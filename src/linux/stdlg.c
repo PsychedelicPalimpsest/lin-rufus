@@ -28,6 +28,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef USE_GTK
+#include <gtk/gtk.h>
+#endif
 
 /* =========================================================================
  * Test-injection state
@@ -183,8 +186,34 @@ HICON FixWarningIcon(HICON hIcon)           { return hIcon; }
 INT_PTR CALLBACK NotificationCallback(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return 0; }
 INT_PTR CALLBACK ListCallback(HWND h, UINT m, WPARAM w, LPARAM l)    { (void)h;(void)m;(void)w;(void)l; return 0; }
 INT_PTR CALLBACK TooltipCallback(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return 0; }
-BOOL CreateTooltip(HWND hCtrl, const char* msg, int dur) { (void)hCtrl;(void)msg;(void)dur; return FALSE; }
-void DestroyTooltip(HWND hCtrl)             { (void)hCtrl; }
+
+BOOL CreateTooltip(HWND hCtrl, const char* msg, int dur)
+{
+	if (hCtrl == NULL || msg == NULL)
+		return FALSE;
+#ifdef USE_GTK
+	GtkWidget *w = (GtkWidget *)hCtrl;
+	gtk_widget_set_tooltip_text(w, msg);
+	gtk_widget_set_has_tooltip(w, TRUE);
+	/* GTK controls tooltip display timing globally; dur is ignored */
+	(void)dur;
+#else
+	(void)dur;
+#endif
+	return TRUE;
+}
+
+void DestroyTooltip(HWND hCtrl)
+{
+	if (hCtrl == NULL)
+		return;
+#ifdef USE_GTK
+	GtkWidget *w = (GtkWidget *)hCtrl;
+	gtk_widget_set_has_tooltip(w, FALSE);
+	gtk_widget_set_tooltip_text(w, NULL);
+#endif
+}
+
 void DestroyAllTooltips(void)               {}
 BOOL SetTaskbarProgressValue(ULONGLONG done, ULONGLONG total) { (void)done;(void)total; return FALSE; }
 INT_PTR CALLBACK UpdateCallback(HWND h, UINT m, WPARAM w, LPARAM l)  { (void)h;(void)m;(void)w;(void)l; return 0; }

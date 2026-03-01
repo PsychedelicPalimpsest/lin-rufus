@@ -189,8 +189,9 @@ EXTRA_SRC_LINUX_test_stdio_linux := $(STDIO_LINUX_SRC) $(BLED_LIB)
 STDLG_LINUX_SRC := $(SRC_DIR)/linux/stdlg.c $(SRC_DIR)/linux/stdfn.c
 CFLAGS_LINUX_test_stdlg_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                    -Wno-implicit-function-declaration -Wno-unused-function \
-                                   -Wno-sign-compare -Wno-unused-parameter
-LDFLAGS_LINUX_test_stdlg_linux := -lpthread
+                                   -Wno-sign-compare -Wno-unused-parameter \
+                                   $(shell pkg-config --cflags fontconfig 2>/dev/null)
+LDFLAGS_LINUX_test_stdlg_linux := -lpthread $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_stdlg_linux := $(STDLG_LINUX_SRC)
 
 # iso_linux tests: ISO image scanning and extraction via system libcdio

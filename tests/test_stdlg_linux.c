@@ -35,6 +35,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <stdint.h>
 
 #include "../src/windows/rufus.h"
 
@@ -45,6 +46,7 @@ extern void stdlg_clear_test_mode(void);
 /* Minimal stubs required by stdlg.c / stdfn.c */
 HWND hMainDialog = NULL;
 HWND hMainInstance = NULL;
+char *ini_file = NULL;
 
 void uprintf(const char *fmt, ...)
 {
@@ -53,6 +55,18 @@ void uprintf(const char *fmt, ...)
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fputc('\n', stderr);
+}
+
+char *get_token_data_file_indexed(const char *token, const char *file, int index)
+{
+    (void)token; (void)file; (void)index;
+    return NULL;
+}
+
+char *set_token_data_file(const char *token, const char *data, const char *file)
+{
+    (void)token; (void)data; (void)file;
+    return NULL;
 }
 
 /* =========================================================================
@@ -371,6 +385,66 @@ TEST(notification_macro_delegates_correctly)
 }
 
 /* =========================================================================
+ * 25. CreateTooltip — NULL hCtrl returns FALSE without crash
+ * =========================================================================*/
+extern BOOL CreateTooltip(HWND hCtrl, const char *msg, int dur);
+extern void DestroyTooltip(HWND hCtrl);
+
+TEST(create_tooltip_null_ctrl_returns_false)
+{
+    BOOL r = CreateTooltip(NULL, "message", 5000);
+    CHECK_MSG(r == FALSE, "CreateTooltip(NULL, ...) must return FALSE");
+}
+
+/* =========================================================================
+ * 26. CreateTooltip — NULL message returns FALSE without crash
+ * =========================================================================*/
+TEST(create_tooltip_null_msg_returns_false)
+{
+    /* Use a non-NULL dummy pointer — no GTK in test env, so no dereference */
+    BOOL r = CreateTooltip((HWND)(uintptr_t)1, NULL, 5000);
+    CHECK_MSG(r == FALSE, "CreateTooltip(ctrl, NULL, ...) must return FALSE");
+}
+
+/* =========================================================================
+ * 27. CreateTooltip — both NULL returns FALSE without crash
+ * =========================================================================*/
+TEST(create_tooltip_both_null_returns_false)
+{
+    BOOL r = CreateTooltip(NULL, NULL, 0);
+    CHECK_MSG(r == FALSE, "CreateTooltip(NULL, NULL, ...) must return FALSE");
+}
+
+/* =========================================================================
+ * 28. CreateTooltip — valid args returns TRUE (GTK call skipped in test env)
+ * =========================================================================*/
+TEST(create_tooltip_valid_returns_true)
+{
+    /* Without USE_GTK, the GTK gtk_widget_set_tooltip_text call is skipped.
+     * The function should still return TRUE for non-NULL inputs. */
+    BOOL r = CreateTooltip((HWND)(uintptr_t)1, "tooltip text", 3000);
+    CHECK_MSG(r == TRUE, "CreateTooltip with valid args must return TRUE");
+}
+
+/* =========================================================================
+ * 29. DestroyTooltip — NULL does not crash
+ * =========================================================================*/
+TEST(destroy_tooltip_null_does_not_crash)
+{
+    DestroyTooltip(NULL);
+    CHECK(1);  /* no crash */
+}
+
+/* =========================================================================
+ * 30. DestroyTooltip — valid pointer does not crash (GTK call skipped)
+ * =========================================================================*/
+TEST(destroy_tooltip_valid_does_not_crash)
+{
+    DestroyTooltip((HWND)(uintptr_t)1);
+    CHECK(1);  /* no crash */
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -401,6 +475,14 @@ int main(void)
     RUN(test_mode_clears_after_use);
     RUN(test_mode_cleared_returns_default);
     RUN(notification_macro_delegates_correctly);
+
+    printf("\n=== CreateTooltip / DestroyTooltip ===\n");
+    RUN(create_tooltip_null_ctrl_returns_false);
+    RUN(create_tooltip_null_msg_returns_false);
+    RUN(create_tooltip_both_null_returns_false);
+    RUN(create_tooltip_valid_returns_true);
+    RUN(destroy_tooltip_null_does_not_crash);
+    RUN(destroy_tooltip_valid_does_not_crash);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;
