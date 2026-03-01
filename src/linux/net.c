@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -41,6 +42,7 @@
 #include "resource.h"
 #include "bled/bled.h"
 #include "dbx/dbx_info.h"
+#include "download_resume.h"
 
 /* Globals from globals.c / ui_gtk.c not declared in headers */
 extern loc_cmd *selected_locale;
@@ -251,6 +253,7 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 	CURLcode res;
 	long http_code = 0;
 	uint64_t size = 0;
+	uint64_t resume_from = 0;
 	struct write_ctx_buf bctx = { NULL, 0 };
 	struct write_ctx_file fctx = { NULL, 0 };
 
@@ -297,11 +300,36 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 
 	/* Set write callback */
 	if (file != NULL) {
-		fctx.fp = fopen(file, "wb");
-		if (fctx.fp == NULL) {
+		char partial[4096];
+
+		if (!get_partial_path(file, partial, sizeof(partial))) {
 			if (!silent)
-				uprintf("Failed to open '%s' for writing", file);
+				uprintf("Failed to build partial path for '%s'", file);
 			goto out;
+		}
+
+		resume_from = get_partial_size(file);
+		if (resume_from > 0) {
+			/* A partial download exists — try to resume */
+			fctx.fp = fopen(partial, "ab");
+			if (fctx.fp == NULL) {
+				if (!silent)
+					uprintf("Failed to open '%s' for append", partial);
+				goto out;
+			}
+			curl_easy_setopt(curl, CURLOPT_RESUME_FROM_LARGE,
+			                 (curl_off_t)resume_from);
+			if (!silent)
+				uprintf("Resuming download of %s from offset %"PRIu64,
+				        net_short_name(url), resume_from);
+		} else {
+			/* Fresh download — write to .partial */
+			fctx.fp = fopen(partial, "wb");
+			if (fctx.fp == NULL) {
+				if (!silent)
+					uprintf("Failed to open '%s' for writing", partial);
+				goto out;
+			}
 		}
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_to_file);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA,     &fctx);
@@ -315,21 +343,43 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 		if (!silent)
 			uprintf("Download of '%s' failed: %s",
 			        net_short_name(url), curl_easy_strerror(res));
+		/* Keep .partial for potential future resume */
 		goto out;
 	}
 
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 	DownloadStatus = (DWORD)http_code;
 
-	if (http_code != 200) {
+	if (http_code == 200 && file != NULL && resume_from > 0) {
+		/* Server ignored our Range request and sent the full file again.
+		 * The .partial is now corrupted — discard it and start fresh. */
 		if (!silent)
-			uprintf("HTTP %ld for '%s'", http_code, url);
+			uprintf("Server returned HTTP 200 on resume request for '%s' — discarding partial",
+			        net_short_name(url));
+		if (fctx.fp != NULL) { fclose(fctx.fp); fctx.fp = NULL; }
+		abandon_partial_download(file);
 		goto out;
 	}
 
-	/* Success — return data */
+	if (http_code != 200 && http_code != 206) {
+		if (!silent)
+			uprintf("HTTP %ld for '%s'", http_code, url);
+		/* Keep .partial so the resume can be attempted later */
+		goto out;
+	}
+
+	/* Success — finalize or return data */
 	if (file != NULL) {
-		size = fctx.written;
+		/* Close the .partial file before renaming */
+		fclose(fctx.fp);
+		fctx.fp = NULL;
+		if (!finalize_partial_download(file)) {
+			if (!silent)
+				uprintf("Failed to finalize download of '%s'", net_short_name(url));
+			goto out;
+		}
+		/* Total bytes = previously downloaded (resume_from) + this session */
+		size = resume_from + fctx.written;
 	} else {
 		size = bctx.len;
 		if (buf != NULL) {

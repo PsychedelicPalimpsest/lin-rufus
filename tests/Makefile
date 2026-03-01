@@ -302,6 +302,7 @@ EXTRA_SRC_WIN_test_hash := hash_win_glue.c
 # The test file includes src/linux/net.c directly (no glue file needed).
 # net.c itself needs stdfn.c for safe_strlen/safe_free, and stdio.c for uprintf.
 NET_LINUX_SRC := $(SRC_DIR)/linux/net.c \
+                 $(SRC_DIR)/linux/download_resume.c \
                  $(SRC_DIR)/linux/stdfn.c \
                  $(SRC_DIR)/linux/stdio.c \
                  net_linux_glue.c
@@ -319,6 +320,7 @@ EXTRA_SRC_LINUX_test_net_linux := $(NET_LINUX_SRC)
 # Uses real common/parser.c for settings (ReadSetting64/WriteSetting64) instead
 # of the stubs in net_linux_glue.c, allowing INI-file-backed settings tests.
 DBX_LINUX_SRC := $(SRC_DIR)/linux/net.c \
+                 $(SRC_DIR)/linux/download_resume.c \
                  $(SRC_DIR)/linux/stdfn.c \
                  $(SRC_DIR)/linux/stdio.c \
                  $(SRC_DIR)/linux/parser.c \
@@ -337,6 +339,7 @@ EXTRA_SRC_LINUX_test_dbx_linux := $(DBX_LINUX_SRC)
 # fido_linux tests: Fido script version-check (fido_check_url_updated).
 # Uses real common/parser.c for settings (ReadSettingStr/WriteSettingStr).
 FIDO_LINUX_SRC := $(SRC_DIR)/linux/net.c \
+                  $(SRC_DIR)/linux/download_resume.c \
                   $(SRC_DIR)/linux/stdfn.c \
                   $(SRC_DIR)/linux/stdio.c \
                   $(SRC_DIR)/linux/parser.c \
@@ -560,6 +563,15 @@ CFLAGS_LINUX_test_polkit_linux := \
 	-I$(SRC_DIR)/linux \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_polkit_linux := $(SRC_DIR)/linux/polkit.c
+
+# download_resume_linux tests: .partial file helpers for resumable downloads
+CFLAGS_LINUX_test_download_resume_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_download_resume_linux := \
+	$(SRC_DIR)/linux/download_resume.c \
+	download_resume_linux_glue.c
 
 # verify_linux tests: write-and-verify pass
 CFLAGS_LINUX_test_verify_linux := \
