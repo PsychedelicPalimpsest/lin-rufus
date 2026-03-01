@@ -271,7 +271,7 @@ CFLAGS_LINUX_test_net_linux := \
 	-Wno-unused-function -Wno-sign-compare \
 	-Wno-implicit-function-declaration -Wno-unused-parameter \
 	-Wno-missing-field-initializers
-LDFLAGS_LINUX_test_net_linux := -lcurl -lpthread $(shell pkg-config --libs fontconfig 2>/dev/null)
+LDFLAGS_LINUX_test_net_linux := -lcurl -lpthread -lssl -lcrypto $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_net_linux := $(NET_LINUX_SRC)
 
 # settings_linux tests: FileIO, ReadSetting*/WriteSetting*, XDG path init.

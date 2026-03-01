@@ -258,17 +258,79 @@ out:
 	return size;
 }
 
-/* ---- Stubs for functions that depend on Windows-only subsystems ---- */
+/* ---- DownloadSignedFile: download + RSA-SHA256 signature verify ---- */
+
+extern BOOL ValidateOpensslSignature(BYTE *pbBuffer, DWORD dwBufferLen,
+                                      BYTE *pbSignature, DWORD dwSigLen);
 
 /*
- * DownloadSignedFile: download a file and verify its Authenticode signature.
- * On Linux, PKI/signature validation is not yet implemented.
- * Falls back to DownloadToFileOrBufferEx without signature verification.
+ * DownloadSignedFile — download `url` to `file` after verifying its detached
+ * RSA-SHA256 `.sig` file (same protocol as the Windows implementation).
+ *
+ * 1. Downloads `url` into a memory buffer.
+ * 2. Downloads `url + ".sig"` into a memory buffer.
+ * 3. Calls ValidateOpensslSignature() to verify the signature.
+ * 4. On success, writes the buffer to `file` and returns its byte count.
+ *    On failure, sets DownloadStatus = 403 and returns 0.
  */
 DWORD DownloadSignedFile(const char *url, const char *file, HWND hDlg, BOOL silent)
 {
-	uint64_t n = DownloadToFileOrBufferEx(url, file, NULL, NULL, hDlg, silent);
-	return (n > 0) ? (DWORD)n : 0;
+	char *url_sig = NULL;
+	uint8_t *buf = NULL, *sig = NULL;
+	uint64_t buf_len = 0, sig_len = 0;
+	DWORD ret = 0;
+	FILE *fp = NULL;
+	size_t written;
+
+	if (url == NULL)
+		return 0;
+
+	url_sig = malloc(strlen(url) + 5);
+	if (url_sig == NULL) {
+		uprintf("DownloadSignedFile: could not allocate signature URL");
+		return 0;
+	}
+	strcpy(url_sig, url);
+	strcat(url_sig, ".sig");
+
+	/* Download file content to memory */
+	buf_len = DownloadToFileOrBufferEx(url, NULL, NULL, &buf, hDlg, silent);
+	if (buf_len == 0)
+		goto out;
+
+	/* Download and verify the detached signature */
+	sig_len = DownloadToFileOrBufferEx(url_sig, NULL, NULL, &sig, NULL, TRUE);
+	if (sig_len != RSA_SIGNATURE_SIZE ||
+	    !ValidateOpensslSignature(buf, (DWORD)buf_len, sig, (DWORD)sig_len)) {
+		uprintf("FATAL: Download signature is invalid \xe2\x9c\x97");
+		DownloadStatus = 403;
+		goto out;
+	}
+
+	uprintf("Download signature is valid \xe2\x9c\x93");
+	DownloadStatus = 206;
+
+	fp = fopen(file, "wb");
+	if (fp == NULL) {
+		uprintf("Unable to create '%s': %s", file, strerror(errno));
+		goto out;
+	}
+	written = fwrite(buf, 1, (size_t)buf_len, fp);
+	if (written != (size_t)buf_len) {
+		uprintf("Error writing '%s': only %zu/%zu bytes written",
+		        file, written, (size_t)buf_len);
+		goto out;
+	}
+	ret = (DWORD)buf_len;
+	DownloadStatus = 200;
+
+out:
+	if (fp != NULL)
+		fclose(fp);
+	free(url_sig);
+	free(buf);
+	free(sig);
+	return ret;
 }
 
 /* Threaded download: run DownloadSignedFile in a background thread */

@@ -243,6 +243,67 @@ static void srv_create_file(const char *name, const char *content)
 	if (f) { fputs(content, f); fclose(f); }
 }
 
+/* Create a binary file inside srv_root. */
+static void srv_create_binary(const char *name, const uint8_t *data, size_t len)
+{
+	char path[512];
+	snprintf(path, sizeof(path), "%s/%s", srv_root, name);
+	FILE *f = fopen(path, "wb");
+	if (f) { fwrite(data, 1, len, f); fclose(f); }
+}
+
+/* ================================================================
+ * Test RSA-2048 key/signature vectors for DownloadSignedFile tests.
+ *
+ * Generated with:
+ *   openssl genrsa -out test.pem 2048
+ *   echo -n "test signed file content" > data.txt
+ *   openssl dgst -sha256 -sign test.pem -out sig_be.bin data.txt
+ *   python3 -c "open('sig_le.bin','wb').write(bytes(reversed(open('sig_be.bin','rb').read())))"
+ *
+ * The ValidateOpensslSignature implementation in net_linux_glue.c uses
+ * test_rsa_modulus (the public key matching these vectors).
+ * ================================================================ */
+
+/* The plaintext content that was signed */
+static const char TEST_SIGNED_CONTENT[] = "test signed file content";
+
+/* 256-byte RSA-SHA256 signature in Rufus little-endian wire format */
+static const uint8_t TEST_SIG_LE[256] = {
+	0xe5, 0xf5, 0xcd, 0x11, 0xca, 0xd9, 0xb2, 0x2a,
+	0xb0, 0x38, 0xf3, 0x66, 0x4c, 0xca, 0x25, 0xf3,
+	0x82, 0xfa, 0xbb, 0xed, 0x11, 0x0b, 0x62, 0x24,
+	0xcf, 0xf9, 0x07, 0x97, 0x67, 0xb1, 0x1f, 0x4d,
+	0x97, 0x90, 0xd0, 0xf4, 0x22, 0x03, 0x8f, 0xb4,
+	0x21, 0x94, 0xcf, 0x4e, 0x8c, 0x84, 0x22, 0xb9,
+	0xf3, 0xc9, 0xe0, 0x5c, 0x95, 0x1a, 0x74, 0xd2,
+	0x7f, 0xce, 0x9a, 0xee, 0x70, 0x20, 0xf8, 0x8d,
+	0x96, 0x7f, 0x11, 0x28, 0x1e, 0x97, 0x0c, 0x83,
+	0xa8, 0x7b, 0xef, 0x88, 0x0e, 0x27, 0x4b, 0x04,
+	0x42, 0x3c, 0x91, 0x9e, 0xad, 0x8f, 0x3d, 0xd1,
+	0x62, 0xa2, 0x7c, 0x6c, 0x02, 0xe4, 0xa3, 0xf9,
+	0xdf, 0x74, 0x0a, 0x22, 0x88, 0xc5, 0x06, 0x81,
+	0xfb, 0xc6, 0x28, 0xd8, 0x76, 0x19, 0x6a, 0x04,
+	0x68, 0x35, 0x23, 0xcf, 0xbc, 0xd4, 0xe5, 0x2d,
+	0xb2, 0x8b, 0x8d, 0x68, 0xe2, 0xfd, 0xbd, 0x13,
+	0xf9, 0xfe, 0x02, 0xc8, 0x3f, 0x38, 0xf1, 0xda,
+	0x6a, 0xf2, 0x6f, 0x6d, 0x8a, 0xa9, 0x49, 0x89,
+	0x43, 0xd4, 0x96, 0x53, 0xe4, 0xe9, 0xfe, 0x4d,
+	0x46, 0x25, 0x51, 0xe0, 0xf5, 0xc5, 0x3b, 0xdd,
+	0xe2, 0x0b, 0x9b, 0x46, 0x17, 0x8c, 0xa7, 0x4d,
+	0xc6, 0x53, 0x93, 0x05, 0xc3, 0x47, 0xb8, 0x4e,
+	0x4a, 0x24, 0xbf, 0x2e, 0x30, 0x79, 0x42, 0x01,
+	0xce, 0x36, 0xab, 0xe1, 0xf9, 0xc2, 0xb4, 0x93,
+	0xcc, 0x3b, 0x8b, 0xb4, 0x6a, 0xd2, 0xce, 0x7d,
+	0x7c, 0xed, 0x33, 0xf4, 0x4f, 0x24, 0xe5, 0xb5,
+	0x23, 0x81, 0x70, 0xab, 0x20, 0xe5, 0xb8, 0x8d,
+	0x5a, 0x8e, 0x0c, 0x3c, 0x12, 0xc2, 0xce, 0x8c,
+	0x31, 0x2a, 0xe6, 0x34, 0x86, 0x3e, 0x70, 0xdd,
+	0x86, 0xb4, 0x95, 0xf9, 0x22, 0xfa, 0x2e, 0x18,
+	0x24, 0x7b, 0x6f, 0x58, 0x6f, 0xe2, 0xc4, 0x27,
+	0xde, 0x34, 0xf8, 0xf0, 0x97, 0xb8, 0x38, 0x76
+};
+
 /* Wait up to 2 s for TCP port to accept connections. */
 static int wait_for_port(int port)
 {
@@ -285,6 +346,25 @@ static void start_http_server(int port)
 		}
 	}
 	srv_create_file("empty.txt", "");
+
+	/* Signed file test vectors */
+	srv_create_file("signed.txt", TEST_SIGNED_CONTENT);
+	srv_create_binary("signed.txt.sig", TEST_SIG_LE, sizeof(TEST_SIG_LE));
+
+	/* Wrong-size signature (128 bytes instead of 256) */
+	srv_create_file("signed_short.txt", TEST_SIGNED_CONTENT);
+	srv_create_binary("signed_short.txt.sig", TEST_SIG_LE, 128);
+
+	/* Wrong-content signature (256 bytes of zeros — valid size, wrong sig) */
+	{
+		uint8_t zeros[256];
+		memset(zeros, 0, sizeof(zeros));
+		srv_create_file("signed_bad.txt", TEST_SIGNED_CONTENT);
+		srv_create_binary("signed_bad.txt.sig", zeros, sizeof(zeros));
+	}
+
+	/* No .sig at all — only the content file is served */
+	srv_create_file("signed_nosig.txt", TEST_SIGNED_CONTENT);
 
 	srv_pid = fork();
 	if (srv_pid == 0) {
@@ -697,9 +777,23 @@ TEST(check_for_updates_double_call_returns_false)
  * DownloadSignedFile / DownloadSignedFileThreaded tests
  * ================================================================ */
 
+/*
+ * The test build links net_linux_glue.c's ValidateOpensslSignature which uses
+ * the TEST RSA key pair.  TEST_SIGNED_CONTENT + TEST_SIG_LE form a valid
+ * (content, signature) pair for that key.
+ */
+
+/* --- basic smoke tests (no server required) --- */
+
+TEST(download_signed_file_null_url_returns_zero)
+{
+	DWORD r = DownloadSignedFile(NULL, "/tmp/x", NULL, TRUE);
+	CHECK_MSG(r == 0, "NULL url must return 0");
+}
+
 TEST(download_signed_file_no_crash)
 {
-	DWORD r = DownloadSignedFile("http://127.0.0.1/x", "/tmp/x", NULL, FALSE);
+	DWORD r = DownloadSignedFile("http://127.0.0.1/x", "/tmp/x", NULL, TRUE);
 	CHECK(r == 0 || r > 0); /* whatever it returns, must not crash */
 }
 
@@ -724,6 +818,113 @@ TEST(download_signed_file_threaded_thread_exits)
 		CHECK(r == WAIT_OBJECT_0);
 		CloseHandle(h);
 	}
+}
+
+/* --- rejection paths (require HTTP server) --- */
+
+TEST(download_signed_file_missing_sig_returns_zero)
+{
+	/* The .sig file is not on the server → DownloadSignedFile must return 0 */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	char tmp[256];
+	snprintf(tmp, sizeof(tmp), "/tmp/test_dsf_nosig_%d.txt", (int)getpid());
+	unlink(tmp);
+	ErrorStatus = 0; DownloadStatus = 0;
+
+	DWORD r = DownloadSignedFile(srv_url("signed_nosig.txt"), tmp, NULL, TRUE);
+	CHECK_MSG(r == 0, "missing .sig must return 0");
+	CHECK_MSG(DownloadStatus == 403 || DownloadStatus == 0,
+	          "bad-sig path should set DownloadStatus=403 (or 0 if file also failed)");
+	/* Output file must NOT have been written */
+	struct stat st;
+	CHECK_MSG(stat(tmp, &st) != 0, "file must not be written when .sig is missing");
+	unlink(tmp);
+}
+
+TEST(download_signed_file_short_sig_returns_zero)
+{
+	/* The .sig is only 128 bytes — wrong size → rejected */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	char tmp[256];
+	snprintf(tmp, sizeof(tmp), "/tmp/test_dsf_short_%d.txt", (int)getpid());
+	unlink(tmp);
+
+	DWORD r = DownloadSignedFile(srv_url("signed_short.txt"), tmp, NULL, TRUE);
+	CHECK_MSG(r == 0, "short .sig must return 0");
+	struct stat st;
+	CHECK_MSG(stat(tmp, &st) != 0, "file must not be written for short .sig");
+	unlink(tmp);
+}
+
+TEST(download_signed_file_wrong_sig_returns_zero)
+{
+	/* The .sig is 256 bytes of zeros — correct size but wrong content → rejected */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	char tmp[256];
+	snprintf(tmp, sizeof(tmp), "/tmp/test_dsf_bad_%d.txt", (int)getpid());
+	unlink(tmp);
+	DownloadStatus = 0;
+
+	DWORD r = DownloadSignedFile(srv_url("signed_bad.txt"), tmp, NULL, TRUE);
+	CHECK_MSG(r == 0, "wrong .sig content must return 0");
+	CHECK_MSG(DownloadStatus == 403, "wrong sig must set DownloadStatus=403");
+	struct stat st;
+	CHECK_MSG(stat(tmp, &st) != 0, "file must not be written for wrong .sig");
+	unlink(tmp);
+}
+
+TEST(download_signed_file_valid_sig_writes_file)
+{
+	/* Valid content + valid .sig → file written, return == content size */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	char tmp[256];
+	snprintf(tmp, sizeof(tmp), "/tmp/test_dsf_ok_%d.txt", (int)getpid());
+	unlink(tmp);
+	DownloadStatus = 0;
+
+	DWORD r = DownloadSignedFile(srv_url("signed.txt"), tmp, NULL, TRUE);
+	size_t expected_len = strlen(TEST_SIGNED_CONTENT);
+	CHECK_MSG(r == (DWORD)expected_len,
+	          "valid .sig must return file size");
+	CHECK_MSG(DownloadStatus == 200, "successful download must set DownloadStatus=200");
+
+	/* Verify file was written with correct content */
+	struct stat st;
+	CHECK_MSG(stat(tmp, &st) == 0, "output file must exist after valid download");
+	CHECK_MSG((size_t)st.st_size == expected_len,
+	          "output file must have correct size");
+
+	/* Read back and compare */
+	FILE *f = fopen(tmp, "rb");
+	if (f != NULL) {
+		char buf[64] = {0};
+		size_t n = fread(buf, 1, sizeof(buf)-1, f);
+		fclose(f);
+		CHECK_MSG(n == expected_len, "read-back must match expected length");
+		CHECK_MSG(memcmp(buf, TEST_SIGNED_CONTENT, expected_len) == 0,
+		          "read-back content must match original");
+	}
+	unlink(tmp);
+}
+
+TEST(download_signed_file_valid_sets_status_206_then_200)
+{
+	/* Verify the intermediate DownloadStatus=206 does not remain after success */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	char tmp[256];
+	snprintf(tmp, sizeof(tmp), "/tmp/test_dsf_status_%d.txt", (int)getpid());
+	unlink(tmp);
+	DownloadStatus = 0;
+
+	DWORD r = DownloadSignedFile(srv_url("signed.txt"), tmp, NULL, TRUE);
+	CHECK_MSG(r > 0, "must succeed");
+	CHECK_MSG(DownloadStatus == 200, "final DownloadStatus must be 200");
+	unlink(tmp);
 }
 
 /* ================================================================
@@ -829,10 +1030,23 @@ int main(void)
 	RUN(check_for_updates_ini_null_runs);
 	RUN(check_for_updates_double_call_returns_false);
 
-	printf("\n  DownloadSignedFile / DownloadSignedFileThreaded\n");
+	printf("\n  DownloadSignedFile / DownloadSignedFileThreaded — smoke tests\n");
+	RUN(download_signed_file_null_url_returns_zero);
 	RUN(download_signed_file_no_crash);
 	RUN(download_signed_file_threaded_returns_handle);
 	RUN(download_signed_file_threaded_thread_exits);
+
+	if (srv_available) {
+		printf("\n  DownloadSignedFile — signature verification (HTTP server on :%d)\n",
+		       HTTP_PORT);
+		RUN(download_signed_file_missing_sig_returns_zero);
+		RUN(download_signed_file_short_sig_returns_zero);
+		RUN(download_signed_file_wrong_sig_returns_zero);
+		RUN(download_signed_file_valid_sig_writes_file);
+		RUN(download_signed_file_valid_sets_status_206_then_200);
+	} else {
+		printf("\n  [HTTP server unavailable — skipping signed-file tests]\n");
+	}
 
 	printf("\n  UseLocalDbx / DownloadISO\n");
 	RUN(use_local_dbx_no_crash);
