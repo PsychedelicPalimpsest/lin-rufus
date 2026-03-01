@@ -63,7 +63,9 @@ BOOL FormatPartition(DWORD DriveIndex, uint64_t PartitionOffset, DWORD UnitAlloc
 		return FormatNTFS(DriveIndex, PartitionOffset, UnitAllocationSize, Label, Flags);
 	if (FSType == FS_EXFAT)
 		return FormatExFAT(DriveIndex, PartitionOffset, UnitAllocationSize, Label, Flags);
-	/* UDF, ReFS not yet supported on Linux */
+	if (FSType == FS_UDF)
+		return FormatUDF(DriveIndex, PartitionOffset, UnitAllocationSize, Label, Flags);
+	/* ReFS not yet supported on Linux */
 	ErrorStatus = RUFUS_ERROR(ERROR_NOT_SUPPORTED);
 	return FALSE;
 }

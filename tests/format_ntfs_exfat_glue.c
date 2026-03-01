@@ -31,6 +31,7 @@ DWORD RunCommandWithProgress(const char *cmd, const char *dir,
 /* ---- globals added in bad-blocks integration (not in test file stubs) ---- */
 BOOL enable_bad_blocks = FALSE;
 int  nb_passes_sel     = 0;
+DWORD _win_last_error  = 0;
 
 /* ---- format.c needs these ---- */
 void UpdateProgress(int op, float percent) { (void)op; (void)percent; }

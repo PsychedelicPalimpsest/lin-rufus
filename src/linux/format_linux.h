@@ -114,3 +114,27 @@ BOOL format_ntfs_build_cmd(const char *tool, const char *part_path,
 BOOL format_exfat_build_cmd(const char *tool, const char *part_path,
                              DWORD cluster_size, const char *label,
                              char *cmd_buf, size_t cmd_buf_len);
+
+/*
+ * FormatUDF - format a partition as UDF using mkudffs (udftools).
+ *
+ * Returns FALSE if mkudffs is not installed.
+ */
+BOOL FormatUDF(DWORD DriveIndex, uint64_t PartitionOffset,
+               DWORD UnitAllocationSize, LPCSTR Label, DWORD Flags);
+
+/*
+ * format_udf_build_cmd - build a mkudffs command string (testable helper).
+ *
+ *   tool         - absolute path to mkudffs binary
+ *   part_path    - partition device/file path
+ *   block_size   - bytes per block (0 = let tool choose)
+ *   label        - volume label (NULL or empty = omit -l)
+ *   cmd_buf      - output buffer
+ *   cmd_buf_len  - size of cmd_buf
+ *
+ * Returns TRUE on success, FALSE on NULL argument or buffer overflow.
+ */
+BOOL format_udf_build_cmd(const char *tool, const char *part_path,
+                           DWORD block_size, const char *label,
+                           char *cmd_buf, size_t cmd_buf_len);

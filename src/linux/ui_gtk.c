@@ -1318,8 +1318,8 @@ static void populate_partition_combos(void)
  * populate_fs_combo — fill the File System dropdown.
  *
  * Populates FAT32, NTFS (if mkntfs is installed), exFAT (if mkfs.exfat is
- * installed), and ext2/ext3/ext4.  NTFS and exFAT entries are only shown
- * when the respective external formatter is present on the system.
+ * installed), UDF (if mkudffs is installed), and ext2/ext3/ext4.
+ * External formatter entries are only shown when the respective tool is present.
  */
 static void populate_fs_combo(void)
 {
@@ -1354,6 +1354,21 @@ static void populate_fs_combo(void)
 			if (access(exfat_candidates[i], X_OK) == 0) {
 				IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
 				    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXFAT]), FS_EXFAT));
+				break;
+			}
+		}
+	}
+
+	/* Add UDF only if mkudffs (udftools) is available */
+	{
+		static const char * const udf_candidates[] = {
+			"/sbin/mkudffs", "/usr/sbin/mkudffs", "/bin/mkudffs", "/usr/bin/mkudffs",
+			"/usr/local/sbin/mkudffs", "/usr/local/bin/mkudffs", NULL
+		};
+		for (int i = 0; udf_candidates[i]; i++) {
+			if (access(udf_candidates[i], X_OK) == 0) {
+				IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
+				    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_UDF]), FS_UDF));
 				break;
 			}
 		}

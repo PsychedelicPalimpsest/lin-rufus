@@ -295,4 +295,112 @@ BOOL FormatExFAT(DWORD DriveIndex, uint64_t PartitionOffset,
 	return TRUE;
 }
 
+/* =========================================================================
+ * format_udf_build_cmd
+ *
+ * Build the mkudffs command string into cmd_buf.
+ *
+ * Parameters:
+ *   tool         - absolute path to mkudffs binary
+ *   part_path    - partition device/file path
+ *   block_size   - bytes per block (sector size); 0 means let the tool choose
+ *   label        - volume label or NULL/empty to omit -l
+ *   cmd_buf      - output buffer
+ *   cmd_buf_len  - size of cmd_buf
+ *
+ * Returns TRUE on success, FALSE on any invalid argument or buffer overflow.
+ * ======================================================================= */
+BOOL format_udf_build_cmd(const char *tool, const char *part_path,
+                           DWORD block_size, const char *label,
+                           char *cmd_buf, size_t cmd_buf_len)
+{
+	if (!tool || !part_path || !cmd_buf || cmd_buf_len < 16)
+		return FALSE;
+
+	char tmp[1024];
+	int n = snprintf(tmp, sizeof(tmp), "%s", tool);
+	if (n < 0 || (size_t)n >= sizeof(tmp)) return FALSE;
+
+	if (block_size > 0) {
+		int m = snprintf(tmp + n, sizeof(tmp) - (size_t)n,
+		                 " -b %u", (unsigned)block_size);
+		if (m < 0 || (size_t)(n + m) >= sizeof(tmp)) return FALSE;
+		n += m;
+	}
+
+	if (label && label[0] != '\0') {
+		int m = snprintf(tmp + n, sizeof(tmp) - (size_t)n,
+		                 " -l \"%s\"", label);
+		if (m < 0 || (size_t)(n + m) >= sizeof(tmp)) return FALSE;
+		n += m;
+	}
+
+	int m = snprintf(tmp + n, sizeof(tmp) - (size_t)n, " \"%s\"", part_path);
+	if (m < 0 || (size_t)(n + m) >= sizeof(tmp)) return FALSE;
+	n += m;
+
+	if ((size_t)n >= cmd_buf_len) return FALSE;
+
+	memcpy(cmd_buf, tmp, (size_t)n + 1);
+	return TRUE;
+}
+
+/* =========================================================================
+ * FormatUDF
+ *
+ * Format a partition as UDF using mkudffs (udftools).
+ *
+ * Returns TRUE on success, FALSE if mkudffs is not installed or fails.
+ * ======================================================================= */
+BOOL FormatUDF(DWORD DriveIndex, uint64_t PartitionOffset,
+               DWORD UnitAllocationSize, LPCSTR Label, DWORD Flags)
+{
+	(void)Flags;
+
+	if ((DriveIndex < DRIVE_INDEX_MIN) || (DriveIndex > DRIVE_INDEX_MAX)) {
+		ErrorStatus = RUFUS_ERROR(ERROR_INVALID_PARAMETER);
+		return FALSE;
+	}
+
+	const char *tool = find_format_tool("mkudffs");
+	if (!tool) {
+		uprintf("FormatUDF: mkudffs not found; please install udftools");
+		ErrorStatus = RUFUS_ERROR(ERROR_NOT_SUPPORTED);
+		return FALSE;
+	}
+
+	char *part_path = GetLogicalName(DriveIndex, PartitionOffset, FALSE, TRUE);
+	if (!part_path)
+		part_path = GetPhysicalName(DriveIndex);
+	if (!part_path) {
+		ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
+		return FALSE;
+	}
+
+	char cmd[1024];
+	if (!format_udf_build_cmd(tool, part_path, UnitAllocationSize,
+	                           Label, cmd, sizeof(cmd))) {
+		free(part_path);
+		ErrorStatus = RUFUS_ERROR(ERROR_INVALID_PARAMETER);
+		return FALSE;
+	}
+	free(part_path);
+
+	uprintf("Formatting as UDF: %s", cmd);
+	PrintStatusInfo(FALSE, FALSE, 0, MSG_222, "UDF");
+	UpdateProgressWithInfoInit(NULL, TRUE);
+
+	DWORD rc = RunCommandWithProgress(cmd, NULL, TRUE, MSG_217, NULL);
+	if (rc != 0) {
+		if (rc != ERROR_CANCELLED)
+			uprintf("mkudffs failed with exit code %lu", (unsigned long)rc);
+		if (!IS_ERROR(ErrorStatus))
+			ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
+		return FALSE;
+	}
+
+	UpdateProgressWithInfo(OP_FORMAT, MSG_217, 100, 100);
+	return TRUE;
+}
+
 #endif /* __linux__ */

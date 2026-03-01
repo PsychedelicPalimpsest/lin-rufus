@@ -411,6 +411,190 @@ TEST(exfat_build_cmd_null_buf_returns_false)
 }
 
 /* ================================================================
+ * UDF command builder tests
+ * ================================================================ */
+
+TEST(udf_build_cmd_basic)
+{
+    char cmd[512];
+    extern BOOL format_udf_build_cmd(const char *, const char *, DWORD,
+                                     const char *, char *, size_t);
+    BOOL r = format_udf_build_cmd("/usr/sbin/mkudffs", "/dev/sdb1",
+                                   0, NULL, cmd, sizeof(cmd));
+    CHECK(r == TRUE);
+    CHECK(strstr(cmd, "/usr/sbin/mkudffs") != NULL);
+    CHECK(strstr(cmd, "/dev/sdb1") != NULL);
+}
+
+TEST(udf_build_cmd_with_label)
+{
+    char cmd[512];
+    extern BOOL format_udf_build_cmd(const char *, const char *, DWORD,
+                                     const char *, char *, size_t);
+    format_udf_build_cmd("/usr/sbin/mkudffs", "/dev/sdb1",
+                          0, "MyUDF", cmd, sizeof(cmd));
+    CHECK(strstr(cmd, "-l") != NULL);
+    CHECK(strstr(cmd, "MyUDF") != NULL);
+}
+
+TEST(udf_build_cmd_empty_label_omitted)
+{
+    char cmd[512];
+    extern BOOL format_udf_build_cmd(const char *, const char *, DWORD,
+                                     const char *, char *, size_t);
+    format_udf_build_cmd("/usr/sbin/mkudffs", "/dev/sdb1",
+                          0, "", cmd, sizeof(cmd));
+    CHECK(strstr(cmd, "-l") == NULL);
+}
+
+TEST(udf_build_cmd_with_blocksize)
+{
+    char cmd[512];
+    extern BOOL format_udf_build_cmd(const char *, const char *, DWORD,
+                                     const char *, char *, size_t);
+    format_udf_build_cmd("/usr/sbin/mkudffs", "/dev/sdb1",
+                          512, NULL, cmd, sizeof(cmd));
+    CHECK(strstr(cmd, "-b") != NULL);
+    CHECK(strstr(cmd, "512") != NULL);
+}
+
+TEST(udf_build_cmd_zero_blocksize_omitted)
+{
+    char cmd[512];
+    extern BOOL format_udf_build_cmd(const char *, const char *, DWORD,
+                                     const char *, char *, size_t);
+    format_udf_build_cmd("/usr/sbin/mkudffs", "/dev/sdb1",
+                          0, NULL, cmd, sizeof(cmd));
+    CHECK(strstr(cmd, "-b") == NULL);
+}
+
+TEST(udf_build_cmd_null_tool_returns_false)
+{
+    char cmd[512];
+    extern BOOL format_udf_build_cmd(const char *, const char *, DWORD,
+                                     const char *, char *, size_t);
+    BOOL r = format_udf_build_cmd(NULL, "/dev/sdb1",
+                                   0, NULL, cmd, sizeof(cmd));
+    CHECK(r == FALSE);
+}
+
+TEST(udf_build_cmd_null_path_returns_false)
+{
+    char cmd[512];
+    extern BOOL format_udf_build_cmd(const char *, const char *, DWORD,
+                                     const char *, char *, size_t);
+    BOOL r = format_udf_build_cmd("/usr/sbin/mkudffs", NULL,
+                                   0, NULL, cmd, sizeof(cmd));
+    CHECK(r == FALSE);
+}
+
+TEST(udf_build_cmd_null_buf_returns_false)
+{
+    extern BOOL format_udf_build_cmd(const char *, const char *, DWORD,
+                                     const char *, char *, size_t);
+    BOOL r = format_udf_build_cmd("/usr/sbin/mkudffs", "/dev/sdb1",
+                                   0, NULL, NULL, 512);
+    CHECK(r == FALSE);
+}
+
+TEST(udf_invalid_drive_returns_false)
+{
+    ErrorStatus = 0;
+    BOOL r = FormatUDF(DRIVE_INDEX_MIN - 1, 0, 0, "Test", FP_FORCE);
+    CHECK(r == FALSE);
+}
+
+TEST(udf_format_no_tool_returns_false)
+{
+    char *path = create_temp_image(TEST_IMG_SIZE_NTFS);
+    CHECK(path != NULL);
+    setup_drive(path, TEST_IMG_SIZE_NTFS);
+    ErrorStatus = 0;
+
+    /* Use a nonexistent tool path — build cmd then run it */
+    extern BOOL format_udf_build_cmd(const char *, const char *, DWORD,
+                                     const char *, char *, size_t);
+    char cmd[512];
+    BOOL cmd_ok = format_udf_build_cmd("/nonexistent/mkudffs", path,
+                                        0, NULL, cmd, sizeof(cmd));
+    CHECK(cmd_ok == TRUE);
+    int rc = system(cmd);
+    CHECK(rc != 0);
+
+    teardown_drive();
+    unlink(path);
+    free(path);
+}
+
+TEST(udf_format_creates_filesystem_if_tool_present)
+{
+    const char *tool = find_tool("mkudffs");
+    if (tool == NULL) {
+        printf("  [SKIP] mkudffs not found\n");
+        return;
+    }
+
+    char *path = create_temp_image(TEST_IMG_SIZE_NTFS);
+    CHECK(path != NULL);
+    setup_drive(path, TEST_IMG_SIZE_NTFS);
+    ErrorStatus = 0;
+
+    BOOL r = FormatUDF(DRIVE_INDEX_MIN, 0, 0, "UDFTEST", FP_FORCE);
+    CHECK(r == TRUE);
+
+    /* UDF descriptor begins with 0x01 at offset 0 in the AVDP or first sector */
+    /* Just verify no error status is set */
+    CHECK(IS_ERROR(ErrorStatus) == FALSE);
+
+    teardown_drive();
+    unlink(path);
+    free(path);
+}
+
+TEST(format_partition_udf_returns_false_no_tool)
+{
+    /* If mkudffs is absent this must return FALSE gracefully */
+    const char *tool = find_tool("mkudffs");
+    if (tool != NULL) {
+        printf("  [SKIP] mkudffs present — cannot test absent-tool path\n");
+        return;
+    }
+
+    char *path = create_temp_image(TEST_IMG_SIZE_NTFS);
+    CHECK(path != NULL);
+    setup_drive(path, TEST_IMG_SIZE_NTFS);
+    ErrorStatus = 0;
+
+    BOOL r = FormatPartition(DRIVE_INDEX_MIN, 0, 0, FS_UDF, "UDFTEST", FP_FORCE);
+    CHECK(r == FALSE);
+
+    teardown_drive();
+    unlink(path);
+    free(path);
+}
+
+TEST(format_partition_udf_returns_true_if_tool_present)
+{
+    const char *tool = find_tool("mkudffs");
+    if (tool == NULL) {
+        printf("  [SKIP] mkudffs not found\n");
+        return;
+    }
+
+    char *path = create_temp_image(TEST_IMG_SIZE_NTFS);
+    CHECK(path != NULL);
+    setup_drive(path, TEST_IMG_SIZE_NTFS);
+    ErrorStatus = 0;
+
+    BOOL r = FormatPartition(DRIVE_INDEX_MIN, 0, 0, FS_UDF, "UDFTEST", FP_FORCE);
+    CHECK(r == TRUE);
+
+    teardown_drive();
+    unlink(path);
+    free(path);
+}
+
+/* ================================================================
  * 2. Graceful failure when tool is not present
  * ================================================================ */
 
@@ -820,11 +1004,22 @@ int main(void)
     RUN(exfat_build_cmd_null_path_returns_false);
     RUN(exfat_build_cmd_null_buf_returns_false);
 
+    RUN(udf_build_cmd_basic);
+    RUN(udf_build_cmd_with_label);
+    RUN(udf_build_cmd_empty_label_omitted);
+    RUN(udf_build_cmd_with_blocksize);
+    RUN(udf_build_cmd_zero_blocksize_omitted);
+    RUN(udf_build_cmd_null_tool_returns_false);
+    RUN(udf_build_cmd_null_path_returns_false);
+    RUN(udf_build_cmd_null_buf_returns_false);
+
     /* Graceful failure */
     RUN(ntfs_format_no_tool_returns_false);
     RUN(exfat_format_no_tool_returns_false);
+    RUN(udf_format_no_tool_returns_false);
     RUN(ntfs_invalid_drive_returns_false);
     RUN(exfat_invalid_drive_returns_false);
+    RUN(udf_invalid_drive_returns_false);
 
     /* WritePBR */
     RUN(writepbr_ntfs_returns_true);
@@ -833,6 +1028,7 @@ int main(void)
     /* FormatPartition routing */
     RUN(format_partition_ntfs_returns_false_no_tool);
     RUN(format_partition_exfat_no_crash);
+    RUN(format_partition_udf_returns_false_no_tool);
 
     /* Actual formatting (skipped if tool absent) */
     RUN(ntfs_format_creates_filesystem_if_tool_present);
@@ -841,10 +1037,12 @@ int main(void)
     RUN(exfat_format_creates_filesystem_if_tool_present);
     RUN(exfat_format_with_label);
     RUN(exfat_format_with_cluster_size);
+    RUN(udf_format_creates_filesystem_if_tool_present);
 
     /* Full FormatPartition routing */
     RUN(format_partition_ntfs_returns_true_if_tool_present);
     RUN(format_partition_exfat_returns_true_if_tool_present);
+    RUN(format_partition_udf_returns_true_if_tool_present);
 
     TEST_RESULTS();
 }

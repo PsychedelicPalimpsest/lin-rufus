@@ -122,6 +122,7 @@ FORMAT_NTFS_EXFAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                                 $(SRC_DIR)/linux/format_ext.c \
                                 $(SRC_DIR)/linux/format_ext_tools.c \
                                 $(SRC_DIR)/linux/drive.c \
+                                $(SRC_DIR)/linux/window_text_bridge.c \
                                 $(SRC_DIR)/ext2fs/posix_io.c
 CFLAGS_LINUX_test_format_ntfs_exfat_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
