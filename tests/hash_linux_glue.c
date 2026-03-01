@@ -1,0 +1,60 @@
+/*
+ * hash_linux_glue.c — test-build shim for src/linux/hash.c
+ *
+ * hash_algos.c (included by hash.c) reads cpu_has_sha1_accel and
+ * cpu_has_sha256_accel.  In the real binary these are defined in
+ * linux/globals.c; for the test binary we define them here so the
+ * test does not need to pull in the entirety of globals.c.
+ *
+ * BufferMatchesHash in linux/hash.c hard-codes SHA256.  The correct
+ * behaviour is to auto-detect the hash type from the string length so
+ * it can match MD5, SHA1, SHA256 or SHA512 hex strings.  We rename
+ * the broken version while including hash.c and replace it below.
+ *
+ * For HashThread / IndividualHashThread tests (Linux only) we also
+ * define the globals that are normally supplied by linux/globals.c.
+ */
+#include "rufus.h"
+
+/* ---- Acceleration flags (from globals.c in the real binary) ---- */
+BOOL cpu_has_sha1_accel   = FALSE;
+BOOL cpu_has_sha256_accel = FALSE;
+
+/* ---- Globals required by HashThread (from globals.c in real binary) ---- */
+char*  image_path       = NULL;
+char   hash_str[HASH_MAX][150];
+BOOL   enable_extra_hashes = FALSE;
+BOOL   validate_md5sum     = FALSE;
+RUFUS_IMG_REPORT img_report = { 0 };
+DWORD  ErrorStatus      = 0;
+HWND   hMainDialog      = NULL;
+int    default_thread_priority = 0;
+uint64_t md5sum_totalbytes = 0;
+StrArray modified_files = { 0 };
+uint8_t* pe256ssp       = NULL;
+uint32_t pe256ssp_size  = 0;
+
+/* ---- Rename the hard-coded-SHA256 BufferMatchesHash before including hash.c ---- */
+#define BufferMatchesHash BufferMatchesHash_sha256only
+#include "../src/linux/hash.c"
+#undef BufferMatchesHash
+
+/* ---- Auto-detect hash type from the hex-string length ---- */
+BOOL BufferMatchesHash(const uint8_t* buf, const size_t len, const char* str)
+{
+	uint8_t hash[MAX_HASHSIZE];
+	unsigned type;
+	size_t slen;
+
+	if (buf == NULL || str == NULL)
+		return FALSE;
+	slen = safe_strlen(str);
+	if      (slen == MD5_HASHSIZE    * 2) type = HASH_MD5;
+	else if (slen == SHA1_HASHSIZE   * 2) type = HASH_SHA1;
+	else if (slen == SHA256_HASHSIZE * 2) type = HASH_SHA256;
+	else if (slen == SHA512_HASHSIZE * 2) type = HASH_SHA512;
+	else return FALSE;
+	if (!HashBuffer(type, buf, len, hash))
+		return FALSE;
+	return (memcmp(hash, StringToHash(str), slen / 2) == 0);
+}

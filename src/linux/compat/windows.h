@@ -1004,8 +1004,9 @@ _wh_thread_wrapper(void *raw)
     DWORD (WINAPI *fn)(LPVOID) = a->fn;
     LPVOID param = a->param;
     free(a);
-    h->u.thread.exit_code = fn(param);
-    return NULL;
+    DWORD ec = fn(param);
+    h->u.thread.exit_code = ec;
+    return (void *)(uintptr_t)ec;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1057,8 +1058,11 @@ static inline BOOL CloseHandle(HANDLE h)
         _win_handle_t *wh = (_win_handle_t *)h;
         switch (wh->type) {
         case WH_THREAD:
-            if (!wh->u.thread.joined)
-                pthread_join(wh->u.thread.tid, NULL);
+            if (!wh->u.thread.joined) {
+                void *_rv = NULL;
+                pthread_join(wh->u.thread.tid, &_rv);
+                wh->u.thread.exit_code = (DWORD)(uintptr_t)_rv;
+            }
             break;
         case WH_EVENT:
             pthread_cond_destroy(&wh->u.event.cond);
@@ -1159,13 +1163,20 @@ static inline DWORD WaitForSingleObject(HANDLE h, DWORD ms)
     case WH_THREAD: {
         if (wh->u.thread.joined) return WAIT_OBJECT_0;
         if (ms == INFINITE) {
-            pthread_join(wh->u.thread.tid, NULL);
+            void *_rv = NULL;
+            pthread_join(wh->u.thread.tid, &_rv);
+            wh->u.thread.exit_code = (DWORD)(uintptr_t)_rv;
             wh->u.thread.joined = 1;
             return WAIT_OBJECT_0;
         }
         struct timespec ts = _wh_deadline(ms);
-        int r = pthread_timedjoin_np(wh->u.thread.tid, NULL, &ts);
-        if (r == 0) { wh->u.thread.joined = 1; return WAIT_OBJECT_0; }
+        void *_rv = NULL;
+        int r = pthread_timedjoin_np(wh->u.thread.tid, &_rv, &ts);
+        if (r == 0) {
+            wh->u.thread.exit_code = (DWORD)(uintptr_t)_rv;
+            wh->u.thread.joined = 1;
+            return WAIT_OBJECT_0;
+        }
         if (r == ETIMEDOUT) return WAIT_TIMEOUT;
         return WAIT_FAILED;
     }
@@ -1317,6 +1328,12 @@ static inline BOOL SetThreadPriority(HANDLE h, int prio)
     return TRUE;   /* scheduler priority — ignored on Linux */
 }
 
+static inline DWORD_PTR SetThreadAffinityMask(HANDLE h, DWORD_PTR mask)
+{
+    (void)h; (void)mask;
+    return 0;   /* thread affinity — not enforced on Linux */
+}
+
 static inline BOOL GetExitCodeThread(HANDLE h, LPDWORD code)
 {
     if (!_wh_is_sync(h)) return FALSE;
@@ -1329,6 +1346,11 @@ static inline BOOL GetExitCodeThread(HANDLE h, LPDWORD code)
     }
     if (code) *code = wh->u.thread.exit_code;
     return TRUE;
+}
+
+static inline void ExitThread(DWORD code)
+{
+    pthread_exit((void *)(uintptr_t)code);
 }
 
 /* ---- Process stubs ---- */

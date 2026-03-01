@@ -136,13 +136,24 @@ LDFLAGS_LINUX_test_iso_linux := -lcdio -liso9660 -ludf
 EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC)
 
 # hash tests: MD5/SHA1/SHA256/SHA512 via linux/hash.c (which includes common/hash_algos.c)
+# HashThread/IndividualHashThread tests additionally need:
+#   - stdio.c (uprintf), stdfn.c (safe_* helpers), ui.c (UpdateProgress stubs),
+#     stdlg.c (MyDialogBox stub), msg_dispatch.c (PostMessage compat bridge)
 HASH_SRC := hash_linux_glue.c
+HASH_LINUX_EXTRA := \
+	$(SRC_DIR)/linux/stdio.c \
+	$(SRC_DIR)/linux/stdfn.c \
+	$(SRC_DIR)/linux/ui.c \
+	$(SRC_DIR)/linux/stdlg.c \
+	$(COMPAT)/msg_dispatch.c
 CFLAGS_LINUX_test_hash := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                           -I$(SRC_DIR)/common \
                           -Wno-unused-function -Wno-sign-compare \
                           -Wno-implicit-function-declaration -Wno-unused-parameter \
+                          -Wno-missing-field-initializers \
                           -march=native
-EXTRA_SRC_LINUX_test_hash := $(HASH_SRC)
+LDFLAGS_LINUX_test_hash := -lpthread
+EXTRA_SRC_LINUX_test_hash := $(HASH_SRC) $(HASH_LINUX_EXTRA)
 
 CFLAGS_WIN_test_hash := -I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
                         -Wno-unused-function -Wno-sign-compare \

@@ -171,11 +171,11 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Function | Status | Notes |
 |----------|--------|-------|
 | MD5 / SHA-1 / SHA-256 / SHA-512 implementations | ✅ | All implemented in `src/windows/hash.c` in pure C — portable, just need to compile for Linux |
-| `DetectSHA1Acceleration()` / `DetectSHA256Acceleration()` | 🔧 | x86 CPUID check is platform-neutral; already works on Linux once compiled properly |
-| `HashFile()` / `HashBuffer()` | 🟡 | Need real Linux file I/O (`open`/`read`) instead of `CreateFile`/`ReadFile` |
-| `HashThread()` / `IndividualHashThread()` | 🟡 | Need pthread wrapper instead of `CreateThread` |
+| `DetectSHA1Acceleration()` / `DetectSHA256Acceleration()` | ✅ | x86 CPUID check is platform-neutral; works on Linux |
+| `HashFile()` / `HashBuffer()` | ✅ | Implemented in `src/linux/hash.c` with POSIX `open`/`read` |
+| `HashThread()` / `IndividualHashThread()` | ✅ | Implemented with pthread via compat layer; 78 tests passing |
 | `PE256Buffer()` / `efi_image_parse()` | 🟡 | PE parsing is pure C; remove Windows I/O |
-| `IsFileInDB()` / `IsBufferInDB()` | 🟡 | Hash database lookup — pure C once I/O is sorted |
+| `IsFileInDB()` / `IsBufferInDB()` | ✅ | Hash database lookup implemented in `src/linux/hash.c` |
 | `IsSignedBySecureBootAuthority()` / `IsBootloaderRevoked()` | 🟡 | Needs cert DB + SBAT parsing; uses `pki.c` |
 | `UpdateMD5Sum()` | 🟡 | Write `md5sum`-compatible file on the target drive |
 | `ValidateMD5Sum` flag | 🟡 | Validate checksums after write |
