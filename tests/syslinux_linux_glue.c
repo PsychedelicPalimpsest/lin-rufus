@@ -38,3 +38,10 @@ BOOL WriteFileWithRetry(HANDLE h, const void *buf, DWORD size, DWORD *written, D
     (void)h; (void)buf; (void)size; (void)written; (void)retries;
     return FALSE;
 }
+
+/* ---- globals.c ---- */
+char *ini_file = NULL;
+
+/* ---- stdio.c ---- */
+GUID *StringToGuid(const char *str) { (void)str; return NULL; }
+

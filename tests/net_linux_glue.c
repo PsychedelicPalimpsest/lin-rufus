@@ -29,6 +29,11 @@ void parse_update(char *buf, size_t len)
 /* ---- DownloadNewVersion stub ---- */
 void DownloadNewVersion(void) {}
 
+/* ---- efi_archname stub (defined in iso.c, used by net.c/hash.c) ---- */
+const char* efi_archname[] = {
+    "", "ia32", "x64", "arm", "aa64", "ia64", "riscv64", "loongarch64", "ebc"
+};
+
 /* ---- PostMessage / SendMessage stubs ----
  * msg_dispatch.c provides the real PostMessageA / SendMessageA in the build,
  * but the test link doesn't include it.  Provide minimal no-ops. */

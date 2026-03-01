@@ -56,17 +56,23 @@ CFLAGS_LINUX_test_msg_dispatch  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)
 LDFLAGS_LINUX_test_msg_dispatch := -lpthread
 EXTRA_SRC_LINUX_test_msg_dispatch := $(MSG_DISPATCH_SRC)
 
+# Shared flags for anything that links stdfn.c (fontconfig, freedos_data weak sym)
+FONTCONFIG_CFLAGS := $(shell pkg-config --cflags fontconfig 2>/dev/null)
+FONTCONFIG_LIBS   := $(shell pkg-config --libs   fontconfig 2>/dev/null)
+
 # stdfn tests: htab + StrArray — Linux compat + windows headers + linux stdfn.c
 STDFN_SRC := $(SRC_DIR)/linux/stdfn.c
-CFLAGS_LINUX_test_stdfn  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux -Wno-implicit-function-declaration $(shell pkg-config --cflags fontconfig 2>/dev/null)
+CFLAGS_LINUX_test_stdfn  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux -Wno-implicit-function-declaration $(FONTCONFIG_CFLAGS)
 EXTRA_SRC_LINUX_test_stdfn := $(STDFN_SRC)
-LDFLAGS_LINUX_test_stdfn := $(shell pkg-config --libs fontconfig 2>/dev/null)
+LDFLAGS_LINUX_test_stdfn := $(FONTCONFIG_LIBS)
 
 # dev_linux tests: device enumeration via fake sysfs
 DEV_LINUX_SRC := $(SRC_DIR)/linux/dev.c $(SRC_DIR)/linux/stdfn.c
 CFLAGS_LINUX_test_dev_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-                                 -Wno-implicit-function-declaration -Wno-unused-function
+                                 -Wno-implicit-function-declaration -Wno-unused-function \
+                                 $(FONTCONFIG_CFLAGS)
 EXTRA_SRC_LINUX_test_dev_linux := $(DEV_LINUX_SRC)
+LDFLAGS_LINUX_test_dev_linux := $(FONTCONFIG_LIBS)
 
 # device_monitor tests: lifecycle, callback dispatch, debounce
 DEVICE_MONITOR_SRC := $(SRC_DIR)/linux/device_monitor.c
@@ -503,7 +509,7 @@ _test_name = $(patsubst %_linux,%,$(notdir $@))
 
 %_linux: %.c $(CREGEX_SRC)
 	$(CC) $(CFLAGS_LINUX) $(CFLAGS_LINUX_$(_test_name)) -o $@ $< $(CREGEX_SRC) \
-	    $(EXTRA_SRC_LINUX_$(_test_name)) $(LDFLAGS_LINUX_$(_test_name))
+	    $(EXTRA_SRC_LINUX_$(_test_name)) $(LDFLAGS_LINUX_$(_test_name)) $(FONTCONFIG_LIBS)
 
 # Pattern rules for Windows binaries
 _win_test_name = $(patsubst %.exe,%,$(notdir $@))

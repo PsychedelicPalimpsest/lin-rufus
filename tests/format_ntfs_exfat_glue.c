@@ -28,6 +28,10 @@ DWORD RunCommandWithProgress(const char *cmd, const char *dir,
     return (DWORD)(rc == 0 ? 0 : 1);
 }
 
+/* ---- globals added in bad-blocks integration (not in test file stubs) ---- */
+BOOL enable_bad_blocks = FALSE;
+int  nb_passes_sel     = 0;
+
 /* ---- format.c needs these ---- */
 void UpdateProgress(int op, float percent) { (void)op; (void)percent; }
 BOOL ExtractISO(const char *src, const char *dst, BOOL scan_only)
@@ -35,8 +39,20 @@ BOOL ExtractISO(const char *src, const char *dst, BOOL scan_only)
 BOOL InstallSyslinux(DWORD di, char dl, int fs)
 { (void)di; (void)dl; (void)fs; return FALSE; }
 
+/* ---- badblocks.c ---- */
+typedef struct { int bb_count; } badblocks_report;
+BOOL BadBlocks(HANDLE hDrive, ULONGLONG disk_size, int nb_passes,
+               int flash_type, badblocks_report *report, FILE *fd)
+{ (void)hDrive; (void)disk_size; (void)nb_passes; (void)flash_type;
+  (void)report; (void)fd; return TRUE; }
+
+/* ---- stdlg.c ---- */
+int NotificationEx(int type, const char *setting, const notification_info *info,
+                   const char *title, const char *fmt, ...)
+{ (void)type; (void)setting; (void)info; (void)title; (void)fmt; return IDOK; }
+
 /* ---- settings.h / drive.c ---- */
 char *get_token_data_file_indexed(const char *token, const char *filename,
-                                   const int index)
+                                   int index)
 { (void)token; (void)filename; (void)index; return NULL; }
 GUID *StringToGuid(const char *str) { (void)str; return NULL; }

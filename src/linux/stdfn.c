@@ -13,6 +13,14 @@
 #include "freedos_data.h"
 
 /*
+ * Weak fallback for fd_resources: used when freedos_data.c is not linked
+ * (e.g. in unit tests that don't need FreeDOS resources).  The strong
+ * definition in freedos_data.c takes priority when that file is linked.
+ */
+__attribute__((weak)) const fd_resource_t fd_resources[FD_RESOURCES_COUNT] =
+    {{0, NULL, NULL, 0}};
+
+/*
  * Hash table functions - from glibc 2.3.2 via Windows stdfn.c:
  * [Aho,Sethi,Ullman] Compilers: Principles, Techniques and Tools, 1986
  * [Knuth]            The Art of Computer Programming, part 3 (6.4)
@@ -407,3 +415,25 @@ BOOL CompareGUID(const GUID *guid1, const GUID *guid2)
 }
 
 /* Hash function arrays */
+
+/* -------------------------------------------------------------------------
+ * Weak fallbacks for parser / settings functions.
+ *
+ * These are used when linux/parser.c is not linked (most unit-test builds).
+ * The strong definitions in linux/parser.c take priority when that file is
+ * compiled in.  Without these stubs, any test that includes drive.c (which
+ * includes settings.h, which calls get_token_data_file) fails to link.
+ * The weak stubs return NULL / FALSE which is the correct "not found" value.
+ * --------------------------------------------------------------------- */
+__attribute__((weak)) char* get_token_data_file_indexed(
+    const char* token, const char* filename, int index)
+{ (void)token; (void)filename; (void)index; return NULL; }
+
+__attribute__((weak)) char* set_token_data_file(
+    const char* token, const char* data, const char* filename)
+{ (void)token; (void)data; (void)filename; return NULL; }
+
+__attribute__((weak)) char* get_token_data_buffer(
+    const char* token, unsigned int n,
+    const char* buffer, size_t buffer_size)
+{ (void)token; (void)n; (void)buffer; (void)buffer_size; return NULL; }
