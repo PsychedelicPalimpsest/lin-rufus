@@ -573,6 +573,13 @@ EXTRA_SRC_LINUX_test_cli_linux := \
 	$(SRC_DIR)/linux/cli.c \
 	cli_linux_glue.c
 
+# compat_layer_linux tests: ABI / type-size / macro-value checks for linux/compat/
+# Pure header inclusion + value assertions — no extra .c sources needed.
+CFLAGS_LINUX_test_compat_layer := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter \
+	-Wno-implicit-function-declaration
+
 # download_resume_linux tests: .partial file helpers for resumable downloads
 CFLAGS_LINUX_test_download_resume_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
