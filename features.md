@@ -336,7 +336,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `InstallSyslinux()` | ✅ | Uses mcopy+libfat+pwrite; requires FAT32 image with >65524 clusters (libfat FAT28 detection); 36 tests pass |
 | `GetSyslinuxVersion()` | ✅ | Verbatim port from Windows; scans buffer for SYSLINUX/ISOLINUX version string |
 | `libfat_readfile()` | ✅ | pread-based FAT sector reader; `intptr_t` fd cast |
-| GRUB support | ❌ | GRUB write not yet wired (ISO extraction only) |
+| GRUB support | 🔧 | MBR boot code written via `write_grub2_mbr` (ms-sys); `InstallGrub2` calls `grub-install --target=i386-pc` for core.img install on BIOS-boot GRUB2 ISOs; wired into FormatThread after ExtractISO; 3 tests pass. GRUB4DOS: MBR-only (grldr copy not yet wired). UEFI GRUB: works via EFI files extracted by ISO extraction |
 
 ### 3n. WIM / VHD / WUE (`vhd.c`, `wue.c`)
 

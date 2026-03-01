@@ -574,6 +574,31 @@ TEST(write_mbr_preserves_partition_table)
 }
 
 /* ================================================================
+ * InstallGrub2 tests
+ * ================================================================ */
+
+extern BOOL InstallGrub2(const char *dev_path, const char *mount_path);
+
+TEST(install_grub2_null_dev_returns_false)
+{
+	BOOL r = InstallGrub2(NULL, "/tmp");
+	CHECK(r == FALSE);
+}
+
+TEST(install_grub2_null_mount_returns_false)
+{
+	BOOL r = InstallGrub2("/dev/sdb", NULL);
+	CHECK(r == FALSE);
+}
+
+TEST(install_grub2_nonexistent_dev_fails)
+{
+	/* grub-install should fail for a nonexistent device */
+	BOOL r = InstallGrub2("/dev/this_does_not_exist_xyz", "/tmp");
+	CHECK(r == FALSE);
+}
+
+/* ================================================================
  * WriteDrive tests
  * ================================================================ */
 
@@ -1085,6 +1110,11 @@ int main(void)
 	RUN(write_mbr_grub2_writes_nonzero_code);
 	RUN(write_mbr_win7_default);
 	RUN(write_mbr_preserves_partition_table);
+
+	printf("\n=== InstallGrub2 tests ===\n");
+	RUN(install_grub2_null_dev_returns_false);
+	RUN(install_grub2_null_mount_returns_false);
+	RUN(install_grub2_nonexistent_dev_fails);
 
 	printf("\n=== WriteDrive tests ===\n");
 	RUN(write_drive_bad_handle_fails);

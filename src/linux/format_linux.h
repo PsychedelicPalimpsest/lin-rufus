@@ -33,3 +33,13 @@ BOOL format_linux_write_mbr(HANDLE hDrive);
  * If bZeroDrive is FALSE, copies from global image_path to hDrive.
  */
 BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive);
+
+/*
+ * InstallGrub2 - install GRUB2 bootloader to the device.
+ *
+ * Calls grub-install (i386-pc target) with --boot-directory=<mount_path>/boot.
+ * dev_path is the raw block device (e.g. /dev/sdb).
+ * mount_path is the root of the mounted partition.
+ * Returns FALSE if grub-install is not found or fails.
+ */
+BOOL InstallGrub2(const char *dev_path, const char *mount_path);

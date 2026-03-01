@@ -339,6 +339,55 @@ out:
 }
 
 /* =========================================================================
+ * InstallGrub2 — install GRUB2 boot files to the device/partition
+ *
+ * Calls grub-install (or grub2-install) with i386-pc target.  mount_path is
+ * the already-mounted partition root (e.g. /tmp/rufus-mount-XXXXXX) where
+ * GRUB files were extracted.  dev_path is the raw block device (e.g. /dev/sdb).
+ * ======================================================================= */
+BOOL InstallGrub2(const char *dev_path, const char *mount_path)
+{
+	if (!dev_path || !mount_path) return FALSE;
+
+	/* Find grub-install binary */
+	static const char * const candidates[] = {
+		"/usr/bin/grub-install",
+		"/usr/sbin/grub-install",
+		"/usr/bin/grub2-install",
+		"/usr/sbin/grub2-install",
+		NULL
+	};
+	const char *grub_install = NULL;
+	for (int i = 0; candidates[i]; i++) {
+		if (access(candidates[i], X_OK) == 0) {
+			grub_install = candidates[i];
+			break;
+		}
+	}
+	if (!grub_install) {
+		uprintf("grub-install not found; skipping GRUB2 core install");
+		return FALSE;
+	}
+
+	/* Build boot-directory path */
+	char boot_dir[512];
+	snprintf(boot_dir, sizeof(boot_dir), "%s/boot", mount_path);
+
+	/* Construct and run grub-install */
+	char cmd[1024];
+	snprintf(cmd, sizeof(cmd),
+		"%s --target=i386-pc --boot-directory=%s --removable --no-floppy %s",
+		grub_install, boot_dir, dev_path);
+	uprintf("Running: %s", cmd);
+	int r = system(cmd);
+	if (r != 0) {
+		uprintf("grub-install failed with exit code %d", r);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+/* =========================================================================
  * FormatThread
  * ======================================================================= */
 
@@ -496,6 +545,17 @@ DWORD WINAPI FormatThread(void* param)
 			if (!ExtractISO(image_path, mount_path, FALSE)) {
 				if (!IS_ERROR(ErrorStatus))
 					ErrorStatus = RUFUS_ERROR(APPERR(ERROR_ISO_EXTRACT));
+			}
+
+			/* Install GRUB2 core.img for BIOS-boot GRUB2 images */
+			if (!IS_ERROR(ErrorStatus) && img_report.has_grub2
+			    && target_type == TT_BIOS && partition_type == PARTITION_STYLE_MBR) {
+				char *dev_path = GetPhysicalName(DriveIndex);
+				if (dev_path != NULL) {
+					if (!InstallGrub2(dev_path, mount_path))
+						uprintf("GRUB2 core install failed; BIOS boot may not work");
+					free(dev_path);
+				}
 			}
 			free(mount_path);
 		}

@@ -13,10 +13,24 @@ char *GuidToString(const GUID *guid, BOOL bDecorated)
     (void)guid; (void)bDecorated; return NULL;
 }
 
+GUID *StringToGuid(const char *str)
+{
+    (void)str; return NULL;
+}
+
 BOOL CompareGUID(const GUID *g1, const GUID *g2)
 {
     if (!g1 || !g2) return FALSE;
     return (__builtin_memcmp(g1, g2, sizeof(GUID)) == 0) ? TRUE : FALSE;
+}
+
+/* Stubs for parser.c symbols (needed by settings.h / IsFilteredDrive) */
+windows_version_t WindowsVersion = { 0 };
+
+char *get_token_data_file_indexed(const char *token, const char *filename,
+                                   const int index)
+{
+    (void)token; (void)filename; (void)index; return NULL;
 }
 
 /*
