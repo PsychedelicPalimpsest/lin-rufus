@@ -179,7 +179,8 @@ am__DEPENDENCIES_1 =
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/iso9660/libiso9660.a \
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/udf/libudf.a \
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/driver/libdriver.a \
-@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	wimlib/libwim.a
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	wimlib/libwim.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	$(am__DEPENDENCIES_1)
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@rufus_DEPENDENCIES =  \
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	bled/libbled.a \
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	ext2fs/libext2fs.a \
@@ -191,6 +192,7 @@ am__DEPENDENCIES_1 =
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/udf/libudf.a \
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/driver/libdriver.a \
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	wimlib/libwim.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	$(am__DEPENDENCIES_1) \
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	$(am__DEPENDENCIES_1)
 @TARGET_WINDOWS_TRUE@rufus_DEPENDENCIES = windows/rufus_rc.o \
 @TARGET_WINDOWS_TRUE@	bled/libbled.a ext2fs/libext2fs.a \
@@ -304,6 +306,8 @@ ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 ETAGS = @ETAGS@
 EXEEXT = @EXEEXT@
+FONTCONFIG_CFLAGS = @FONTCONFIG_CFLAGS@
+FONTCONFIG_LIBS = @FONTCONFIG_LIBS@
 GTK_CFLAGS = @GTK_CFLAGS@
 GTK_LIBS = @GTK_LIBS@
 INSTALL = @INSTALL@
@@ -420,7 +424,7 @@ rufus_SOURCES = $(COMMON_SOURCES) $(OS_SOURCES)
 @TARGET_WINDOWS_FALSE@rufus_CFLAGS = -I$(srcdir)/linux/compat -I$(srcdir)/linux -I$(srcdir)/windows -I$(srcdir)/common \
 @TARGET_WINDOWS_FALSE@	-I$(srcdir)/ms-sys/inc -I$(srcdir)/syslinux/libfat -I$(srcdir)/syslinux/libinstaller \
 @TARGET_WINDOWS_FALSE@	-I$(srcdir)/syslinux/win -I$(srcdir)/libcdio -I$(srcdir)/wimlib -I$(srcdir)/../res \
-@TARGET_WINDOWS_FALSE@	$(AM_CFLAGS) -DEXT2_FLAT_INCLUDES=0 -D_RUFUS -DSOLUTION=rufus
+@TARGET_WINDOWS_FALSE@	$(AM_CFLAGS) -DEXT2_FLAT_INCLUDES=0 -D_RUFUS -DSOLUTION=rufus $(FONTCONFIG_CFLAGS)
 
 @TARGET_WINDOWS_TRUE@rufus_CFLAGS = -I$(srcdir)/windows -I$(srcdir)/common \
 @TARGET_WINDOWS_TRUE@	-I$(srcdir)/ms-sys/inc -I$(srcdir)/syslinux/libfat -I$(srcdir)/syslinux/libinstaller \
@@ -430,10 +434,10 @@ rufus_SOURCES = $(COMMON_SOURCES) $(OS_SOURCES)
 @TARGET_WINDOWS_FALSE@rufus_LDFLAGS = $(AM_LDFLAGS)
 @TARGET_WINDOWS_TRUE@rufus_LDFLAGS = $(AM_LDFLAGS) -mwindows -L../.mingw
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev -lssl -lcrypto
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev -lssl -lcrypto $(FONTCONFIG_LIBS)
 
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev -lssl -lcrypto
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev -lssl -lcrypto $(FONTCONFIG_LIBS)
 
 @TARGET_WINDOWS_TRUE@rufus_LDADD = windows/rufus_rc.o bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
 @TARGET_WINDOWS_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(NONVULNERABLE_LIBS) $(VULNERABLE_LIBS)

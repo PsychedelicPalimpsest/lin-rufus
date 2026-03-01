@@ -411,7 +411,7 @@ void DestroyTooltip(HWND hCtrl)
 void DestroyAllTooltips(void)               {}
 BOOL SetTaskbarProgressValue(ULONGLONG done, ULONGLONG total) { (void)done;(void)total; return FALSE; }
 INT_PTR CALLBACK UpdateCallback(HWND h, UINT m, WPARAM w, LPARAM l)  { (void)h;(void)m;(void)w;(void)l; return 0; }
-void SetFidoCheck(void)                     {}
+/* SetFidoCheck is implemented in net.c */
 
 BOOL SetUpdateCheck(void)
 {

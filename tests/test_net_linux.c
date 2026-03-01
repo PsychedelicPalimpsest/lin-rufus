@@ -742,6 +742,29 @@ TEST(download_iso_no_crash)
 	CHECK(r == TRUE || r == FALSE);
 }
 
+/* ----------------------------------------------------------------
+ * DownloadISO — fails fast when fido_url is NULL
+ * (no pwsh, no script → return FALSE immediately without crash)
+ * ---------------------------------------------------------------- */
+TEST(download_iso_returns_false_when_no_fido_url)
+{
+	char *saved_url = fido_url;
+	fido_url = NULL;
+	BOOL r = DownloadISO();
+	fido_url = saved_url;
+	CHECK_MSG(r == FALSE, "DownloadISO must return FALSE when fido_url is NULL");
+}
+
+/* ----------------------------------------------------------------
+ * SetFidoCheck — does not crash when called
+ * ---------------------------------------------------------------- */
+extern void SetFidoCheck(void);
+TEST(set_fido_check_no_crash)
+{
+	SetFidoCheck();  /* may be a no-op if pwsh is absent; must not crash */
+	CHECK(1);
+}
+
 /* ================================================================
  * GetShortName helper (internal, tested via download log output)
  * ================================================================ */
@@ -814,6 +837,8 @@ int main(void)
 	printf("\n  UseLocalDbx / DownloadISO\n");
 	RUN(use_local_dbx_no_crash);
 	RUN(download_iso_no_crash);
+	RUN(download_iso_returns_false_when_no_fido_url);
+	RUN(set_fido_check_no_crash);
 
 	/* Teardown */
 	stop_http_server();

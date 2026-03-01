@@ -618,6 +618,8 @@ SUFFIX
 AM_LDFLAGS
 AM_CFLAGS
 VISIBILITY_CFLAGS
+BLKID_LIBS
+BLKID_CFLAGS
 CURL_LIBS
 CURL_CFLAGS
 USE_GTK_FALSE
@@ -740,7 +742,9 @@ PKG_CONFIG_LIBDIR
 GTK_CFLAGS
 GTK_LIBS
 CURL_CFLAGS
-CURL_LIBS'
+CURL_LIBS
+BLKID_CFLAGS
+BLKID_LIBS'
 
 
 # Initialize some variables set by options.
@@ -1395,6 +1399,9 @@ Some influential environment variables:
   GTK_LIBS    linker flags for GTK, overriding pkg-config
   CURL_CFLAGS C compiler flags for CURL, overriding pkg-config
   CURL_LIBS   linker flags for CURL, overriding pkg-config
+  BLKID_CFLAGS
+              C compiler flags for BLKID, overriding pkg-config
+  BLKID_LIBS  linker flags for BLKID, overriding pkg-config
 
 Use these variables to override the choices made by 'configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -5563,6 +5570,86 @@ printf "%s\n" "$as_me: libcurl found" >&6;}
 fi
   AM_CFLAGS="$AM_CFLAGS $CURL_CFLAGS"
   AM_LDFLAGS="$AM_LDFLAGS $CURL_LIBS"
+fi
+
+# libblkid — required for Linux drive label detection (drive.c)
+if test "x$target_os" = "xlinux"; then
+
+pkg_failed=no
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for blkid" >&5
+printf %s "checking for blkid... " >&6; }
+
+if test -n "$BLKID_CFLAGS"; then
+    pkg_cv_BLKID_CFLAGS="$BLKID_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"blkid\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "blkid") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_BLKID_CFLAGS=`$PKG_CONFIG --cflags "blkid" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$BLKID_LIBS"; then
+    pkg_cv_BLKID_LIBS="$BLKID_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"blkid\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "blkid") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_BLKID_LIBS=`$PKG_CONFIG --libs "blkid" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+                BLKID_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "blkid" 2>&1`
+        else
+                BLKID_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "blkid" 2>&1`
+        fi
+        # Put the nasty error message in config.log where it belongs
+        echo "$BLKID_PKG_ERRORS" >&5
+
+        as_fn_error $? "libblkid required for Linux build.
+Install it with: apt install libblkid-dev  OR  dnf install util-linux-devel" "$LINENO" 5
+elif test $pkg_failed = untried; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+        as_fn_error $? "libblkid required for Linux build.
+Install it with: apt install libblkid-dev  OR  dnf install util-linux-devel" "$LINENO" 5
+else
+        BLKID_CFLAGS=$pkg_cv_BLKID_CFLAGS
+        BLKID_LIBS=$pkg_cv_BLKID_LIBS
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: libblkid found" >&5
+printf "%s\n" "$as_me: libblkid found" >&6;}
+fi
+  AM_CFLAGS="$AM_CFLAGS $BLKID_CFLAGS"
+  AM_LDFLAGS="$AM_LDFLAGS $BLKID_LIBS"
 fi
 
 

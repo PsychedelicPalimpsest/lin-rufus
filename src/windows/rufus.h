@@ -244,6 +244,8 @@ enum user_message_type {
 	UM_TIMER_START,
 	UM_FORMAT_START,
 	UM_IMAGE_SCANNED,	/* ImageScanThread completed — refresh UI from img_report */
+	UM_HASH_COMPLETED,	/* HashThread completed — show hash results dialog */
+	UM_ENABLE_DOWNLOAD_ISO,	/* Fido URL found — enable Download ISO UI button */
 	// Start of the WM IDs for the language menu items
 	UM_LANGUAGE_MENU = WM_APP + 0x100
 };
