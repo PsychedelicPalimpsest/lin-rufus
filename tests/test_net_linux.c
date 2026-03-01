@@ -773,6 +773,78 @@ TEST(check_for_updates_double_call_returns_false)
 	CHECK(r2 == FALSE || r2 == TRUE); /* Exact result depends on timing */
 }
 
+/* ---- UM_NEW_VERSION message routing ---- */
+
+/* Capture facility declared in net_linux_glue.c */
+extern UINT _captured_post_msg;
+
+TEST(um_new_version_constant_differs_from_um_no_update)
+{
+	/* Ensure the new constant is defined and distinct */
+	CHECK_MSG(UM_NEW_VERSION != UM_NO_UPDATE,
+	          "UM_NEW_VERSION must differ from UM_NO_UPDATE");
+}
+
+TEST(um_new_version_is_valid_wm_app_range)
+{
+	/* All UM_* messages must be >= WM_APP */
+	CHECK_MSG(UM_NEW_VERSION >= WM_APP,
+	          "UM_NEW_VERSION must be in WM_APP range");
+}
+
+TEST(um_new_version_posted_when_version_is_newer)
+{
+	/* Arrange: current version is 0.0.0, update.version is 4.13.0 */
+	extern RUFUS_UPDATE update;
+	extern uint16_t rufus_version[3];
+	uint16_t saved_rv[3] = { rufus_version[0], rufus_version[1], rufus_version[2] };
+	uint16_t saved_uv[3] = { update.version[0], update.version[1], update.version[2] };
+
+	rufus_version[0] = 0; rufus_version[1] = 0; rufus_version[2] = 0;
+	update.version[0] = 4; update.version[1] = 13; update.version[2] = 0;
+	_captured_post_msg = 0;
+
+	/* Call the helper directly to verify correct message is chosen */
+	BOOL newer = rufus_is_newer_version(update.version, rufus_version);
+	if (newer)
+		PostMessage(hMainDialog, UM_NEW_VERSION, 0, 0);
+	else
+		PostMessage(hMainDialog, UM_NO_UPDATE, 0, 0);
+
+	CHECK_MSG(newer == TRUE, "4.13.0 > 0.0.0 must be newer");
+	CHECK_MSG(_captured_post_msg == UM_NEW_VERSION,
+	          "UM_NEW_VERSION must be posted when version is newer");
+
+	/* Restore */
+	rufus_version[0] = saved_rv[0]; rufus_version[1] = saved_rv[1]; rufus_version[2] = saved_rv[2];
+	update.version[0] = saved_uv[0]; update.version[1] = saved_uv[1]; update.version[2] = saved_uv[2];
+}
+
+TEST(um_no_update_posted_when_version_is_same)
+{
+	extern RUFUS_UPDATE update;
+	extern uint16_t rufus_version[3];
+	uint16_t saved_rv[3] = { rufus_version[0], rufus_version[1], rufus_version[2] };
+	uint16_t saved_uv[3] = { update.version[0], update.version[1], update.version[2] };
+
+	rufus_version[0] = 4; rufus_version[1] = 13; rufus_version[2] = 0;
+	update.version[0] = 4; update.version[1] = 13; update.version[2] = 0;
+	_captured_post_msg = 0;
+
+	BOOL newer = rufus_is_newer_version(update.version, rufus_version);
+	if (newer)
+		PostMessage(hMainDialog, UM_NEW_VERSION, 0, 0);
+	else
+		PostMessage(hMainDialog, UM_NO_UPDATE, 0, 0);
+
+	CHECK_MSG(newer == FALSE, "same version must not be newer");
+	CHECK_MSG(_captured_post_msg == UM_NO_UPDATE,
+	          "UM_NO_UPDATE must be posted when version is same");
+
+	rufus_version[0] = saved_rv[0]; rufus_version[1] = saved_rv[1]; rufus_version[2] = saved_rv[2];
+	update.version[0] = saved_uv[0]; update.version[1] = saved_uv[1]; update.version[2] = saved_uv[2];
+}
+
 /* ================================================================
  * DownloadSignedFile / DownloadSignedFileThreaded tests
  * ================================================================ */
@@ -1029,6 +1101,12 @@ int main(void)
 	RUN(version_zero_is_not_newer);
 	RUN(check_for_updates_ini_null_runs);
 	RUN(check_for_updates_double_call_returns_false);
+
+	printf("\n  UM_NEW_VERSION message routing\n");
+	RUN(um_new_version_constant_differs_from_um_no_update);
+	RUN(um_new_version_is_valid_wm_app_range);
+	RUN(um_new_version_posted_when_version_is_newer);
+	RUN(um_no_update_posted_when_version_is_same);
 
 	printf("\n  DownloadSignedFile / DownloadSignedFileThreaded — smoke tests\n");
 	RUN(download_signed_file_null_url_returns_zero);

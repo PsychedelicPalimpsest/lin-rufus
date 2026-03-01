@@ -36,10 +36,18 @@ const char* efi_archname[] = {
 
 /* ---- PostMessage / SendMessage stubs ----
  * msg_dispatch.c provides the real PostMessageA / SendMessageA in the build,
- * but the test link doesn't include it.  Provide minimal no-ops. */
+ * but the test link doesn't include it.  Provide capturing stubs so tests
+ * can inspect which message was last posted. */
+UINT _captured_post_msg = 0;
+WPARAM _captured_post_wparam = 0;
+LPARAM _captured_post_lparam = 0;
+
 BOOL PostMessageA(HWND h, UINT msg, WPARAM w, LPARAM l)
 {
-	(void)h; (void)msg; (void)w; (void)l;
+	(void)h;
+	_captured_post_msg    = msg;
+	_captured_post_wparam = w;
+	_captured_post_lparam = l;
 	return TRUE;
 }
 LRESULT SendMessageA(HWND h, UINT msg, WPARAM w, LPARAM l)

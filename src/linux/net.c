@@ -414,7 +414,8 @@ static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 		if (rufus_is_newer_version(update.version, rufus_version)) {
 			uprintf("New version %d.%d.%d available!",
 			        update.version[0], update.version[1], update.version[2]);
-			DownloadNewVersion();
+			/* Notify the main thread so it can show the update dialog */
+			PostMessage(hMainDialog, UM_NEW_VERSION, 0, 0);
 		} else {
 			uprintf("Rufus is up to date (%d.%d.%d).",
 			        rufus_version[0], rufus_version[1], rufus_version[2]);

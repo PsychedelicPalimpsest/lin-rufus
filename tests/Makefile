@@ -220,6 +220,13 @@ CFLAGS_LINUX_test_ui_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linu
 LDFLAGS_LINUX_test_ui_linux := $(FONTCONFIG_LIBS)
 EXTRA_SRC_LINUX_test_ui_linux := $(SRC_DIR)/linux/globals.c
 
+# compat_linux tests: shlwapi.h (PathFileExistsA, PathCombineA) and shellapi.h (ShellExecuteA)
+# Pure header-only implementation — no extra .c sources needed
+CFLAGS_LINUX_test_compat_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                   -D_GNU_SOURCE \
+                                   -Wno-unused-function -Wno-unused-parameter \
+                                   -Wno-implicit-function-declaration
+
 # stdlg_linux tests: NotificationEx, FileDialog, CustomSelectionDialog, ListDialog
 # Links against stdlg.c (which provides test-mode injection) and stdfn.c only;
 # stdio.c is NOT needed here (stdlg uses stdio.h directly, not rufus stdio.c)

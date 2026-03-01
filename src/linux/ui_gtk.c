@@ -1067,6 +1067,56 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		rufus_gtk_update_status("No updates available.");
 		break;
 
+	case UM_NEW_VERSION: {
+		/* CheckForUpdates detected a newer version — show a GTK dialog */
+		extern RUFUS_UPDATE update;
+		char msg[512];
+		if (update.version[0] || update.version[1] || update.version[2])
+			snprintf(msg, sizeof(msg),
+			         "Rufus %d.%d.%d is available.\n\n"
+			         "Would you like to open the download page?",
+			         update.version[0], update.version[1], update.version[2]);
+		else
+			snprintf(msg, sizeof(msg),
+			         "A new version of Rufus is available.\n\n"
+			         "Would you like to open the download page?");
+
+		GtkWidget *dlg = gtk_message_dialog_new(
+			rw.window ? GTK_WINDOW(rw.window) : NULL,
+			GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+			GTK_MESSAGE_INFO,
+			GTK_BUTTONS_NONE,
+			"%s", msg);
+		gtk_window_set_title(GTK_WINDOW(dlg), "New Version Available");
+
+		/* Show release notes if available */
+		if (update.release_notes && update.release_notes[0]) {
+			GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
+			GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
+			gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+			                               GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+			gtk_widget_set_size_request(scroll, 400, 150);
+			GtkWidget *tv = gtk_text_view_new();
+			gtk_text_view_set_editable(GTK_TEXT_VIEW(tv), FALSE);
+			gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(tv), GTK_WRAP_WORD_CHAR);
+			gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(tv)),
+			                         update.release_notes, -1);
+			gtk_container_add(GTK_CONTAINER(scroll), tv);
+			gtk_box_pack_start(GTK_BOX(content), scroll, TRUE, TRUE, 4);
+			gtk_widget_show_all(content);
+		}
+
+		gtk_dialog_add_buttons(GTK_DIALOG(dlg),
+			"Remind me later", GTK_RESPONSE_CANCEL,
+			"Download", GTK_RESPONSE_ACCEPT,
+			NULL);
+
+		if (gtk_dialog_run(GTK_DIALOG(dlg)) == GTK_RESPONSE_ACCEPT)
+			DownloadNewVersion();
+		gtk_widget_destroy(dlg);
+		break;
+	}
+
 	case UM_IMAGE_SCANNED:
 		/* ImageScanThread finished — img_report is now populated.
 		 * Refresh boot type, filesystem, and partition-scheme combos

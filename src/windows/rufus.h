@@ -237,6 +237,7 @@ enum user_message_type {
 	UM_PROGRESS_INIT,
 	UM_PROGRESS_EXIT,
 	UM_NO_UPDATE,
+	UM_NEW_VERSION,		/* CheckForUpdates found a newer version — show dialog */
 	UM_UPDATE_CSM_TOOLTIP,
 	UM_RESIZE_BUTTONS,
 	UM_ENABLE_CONTROLS,
