@@ -9,10 +9,14 @@
  * (at your option) any later version.
  */
 
+/* Tell windows.h to skip its weak stubs; we provide the real implementations */
+#define LINUX_DRIVE_C
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -30,10 +34,59 @@
 extern RUFUS_DRIVE rufus_drive[MAX_DRIVES];
 
 /* -------------------------------------------------------------------------
- * Drive-owned globals
+ * Partition fd offset table — strong implementations for linux_get_fd_base_offset
+ * etc., declared as weak no-ops in compat/windows.h.
+ * Maps open fds to (base_offset, partition_size) for raw image file partitions.
  * --------------------------------------------------------------------- */
-RUFUS_DRIVE_INFO SelectedDrive = { 0 };
+#define MAX_PART_FDS 32
+static int      _pfd[MAX_PART_FDS];
+static uint64_t _pbase[MAX_PART_FDS];
+static uint64_t _psize[MAX_PART_FDS];
+static int      _pfd_count = 0;
+
+void linux_register_fd_offset(int fd, uint64_t base, uint64_t size)
+{
+    for (int i = 0; i < _pfd_count; i++) {
+        if (_pfd[i] == fd) { _pbase[i] = base; _psize[i] = size; return; }
+    }
+    if (_pfd_count < MAX_PART_FDS) {
+        _pfd  [_pfd_count] = fd;
+        _pbase[_pfd_count] = base;
+        _psize[_pfd_count] = size;
+        _pfd_count++;
+    }
+}
+
+void linux_unregister_fd_offset(int fd)
+{
+    for (int i = 0; i < _pfd_count; i++) {
+        if (_pfd[i] == fd) {
+            _pfd_count--;
+            _pfd  [i] = _pfd  [_pfd_count];
+            _pbase[i] = _pbase[_pfd_count];
+            _psize[i] = _psize[_pfd_count];
+            return;
+        }
+    }
+}
+
+uint64_t linux_get_fd_base_offset(int fd)
+{
+    for (int i = 0; i < _pfd_count; i++)
+        if (_pfd[i] == fd) return _pbase[i];
+    return 0;
+}
+
+uint64_t linux_get_fd_part_size(int fd)
+{
+    for (int i = 0; i < _pfd_count; i++)
+        if (_pfd[i] == fd) return _psize[i];
+    return 0;
+}
+
+
 int partition_index[PI_MAX]    = { 0 };
+RUFUS_DRIVE_INFO SelectedDrive = { 0 };
 
 /* -------------------------------------------------------------------------
  * Internal helpers
@@ -539,10 +592,30 @@ char *AltGetLogicalName(DWORD DriveIndex, uint64_t PartitionOffset,
 char *GetExtPartitionName(DWORD DriveIndex, uint64_t PartitionOffset)
 {
     char *name = GetLogicalName(DriveIndex, PartitionOffset, FALSE, TRUE);
-    /* Formatting whole device (offset 0): fall back to physical path when
-     * no sysfs partition node exists (e.g. temp image file in tests). */
-    if (!name && PartitionOffset == 0)
-        name = GetPhysicalName(DriveIndex);
+    if (name) return name;
+
+    /* Fall back to physical path when no sysfs partition node exists. */
+    name = GetPhysicalName(DriveIndex);
+    if (!name) return NULL;
+
+    /* For non-zero offsets on image files, append "@offset:size" so
+     * posix_io.c can locate the partition region within the raw file. */
+    if (PartitionOffset > 0) {
+        struct stat st;
+        if (stat(name, &st) == 0 && !S_ISBLK(st.st_mode)) {
+            uint64_t part_size = (uint64_t)st.st_size > PartitionOffset
+                                 ? (uint64_t)st.st_size - PartitionOffset : 0;
+            /* Build "path@offset:size" */
+            size_t len = strlen(name) + 64;
+            char *tagged = (char*)malloc(len);
+            if (tagged) {
+                snprintf(tagged, len, "%s@%" PRIu64 ":%" PRIu64,
+                         name, (uint64_t)PartitionOffset, part_size);
+                free(name);
+                return tagged;
+            }
+        }
+    }
     return name;
 }
 
@@ -559,16 +632,31 @@ HANDLE GetLogicalHandle(DWORD DriveIndex, uint64_t PartitionOffset,
 {
     (void)bLockDrive; (void)bWriteShare;
     char *name = GetLogicalName(DriveIndex, PartitionOffset, FALSE, TRUE);
-    /* Formatting whole device (offset 0): fall back to physical path when
-     * no sysfs partition node exists (e.g. temp image file in tests). */
-    if (!name && PartitionOffset == 0)
+    /* Fall back to the physical path when no sysfs partition node exists
+     * (e.g. temp image files in tests, or raw disk images). */
+    if (!name)
         name = GetPhysicalName(DriveIndex);
     if (!name) return INVALID_HANDLE_VALUE;
+
     int flags = bWriteAccess ? O_RDWR : O_RDONLY;
     flags |= O_CLOEXEC;
     int fd = open(name, flags);
     free(name);
-    return (fd >= 0) ? (HANDLE)(intptr_t)fd : INVALID_HANDLE_VALUE;
+    if (fd < 0) return INVALID_HANDLE_VALUE;
+
+    /* For image files with a non-zero partition offset, register the offset
+     * so that SetFilePointerEx(FILE_BEGIN) transparently adds it. */
+    if (PartitionOffset > 0) {
+        struct stat st;
+        if (fstat(fd, &st) == 0 && !S_ISBLK(st.st_mode)) {
+            uint64_t disk_size = (uint64_t)st.st_size;
+            uint64_t part_size = (disk_size > PartitionOffset)
+                                 ? (disk_size - PartitionOffset) : 0;
+            linux_register_fd_offset(fd, PartitionOffset, part_size);
+        }
+    }
+
+    return (HANDLE)(intptr_t)fd;
 }
 
 HANDLE AltGetLogicalHandle(DWORD DriveIndex, uint64_t PartitionOffset,

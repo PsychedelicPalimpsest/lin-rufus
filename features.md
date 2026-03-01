@@ -143,7 +143,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `FormatThread()` (main format worker) | 🟡 | Stub; real implementation pending FormatPartition/WritePBR integration |
+| `FormatThread()` (main format worker) | ✅ | Full FormatThread workflow: ClearMBRGPT, CreatePartition, FormatPartition, WriteMBR, WritePBR; FAT32 + ext2/3; MBR + GPT; image write + zero-drive modes; 30 new tests (105 total) |
 | `FormatPartition()` | ✅ | Routes FAT32 → `FormatLargeFAT32`, ext2/3/4 → `FormatExtFs`; 6 tests pass |
 | `WritePBR()` (partition boot record) | ✅ | FAT32: ms-sys `write_fat_32_br` + primary/backup sectors; ext: no-op TRUE; 3 tests pass |
 | `FormatLargeFAT32()` | ✅ | Full POSIX implementation; 16 tests pass |

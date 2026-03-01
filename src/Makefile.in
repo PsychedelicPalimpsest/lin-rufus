@@ -102,13 +102,17 @@ PROGRAMS = $(noinst_PROGRAMS)
 am__dirstamp = $(am__leading_dot)dirstamp
 am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 	common/rufus-cregex_parse.$(OBJEXT) \
-	common/rufus-cregex_vm.$(OBJEXT) common/rufus-xml.$(OBJEXT)
+	common/rufus-cregex_vm.$(OBJEXT) common/rufus-xml.$(OBJEXT) \
+	common/rufus-localization.$(OBJEXT) \
+	common/rufus-parser.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@am__objects_2 =  \
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	linux/rufus-ui.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@am__objects_2 = linux/rufus-ui_gtk.$(OBJEXT)
-@TARGET_WINDOWS_FALSE@am__objects_3 = linux/rufus-badblocks.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@am__objects_3 = linux/compat/rufus-msg_dispatch.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-badblocks.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-darkmode.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-dev.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-device_monitor.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-dos.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-dos_locale.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-drive.$(OBJEXT) \
@@ -286,6 +290,8 @@ CFLAGS = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 CSCOPE = @CSCOPE@
 CTAGS = @CTAGS@
+CURL_CFLAGS = @CURL_CFLAGS@
+CURL_LIBS = @CURL_LIBS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DLLTOOL = @DLLTOOL@
@@ -386,8 +392,12 @@ top_srcdir = @top_srcdir@
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES_1 = $(WINDRES)
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES_ = $(AM_V_WINDRES_$(AM_DEFAULT_VERBOSITY))
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES = $(AM_V_WINDRES_$(V))
-COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c
-@TARGET_WINDOWS_FALSE@OS_SOURCES = linux/badblocks.c linux/darkmode.c linux/dev.c linux/dos.c linux/dos_locale.c \
+COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c \
+	common/localization.c common/parser.c
+
+@TARGET_WINDOWS_FALSE@OS_SOURCES = linux/compat/msg_dispatch.c \
+@TARGET_WINDOWS_FALSE@	linux/badblocks.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
+@TARGET_WINDOWS_FALSE@	linux/dos.c linux/dos_locale.c \
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
@@ -416,10 +426,10 @@ rufus_SOURCES = $(COMMON_SOURCES) $(OS_SOURCES)
 @TARGET_WINDOWS_FALSE@rufus_LDFLAGS = $(AM_LDFLAGS)
 @TARGET_WINDOWS_TRUE@rufus_LDFLAGS = $(AM_LDFLAGS) -mwindows -L../.mingw
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev
 
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS)
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev
 
 @TARGET_WINDOWS_TRUE@rufus_LDADD = windows/rufus_rc.o bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
 @TARGET_WINDOWS_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(NONVULNERABLE_LIBS) $(VULNERABLE_LIBS)
@@ -467,12 +477,20 @@ common/rufus-cregex_compile.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-cregex_parse.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-cregex_vm.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-xml.$(OBJEXT): common/$(am__dirstamp)
+common/rufus-localization.$(OBJEXT): common/$(am__dirstamp)
+common/rufus-parser.$(OBJEXT): common/$(am__dirstamp)
+linux/compat/$(am__dirstamp):
+	@$(MKDIR_P) linux/compat
+	@: >>linux/compat/$(am__dirstamp)
+linux/compat/rufus-msg_dispatch.$(OBJEXT):  \
+	linux/compat/$(am__dirstamp)
 linux/$(am__dirstamp):
 	@$(MKDIR_P) linux
 	@: >>linux/$(am__dirstamp)
 linux/rufus-badblocks.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-darkmode.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-dev.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-device_monitor.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-dos.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-dos_locale.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-drive.$(OBJEXT): linux/$(am__dirstamp)
@@ -536,6 +554,7 @@ mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
 	-rm -f common/*.$(OBJEXT)
 	-rm -f linux/*.$(OBJEXT)
+	-rm -f linux/compat/*.$(OBJEXT)
 	-rm -f windows/*.$(OBJEXT)
 
 distclean-compile:
@@ -571,6 +590,24 @@ common/rufus-xml.o: common/xml.c
 common/rufus-xml.obj: common/xml.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-xml.obj `if test -f 'common/xml.c'; then $(CYGPATH_W) 'common/xml.c'; else $(CYGPATH_W) '$(srcdir)/common/xml.c'; fi`
 
+common/rufus-localization.o: common/localization.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-localization.o `test -f 'common/localization.c' || echo '$(srcdir)/'`common/localization.c
+
+common/rufus-localization.obj: common/localization.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-localization.obj `if test -f 'common/localization.c'; then $(CYGPATH_W) 'common/localization.c'; else $(CYGPATH_W) '$(srcdir)/common/localization.c'; fi`
+
+common/rufus-parser.o: common/parser.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-parser.o `test -f 'common/parser.c' || echo '$(srcdir)/'`common/parser.c
+
+common/rufus-parser.obj: common/parser.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-parser.obj `if test -f 'common/parser.c'; then $(CYGPATH_W) 'common/parser.c'; else $(CYGPATH_W) '$(srcdir)/common/parser.c'; fi`
+
+linux/compat/rufus-msg_dispatch.o: linux/compat/msg_dispatch.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/compat/rufus-msg_dispatch.o `test -f 'linux/compat/msg_dispatch.c' || echo '$(srcdir)/'`linux/compat/msg_dispatch.c
+
+linux/compat/rufus-msg_dispatch.obj: linux/compat/msg_dispatch.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/compat/rufus-msg_dispatch.obj `if test -f 'linux/compat/msg_dispatch.c'; then $(CYGPATH_W) 'linux/compat/msg_dispatch.c'; else $(CYGPATH_W) '$(srcdir)/linux/compat/msg_dispatch.c'; fi`
+
 linux/rufus-badblocks.o: linux/badblocks.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-badblocks.o `test -f 'linux/badblocks.c' || echo '$(srcdir)/'`linux/badblocks.c
 
@@ -588,6 +625,12 @@ linux/rufus-dev.o: linux/dev.c
 
 linux/rufus-dev.obj: linux/dev.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-dev.obj `if test -f 'linux/dev.c'; then $(CYGPATH_W) 'linux/dev.c'; else $(CYGPATH_W) '$(srcdir)/linux/dev.c'; fi`
+
+linux/rufus-device_monitor.o: linux/device_monitor.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-device_monitor.o `test -f 'linux/device_monitor.c' || echo '$(srcdir)/'`linux/device_monitor.c
+
+linux/rufus-device_monitor.obj: linux/device_monitor.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-device_monitor.obj `if test -f 'linux/device_monitor.c'; then $(CYGPATH_W) 'linux/device_monitor.c'; else $(CYGPATH_W) '$(srcdir)/linux/device_monitor.c'; fi`
 
 linux/rufus-dos.o: linux/dos.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-dos.o `test -f 'linux/dos.c' || echo '$(srcdir)/'`linux/dos.c
@@ -1026,6 +1069,7 @@ distclean-generic:
 	-test . = "$(srcdir)" || $(am__rm_f) $(CONFIG_CLEAN_VPATH_FILES)
 	-$(am__rm_f) common/$(am__dirstamp)
 	-$(am__rm_f) linux/$(am__dirstamp)
+	-$(am__rm_f) linux/compat/$(am__dirstamp)
 	-$(am__rm_f) windows/$(am__dirstamp)
 
 maintainer-clean-generic:

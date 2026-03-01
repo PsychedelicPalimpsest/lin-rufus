@@ -680,6 +680,470 @@ static void test_three_drives_sorted(void)
 	rmdir_recursive(sysfs); rmdir_recursive(dev);
 }
 
+/* ===== Additional tests ===== */
+
+/* 21. One sector below MIN_DRIVE_SIZE is excluded */
+static void test_one_sector_below_min_size_excluded(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	/* MIN_DRIVE_SIZE = 8 MB = 8*1024*1024 bytes; minus one sector (512 bytes) */
+	uint64_t sectors = (uint64_t)8 * 1024 * 1024 / 512 - 1;
+	FakeDev devs[] = {
+		{ "sda", 1, sectors, "Test", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 0);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 22. Zero-sector drive is excluded */
+static void test_zero_sector_excluded(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	FakeDev devs[] = {
+		{ "sda", 1, 0, "Test", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 0);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 23. Vendor-only name (no model file) */
+static void test_vendor_only_name(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Corsair", NULL, 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(rufus_drive[0].name != NULL);
+	CHECK(strcmp(rufus_drive[0].name, "Corsair") == 0);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 24. Model-only name (no vendor file) */
+static void test_model_only_name(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, NULL, "Ultra Flair\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(rufus_drive[0].name != NULL);
+	CHECK(strcmp(rufus_drive[0].name, "Ultra Flair") == 0);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 25. Trailing whitespace / newlines in sysfs attrs are stripped */
+static void test_whitespace_trimmed_from_attrs(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	/* sysfs writes vendor with trailing spaces and model with a newline */
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Kingston  \n", "DataTraveler   \n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+
+	/* The name must not contain trailing spaces or newlines */
+	const char* n = rufus_drive[0].name;
+	CHECK(n != NULL);
+	if (n) {
+		size_t len = strlen(n);
+		CHECK(len > 0);
+		CHECK(n[len - 1] != ' ');
+		CHECK(n[len - 1] != '\n');
+		CHECK(n[len - 1] != '\r');
+		/* Individual components must appear trimmed */
+		CHECK(strstr(n, "Kingston") != NULL);
+		CHECK(strstr(n, "DataTraveler") != NULL);
+	}
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 26. devnum that matches no drive → first item selected (no crash) */
+static void test_devnum_no_match_returns_true(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Test", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	/* Pass an index that can't possibly match any discovered drive */
+	BOOL ret = GetDevicesWithRoot(0xDEADBEEF, sysfs, dev);
+	CHECK(ret == TRUE);
+	CHECK(count_drives() == 1);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 27. id field is the full /dev/NAME path */
+static void test_id_field_is_dev_path(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Test", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+
+	/* id must end with "/sda" (relative to our fake dev root) */
+	CHECK(rufus_drive[0].id != NULL);
+	if (rufus_drive[0].id) {
+		const char* p = strrchr(rufus_drive[0].id, '/');
+		CHECK(p != NULL);
+		if (p) CHECK(strcmp(p + 1, "sda") == 0);
+	}
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 28. label field is an empty string (not NULL) */
+static void test_label_field_empty_string(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Test", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(rufus_drive[0].label != NULL);
+	if (rufus_drive[0].label)
+		CHECK(rufus_drive[0].label[0] == '\0');
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 29. hub field is NULL (not allocated) */
+static void test_hub_field_is_null(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Test", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(rufus_drive[0].hub == NULL);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 30. port field is 0 */
+static void test_port_field_is_zero(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Test", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(rufus_drive[0].port == 0);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 31. sysfs entry after MAX_DRIVES valid drives is silently ignored */
+static void test_max_drives_cap(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+
+	/* Create MAX_DRIVES + 2 valid removable drives */
+	int n = MAX_DRIVES + 2;
+	for (int i = 0; i < n; i++) {
+		char name[32], node[128], removable_path[256], size_path[256];
+		char dev_dir[256], model_path[256], block_dir[256];
+
+		snprintf(name, sizeof(name), "sd%c", 'a' + (i % 26));
+		/* Unique names: after z, use two-char suffixes like "sda0".
+		 * Keep it simple: just use indices encoded as hex in name. */
+		snprintf(name, sizeof(name), "sd%04x", i);
+
+		snprintf(block_dir, sizeof(block_dir), "%s/block/%s", sysfs, name);
+		mkdirs(block_dir);
+
+		snprintf(removable_path, sizeof(removable_path), "%s/removable", block_dir);
+		fake_write_file(removable_path, "1\n");
+
+		char sec[32]; snprintf(sec, sizeof(sec), "%llu\n",
+		              (unsigned long long)(s_8g + (uint64_t)i));
+		snprintf(size_path, sizeof(size_path), "%s/size", block_dir);
+		fake_write_file(size_path, sec);
+
+		snprintf(dev_dir, sizeof(dev_dir), "%s/device", block_dir);
+		mkdirs(dev_dir);
+		snprintf(model_path, sizeof(model_path), "%s/model", dev_dir);
+		fake_write_file(model_path, "USB Drive\n");
+
+		/* create /dev node */
+		snprintf(node, sizeof(node), "%s/%s", dev, name);
+		fake_write_file(node, "");
+	}
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == MAX_DRIVES);
+
+	ClearDrives();
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 32. Calling GetDevices again after adding a drive updates the list */
+static void test_list_updates_on_second_call(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	uint64_t s_4g = (uint64_t)4 * 1024 * 1024 * 1024 / 512;
+
+	FakeDev first[] = {
+		{ "sda", 1, s_8g, "First", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, first, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+
+	/* Add a second drive to the fake sysfs and dev */
+	FakeDev second[] = {
+		{ "sdb", 1, s_4g, "Second", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, second, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 2);
+
+	/* Sorted: sdb (4GB) first */
+	CHECK(rufus_drive[0].size == s_4g * 512ULL);
+	CHECK(rufus_drive[1].size == s_8g * 512ULL);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 33. NVMe-style device (nvme0n1) is discovered when enable_HDDs is TRUE */
+static void test_nvme_style_device_with_hdd_enabled(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_512g = (uint64_t)512ULL * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		/* NVMe drives are typically non-removable */
+		{ "nvme0n1", 0, s_512g, "Samsung", "SSD 980\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	enable_HDDs = TRUE;
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(strstr(rufus_drive[0].name, "Samsung") != NULL);
+	enable_HDDs = FALSE;
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 34. NVMe device excluded when enable_HDDs is FALSE */
+static void test_nvme_excluded_without_hdd_flag(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_512g = (uint64_t)512ULL * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "nvme0n1", 0, s_512g, "Samsung", "SSD 980\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	enable_HDDs = FALSE;
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 0);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 35. SD-card style device (mmcblk0) is discovered when removable=1 */
+static void test_mmcblk_device_discovered(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_32g = (uint64_t)32ULL * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "mmcblk0", 1, s_32g, "SanDisk", "SD Card\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(strstr(rufus_drive[0].name, "SanDisk") != NULL);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 36. Display name contains both vendor and model */
+static void test_display_name_has_vendor_and_model(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Verbatim", "Store N Go\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(rufus_drive[0].display_name != NULL);
+	if (rufus_drive[0].display_name) {
+		CHECK(strstr(rufus_drive[0].display_name, "Verbatim") != NULL);
+		CHECK(strstr(rufus_drive[0].display_name, "Store N Go") != NULL);
+		CHECK(strstr(rufus_drive[0].display_name, "GB") != NULL);
+	}
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 37. Two drives with identical sizes: both discovered, order stable */
+static void test_two_drives_same_size(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "VendorA", "Model1\n", 1, 1, NULL, NULL },
+		{ "sdb", 1, s_8g, "VendorB", "Model2\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 2);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 2);
+	CHECK(rufus_drive[0].size == s_8g * 512ULL);
+	CHECK(rufus_drive[1].size == s_8g * 512ULL);
+	/* Both must have valid indices */
+	CHECK(rufus_drive[0].index >= DRIVE_INDEX_MIN);
+	CHECK(rufus_drive[1].index >= DRIVE_INDEX_MIN);
+	CHECK(rufus_drive[0].index != rufus_drive[1].index);
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 38. drive_index values are contiguous from DRIVE_INDEX_MIN */
+static void test_drive_indices_are_contiguous(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_1g = (uint64_t)1  * 1024 * 1024 * 1024 / 512;
+	uint64_t s_2g = (uint64_t)2  * 1024 * 1024 * 1024 / 512;
+	uint64_t s_4g = (uint64_t)4  * 1024 * 1024 * 1024 / 512;
+	uint64_t s_8g = (uint64_t)8  * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sdd", 1, s_8g, "D", "Drive\n", 1, 1, NULL, NULL },
+		{ "sdc", 1, s_4g, "C", "Drive\n", 1, 1, NULL, NULL },
+		{ "sdb", 1, s_2g, "B", "Drive\n", 1, 1, NULL, NULL },
+		{ "sda", 1, s_1g, "A", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 4);
+
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 4);
+	for (int i = 0; i < 4; i++)
+		CHECK(rufus_drive[i].index == (DWORD)(DRIVE_INDEX_MIN + i));
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 39. enable_HDDs=TRUE: both removable and non-removable drives found */
+static void test_enable_hdds_includes_both_types(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g   = (uint64_t)8   * 1024 * 1024 * 1024 / 512;
+	uint64_t s_500g = (uint64_t)500ULL * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g,   "USB",  "Flash\n",    1, 1, NULL, NULL },
+		{ "sdb", 0, s_500g, "WD",   "My Book\n",  1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 2);
+
+	enable_HDDs = TRUE;
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 2);
+	/* sorted: USB flash (8GB) before HDD (500GB) */
+	CHECK(rufus_drive[0].size < rufus_drive[1].size);
+	enable_HDDs = FALSE;
+
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 40. ClearDrives on already-empty array is safe */
+static void test_clear_drives_idempotent(void)
+{
+	ClearDrives();
+	CHECK(count_drives() == 0);
+	ClearDrives(); /* must not crash or double-free */
+	CHECK(count_drives() == 0);
+}
+
 /* ===== main ===== */
 int main(void)
 {
@@ -705,6 +1169,26 @@ int main(void)
 	test_repeated_calls_no_leak();
 	test_zram_device_skipped();
 	test_three_drives_sorted();
+	test_one_sector_below_min_size_excluded();
+	test_zero_sector_excluded();
+	test_vendor_only_name();
+	test_model_only_name();
+	test_whitespace_trimmed_from_attrs();
+	test_devnum_no_match_returns_true();
+	test_id_field_is_dev_path();
+	test_label_field_empty_string();
+	test_hub_field_is_null();
+	test_port_field_is_zero();
+	test_max_drives_cap();
+	test_list_updates_on_second_call();
+	test_nvme_style_device_with_hdd_enabled();
+	test_nvme_excluded_without_hdd_flag();
+	test_mmcblk_device_discovered();
+	test_display_name_has_vendor_and_model();
+	test_two_drives_same_size();
+	test_drive_indices_are_contiguous();
+	test_enable_hdds_includes_both_types();
+	test_clear_drives_idempotent();
 
 	printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

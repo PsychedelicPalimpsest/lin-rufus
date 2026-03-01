@@ -79,6 +79,10 @@ static int _fail = 0;
 /* Alias used by some test files */
 #define RUN_TEST(name) RUN(name)
 
+/* Skip the remainder of the current test if cond is true.
+ * Does NOT count as pass or fail — the test is silently omitted. */
+#define SKIP_IF(cond) do { if (cond) return; } while (0)
+
 /* Expose pass/fail counters under the names some tests use */
 #define g_passed _pass
 #define g_failed _fail

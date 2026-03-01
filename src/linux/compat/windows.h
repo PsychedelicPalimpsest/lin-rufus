@@ -25,7 +25,27 @@
 #include <time.h>
 #include <pthread.h>
 
-/* ---- Calling conventions (no-ops on Linux/GCC) ---- */
+/*
+ * Partition-handle offset table for image files.
+ *
+ * On real block devices, /dev/sda1 starts at byte 0 of the partition.
+ * For raw image files (no sysfs node), we open the whole file and register
+ * the partition's byte offset here so that SetFilePointerEx() can add it
+ * to all FILE_BEGIN seeks transparently.
+ *
+ * Strong implementations are in drive.c; these weak no-ops are used by
+ * test binaries that do not link drive.c.
+ */
+#ifndef LINUX_DRIVE_C   /* drive.c provides strong implementations */
+__attribute__((weak)) uint64_t linux_get_fd_base_offset(int fd)   { (void)fd; return 0; }
+__attribute__((weak)) uint64_t linux_get_fd_part_size(int fd)     { (void)fd; return 0; }
+__attribute__((weak)) void     linux_unregister_fd_offset(int fd) { (void)fd; }
+#else
+/* Declare prototypes so code in drive.c can still call them */
+uint64_t linux_get_fd_base_offset(int fd);
+uint64_t linux_get_fd_part_size(int fd);
+void     linux_unregister_fd_offset(int fd);
+#endif
 /* NOTE: WINAPI/CALLBACK etc. will be re-defined later with correct values */
 #define __stdcall
 #define __cdecl
@@ -317,6 +337,7 @@ typedef void* LPVOID;
 #define ERROR_BUFFER_OVERFLOW            111L
 #define ERROR_WRITE_FAULT                29L
 #define ERROR_READ_FAULT                 30L
+#define ERROR_PARTITION_FAILURE          1105L
 
 /* ---- Window messages ---- */
 #define WM_NULL          0x0000
@@ -892,6 +913,10 @@ static inline BOOL WriteFile(HANDLE h, LPCVOID buf, DWORD n, LPDWORD wr, LPOVERL
 }
 static inline BOOL SetFilePointerEx(HANDLE h, LARGE_INTEGER dist, PLARGE_INTEGER newpos, DWORD method) {
     int whence = (method == FILE_BEGIN) ? SEEK_SET : (method == FILE_END ? SEEK_END : SEEK_CUR);
+    if (method == FILE_BEGIN) {
+        uint64_t base = linux_get_fd_base_offset((int)(intptr_t)h);
+        dist.QuadPart += (LONGLONG)base;
+    }
     off_t r = lseek((int)(intptr_t)h, (off_t)dist.QuadPart, whence);
     if (newpos) newpos->QuadPart = r;
     return (r != (off_t)-1);
@@ -1077,6 +1102,7 @@ static inline BOOL CloseHandle(HANDLE h)
         return TRUE;
     }
 
+    linux_unregister_fd_offset((int)(intptr_t)h);
     return close((int)(intptr_t)h) == 0;
 }
 static inline BOOL GetFileSizeEx(HANDLE h, PLARGE_INTEGER size) {
