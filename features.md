@@ -101,6 +101,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `SendMessage` / `PostMessage` | ✅ | Full `msg_dispatch` bridge: thread-safe handler registry, async `PostMessage` via pluggable `MsgPostScheduler` (GTK: `g_idle_add`), synchronous `SendMessage` with pthread condvar blocking for cross-thread calls; 61 tests pass; GTK scheduler and main dialog handler registered in `ui_gtk.c` |
 | `CreateThread` / `WaitForSingleObject` | ✅ | Full pthread bridge: threads, events (auto/manual-reset), mutexes, `CRITICAL_SECTION`, `WaitForMultipleObjects`, `GetExitCodeThread`, `TerminateThread` — 51 tests pass |
 | Windows Registry (`RegOpenKey` etc.) | 🟡 | All no-ops; settings storage needs a Linux equivalent (e.g., `GKeyFile` / INI file) |
+| `DEFINE_GUID` / `CompareGUID` / `GuidToString` / `StringToGuid` | ✅ | `DEFINE_GUID` in `guiddef.h` (INITGUID-conditional); others in `stdfn.c` / `stdio.c`; 19 tests pass |
 
 ---
 
@@ -117,19 +118,19 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `GetPhysicalHandle()` | 🟡 | Should open `/dev/sdX` with `O_RDWR` |
 | `GetLogicalName()` / `GetLogicalHandle()` | 🟡 | Should return/open `/dev/sdXN` |
 | `GetDriveSize()` | 🟡 | `ioctl(BLKGETSIZE64)` |
-| `GetDriveLabel()` | 🟡 | `blkid_get_tag_value()` |
+| `GetDriveLabel()` | ✅ | libblkid-based; probes whole-disk then first partition; tests pass |
 | `IsMediaPresent()` | 🟡 | `stat()` or `ioctl` |
-| `GetDriveTypeFromIndex()` | 🟡 | `udev` property `ID_USB` |
+| `GetDriveTypeFromIndex()` | ✅ | sysfs `/sys/block/<dev>/removable` + `device/uevent`; tests pass |
 | `GetDriveLetters()` / `GetUnusedDriveLetter()` | 🚫 | Drive letters are Windows-only; adapt callers to use mount points |
 | `MountVolume()` / `UnmountVolume()` | 🟡 | `udisks2` D-Bus API or `mount(2)` / `umount(2)` |
 | `AltMountVolume()` / `AltUnmountVolume()` | 🟡 | Same as above |
 | `RemoveDriveLetters()` | 🚫 | N/A on Linux |
 | `CreatePartition()` | 🟡 | `ioctl(BLKPG_ADD_PARTITION)` or call `sfdisk` |
 | `InitializeDisk()` | 🟡 | Write fresh MBR/GPT with `libfdisk` |
-| `RefreshDriveLayout()` / `RefreshLayout()` | 🟡 | `ioctl(BLKRRPART)` |
-| `AnalyzeMBR()` / `AnalyzePBR()` | 🟡 | Read first sector and inspect signature |
+| `RefreshDriveLayout()` / `RefreshLayout()` | ✅ | `ioctl(BLKRRPART)`; `RefreshLayout(DWORD)` opens by drive index; tests pass |
+| `AnalyzeMBR()` / `AnalyzePBR()` | ✅ | ms-sys boot record analysis via FAKE_FD trick; tests pass |
 | `GetDrivePartitionData()` | 🟡 | Parse partition table via `libfdisk` or `/proc/partitions` |
-| `GetMBRPartitionType()` / `GetGPTPartitionType()` | 🟡 | Look up type in local table (no Windows dep) |
+| `GetMBRPartitionType()` / `GetGPTPartitionType()` | ✅ | Lookup in `mbr_types.h` / `gpt_types.h` tables (no Windows dep); tests pass |
 | `DeletePartition()` | 🟡 | `ioctl(BLKPG_DEL_PARTITION)` |
 | `SetAutoMount()` / `GetAutoMount()` | 🚫 | Windows auto-mount concept; Linux equivalent is `udisks2` policy |
 | `GetOpticalMedia()` | 🟡 | Scan `/dev/sr*` |

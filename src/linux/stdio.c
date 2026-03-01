@@ -305,3 +305,46 @@ char* SizeToHumanReadable(uint64_t size, BOOL copy_to_log, BOOL fake_units)
         snprintf(str, sizeof(str), (hr - (int)hr < 0.05) ? "%.0f %s" : "%.1f %s", hr, suffix[s]);
     return str;
 }
+
+
+/* -------------------------------------------------------------------------
+ * GUID string conversion helpers
+ * --------------------------------------------------------------------- */
+
+char *GuidToString(const GUID *guid, BOOL bDecorated)
+{
+    static char guid_string[MAX_GUID_STRING_LENGTH];
+    if (guid == NULL) return NULL;
+    snprintf(guid_string, sizeof(guid_string),
+             bDecorated
+             ? "{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}"
+             : "%08X%04X%04X%02X%02X%02X%02X%02X%02X%02X%02X",
+             (uint32_t)guid->Data1, guid->Data2, guid->Data3,
+             guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
+             guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
+    return guid_string;
+}
+
+GUID *StringToGuid(const char *str)
+{
+    static GUID guid;
+    if (str == NULL) return NULL;
+    unsigned int d[11];
+    if (sscanf(str, "{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}",
+               &d[0], &d[1], &d[2],
+               &d[3], &d[4], &d[5], &d[6],
+               &d[7], &d[8], &d[9], &d[10]) != 11)
+        return NULL;
+    guid.Data1    = (uint32_t)d[0];
+    guid.Data2    = (uint16_t)d[1];
+    guid.Data3    = (uint16_t)d[2];
+    guid.Data4[0] = (uint8_t)d[3];
+    guid.Data4[1] = (uint8_t)d[4];
+    guid.Data4[2] = (uint8_t)d[5];
+    guid.Data4[3] = (uint8_t)d[6];
+    guid.Data4[4] = (uint8_t)d[7];
+    guid.Data4[5] = (uint8_t)d[8];
+    guid.Data4[6] = (uint8_t)d[9];
+    guid.Data4[7] = (uint8_t)d[10];
+    return &guid;
+}

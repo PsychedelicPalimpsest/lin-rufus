@@ -26,9 +26,27 @@
 #include <linux/fs.h>   /* BLKGETSIZE64, BLKRRPART, BLKSSZGET, BLKFLSBUF */
 #include <time.h>
 
+/* GUID table: define the GUID constants in this translation unit */
+#define INITGUID
 #include "rufus.h"
 #include "drive.h"
 #include "drive_linux.h"
+
+/* ms-sys headers for AnalyzeMBR / AnalyzePBR */
+#include "file.h"
+#include "br.h"
+#include "fat16.h"
+#include "fat32.h"
+#include "partition_info.h"
+
+/* blkid for GetDriveLabel */
+#include <blkid/blkid.h>
+
+/* Partition type lookup tables from the Windows source tree.
+ * mbr_types.h is pure C.  gpt_types.h uses DEFINE_GUID which expands to
+ * const-definitions because INITGUID is defined above. */
+#include "../windows/mbr_types.h"
+#include "../windows/gpt_types.h"
 
 /* rufus_drive[] is defined in globals.c (production) or inline by tests */
 extern RUFUS_DRIVE rufus_drive[MAX_DRIVES];
@@ -702,19 +720,239 @@ BOOL IsVdsAvailable(BOOL bSilent)                     { (void)bSilent; return FA
 BOOL ListVdsVolumes(BOOL bSilent)                     { (void)bSilent; return FALSE; }
 BOOL VdsRescan(DWORD rt, DWORD st, BOOL s)            { (void)rt;(void)st;(void)s; return FALSE; }
 BOOL GetDriveLetters(DWORD di, char* dl)              { (void)di;(void)dl; return FALSE; }
-UINT GetDriveTypeFromIndex(DWORD di)                  { (void)di; return 0; }
+
+/* -------------------------------------------------------------------------
+ * GetDriveTypeFromIndex — sysfs-based drive type detection
+ * --------------------------------------------------------------------- */
+UINT GetDriveTypeFromIndex(DWORD DriveIndex)
+{
+    RUFUS_DRIVE *e = get_entry(DriveIndex);
+    if (!e || !e->id) return DRIVE_UNKNOWN;
+
+    /* Extract block device name (e.g. "/dev/sdb" → "sdb") */
+    const char *devpath = e->id;
+    const char *devname = strrchr(devpath, '/');
+    devname = devname ? devname + 1 : devpath;
+
+    /* Read /sys/block/<devname>/removable */
+    char sysfs_path[256];
+    snprintf(sysfs_path, sizeof(sysfs_path), "/sys/block/%s/removable", devname);
+    FILE *f = fopen(sysfs_path, "r");
+    if (f) {
+        int removable = 0;
+        fscanf(f, "%d", &removable);
+        fclose(f);
+
+        /* Check if the device is connected via USB by reading the uevent */
+        char uevent_path[256];
+        snprintf(uevent_path, sizeof(uevent_path),
+                 "/sys/block/%s/device/uevent", devname);
+        FILE *uf = fopen(uevent_path, "r");
+        if (uf) {
+            char line[256];
+            while (fgets(line, sizeof(line), uf)) {
+                /* MODALIAS=usb:... or DRIVER=usb-storage means USB */
+                if (strncmp(line, "DRIVER=usb-storage", 18) == 0 ||
+                    strncmp(line, "DRIVER=uas", 10) == 0) {
+                    fclose(uf);
+                    return DRIVE_REMOVABLE;
+                }
+            }
+            fclose(uf);
+        }
+
+        return removable ? DRIVE_REMOVABLE : DRIVE_FIXED;
+    }
+
+    /* sysfs not accessible (e.g. temp file in tests) */
+    return DRIVE_UNKNOWN;
+}
+
 char GetUnusedDriveLetter(void)                       { return 0; }
 BOOL IsDriveLetterInUse(const char dl)                { (void)dl; return FALSE; }
 char RemoveDriveLetters(DWORD di, BOOL last, BOOL s)  { (void)di;(void)last;(void)s; return 0; }
-BOOL GetDriveLabel(DWORD di, char* letters, char** label, BOOL s) { (void)di;(void)letters;(void)label;(void)s; return FALSE; }
-BOOL AnalyzeMBR(HANDLE h, const char* name, BOOL s)   { (void)h;(void)name;(void)s; return FALSE; }
-BOOL AnalyzePBR(HANDLE h)                             { (void)h; return FALSE; }
+
+/* -------------------------------------------------------------------------
+ * GetDriveLabel — read filesystem label via libblkid
+ * --------------------------------------------------------------------- */
+BOOL GetDriveLabel(DWORD DriveIndex, char *letters, char **label, BOOL bSilent)
+{
+    (void)letters;
+    (void)bSilent;
+
+    if (!label) return FALSE;
+    *label = NULL;
+
+    RUFUS_DRIVE *e = get_entry(DriveIndex);
+    if (!e || !e->id) return FALSE;
+
+    /* Try the device path directly (works for partitions) */
+    const char *probe_path = e->id;
+
+    /* If the device is a whole disk, try first partition */
+    char part_path[256] = "";
+    struct stat st;
+    if (stat(probe_path, &st) == 0 && S_ISBLK(st.st_mode)) {
+        /* Try /dev/sdX1 */
+        snprintf(part_path, sizeof(part_path), "%s1", probe_path);
+        if (access(part_path, F_OK) == 0)
+            probe_path = part_path;
+    }
+
+    blkid_probe pr = blkid_new_probe_from_filename(probe_path);
+    if (!pr) return FALSE;
+
+    blkid_probe_enable_superblocks(pr, 1);
+    blkid_probe_set_superblocks_flags(pr, BLKID_SUBLKS_LABEL);
+
+    if (blkid_do_probe(pr) != 0) {
+        blkid_free_probe(pr);
+        return FALSE;
+    }
+
+    const char *val = NULL;
+    if (blkid_probe_lookup_value(pr, "LABEL", &val, NULL) != 0 || !val) {
+        blkid_free_probe(pr);
+        return FALSE;
+    }
+
+    *label = strdup(val);
+    blkid_free_probe(pr);
+    return (*label && **label) ? TRUE : FALSE;
+}
+
+/* -------------------------------------------------------------------------
+ * AnalyzeMBR / AnalyzePBR — boot-sector analysis via ms-sys
+ * --------------------------------------------------------------------- */
+
+static const struct { int (*fn)(FILE *fp); const char *str; } known_mbr[] = {
+    { is_dos_mbr,         "DOS/NT/95A" },
+    { is_dos_f2_mbr,      "DOS/NT/95A (F2)" },
+    { is_95b_mbr,         "Windows 95B/98/98SE/ME" },
+    { is_2000_mbr,        "Windows 2000/XP/2003" },
+    { is_vista_mbr,       "Windows Vista" },
+    { is_win7_mbr,        "Windows 7" },
+    { is_rufus_mbr,       "Rufus" },
+    { is_syslinux_mbr,    "Syslinux" },
+    { is_reactos_mbr,     "ReactOS" },
+    { is_kolibrios_mbr,   "KolibriOS" },
+    { is_grub4dos_mbr,    "Grub4DOS" },
+    { is_grub2_mbr,       "Grub 2.0" },
+    { is_zero_mbr_not_including_disk_signature_or_copy_protect, "Zeroed" },
+};
+
+BOOL AnalyzeMBR(HANDLE hPhysicalDrive, const char *TargetName, BOOL bSilent)
+{
+    (void)bSilent;
+    if (!hPhysicalDrive || hPhysicalDrive == INVALID_HANDLE_VALUE)
+        return FALSE;
+
+    FAKE_FD fake_fd = { 0 };
+    FILE *fp = (FILE *)&fake_fd;
+    fake_fd._handle = hPhysicalDrive;
+    set_bytes_per_sector(SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512);
+
+    if (!is_br(fp)) {
+        uprintf("%s does not have a Boot Marker", TargetName ? TargetName : "Drive");
+        return FALSE;
+    }
+
+    for (int i = 0; i < (int)(sizeof(known_mbr)/sizeof(known_mbr[0])); i++) {
+        if (known_mbr[i].fn(fp)) {
+            uprintf("%s has a %s Master Boot Record",
+                    TargetName ? TargetName : "Drive", known_mbr[i].str);
+            return TRUE;
+        }
+    }
+
+    uprintf("%s has an unknown Master Boot Record", TargetName ? TargetName : "Drive");
+    return TRUE;
+}
+
+static const struct { int (*fn)(FILE *fp); const char *str; } known_pbr[] = {
+    { entire_fat_16_br_matches,     "FAT16 DOS" },
+    { entire_fat_16_fd_br_matches,  "FAT16 FreeDOS" },
+    { entire_fat_16_ros_br_matches, "FAT16 ReactOS" },
+    { entire_fat_32_br_matches,     "FAT32 DOS" },
+    { entire_fat_32_nt_br_matches,  "FAT32 NT" },
+    { entire_fat_32_fd_br_matches,  "FAT32 FreeDOS" },
+    { entire_fat_32_ros_br_matches, "FAT32 ReactOS" },
+    { entire_fat_32_kos_br_matches, "FAT32 KolibriOS" },
+};
+
+BOOL AnalyzePBR(HANDLE hLogicalVolume)
+{
+    if (!hLogicalVolume || hLogicalVolume == INVALID_HANDLE_VALUE)
+        return FALSE;
+
+    const char *pbr_name = "Partition Boot Record";
+    FAKE_FD fake_fd = { 0 };
+    FILE *fp = (FILE *)&fake_fd;
+    fake_fd._handle = hLogicalVolume;
+    set_bytes_per_sector(SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512);
+
+    if (!is_br(fp)) {
+        uprintf("Volume does not have an x86 %s", pbr_name);
+        return FALSE;
+    }
+
+    if (is_fat_16_br(fp) || is_fat_32_br(fp)) {
+        for (int i = 0; i < (int)(sizeof(known_pbr)/sizeof(known_pbr[0])); i++) {
+            if (known_pbr[i].fn(fp)) {
+                uprintf("Drive has a %s %s", known_pbr[i].str, pbr_name);
+                return TRUE;
+            }
+        }
+        uprintf("Volume has an unknown FAT16 or FAT32 %s", pbr_name);
+    } else {
+        uprintf("Volume has an unknown %s", pbr_name);
+    }
+    return TRUE;
+}
 BOOL MountVolume(char* dn, char* dg)                  { (void)dn;(void)dg; return FALSE; }
 char* AltMountVolume(DWORD di, uint64_t off, BOOL s)  { (void)di;(void)off;(void)s; return NULL; }
 BOOL RemountVolume(char* dn, BOOL s)                  { (void)dn;(void)s; return FALSE; }
-const char* GetMBRPartitionType(const uint8_t type)   { (void)type; return ""; }
-const char* GetGPTPartitionType(const GUID* guid)     { (void)guid; return ""; }
-BOOL RefreshLayout(DWORD di)                          { (void)di; return FALSE; }
+
+/* -------------------------------------------------------------------------
+ * GetMBRPartitionType / GetGPTPartitionType — partition type lookup tables
+ * (mbr_type[] from mbr_types.h; gpt_type[] from gpt_types.h)
+ * --------------------------------------------------------------------- */
+
+const char *GetMBRPartitionType(const uint8_t type)
+{
+    for (int i = 0; i < (int)(sizeof(mbr_type)/sizeof(mbr_type[0])); i++) {
+        if (mbr_type[i].type == type)
+            return mbr_type[i].name;
+    }
+    return "Unknown";
+}
+
+const char *GetGPTPartitionType(const GUID *guid)
+{
+    for (int i = 0; i < (int)(sizeof(gpt_type)/sizeof(gpt_type[0])); i++) {
+        if (CompareGUID(guid, gpt_type[i].guid))
+            return gpt_type[i].name;
+    }
+    return GuidToString(guid, TRUE);
+}
+
+/* -------------------------------------------------------------------------
+ * RefreshLayout(DWORD) — reread partition table by drive index
+ * --------------------------------------------------------------------- */
+BOOL RefreshLayout(DWORD DriveIndex)
+{
+    RUFUS_DRIVE *e = get_entry(DriveIndex);
+    if (!e || !e->id) return FALSE;
+
+    HANDLE h = GetPhysicalHandle(DriveIndex, FALSE, TRUE, TRUE);
+    if (h == INVALID_HANDLE_VALUE) return FALSE;
+
+    int fd = (int)(intptr_t)h;
+    int r = ioctl(fd, BLKRRPART);
+    CloseHandle(h);
+    /* BLKRRPART fails on non-block devices; treat as non-fatal */
+    return (r == 0) ? TRUE : FALSE;
+}
 uint64_t GetEspOffset(DWORD di)                       { (void)di; return 0; }
 BOOL ToggleEsp(DWORD di, uint64_t off)                { (void)di;(void)off; return FALSE; }
 BOOL IsMsDevDrive(DWORD di)                           { (void)di; return FALSE; }

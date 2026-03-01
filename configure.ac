@@ -164,6 +164,16 @@ Install it with: apt install libcurl4-openssl-dev  OR  dnf install libcurl-devel
   AM_LDFLAGS="$AM_LDFLAGS $CURL_LIBS"
 fi
 
+# libblkid — required for Linux drive label detection (drive.c)
+if test "x$target_os" = "xlinux"; then
+  PKG_CHECK_MODULES([BLKID], [blkid],
+    [AC_MSG_NOTICE([libblkid found])],
+    [AC_MSG_ERROR([libblkid required for Linux build.
+Install it with: apt install libblkid-dev  OR  dnf install util-linux-devel])])
+  AM_CFLAGS="$AM_CFLAGS $BLKID_CFLAGS"
+  AM_LDFLAGS="$AM_LDFLAGS $BLKID_LIBS"
+fi
+
 AC_SUBST([VISIBILITY_CFLAGS])
 AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])

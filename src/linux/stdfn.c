@@ -273,4 +273,15 @@ BOOL    MountRegistryHive(const HKEY k, const char* n, const char* p) { (void)k;
 BOOL    UnmountRegistryHive(const HKEY k, const char* n)         { (void)k;(void)n; return FALSE; }
 BOOL    TakeOwnership(LPCSTR lpszOwnFile)                        { (void)lpszOwnFile; return FALSE; }
 
+/* -------------------------------------------------------------------------
+ * GUID helpers
+ * --------------------------------------------------------------------- */
+
+BOOL CompareGUID(const GUID *guid1, const GUID *guid2)
+{
+    if (guid1 == NULL || guid2 == NULL)
+        return FALSE;
+    return (memcmp(guid1, guid2, sizeof(GUID)) == 0) ? TRUE : FALSE;
+}
+
 /* Hash function arrays */

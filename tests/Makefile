@@ -93,6 +93,7 @@ FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
 EXT2FS_LIB := $(SRC_DIR)/ext2fs/libext2fs.a
 FORMAT_MS_SRC := $(SRC_DIR)/ms-sys/file.c \
                  $(SRC_DIR)/ms-sys/br.c \
+                 $(SRC_DIR)/ms-sys/fat16.c \
                  $(SRC_DIR)/ms-sys/fat32.c \
                  $(SRC_DIR)/ms-sys/partition_info.c
 CFLAGS_LINUX_test_format_linux := \
@@ -136,6 +137,20 @@ CFLAGS_LINUX_test_drive_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/
                                    -Wno-implicit-function-declaration -Wno-unused-function \
                                    -Wno-sign-compare -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_drive_linux := $(DRIVE_LINUX_SRC)
+
+# drive2_linux tests: GUID, partition types, AnalyzeMBR/PBR, RefreshLayout,
+#                     GetDriveTypeFromIndex, GetDriveLabel
+DRIVE2_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
+                    $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
+                    $(SRC_DIR)/linux/ui.c \
+                    $(FORMAT_MS_SRC)
+CFLAGS_LINUX_test_drive2_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/ms-sys/inc \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_drive2_linux := -lblkid
+EXTRA_SRC_LINUX_test_drive2_linux := $(DRIVE2_LINUX_SRC)
 
 # stdio_linux tests: RunCommandWithProgress, SizeToHumanReadable, WindowsErrorString
 STDIO_LINUX_SRC := $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/stdfn.c
