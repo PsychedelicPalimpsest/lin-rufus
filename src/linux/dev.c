@@ -7,9 +7,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <linux/fs.h>
+#include <linux/usbdevice_fs.h>
+#include <limits.h>
 #include <assert.h>
 
 #include "rufus.h"
@@ -54,6 +57,50 @@ static BOOL is_virtual_device(const char* name)
 	return (strncmp(name, "loop", 4) == 0 ||
 	        strncmp(name, "ram",  3) == 0 ||
 	        strncmp(name, "zram", 4) == 0);
+}
+
+/* Walk up the resolved sysfs device path to find the USB device node —
+ * the first ancestor directory that contains a 'busnum' file.
+ * Returns TRUE and fills usb_path_out on success. */
+BOOL find_usb_sysfs_device(const char* sysfs_root, const char* blk_name,
+                            char* usb_path_out, size_t usb_path_sz)
+{
+	char dev_link[PATH_MAX];
+	char resolved[PATH_MAX];
+
+	snprintf(dev_link, sizeof(dev_link), "%s/block/%s/device",
+	         sysfs_root, blk_name);
+	if (realpath(dev_link, resolved) == NULL)
+		return FALSE;
+
+	/* Walk up the resolved path looking for a 'busnum' attribute */
+	size_t len = strlen(resolved);
+	while (len > 1) {
+		char busnum_path[PATH_MAX];
+		snprintf(busnum_path, sizeof(busnum_path), "%s/busnum", resolved);
+		if (access(busnum_path, F_OK) == 0) {
+			snprintf(usb_path_out, usb_path_sz, "%s", resolved);
+			return TRUE;
+		}
+		/* Strip last path component */
+		while (len > 0 && resolved[len - 1] != '/')
+			len--;
+		if (len > 0 && resolved[len - 1] == '/')
+			len--;
+		resolved[len] = '\0';
+	}
+	return FALSE;
+}
+
+/* Read an integer attribute from a sysfs path (absolute, not block-relative) */
+static int sysfs_read_int(const char* path)
+{
+	FILE* f = fopen(path, "r");
+	if (!f) return -1;
+	int val = -1;
+	fscanf(f, "%d", &val);
+	fclose(f);
+	return val;
 }
 
 void ClearDrives(void)
@@ -142,10 +189,22 @@ BOOL GetDevicesWithRoot(DWORD devnum, const char* sysfs_root, const char* dev_ro
 		rufus_drive[num_drives].name         = safe_strdup(dev_name);
 		rufus_drive[num_drives].display_name = safe_strdup(display_name);
 		rufus_drive[num_drives].label        = safe_strdup("");
-		rufus_drive[num_drives].hub          = NULL;
 		rufus_drive[num_drives].index        = 0; /* assigned after sort */
-		rufus_drive[num_drives].port         = 0;
 		rufus_drive[num_drives].size         = size;
+
+		/* Locate the parent USB device in sysfs for CyclePort/CycleDevice */
+		char usb_path[PATH_MAX];
+		if (find_usb_sysfs_device(sysfs_root, name, usb_path, sizeof(usb_path))) {
+			rufus_drive[num_drives].hub  = safe_strdup(usb_path);
+			/* Store devnum so CyclePort can build /dev/bus/usb/BBB/DDD */
+			char devnum_path[PATH_MAX];
+			snprintf(devnum_path, sizeof(devnum_path), "%s/devnum", usb_path);
+			int dn = sysfs_read_int(devnum_path);
+			rufus_drive[num_drives].port = (dn > 0) ? (uint32_t)dn : 0;
+		} else {
+			rufus_drive[num_drives].hub  = NULL;
+			rufus_drive[num_drives].port = 0;
+		}
 		num_drives++;
 	}
 	closedir(dir);
@@ -205,8 +264,90 @@ BOOL GetDevices(DWORD devnum)
 	return GetDevicesWithRoot(devnum, "/sys", "/dev");
 }
 
-BOOL CyclePort(int index)                            { (void)index; return FALSE; }
-int  CycleDevice(int index)                          { (void)index; return 0; }
+BOOL CyclePort(int index)
+{
+	static uint64_t last_reset = 0;
+	if (index < 0 || index >= MAX_DRIVES) return FALSE;
+
+	if (GetTickCount64() < last_reset + 10000ULL) {
+		uprintf("You must wait at least 10 seconds before trying to reset a device");
+		return FALSE;
+	}
+
+	const char* hub = rufus_drive[index].hub;
+	if (hub == NULL) {
+		uprintf("The device does not appear to be a USB device");
+		return FALSE;
+	}
+
+	/* Read busnum and devnum from sysfs */
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/busnum", hub);
+	int busnum = sysfs_read_int(path);
+	snprintf(path, sizeof(path), "%s/devnum", hub);
+	int devnum = sysfs_read_int(path);
+	if (busnum <= 0 || devnum <= 0) {
+		uprintf("Could not determine USB bus/device number for reset");
+		return FALSE;
+	}
+
+	snprintf(path, sizeof(path), "/dev/bus/usb/%03d/%03d", busnum, devnum);
+	uprintf("Resetting USB device %s", path);
+	int fd = open(path, O_WRONLY);
+	if (fd < 0) {
+		uprintf("Could not open %s: %s", path, strerror(errno));
+		return FALSE;
+	}
+	BOOL r = (ioctl(fd, USBDEVFS_RESET, 0) == 0);
+	if (!r)
+		uprintf("Failed to reset USB device: %s", strerror(errno));
+	else
+		uprintf("Please wait for the device to re-appear...");
+	close(fd);
+	last_reset = GetTickCount64();
+	return r;
+}
+
+int CycleDevice(int index)
+{
+	if (index < 0 || index >= MAX_DRIVES) return ERROR_INVALID_PARAMETER;
+
+	const char* hub = rufus_drive[index].hub;
+	if (hub == NULL) {
+		uprintf("The device does not appear to be a USB device");
+		return ERROR_DEV_NOT_EXIST;
+	}
+
+	/* The USB device ID is the basename of the sysfs path (e.g. "4-1") */
+	const char* dev_id = strrchr(hub, '/');
+	if (dev_id == NULL || dev_id[1] == '\0') return ERROR_INVALID_PARAMETER;
+	dev_id++; /* skip the '/' */
+
+	/* Unbind */
+	int fd = open("/sys/bus/usb/drivers/usb/unbind", O_WRONLY);
+	if (fd < 0) {
+		uprintf("Could not open USB unbind: %s", strerror(errno));
+		return (int)errno;
+	}
+	uprintf("Unbinding USB device %s", dev_id);
+	write(fd, dev_id, strlen(dev_id));
+	close(fd);
+
+	/* Brief pause to let the device detach */
+	usleep(500000);
+
+	/* Rebind */
+	fd = open("/sys/bus/usb/drivers/usb/bind", O_WRONLY);
+	if (fd < 0) {
+		uprintf("Could not open USB bind: %s", strerror(errno));
+		return (int)errno;
+	}
+	uprintf("Rebinding USB device %s", dev_id);
+	write(fd, dev_id, strlen(dev_id));
+	close(fd);
+
+	return NO_ERROR;
+}
 
 /* ISO 9660 Primary Volume Descriptor: offset 0x8000, label at +0x28, 32 bytes */
 #define ISO_VD_OFFSET   0x8000LL

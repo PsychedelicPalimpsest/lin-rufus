@@ -28,6 +28,8 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "windows.h"
 #include "commctrl.h"
 #include "rufus.h"
+/* NO_ERROR and error codes */
+#include "compat/winioctl.h"
 /* Declare GetDevicesWithRoot without pulling in dev.h (which has a non-extern GUID
  * that causes multiple-definition errors when included in more than one TU). */
 extern BOOL GetDevicesWithRoot(DWORD devnum, const char* sysfs_root, const char* dev_root);
@@ -1322,6 +1324,159 @@ static void test_optical_non_sr_ignored(void)
 	rmdir(dev);
 }
 
+/* ===== find_usb_sysfs_device / CyclePort / CycleDevice tests ===== */
+
+extern BOOL find_usb_sysfs_device(const char* sysfs_root, const char* blk_name,
+                                   char* usb_path_out, size_t usb_path_sz);
+extern BOOL CyclePort(int index);
+extern int  CycleDevice(int index);
+
+/* Build a fake sysfs tree that includes a USB device ancestor:
+ *   sysfs/block/sda/device -> (real dir for test, not symlink)
+ *   sysfs/block/sda/       - fake block device
+ *   usb_dev/               - parent USB device directory (has busnum/devnum)
+ *
+ * Because realpath() on a non-symlink just canonicalizes the path,
+ * we put 'device' at a path where the USB "parent" is accessible via
+ * the walk-up logic. The simplest approach: create the USB attrs directly
+ * in the device dir itself.
+ */
+static void make_fake_usb_sysfs(char* sysfs_out, size_t sz,
+                                 int busnum, int devnum)
+{
+	char tmp[64];
+	snprintf(tmp, sizeof(tmp), "/tmp/rufus_usb_sysfs_XXXXXX");
+	if (mkdtemp(tmp) == NULL) { sysfs_out[0] = '\0'; return; }
+	snprintf(sysfs_out, sz, "%s", tmp);
+
+	/* Create block/sda/device/ which is the resolved real path */
+	char path[512];
+	snprintf(path, sizeof(path), "%s/block/sda/device", tmp);
+	/* We'll use a chain: block/sda/device is inside the USB device dir  
+	 * so that the walk-up from block/sda/device finds the USB attrs. */
+	snprintf(path, sizeof(path), "%s/block/sda", tmp);
+	mkdirs(path);
+
+	/* Create the USB device directory at sysfs/usb_dev/ */
+	snprintf(path, sizeof(path), "%s/usb_dev", tmp);
+	mkdirs(path);
+	char attr[64];
+	snprintf(attr, sizeof(attr), "%d\n", busnum);
+	snprintf(path, sizeof(path), "%s/usb_dev/busnum", tmp);
+	fake_write_file(path, attr);
+	snprintf(attr, sizeof(attr), "%d\n", devnum);
+	snprintf(path, sizeof(path), "%s/usb_dev/devnum", tmp);
+	fake_write_file(path, attr);
+
+	/* block/sda/device -> usb_dev/ (as a real subdirectory inside usb_dev) */
+	snprintf(path, sizeof(path), "%s/usb_dev/device", tmp);
+	mkdirs(path);
+	/* Write removable and size so GetDevicesWithRoot also accepts it */
+	snprintf(path, sizeof(path), "%s/block/sda/removable", tmp);
+	fake_write_file(path, "1\n");
+	snprintf(path, sizeof(path), "%s/block/sda/size", tmp);
+	uint64_t sectors = (uint64_t)8 * 1024 * 1024 * 2; /* 8 GB */
+	snprintf(attr, sizeof(attr), "%llu\n", (unsigned long long)sectors);
+	fake_write_file(path, attr);
+
+	/* Create device/ dir under block/sda pointing into the USB device
+	 * so the walk-up from device/ will eventually reach usb_dev/ */
+	snprintf(path, sizeof(path), "%s/usb_dev/scsi/target/host/0:0:0:0",  tmp);
+	mkdirs(path);
+	snprintf(path, sizeof(path), "%s/block/sda/device", tmp);
+	/* Use a symlink so realpath resolves through usb_dev */
+	symlink("../../usb_dev/scsi/target/host/0:0:0:0", path);
+}
+
+static void test_find_usb_no_busnum(void)
+{
+	/* fake sysfs without busnum in device ancestor → returns FALSE */
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Test", "Drive\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+
+	char out[PATH_MAX];
+	BOOL r = find_usb_sysfs_device(sysfs, "sda", out, sizeof(out));
+	CHECK(r == FALSE);
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+static void test_find_usb_nonexistent_device_link(void)
+{
+	/* no device/ directory → returns FALSE */
+	char sysfs[64];
+	snprintf(sysfs, sizeof(sysfs), "/tmp/rufus_usb_nodev_XXXXXX");
+	mkdtemp(sysfs);
+	char path[256];
+	snprintf(path, sizeof(path), "%s/block/sda", sysfs);
+	mkdirs(path);
+
+	char out[PATH_MAX];
+	BOOL r = find_usb_sysfs_device(sysfs, "sda", out, sizeof(out));
+	CHECK(r == FALSE);
+	rmdir_recursive(sysfs);
+}
+
+static void test_find_usb_with_busnum(void)
+{
+	/* Create a fake sysfs where device symlink resolves through a dir
+	 * that has busnum → returns TRUE and path ends at USB device dir */
+	char sysfs[256];
+	make_fake_usb_sysfs(sysfs, sizeof(sysfs), 3, 5);
+	if (sysfs[0] == '\0') { return; } /* mkdtemp failed */
+
+	char out[PATH_MAX];
+	BOOL r = find_usb_sysfs_device(sysfs, "sda", out, sizeof(out));
+	CHECK(r == TRUE);
+	/* The returned path should contain the USB device dir */
+	char expected[256];
+	snprintf(expected, sizeof(expected), "%s/usb_dev", sysfs);
+	CHECK(strcmp(out, expected) == 0);
+	rmdir_recursive(sysfs);
+}
+
+static void test_cycle_port_no_hub(void)
+{
+	/* CyclePort returns FALSE when hub is NULL */
+	ClearDrives();
+	rufus_drive[0].hub  = NULL;
+	rufus_drive[0].port = 0;
+	rufus_drive[0].size = 1; /* non-zero so ClearDrives won't stop early */
+	BOOL r = CyclePort(0);
+	CHECK(r == FALSE);
+	rufus_drive[0].size = 0;
+}
+
+static void test_cycle_port_invalid_index(void)
+{
+	BOOL r = CyclePort(-1);
+	CHECK(r == FALSE);
+	r = CyclePort(MAX_DRIVES);
+	CHECK(r == FALSE);
+}
+
+static void test_cycle_device_no_hub(void)
+{
+	ClearDrives();
+	rufus_drive[0].hub  = NULL;
+	rufus_drive[0].size = 1;
+	int r = CycleDevice(0);
+	CHECK(r != NO_ERROR);
+	rufus_drive[0].size = 0;
+}
+
+static void test_cycle_device_invalid_index(void)
+{
+	int r = CycleDevice(-1);
+	CHECK(r != NO_ERROR);
+	r = CycleDevice(MAX_DRIVES);
+	CHECK(r != NO_ERROR);
+}
+
 /* ===== main ===== */
 int main(void)
 {
@@ -1377,6 +1532,15 @@ int main(void)
 	test_optical_device_path_set();
 	test_optical_skips_small_picks_next();
 	test_optical_non_sr_ignored();
+
+	printf("\n  find_usb_sysfs_device / CyclePort / CycleDevice\n");
+	test_find_usb_no_busnum();
+	test_find_usb_nonexistent_device_link();
+	test_find_usb_with_busnum();
+	test_cycle_port_no_hub();
+	test_cycle_port_invalid_index();
+	test_cycle_device_no_hub();
+	test_cycle_device_invalid_index();
 
 	printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

@@ -112,7 +112,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Function | Status | Notes |
 |----------|--------|-------|
 | `GetDevices()` | ✅ | sysfs scan: removable flag, size, vendor/model; sorted by size; 79 tests pass |
-| `CycleDevice()` / `CyclePort()` | 🟡 | Stub; needed to refresh the device dropdown |
+| `CycleDevice()` / `CyclePort()` | ✅ | `CyclePort`: USB device reset via `USBDEVFS_RESET` ioctl; `CycleDevice`: sysfs unbind/rebind; `find_usb_sysfs_device` helper populates hub/port in `GetDevicesWithRoot`; 7 tests pass |
 | `ClearDrives()` | ✅ | Frees rufus_drive[] strings and zeros the array |
 | `GetPhysicalName()` | ✅ | Returns `/dev/sdX` path via `rufus_drive[i].id` |
 | `GetPhysicalHandle()` | ✅ | Opens `/dev/sdX` with `O_RDWR` |
