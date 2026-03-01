@@ -103,7 +103,10 @@ am__dirstamp = $(am__leading_dot)dirstamp
 am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 	common/rufus-cregex_parse.$(OBJEXT) \
 	common/rufus-cregex_vm.$(OBJEXT) common/rufus-xml.$(OBJEXT)
-@TARGET_WINDOWS_FALSE@am__objects_2 = linux/rufus-badblocks.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@am__objects_2 =  \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	linux/rufus-ui.$(OBJEXT)
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@am__objects_2 = linux/rufus-ui_gtk.$(OBJEXT)
+@TARGET_WINDOWS_FALSE@am__objects_3 = linux/rufus-badblocks.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-darkmode.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-dev.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-dos.$(OBJEXT) \
@@ -127,10 +130,10 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-stdio.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-stdlg.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-syslinux.$(OBJEXT) \
-@TARGET_WINDOWS_FALSE@	linux/rufus-ui.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	$(am__objects_2) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-vhd.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-wue.$(OBJEXT)
-@TARGET_WINDOWS_TRUE@am__objects_2 =  \
+@TARGET_WINDOWS_TRUE@am__objects_3 =  \
 @TARGET_WINDOWS_TRUE@	windows/rufus-badblocks.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-darkmode.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-dev.$(OBJEXT) \
@@ -157,18 +160,32 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-ui.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-vhd.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-wue.$(OBJEXT)
-am_rufus_OBJECTS = $(am__objects_1) $(am__objects_2)
+am_rufus_OBJECTS = $(am__objects_1) $(am__objects_3)
 rufus_OBJECTS = $(am_rufus_OBJECTS)
 am__DEPENDENCIES_1 =
-@TARGET_WINDOWS_FALSE@rufus_DEPENDENCIES = bled/libbled.a \
-@TARGET_WINDOWS_FALSE@	ext2fs/libext2fs.a ms-sys/libmssys.a \
-@TARGET_WINDOWS_FALSE@	syslinux/libfat/libfat.a \
-@TARGET_WINDOWS_FALSE@	syslinux/libinstaller/libinstaller.a \
-@TARGET_WINDOWS_FALSE@	syslinux/win/libwin.a \
-@TARGET_WINDOWS_FALSE@	libcdio/iso9660/libiso9660.a \
-@TARGET_WINDOWS_FALSE@	libcdio/udf/libudf.a \
-@TARGET_WINDOWS_FALSE@	libcdio/driver/libdriver.a \
-@TARGET_WINDOWS_FALSE@	wimlib/libwim.a
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@rufus_DEPENDENCIES =  \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	bled/libbled.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	ext2fs/libext2fs.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	ms-sys/libmssys.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	syslinux/libfat/libfat.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	syslinux/libinstaller/libinstaller.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	syslinux/win/libwin.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/iso9660/libiso9660.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/udf/libudf.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/driver/libdriver.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	wimlib/libwim.a
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@rufus_DEPENDENCIES =  \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	bled/libbled.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	ext2fs/libext2fs.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	ms-sys/libmssys.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	syslinux/libfat/libfat.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	syslinux/libinstaller/libinstaller.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	syslinux/win/libwin.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/iso9660/libiso9660.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/udf/libudf.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/driver/libdriver.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	wimlib/libwim.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	$(am__DEPENDENCIES_1)
 @TARGET_WINDOWS_TRUE@rufus_DEPENDENCIES = windows/rufus_rc.o \
 @TARGET_WINDOWS_TRUE@	bled/libbled.a ext2fs/libext2fs.a \
 @TARGET_WINDOWS_TRUE@	ms-sys/libmssys.a \
@@ -253,8 +270,7 @@ am__define_uniq_tagged_files = \
   done | $(am__uniquify_input)`
 DIST_SUBDIRS = bled ext2fs ms-sys syslinux/libfat \
 	syslinux/libinstaller syslinux/win libcdio/iso9660 libcdio/udf \
-	libcdio/driver wimlib ../res/loc ../.mingw common windows \
-	linux
+	libcdio/driver wimlib ../res/loc ../.mingw
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
 AM_CFLAGS = @AM_CFLAGS@
@@ -278,6 +294,8 @@ ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 ETAGS = @ETAGS@
 EXEEXT = @EXEEXT@
+GTK_CFLAGS = @GTK_CFLAGS@
+GTK_LIBS = @GTK_LIBS@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -298,6 +316,9 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PKG_CONFIG = @PKG_CONFIG@
+PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
+PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 RANLIB = @RANLIB@
 RM = @RM@
 SED = @SED@
@@ -370,7 +391,7 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c linux/ui.c linux/vhd.c linux/wue.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/wue.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -378,6 +399,9 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_TRUE@	windows/pki.c windows/process.c windows/rufus.c windows/smart.c windows/stdfn.c \
 @TARGET_WINDOWS_TRUE@	windows/stdio.c windows/stdlg.c windows/syslinux.c windows/ui.c windows/vhd.c windows/wue.c
 
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@LINUX_UI_SRC = linux/ui.c
+# Select the UI backend source for Linux builds
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@LINUX_UI_SRC = linux/ui_gtk.c
 rufus_SOURCES = $(COMMON_SOURCES) $(OS_SOURCES)
 @TARGET_WINDOWS_FALSE@rufus_CFLAGS = -I$(srcdir)/linux/compat -I$(srcdir)/linux -I$(srcdir)/windows -I$(srcdir)/common \
 @TARGET_WINDOWS_FALSE@	-I$(srcdir)/ms-sys/inc -I$(srcdir)/syslinux/libfat -I$(srcdir)/syslinux/libinstaller \
@@ -391,8 +415,11 @@ rufus_SOURCES = $(COMMON_SOURCES) $(OS_SOURCES)
 
 @TARGET_WINDOWS_FALSE@rufus_LDFLAGS = $(AM_LDFLAGS)
 @TARGET_WINDOWS_TRUE@rufus_LDFLAGS = $(AM_LDFLAGS) -mwindows -L../.mingw
-@TARGET_WINDOWS_FALSE@rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-@TARGET_WINDOWS_FALSE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a
+
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS)
 
 @TARGET_WINDOWS_TRUE@rufus_LDADD = windows/rufus_rc.o bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
 @TARGET_WINDOWS_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(NONVULNERABLE_LIBS) $(VULNERABLE_LIBS)
@@ -468,6 +495,7 @@ linux/rufus-stdio.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-stdlg.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-syslinux.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-ui_gtk.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-vhd.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-wue.$(OBJEXT): linux/$(am__dirstamp)
 windows/$(am__dirstamp):
@@ -692,6 +720,12 @@ linux/rufus-ui.o: linux/ui.c
 
 linux/rufus-ui.obj: linux/ui.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ui.obj `if test -f 'linux/ui.c'; then $(CYGPATH_W) 'linux/ui.c'; else $(CYGPATH_W) '$(srcdir)/linux/ui.c'; fi`
+
+linux/rufus-ui_gtk.o: linux/ui_gtk.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ui_gtk.o `test -f 'linux/ui_gtk.c' || echo '$(srcdir)/'`linux/ui_gtk.c
+
+linux/rufus-ui_gtk.obj: linux/ui_gtk.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ui_gtk.obj `if test -f 'linux/ui_gtk.c'; then $(CYGPATH_W) 'linux/ui_gtk.c'; else $(CYGPATH_W) '$(srcdir)/linux/ui_gtk.c'; fi`
 
 linux/rufus-vhd.o: linux/vhd.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-vhd.o `test -f 'linux/vhd.c' || echo '$(srcdir)/'`linux/vhd.c

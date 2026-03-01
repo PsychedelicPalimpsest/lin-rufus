@@ -6,7 +6,10 @@
 #include <unistd.h>
 
 /* ---- Function stubs ---- */
+/* EnableControls is provided by ui_gtk.c when using the GTK UI */
+#ifndef USE_GTK
 void EnableControls(BOOL enable, BOOL remove_checkboxes)  { (void)enable;(void)remove_checkboxes; }
+#endif
 
 BOOL CALLBACK LogCallback(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     { (void)hDlg;(void)message;(void)wParam;(void)lParam; return FALSE; }
@@ -30,8 +33,10 @@ HANDLE CreatePreallocatedFile(const char* path, DWORD access, DWORD share,
     { (void)path;(void)access;(void)share;(void)sa;(void)disp;(void)flags;(void)size; return INVALID_HANDLE_VALUE; }
 
 /* ---- Linux main entry point ---- */
+#ifndef USE_GTK
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
     fprintf(stderr, "Rufus Linux port - not yet implemented\n");
     return 1;
 }
+#endif /* !USE_GTK */

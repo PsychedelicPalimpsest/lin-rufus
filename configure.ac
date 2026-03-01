@@ -35,6 +35,7 @@ AC_CHECK_TOOL(STRIP, strip, :)
 AC_CHECK_TOOL(WINDRES, windres, :)
 AC_C_INLINE
 AC_DEFINE([_GNU_SOURCE], [], [Use GNU extensions])
+PKG_PROG_PKG_CONFIG
 
 if test "x$target_os" = "xwindows"; then
   AM_CFLAGS="${AM_CFLAGS} -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -D_WIN32_IE=0x0A00"
@@ -94,6 +95,25 @@ fi
 
 AM_CONDITIONAL([TARGET_WINDOWS], [test "x$target_os" = "xwindows"])
 AM_CONDITIONAL([TARGET_LINUX],   [test "x$target_os" = "xlinux"])
+
+# UI backend selection
+# --with-ui=gtk  : use GTK3 UI (default on Linux; optional on Windows)
+# --with-ui=win  : use native Windows UI (default on Windows; N/A on Linux)
+AC_ARG_WITH([ui],
+	[AS_HELP_STRING([--with-ui=BACKEND],
+		[UI backend: gtk or win (default: gtk on Linux, win on Windows)])],
+	[ui_backend=$withval],
+	[if test "x$target_os" = "xwindows"; then ui_backend='win'; else ui_backend='gtk'; fi])
+
+if test "x$ui_backend" = "xgtk"; then
+  PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.18],
+    [AC_MSG_NOTICE([GTK3 found: building GTK UI])],
+    [AC_MSG_ERROR([GTK3 >= 3.18 required for --with-ui=gtk])])
+  AM_CFLAGS="$AM_CFLAGS $GTK_CFLAGS -DUSE_GTK"
+  AM_LDFLAGS="$AM_LDFLAGS $GTK_LIBS"
+fi
+
+AM_CONDITIONAL([USE_GTK], [test "x$ui_backend" = "xgtk"])
 
 AC_SUBST([VISIBILITY_CFLAGS])
 AC_SUBST([AM_CFLAGS])
