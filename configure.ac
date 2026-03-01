@@ -208,6 +208,14 @@ Install it with: apt install libfontconfig1-dev  OR  dnf install fontconfig-deve
       AC_MSG_NOTICE([mkfs.exfat/mkexfatfs not found — install exfatprogs to enable exFAT formatting])
     fi
   fi
+
+  # libnotify — optional; used for desktop notifications on format/hash/download completion.
+  # Falls back to notify-send(1) subprocess when the library is absent.
+  PKG_CHECK_MODULES([LIBNOTIFY], [libnotify >= 0.7],
+    [AC_MSG_NOTICE([libnotify found — desktop notifications via library])
+     AM_CFLAGS="$AM_CFLAGS $LIBNOTIFY_CFLAGS -DUSE_LIBNOTIFY"
+     AM_LDFLAGS="$AM_LDFLAGS $LIBNOTIFY_LIBS"],
+    [AC_MSG_NOTICE([libnotify not found — desktop notifications via notify-send fallback])])
 fi
 
 AC_SUBST([VISIBILITY_CFLAGS])

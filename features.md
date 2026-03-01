@@ -530,7 +530,7 @@ This is the most structurally significant porting gap.
 64. ~~**Operation log — save to file**~~ ✅ **DONE** — log `GtkDialog` has "Save" button (`GTK_RESPONSE_ACCEPT`) in `on_log_response()`; opens `GtkFileChooserDialog`, writes `GtkTextBuffer` content to selected file; "Clear" button clears buffer; "Close" hides dialog
 65. ~~**Status label history**~~ ✅ **DONE** — `src/linux/status_history.c/.h`: ring buffer (capacity=5) of last N status strings; `idle_update_status()` in `ui_gtk.c` pushes each message then calls `gtk_widget_set_tooltip_text(status_label, tooltip)` with all previous messages (newest first, newline-separated); 15 tests, 24 assertions pass
 66. ~~**`SetTitleBarIcon()` implementation**~~ ✅ **DONE** — `stdlg.c`: calls `gtk_window_set_icon_name(GTK_WINDOW(hDlg), "ie.akeo.rufus")` when `hDlg` is a GtkWindow; `#ifdef USE_GTK` guarded; no-op in non-GTK builds
-67. **System tray / notification on completion** — use `libnotify` (`notify_notification_new`) to send a desktop notification when a long-running format or download completes; fall back gracefully if `libnotify` is absent; detect at configure time
+67. ~~**System tray / notification on completion**~~ ✅ **DONE** — `src/linux/notify.c`/`notify.h`: `rufus_notify(title, body, success)` dispatches via libnotify tier-1 (when compiled with `USE_LIBNOTIFY`, detected by `configure.ac` PKG_CHECK_MODULES) with `notify-send` subprocess tier-2 fallback; `notify_format_message()` builds standard human-readable title/body for `NOTIFY_OP_FORMAT`, `NOTIFY_OP_HASH`, `NOTIFY_OP_DOWNLOAD`; `notify_build_cmd()` is a pure testable function that builds the shell command; wired into `UM_FORMAT_COMPLETED` and `UM_HASH_COMPLETED` handlers in `ui_gtk.c`; 32 tests pass
 
 ---
 

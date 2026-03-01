@@ -223,6 +223,13 @@ LDFLAGS_LINUX_test_ui_linux := $(FONTCONFIG_LIBS)
 EXTRA_SRC_LINUX_test_ui_linux := $(SRC_DIR)/linux/globals.c \
                                   $(SRC_DIR)/linux/device_combo.c
 
+# notify_linux tests: desktop notification bridge (notify_build_cmd, rufus_notify, notify_format_message)
+CFLAGS_LINUX_test_notify_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                   -D_GNU_SOURCE -DRUFUS_TEST \
+                                   -Wno-unused-function -Wno-sign-compare \
+                                   -Wno-unused-parameter -Wno-implicit-function-declaration
+EXTRA_SRC_LINUX_test_notify_linux := $(SRC_DIR)/linux/notify.c
+
 # compat_linux tests: shlwapi.h (PathFileExistsA, PathCombineA) and shellapi.h (ShellExecuteA)
 # Pure header-only implementation — no extra .c sources needed
 CFLAGS_LINUX_test_compat_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \

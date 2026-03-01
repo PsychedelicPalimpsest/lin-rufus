@@ -42,6 +42,7 @@
 #include "window_text_bridge.h"
 #include "device_combo.h"
 #include "status_history.h"
+#include "notify.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -1114,18 +1115,28 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 	(void)hwnd; (void)l;
 
 	switch (msg) {
-	case UM_FORMAT_COMPLETED:
+	case UM_FORMAT_COMPLETED: {
 		/* w = TRUE on success, FALSE on failure */
+		BOOL ok = (BOOL)w;
 		op_in_progress = FALSE;
 		safe_closehandle(format_thread);
 		format_thread = NULL;
-		EnableControls((BOOL)w, TRUE);
-		if (w)
+		EnableControls(ok, TRUE);
+		if (ok)
 			rufus_gtk_update_status("Format completed successfully.");
 		else
 			rufus_gtk_update_status("Format failed.");
-		uprintf("*** Format completed (success=%d) ***", (int)w);
+		uprintf("*** Format completed (success=%d) ***", (int)ok);
+		/* Send desktop notification so the user can come back to Rufus */
+		{
+			char title[128], body[256];
+			notify_format_message(NOTIFY_OP_FORMAT, ok,
+			                      title, sizeof(title),
+			                      body,  sizeof(body));
+			rufus_notify(title, body, ok);
+		}
 		break;
+	}
 
 	case UM_ENABLE_CONTROLS:
 		EnableControls(TRUE, TRUE);
@@ -1267,6 +1278,15 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		gtk_widget_show_all(dlg);
 		gtk_dialog_run(GTK_DIALOG(dlg));
 		gtk_widget_destroy(dlg);
+
+		/* Notify the user that hashing finished (they may have switched windows) */
+		{
+			char ntitle[128], nbody[256];
+			notify_format_message(NOTIFY_OP_HASH, TRUE,
+			                      ntitle, sizeof(ntitle),
+			                      nbody,  sizeof(nbody));
+			rufus_notify(ntitle, nbody, TRUE);
+		}
 		break;
 	}
 
