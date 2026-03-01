@@ -247,38 +247,30 @@ static cregex_program_instr_t *compile_context(regex_compile_context *context,
 /* Compile a parsed pattern (using a previously allocated program with at least
  * estimate_instructions(root) instructions).
  */
-#if defined __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdangling-pointer"
-#endif
 static cregex_program_t *compile_node_with_program(const cregex_node_t *root,
                                                    cregex_program_t *program)
 {
-    /* Silence a MinGW warning about dangling pointers */
-    static cregex_node_t* _root;
     /* add capture node for entire match */
-    root = &(cregex_node_t){.type = REGEX_NODE_TYPE_CAPTURE,
-                            .captured = (cregex_node_t *) root};
+    cregex_node_t capture_node = {.type = REGEX_NODE_TYPE_CAPTURE,
+                                  .captured = (cregex_node_t *) root};
+    root = &capture_node;
 
     /* add .*? unless pattern starts with ^ */
+    cregex_node_t any_node, quant_node, concat_node;
     if (!node_is_anchored(root)) {
-        _root = &(cregex_node_t){
-            .type = REGEX_NODE_TYPE_CONCATENATION,
-            .left =
-                &(cregex_node_t){
-                    .type = REGEX_NODE_TYPE_QUANTIFIER,
-                    .nmin = 0,
-                    .nmax = -1,
-                    .greedy = 0,
-                    .quantified = &(
-                        cregex_node_t){.type = REGEX_NODE_TYPE_ANY_CHARACTER}},
-            .right = (cregex_node_t *) root};
-        root = _root;
-     }
+        any_node   = (cregex_node_t){.type = REGEX_NODE_TYPE_ANY_CHARACTER};
+        quant_node = (cregex_node_t){.type = REGEX_NODE_TYPE_QUANTIFIER,
+                                     .nmin = 0, .nmax = -1, .greedy = 0,
+                                     .quantified = &any_node};
+        concat_node = (cregex_node_t){.type = REGEX_NODE_TYPE_CONCATENATION,
+                                      .left = &quant_node,
+                                      .right = (cregex_node_t *) root};
+        root = &concat_node;
+    }
 
     /* compile */
-    regex_compile_context *context =
-        &(regex_compile_context){.pc = program->instructions, .ncaptures = 0};
+    regex_compile_context ctx = {.pc = program->instructions, .ncaptures = 0};
+    regex_compile_context *context = &ctx;
     compile_context(context, root);
 
     /* emit final match instruction */
@@ -290,9 +282,6 @@ static cregex_program_t *compile_node_with_program(const cregex_node_t *root,
 
     return program;
 }
-#if defined __GNUC__
-#pragma GCC diagnostic pop
-#endif
 
 /* Upper bound of number of instructions required to compile parsed pattern. */
 static int estimate_instructions(const cregex_node_t *root)
