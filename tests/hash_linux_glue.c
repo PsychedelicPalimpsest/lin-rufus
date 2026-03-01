@@ -15,6 +15,7 @@
  * define the globals that are normally supplied by linux/globals.c.
  */
 #include "rufus.h"
+#include <sys/stat.h>
 
 /* ---- Acceleration flags (from globals.c in the real binary) ---- */
 BOOL cpu_has_sha1_accel   = FALSE;
@@ -39,6 +40,51 @@ char*  ini_file         = NULL;
 #include "../src/windows/rufus.h"
 RUFUS_UPDATE update = { {0,0,0}, {0,0}, NULL, NULL };
 windows_version_t WindowsVersion = { 0 };
+
+/* ---- Globals for Secure Boot checks (IsSignedBySecureBootAuthority / IsBootloaderRevoked) ---- */
+char *sbat_level_txt    = NULL;
+char *sb_active_txt     = NULL;
+char *sb_revoked_txt    = NULL;
+sbat_entry_t*     sbat_entries   = NULL;
+thumbprint_list_t *sb_active_certs  = NULL;
+thumbprint_list_t *sb_revoked_certs = NULL;
+BOOL expert_mode        = FALSE;
+char app_data_dir[MAX_PATH] = "/tmp";
+BOOL usb_debug          = FALSE;
+BOOL right_to_left_mode = FALSE;
+
+/* ---- fd_resources stub (stdfn.c/GetResource uses this, but we have no FreeDOS data in hash tests) ---- */
+#include "../src/linux/freedos_data.h"
+const fd_resource_t fd_resources[FD_RESOURCES_COUNT] = {{ 0, NULL, 0 }};
+
+/* ---- efi_archname and MachineToArch stubs (normally from iso.c / rufus.c) ---- */
+const char* efi_archname[ARCH_MAX] = {
+	"",         /* ARCH_UNKNOWN */
+	"ia32",     /* ARCH_X86_32  */
+	"x64",      /* ARCH_X86_64  */
+	"arm",      /* ARCH_ARM_32  */
+	"aa64",     /* ARCH_ARM_64  */
+	"ia64",     /* ARCH_IA_64   */
+	"riscv64",  /* ARCH_RISCV_64 */
+	"loongarch64", /* ARCH_LOONGARCH_64 */
+	"ebc",      /* ARCH_EBC     */
+};
+
+enum ArchType MachineToArch(WORD machine)
+{
+	switch (machine) {
+	case IMAGE_FILE_MACHINE_I386:   return ARCH_X86_32;
+	case IMAGE_FILE_MACHINE_AMD64:  return ARCH_X86_64;
+	case IMAGE_FILE_MACHINE_ARM:    return ARCH_ARM_32;
+	case IMAGE_FILE_MACHINE_ARMNT:  return ARCH_ARM_32;
+	case IMAGE_FILE_MACHINE_ARM64:  return ARCH_ARM_64;
+	case IMAGE_FILE_MACHINE_IA64:   return ARCH_IA_64;
+	default:                        return ARCH_UNKNOWN;
+	}
+}
+
+/* ---- UseLocalDbx stub (no cached DBX in test environment) ---- */
+BOOL UseLocalDbx(int arch) { (void)arch; return FALSE; }
 
 /* ---- Stubs for bled (not needed for hash tests) ---- */
 void bled_init(void *a, void *b, void *c, void *d, void *e, void *f, void *g)

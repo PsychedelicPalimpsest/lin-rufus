@@ -241,15 +241,19 @@ HASH_LINUX_EXTRA := \
 	$(SRC_DIR)/linux/ui.c \
 	$(SRC_DIR)/linux/stdlg.c \
 	$(SRC_DIR)/linux/parser.c \
+	$(SRC_DIR)/linux/pki.c \
+	$(SRC_DIR)/linux/localization.c \
+	$(SRC_DIR)/common/parser.c \
+	$(SRC_DIR)/common/localization.c \
 	$(COMPAT)/msg_dispatch.c
 CFLAGS_LINUX_test_hash := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                           -I$(SRC_DIR)/common -I$(SRC_DIR)/bled -I$(SRC_DIR) \
-                          -D_GNU_SOURCE \
+                          -D_GNU_SOURCE -DRUFUS_TEST \
                           -Wno-unused-function -Wno-sign-compare \
                           -Wno-implicit-function-declaration -Wno-unused-parameter \
                           -Wno-missing-field-initializers \
                           -march=native
-LDFLAGS_LINUX_test_hash := -lpthread $(shell pkg-config --libs fontconfig 2>/dev/null)
+LDFLAGS_LINUX_test_hash := -lpthread -lssl -lcrypto $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_hash := $(HASH_SRC) $(HASH_LINUX_EXTRA)
 
 CFLAGS_WIN_test_hash := -I$(SRC_DIR)/windows -I$(SRC_DIR)/common \

@@ -43,6 +43,7 @@ extern char   *image_path;
 extern HWND    hMainDialog;
 extern DWORD   ErrorStatus;
 extern char    temp_dir[];
+extern const char* efi_archname[];
 
 /* Maximum download buffer chunk */
 #define DOWNLOAD_BUFFER_SIZE (16 * 1024)
@@ -431,11 +432,18 @@ static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 }
 
 /* UseLocalDbx: use a locally cached DBX (UEFI Secure Boot revocation) database.
- * The DBX download and caching subsystem is not yet implemented on Linux. */
+ * Returns TRUE if a locally cached dbx_<arch>.bin file exists in app_data_dir/FILES_DIR/. */
 BOOL UseLocalDbx(int arch)
 {
-	(void)arch;
-	return FALSE;
+	char path[MAX_PATH];
+	struct stat st;
+
+	if (arch <= ARCH_UNKNOWN || arch >= ARCH_MAX)
+		return FALSE;
+	if (snprintf(path, sizeof(path), "%s/" FILES_DIR "/dbx_%s.bin",
+	             app_data_dir, efi_archname[arch]) < 0)
+		return FALSE;
+	return (stat(path, &st) == 0 && st.st_size > 0);
 }
 
 /* CheckForUpdates: check for a newer version of Rufus on the project server. */

@@ -941,6 +941,105 @@ TEST(efi_parse_valid_pe64)
 	free(pe);
 }
 
+/* ---- IsSignedBySecureBootAuthority / IsBootloaderRevoked (Linux only) ---- */
+
+/* NULL buffer → FALSE (not signed) */
+TEST(sb_issigned_null_buf)
+{
+	BOOL r = IsSignedBySecureBootAuthority(NULL, 0);
+	CHECK(r == FALSE);
+}
+
+/* Too short to be a PE → FALSE */
+TEST(sb_issigned_too_short)
+{
+	uint8_t data[4] = { 'M', 'Z', 0, 0 };
+	BOOL r = IsSignedBySecureBootAuthority(data, sizeof(data));
+	CHECK(r == FALSE);
+}
+
+/* Random bytes — not a PE → FALSE */
+TEST(sb_issigned_random_bytes)
+{
+	uint8_t data[256];
+	for (int i = 0; i < (int)sizeof(data); i++) data[i] = (uint8_t)(i * 37 + 13);
+	BOOL r = IsSignedBySecureBootAuthority(data, sizeof(data));
+	CHECK(r == FALSE);
+}
+
+/* Minimal unsigned PE64 → FALSE (no signature table) */
+TEST(sb_issigned_unsigned_pe)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	BOOL r = IsSignedBySecureBootAuthority(pe, len);
+	CHECK(r == FALSE);
+	free(pe);
+}
+
+/* IsBootloaderRevoked: NULL buffer → -2 (invalid input) */
+TEST(sb_revoked_null_buf)
+{
+	int r = IsBootloaderRevoked(NULL, 0);
+	CHECK(r == -2);
+}
+
+/* IsBootloaderRevoked: too short → -2 */
+TEST(sb_revoked_too_short)
+{
+	uint8_t data[4] = { 'M', 'Z', 0, 0 };
+	int r = IsBootloaderRevoked(data, sizeof(data));
+	CHECK(r == -2);
+}
+
+/* IsBootloaderRevoked: random bytes → -2 (not a valid PE) */
+TEST(sb_revoked_random_bytes)
+{
+	uint8_t data[256];
+	for (int i = 0; i < (int)sizeof(data); i++) data[i] = (uint8_t)(i * 53 + 7);
+	int r = IsBootloaderRevoked(data, sizeof(data));
+	CHECK(r == -2);
+}
+
+/* IsBootloaderRevoked: minimal unsigned PE64 → 0 (not revoked, not signed = treated as
+ * untrusted but not actively revoked; function returns 0 for "not revoked") */
+TEST(sb_revoked_unsigned_pe)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	int r = IsBootloaderRevoked(pe, len);
+	/* An unsigned PE cannot be revoked by DBX (no hash in DBX), SBAT, SVN or cert.
+	 * Expect 0 (no revocation found). */
+	CHECK(r == 0);
+	free(pe);
+}
+
+/* IsBootloaderRevoked: idempotent — same PE gives same result twice */
+TEST(sb_revoked_idempotent)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	int r1 = IsBootloaderRevoked(pe, len);
+	int r2 = IsBootloaderRevoked(pe, len);
+	CHECK(r1 == r2);
+	free(pe);
+}
+
+/* IsSignedBySecureBootAuthority with empty active-cert list → FALSE (no authority to match) */
+TEST(sb_issigned_no_active_certs)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	/* sb_active_txt is NULL / sb_active_certs is NULL from glue */
+	BOOL r = IsSignedBySecureBootAuthority(pe, len);
+	CHECK(r == FALSE);
+	free(pe);
+}
+
 #endif /* __linux__ */
 
 int main(void)
@@ -1024,6 +1123,18 @@ int main(void)
 	RUN(efi_parse_too_short);
 	RUN(efi_parse_bad_magic);
 	RUN(efi_parse_valid_pe64);
+
+	printf("\n  IsSignedBySecureBootAuthority / IsBootloaderRevoked (Linux only)\n");
+	RUN(sb_issigned_null_buf);
+	RUN(sb_issigned_too_short);
+	RUN(sb_issigned_random_bytes);
+	RUN(sb_issigned_unsigned_pe);
+	RUN(sb_issigned_no_active_certs);
+	RUN(sb_revoked_null_buf);
+	RUN(sb_revoked_too_short);
+	RUN(sb_revoked_random_bytes);
+	RUN(sb_revoked_unsigned_pe);
+	RUN(sb_revoked_idempotent);
 #endif
 
 	TEST_RESULTS();
