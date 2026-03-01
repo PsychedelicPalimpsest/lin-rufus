@@ -171,7 +171,12 @@ char hash_str[HASH_MAX][150];
 
 /* UI stubs */
 void EnableControls(BOOL e, BOOL r)   { (void)e;(void)r; }
-void UpdateProgress(int op, float p)  { (void)op;(void)p; }
+/* Progress tracking for tests */
+static int   _progress_calls = 0;
+static float _progress_last_pct = -1.0f;
+static int   _progress_op = -99;
+static void _reset_progress(void) { _progress_calls = 0; _progress_last_pct = -1.0f; _progress_op = -99; }
+void UpdateProgress(int op, float p)  { _progress_calls++; _progress_last_pct = p; _progress_op = op; }
 void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f)
                                        { (void)op;(void)msg;(void)cur;(void)tot;(void)f; }
 void InitProgress(BOOL b)             { (void)b; }
@@ -678,6 +683,62 @@ TEST(download_noisy_on_error_no_crash)
 }
 
 /* ================================================================
+ * Download progress callback tests (item 68)
+ * ================================================================ */
+
+TEST(download_progress_called_during_download)
+{
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	_reset_progress();
+	uint8_t *buf = NULL;
+	uint64_t n = DownloadToFileOrBufferEx(srv_url("hello.txt"), NULL, NULL, &buf, NULL, TRUE);
+	CHECK(n > 0);
+	/* UpdateProgress must have been called at least once during the download */
+	CHECK(_progress_calls > 0);
+	if (buf) free(buf);
+}
+
+TEST(download_progress_completes_at_100)
+{
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	_reset_progress();
+	uint8_t *buf = NULL;
+	uint64_t n = DownloadToFileOrBufferEx(srv_url("hello.txt"), NULL, NULL, &buf, NULL, TRUE);
+	CHECK(n > 0);
+	/* After a successful download the last progress call must be 100% */
+	CHECK_MSG(_progress_last_pct >= 99.0f,
+	          "last progress percentage must be >= 99 after complete download");
+	if (buf) free(buf);
+}
+
+TEST(download_progress_not_called_on_failure)
+{
+	/* On connection failure (port 4) no progress should be reported */
+	_reset_progress();
+	uint8_t *buf = NULL;
+	DownloadToFileOrBufferEx("http://127.0.0.1:4/bad", NULL, NULL, &buf, NULL, TRUE);
+	/* Either 0 calls or only 0%-progress calls before error — main check: no crash */
+	/* last pct should not be 100 since download never completed */
+	CHECK(_progress_last_pct < 99.0f || _progress_last_pct < 0.0f || _progress_calls == 0);
+}
+
+TEST(download_progress_file_also_reports_progress)
+{
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	_reset_progress();
+	char tmp[256];
+	snprintf(tmp, sizeof(tmp), "/tmp/test_net_prog_%d.txt", (int)getpid());
+	unlink(tmp);
+	uint64_t n = DownloadToFileOrBufferEx(srv_url("hello.txt"), tmp, NULL, NULL, NULL, TRUE);
+	CHECK(n > 0);
+	CHECK(_progress_calls > 0);
+	unlink(tmp);
+}
+
+/* ================================================================
  * CheckForUpdates — tests
  * ================================================================ */
 
@@ -1088,6 +1149,16 @@ int main(void)
 		RUN(download_status_200_on_success);
 	} else {
 		printf("\n  [HTTP server unavailable — skipping download tests]\n");
+	}
+
+	printf("\n  Download progress callback\n");
+	RUN(download_progress_not_called_on_failure);
+	if (srv_available) {
+		RUN(download_progress_called_during_download);
+		RUN(download_progress_completes_at_100);
+		RUN(download_progress_file_also_reports_progress);
+	} else {
+		printf("  [SKIP: no HTTP server]\n");
 	}
 
 	printf("\n  CheckForUpdates\n");

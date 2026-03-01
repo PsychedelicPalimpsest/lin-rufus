@@ -117,6 +117,19 @@ static size_t write_to_file(void *ptr, size_t sz, size_t nmemb, void *ud)
 	return n;
 }
 
+/* ---- libcurl progress callback ---- */
+
+static int download_xferinfo_cb(void *ud, curl_off_t dltotal, curl_off_t dlnow,
+                                 curl_off_t ultotal, curl_off_t ulnow)
+{
+	(void)ud; (void)ultotal; (void)ulnow;
+	if (dltotal > 0) {
+		float pct = (float)((double)dlnow / (double)dltotal * 100.0);
+		UpdateProgress(OP_NOOP, pct);
+	}
+	return 0; /* returning non-zero aborts the transfer */
+}
+
 /* ---- Internal URL helper ---- */
 
 static const char *net_short_name(const char *url)
@@ -208,6 +221,11 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 	if (ua != NULL && *ua != '\0')
 		curl_easy_setopt(curl, CURLOPT_USERAGENT, ua);
 
+	/* Progress callback — reports download percentage via UpdateProgress */
+	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, download_xferinfo_cb);
+	curl_easy_setopt(curl, CURLOPT_XFERINFODATA,     NULL);
+	curl_easy_setopt(curl, CURLOPT_NOPROGRESS,       0L);
+
 	/* Set write callback */
 	if (file != NULL) {
 		fctx.fp = fopen(file, "wb");
@@ -250,6 +268,8 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 			bctx.data = NULL; /* ownership transferred to caller */
 		}
 	}
+	/* Report 100% completion so the progress bar reaches the end */
+	UpdateProgress(OP_NOOP, 100.0f);
 
 out:
 	curl_easy_cleanup(curl);
