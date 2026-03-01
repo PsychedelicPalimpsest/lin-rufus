@@ -184,13 +184,15 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `DownloadToFileOrBufferEx()` | 🟡 | 1 042-line Windows impl uses `WinInet`; replace with `libcurl` |
-| `DownloadSignedFile()` / `DownloadSignedFileThreaded()` | 🟡 | Wraps `DownloadToFileOrBufferEx` + signature check |
-| `CheckForUpdates()` | 🟡 | Fetches update JSON; needs `libcurl` + `parser.c` |
-| `DownloadISO()` | 🟡 | Fido script launcher; needs `process.c` + `libcurl` |
-| `UseLocalDbx()` | 🟡 | Use local DBX (revocation) database |
-| `IsDownloadable()` | 🟡 | URL validation; trivial once `libcurl` is available |
-| TLS / certificate verification | 🟡 | WinInet handles this on Windows; `libcurl` + system CA bundle on Linux |
+| `DownloadToFileOrBufferEx()` | ✅ | libcurl implementation; file + buffer modes, HTTP status tracking, silent/noisy error, User-Agent; 45 tests pass |
+| `IsDownloadable()` | ✅ | URL validation: http:// and https:// only; 45 tests pass |
+| TLS / certificate verification | ✅ | `libcurl` + system CA bundle; CURLOPT_SSL_VERIFYPEER enabled by default |
+| `DownloadSignedFile()` | 🔧 | Delegates to `DownloadToFileOrBufferEx`; signature verification not yet implemented (needs `pki.c`) |
+| `DownloadSignedFileThreaded()` | 🟡 | Stub; wraps `DownloadSignedFile` in a thread |
+| `CheckForUpdates()` | 🟡 | Stub returns FALSE; needs version comparison + `parse_update()` |
+| `DownloadISO()` | 🟡 | Stub; Fido script launcher — needs `process.c` |
+| `UseLocalDbx()` | 🟡 | Stub; use local DBX (revocation) database |
+| `configure.ac` libcurl detection | ✅ | `PKG_CHECK_MODULES([CURL], [libcurl >= 7.50])` added; flags propagated to AM_CFLAGS/AM_LDFLAGS |
 
 ### 3f. PKI / Certificates (`pki.c`)
 
@@ -436,7 +438,7 @@ This is the most structurally significant porting gap.
 | PE parsing functions tests | ❌ | `GetPeArch`, `GetPeSection` etc. are portable C |
 | `msg_dispatch` (PostMessage/SendMessage bridge) tests | ✅ | 61 tests: handler registry, sync/async dispatch, cross-thread SendMessage, concurrent posts, macro aliases, UM_* constants |
 | `common/device_monitor` (hotplug) tests | ✅ | 20 tests: lifecycle (start/stop/double/null), callback dispatch, debounce, thread safety, inject |
-| Device enumeration tests (`test_dev_linux`) | ✅ | 138 tests: fake sysfs, removable/HDD/size/sort/name/index/cleanup |
+| `common/net` (IsDownloadable, DownloadToFileOrBufferEx) tests | ✅ | 45 tests; real libcurl downloads, file+buffer modes, HTTP status, User-Agent, 404 handling, binary data |
 
 ---
 
@@ -453,7 +455,7 @@ This is the most structurally significant porting gap.
 9. ~~**ext formatter** (`format_ext.c`)~~ ✅ **DONE** — 9 tests pass
 10. **ISO extraction** (`iso.c`) — `libcdio` is bundled; wire up real I/O
 11. **Hashing** (`hash.c`) — algorithms are pure C; just need POSIX I/O wrappers
-11. **Networking** (`net.c`) — replace `WinInet` with `libcurl`
+11. ~~**Networking** (`net.c`)~~ ✅ **DONE** — `IsDownloadable` + `DownloadToFileOrBufferEx` implemented with libcurl; 45 tests pass; `configure.ac` updated with `PKG_CHECK_MODULES` for libcurl; stubs remain for `CheckForUpdates`/`DownloadISO`/`DownloadSignedFileThreaded`
 12. **PKI / signatures** (`pki.c`) — replace `WinTrust` with OpenSSL
 13. **Bad blocks** (`badblocks.c`) — straightforward block I/O loop
 14. **S.M.A.R.T.** (`smart.c`) — `SG_IO` ioctl

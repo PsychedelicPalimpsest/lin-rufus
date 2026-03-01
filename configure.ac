@@ -154,6 +154,16 @@ fi
 
 AM_CONDITIONAL([USE_GTK], [test "x$ui_backend" = "xgtk"])
 
+# libcurl — required for Linux networking (net.c)
+if test "x$target_os" = "xlinux"; then
+  PKG_CHECK_MODULES([CURL], [libcurl >= 7.50],
+    [AC_MSG_NOTICE([libcurl found])],
+    [AC_MSG_ERROR([libcurl >= 7.50 required for Linux build.
+Install it with: apt install libcurl4-openssl-dev  OR  dnf install libcurl-devel])])
+  AM_CFLAGS="$AM_CFLAGS $CURL_CFLAGS"
+  AM_LDFLAGS="$AM_LDFLAGS $CURL_LIBS"
+fi
+
 AC_SUBST([VISIBILITY_CFLAGS])
 AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])
