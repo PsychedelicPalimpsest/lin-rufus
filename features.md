@@ -240,9 +240,9 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `isSMode()` | 🚫 | Windows S Mode — always FALSE |
 | `ExtractZip()` | ✅ | Implemented using bundled `bled` library (`bled_uncompress_to_dir`); fixed path separator and `bytes_out` tracking for stored files |
 | `ListDirectoryContent()` | ✅ | POSIX `opendir`/`readdir`/`stat`; supports FILE, DIRECTORY, RECURSIVE flags |
-| `WriteFileWithRetry()` | 🟡 | Use `pwrite` with retry loop |
+| `WriteFileWithRetry()` | ✅ | `write()` retry loop with EINTR/EAGAIN handling; NULL-buf guard; 4 tests pass |
 | `ResolveDllAddress()` | 🚫 | DLL delay-load — N/A on Linux |
-| `WaitForSingleObjectWithMessages()` | 🟡 | Needs pthread condvar or `poll()` loop |
+| `WaitForSingleObjectWithMessages()` | ✅ | Delegates to `WaitForSingleObject`; no message pump needed on Linux (GTK runs its own loop); 3 tests pass |
 | `CreateFileWithTimeoutThread()` | 🟡 | Use `open()` with `O_NONBLOCK` + `alarm` |
 
 ### 3i. Standard I/O (`stdio.c`)

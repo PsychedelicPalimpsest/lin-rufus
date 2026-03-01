@@ -23,6 +23,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -522,6 +523,91 @@ TEST(extract_zip_nonexistent_src)
 }
 
 /* ===========================================================================
+ * WriteFileWithRetry tests
+ * =========================================================================*/
+
+/* 29. Basic write succeeds and reports correct byte count */
+TEST(write_file_with_retry_basic)
+{
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "/tmp/rufus_wfwr_%d", (int)getpid());
+    int fd = open(tmp, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+    CHECK(fd >= 0);
+    HANDLE h = (HANDLE)(intptr_t)fd;
+    const char *data = "hello, world";
+    DWORD written = 0;
+    BOOL r = WriteFileWithRetry(h, data, (DWORD)strlen(data), &written, 0);
+    CHECK(r == TRUE);
+    CHECK(written == (DWORD)strlen(data));
+    close(fd);
+    unlink(tmp);
+}
+
+/* 30. Reports failure and written=partial for invalid fd */
+TEST(write_file_with_retry_invalid_handle)
+{
+    DWORD written = 99;
+    BOOL r = WriteFileWithRetry(INVALID_HANDLE_VALUE, "x", 1, &written, 0);
+    CHECK(r == FALSE);
+}
+
+/* 31. NULL buffer returns FALSE */
+TEST(write_file_with_retry_null_buf)
+{
+    BOOL r = WriteFileWithRetry((HANDLE)(intptr_t)1, NULL, 4, NULL, 0);
+    CHECK(r == FALSE);
+}
+
+/* 32. NULL written pointer is safe */
+TEST(write_file_with_retry_null_written)
+{
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "/tmp/rufus_wfwr2_%d", (int)getpid());
+    int fd = open(tmp, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+    CHECK(fd >= 0);
+    HANDLE h = (HANDLE)(intptr_t)fd;
+    BOOL r = WriteFileWithRetry(h, "test", 4, NULL, 0);
+    CHECK(r == TRUE);
+    close(fd);
+    unlink(tmp);
+}
+
+/* ===========================================================================
+ * WaitForSingleObjectWithMessages tests
+ * =========================================================================*/
+
+/* Helper thread that exits immediately */
+static DWORD WINAPI wfsom_trivial_thread(void *arg) { (void)arg; return 42; }
+
+/* 29. Returns WAIT_OBJECT_0 when thread has finished */
+TEST(wfsom_returns_wait_object_0)
+{
+    HANDLE h = CreateThread(NULL, 0, wfsom_trivial_thread, NULL, 0, NULL);
+    CHECK(h != NULL && h != INVALID_HANDLE_VALUE);
+    DWORD r = WaitForSingleObjectWithMessages(h, 5000);
+    CHECK(r == WAIT_OBJECT_0);
+    CloseHandle(h);
+}
+
+/* 30. Returns WAIT_TIMEOUT when handle does not signal within timeout */
+TEST(wfsom_returns_wait_timeout)
+{
+    /* Create an event (manual reset) that we never signal */
+    HANDLE ev = CreateEvent(NULL, TRUE, FALSE, NULL);
+    CHECK(ev != NULL && ev != INVALID_HANDLE_VALUE);
+    DWORD r = WaitForSingleObjectWithMessages(ev, 50);  /* 50 ms */
+    CHECK(r == WAIT_TIMEOUT);
+    CloseHandle(ev);
+}
+
+/* 31. Returns WAIT_FAILED for invalid handle */
+TEST(wfsom_invalid_handle_returns_failed)
+{
+    DWORD r = WaitForSingleObjectWithMessages(INVALID_HANDLE_VALUE, 0);
+    CHECK(r == WAIT_FAILED);
+}
+
+/* ===========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -556,6 +642,17 @@ int main(void)
     RUN(extract_zip_success);
     RUN(extract_zip_null_src);
     RUN(extract_zip_nonexistent_src);
+
+    printf("\n  WriteFileWithRetry\n");
+    RUN(write_file_with_retry_basic);
+    RUN(write_file_with_retry_invalid_handle);
+    RUN(write_file_with_retry_null_buf);
+    RUN(write_file_with_retry_null_written);
+
+    printf("\n  WaitForSingleObjectWithMessages\n");
+    RUN(wfsom_returns_wait_object_0);
+    RUN(wfsom_returns_wait_timeout);
+    RUN(wfsom_invalid_handle_returns_failed);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;

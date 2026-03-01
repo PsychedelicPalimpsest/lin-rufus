@@ -100,7 +100,12 @@ const char* _StrError(DWORD code)    { return strerror((int)code); }
 const char* StrError(DWORD code, BOOL use_default) { (void)use_default; return strerror((int)code); }
 
 DWORD WINAPI CreateFileWithTimeoutThread(void* params)            { (void)params; return 0; }
-DWORD WaitForSingleObjectWithMessages(HANDLE h, DWORD ms)         { (void)h;(void)ms; return 0; }
+/* WaitForSingleObjectWithMessages — on Linux there is no message pump,
+ * so we simply delegate to WaitForSingleObject which uses pthreads. */
+DWORD WaitForSingleObjectWithMessages(HANDLE h, DWORD ms)
+{
+    return WaitForSingleObject(h, ms);
+}
 BOOL  CALLBACK EnumSymProc(void* info, ULONG sz, PVOID ctx)       { (void)info;(void)sz;(void)ctx; return FALSE; }
 uint32_t ResolveDllAddress(dll_resolver_t* resolver)                        { (void)resolver; return 0; }
 
