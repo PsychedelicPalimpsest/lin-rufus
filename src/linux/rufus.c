@@ -155,6 +155,43 @@ void rufus_init_paths(void)
     uprintf("ini_file:     %s", ini_file ? ini_file : "(none)");
 }
 
+/*
+ * find_loc_file() — locate the embedded.loc localization file.
+ *
+ * Searches in order:
+ *   1. <app_dir>/res/loc/embedded.loc   (development / running from build root)
+ *   2. <app_dir>/embedded.loc           (same dir as binary, e.g. after install)
+ *   3. RUFUS_DATADIR "/embedded.loc"    (compile-time installed path)
+ *
+ * Returns a pointer to a static buffer with the path on success, or NULL if
+ * the file cannot be found.  The returned pointer is valid until the next
+ * call to find_loc_file().
+ */
+const char *find_loc_file(void)
+{
+    static char loc_path[PATH_MAX];
+    struct stat st;
+
+    /* 1. Development: <app_dir>/res/loc/embedded.loc */
+    snprintf(loc_path, sizeof(loc_path), "%sres/loc/embedded.loc", app_dir);
+    if (stat(loc_path, &st) == 0 && S_ISREG(st.st_mode))
+        return loc_path;
+
+    /* 2. Installed alongside binary: <app_dir>/embedded.loc */
+    snprintf(loc_path, sizeof(loc_path), "%sembedded.loc", app_dir);
+    if (stat(loc_path, &st) == 0 && S_ISREG(st.st_mode))
+        return loc_path;
+
+#ifdef RUFUS_DATADIR
+    /* 3. Compile-time data directory */
+    snprintf(loc_path, sizeof(loc_path), "%s/embedded.loc", RUFUS_DATADIR);
+    if (stat(loc_path, &st) == 0 && S_ISREG(st.st_mode))
+        return loc_path;
+#endif
+
+    return NULL;
+}
+
 /* ---- Linux main entry point ---- */
 #ifndef USE_GTK
 int main(int argc, char* argv[]) {

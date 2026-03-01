@@ -201,6 +201,9 @@ void _exit_localization(BOOL reinit)
 	free_dialog_list();
 	mtab_destroy(reinit);
 	htab_destroy(&htab_loc);
+	if (!reinit)
+		msg_table = NULL;
+	localization_initialized = FALSE;
 }
 
 /*

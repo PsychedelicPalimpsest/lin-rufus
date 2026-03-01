@@ -180,6 +180,10 @@ if test "x$target_os" = "xlinux"; then
     [AC_MSG_NOTICE([fontconfig found])],
     [AC_MSG_ERROR([fontconfig required for Linux build.
 Install it with: apt install libfontconfig1-dev  OR  dnf install fontconfig-devel])])
+
+  # Define RUFUS_DATADIR as the installed package data directory
+  AC_DEFINE_UNQUOTED([RUFUS_DATADIR], ["${datadir}/rufus"],
+                     [Installed data directory for rufus resources])
 fi
 
 AC_SUBST([VISIBILITY_CFLAGS])

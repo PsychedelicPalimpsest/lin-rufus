@@ -34,6 +34,7 @@
 
 /* Globals provided by globals.c — must be visible to hash_algos.c (included below) */
 extern BOOL cpu_has_sha1_accel, cpu_has_sha256_accel;
+extern BOOL validate_md5sum;
 
 /*
  * Include the portable algorithm implementations (MD5, SHA1, SHA256, SHA512),

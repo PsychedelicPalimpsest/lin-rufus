@@ -423,7 +423,7 @@ This is the most structurally significant porting gap.
 | Item | Status | Notes |
 |------|--------|-------|
 | `GetResource()` — Windows PE resources | 🚫 | PE resource section not available on ELF Linux binary |
-| Embedded locale data (`res/loc/embedded.loc`) | 🟡 | Must be compiled in as a C array (`xxd -i`) or loaded from a data directory |
+| Embedded locale data (`res/loc/embedded.loc`) | ✅ | `find_loc_file()` searches `app_dir/res/loc/embedded.loc`, `app_dir/embedded.loc`, `RUFUS_DATADIR/embedded.loc`; loaded in `on_app_activate()`; 7 new tests in `test_parser` (get_supported_locales + get_loc_data_file) pass |
 | Embedded FreeDOS / MS-DOS boot files | 🟡 | Same — embed as binary arrays or install to `$datadir` |
 | Application icon (`.desktop` / `.png`) | ✅ | `res/ie.akeo.rufus.desktop` + `res/ie.akeo.rufus.appdata.xml`; icons at 32/48/256px; install targets in `Makefile.am` |
 

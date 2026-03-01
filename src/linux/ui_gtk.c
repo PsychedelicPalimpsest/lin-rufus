@@ -45,6 +45,7 @@ extern void rufus_set_status_handler(void (*fn)(const char *msg));
 /* Update check — implemented in linux/stdlg.c and linux/net.c */
 extern BOOL SetUpdateCheck(void);
 extern BOOL CheckForUpdates(BOOL force);
+extern BOOL quick_format, zero_drive;
 
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
@@ -1206,6 +1207,27 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	/* Initialise application paths (app_dir, app_data_dir, user_dir, ini_file)
 	 * using XDG Base Directory conventions. */
 	rufus_init_paths();
+
+	/* Load the embedded locale data file, populate locale_list, and apply
+	 * the best match for the system language to the UI strings. */
+	{
+		const char *loc_path = find_loc_file();
+		if (loc_path != NULL) {
+			uprintf("localization: loading '%s'", loc_path);
+			if (get_supported_locales(loc_path)) {
+				char *sys_locale = ToLocaleName(0);
+				loc_cmd *sel = get_locale_from_name(sys_locale, TRUE);
+				if (sel != NULL)
+					get_loc_data_file(loc_path, sel);
+				else
+					uprintf("localization: no locale match for '%s'", sys_locale);
+			} else {
+				uprintf("localization: failed to parse '%s'", loc_path);
+			}
+		} else {
+			uprintf("localization: embedded.loc not found — UI strings will be untranslated");
+		}
+	}
 
 	/* Initialise the message dispatch system on the main thread and hook
 	 * it up to the GTK scheduler so worker threads can safely drive UI

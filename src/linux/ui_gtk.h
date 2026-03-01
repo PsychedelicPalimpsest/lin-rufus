@@ -127,3 +127,4 @@ void       rufus_gtk_append_log(const char *msg);
 
 /* Linux-specific initialization (defined in rufus.c) */
 void rufus_init_paths(void);
+const char *find_loc_file(void);

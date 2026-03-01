@@ -417,6 +417,94 @@ TEST(open_loc_file_real_file)
 }
 
 /* ============================================================
+ * get_supported_locales (common/parser.c)
+ * ============================================================ */
+
+/* Path to the real embedded.loc in the source tree (used during tests) */
+#define REAL_LOC_PATH "../res/loc/embedded.loc"
+
+TEST(get_supported_locales_null)
+{
+    init_localization();
+    BOOL r = get_supported_locales(NULL);
+    CHECK_MSG(r == FALSE, "get_supported_locales(NULL) must return FALSE");
+    exit_localization();
+}
+
+TEST(get_supported_locales_nonexistent)
+{
+    init_localization();
+    BOOL r = get_supported_locales("/nonexistent/path/rufus.loc");
+    CHECK_MSG(r == FALSE, "get_supported_locales with missing file must return FALSE");
+    exit_localization();
+}
+
+TEST(get_supported_locales_real_file)
+{
+    init_localization();
+    BOOL r = get_supported_locales(REAL_LOC_PATH);
+    CHECK_MSG(r == TRUE, "get_supported_locales must succeed with the real embedded.loc");
+    /* locale_list must be non-empty */
+    CHECK_MSG(!list_empty(&locale_list), "locale_list must be populated");
+    exit_localization();
+}
+
+TEST(get_supported_locales_contains_en_us)
+{
+    init_localization();
+    get_supported_locales(REAL_LOC_PATH);
+    /* Look for en-US in the locale list */
+    BOOL found = FALSE;
+    loc_cmd *lcmd;
+    list_for_each_entry(lcmd, &locale_list, loc_cmd, list) {
+        if (lcmd->txt[0] && strcmp(lcmd->txt[0], "en-US") == 0) {
+            found = TRUE;
+            break;
+        }
+    }
+    CHECK_MSG(found, "locale_list must contain en-US after loading embedded.loc");
+    exit_localization();
+}
+
+TEST(get_loc_data_file_null_locale)
+{
+    init_localization();
+    get_supported_locales(REAL_LOC_PATH);
+    BOOL r = get_loc_data_file(REAL_LOC_PATH, NULL);
+    CHECK_MSG(r == FALSE, "get_loc_data_file with NULL locale must return FALSE");
+    exit_localization();
+}
+
+TEST(get_loc_data_file_en_us)
+{
+    init_localization();
+    BOOL r = get_supported_locales(REAL_LOC_PATH);
+    CHECK_MSG(r == TRUE, "get_supported_locales must succeed");
+
+    loc_cmd *en = get_locale_from_name((char *)"en-US", TRUE);
+    CHECK_MSG(en != NULL, "get_locale_from_name must find en-US");
+
+    r = get_loc_data_file(REAL_LOC_PATH, en);
+    CHECK_MSG(r == TRUE, "get_loc_data_file for en-US must succeed");
+    exit_localization();
+}
+
+TEST(get_loc_data_file_populates_msg_table)
+{
+    extern char **msg_table;
+    init_localization();
+    get_supported_locales(REAL_LOC_PATH);
+    loc_cmd *en = get_locale_from_name((char *)"en-US", TRUE);
+    if (en != NULL)
+        get_loc_data_file(REAL_LOC_PATH, en);
+    /* After loading en-US, msg_table[1] should be a non-NULL string
+     * (MSG_001 = "Other instance detected") */
+    CHECK_MSG(msg_table != NULL, "msg_table must be non-NULL");
+    CHECK_MSG(msg_table[1] != NULL, "MSG_001 must be populated after loading en-US locale");
+    exit_localization();
+}
+
+/* ============================================================
  * get_token_data_file_indexed (linux/parser.c)
  * ============================================================ */
 
@@ -733,6 +821,15 @@ int main(void)
     RUN(open_loc_file_null);
     RUN(open_loc_file_nonexistent);
     RUN(open_loc_file_real_file);
+
+    printf("\n=== get_supported_locales / get_loc_data_file ===\n");
+    RUN(get_supported_locales_null);
+    RUN(get_supported_locales_nonexistent);
+    RUN(get_supported_locales_real_file);
+    RUN(get_supported_locales_contains_en_us);
+    RUN(get_loc_data_file_null_locale);
+    RUN(get_loc_data_file_en_us);
+    RUN(get_loc_data_file_populates_msg_table);
 
     printf("\n=== get_token_data_file_indexed ===\n");
     RUN(get_token_data_file_indexed_basic);

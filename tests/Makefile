@@ -79,7 +79,9 @@ PARSER_SRC := $(COMMON)/parser.c $(SRC_DIR)/linux/parser.c \
               $(COMMON)/localization.c $(SRC_DIR)/linux/stdfn.c
 CFLAGS_LINUX_test_parser  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                               -Wno-unused-function -Wno-sign-compare \
-                              -Wno-implicit-function-declaration
+                              -Wno-implicit-function-declaration \
+                              $(shell pkg-config --cflags fontconfig 2>/dev/null)
+LDFLAGS_LINUX_test_parser := $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_parser := $(PARSER_SRC)
 
 # drive_linux tests: Linux drive access (GetPhysicalName, partition parsing, etc.)
@@ -309,13 +311,14 @@ LOC_LINUX_SRC := $(SRC_DIR)/linux/localization.c \
                  $(SRC_DIR)/linux/stdfn.c \
                  $(COMMON)/localization.c \
                  $(COMMON)/parser.c
+LDFLAGS_LINUX_test_localization_linux := $(shell pkg-config --libs fontconfig 2>/dev/null)
 CFLAGS_LINUX_test_localization_linux := \
 	-DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(COMMON) -I$(SRC_DIR) \
 	-Wno-implicit-function-declaration -Wno-unused-function \
-	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_localization_linux :=
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
+	$(shell pkg-config --cflags fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_localization_linux := $(LOC_LINUX_SRC)
 
 # smart_linux tests: SMART HDD/UFD detection via SG_IO
