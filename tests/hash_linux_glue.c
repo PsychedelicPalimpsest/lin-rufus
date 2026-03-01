@@ -33,6 +33,18 @@ uint64_t md5sum_totalbytes = 0;
 StrArray modified_files = { 0 };
 uint8_t* pe256ssp       = NULL;
 uint32_t pe256ssp_size  = 0;
+char*  ini_file         = NULL;
+
+/* ---- Globals needed by parser.c ---- */
+#include "../src/windows/rufus.h"
+RUFUS_UPDATE update = { {0,0,0}, {0,0}, NULL, NULL };
+windows_version_t WindowsVersion = { 0 };
+
+/* ---- Stubs for bled (not needed for hash tests) ---- */
+void bled_init(void *a, void *b, void *c, void *d, void *e, void *f, void *g)
+     { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g; }
+int  bled_uncompress_to_dir(const char *src, const char *dst) { (void)src;(void)dst; return -1; }
+void bled_exit(void) {}
 
 /* ---- Rename the hard-coded-SHA256 BufferMatchesHash before including hash.c ---- */
 #define BufferMatchesHash BufferMatchesHash_sha256only

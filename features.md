@@ -152,7 +152,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `error_message()` / `ext2fs_print_progress()` | ✅ | Implemented and working |
 | `GetExtFsLabel()` | ✅ | `ext2fs_get_label()` working |
 | Quick format checkbox | ✅ | `quick_format` global wired to GTK checkbox in `on_start_clicked`; controls `FP_QUICK` flag in FormatThread |
-| Progress reporting from format thread | 🟡 | Route through `UpdateProgress()` → GTK idle |
+| Progress reporting from format thread | ✅ | `UpdateProgress()` in `ui_gtk.c` posts to GTK main thread via `g_idle_add(idle_update_progress, ...)`; `_UpdateProgressWithInfo` wraps it; fully wired |
 
 ### 3c. ISO / Image Handling (`iso.c`)
 
@@ -179,8 +179,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `PE256Buffer()` / `efi_image_parse()` | 🟡 | PE parsing is pure C; remove Windows I/O |
 | `IsFileInDB()` / `IsBufferInDB()` | ✅ | Hash database lookup implemented in `src/linux/hash.c` |
 | `IsSignedBySecureBootAuthority()` / `IsBootloaderRevoked()` | 🟡 | Needs cert DB + SBAT parsing; uses `pki.c` |
-| `UpdateMD5Sum()` | 🟡 | Write `md5sum`-compatible file on the target drive |
-| `ValidateMD5Sum` flag | 🟡 | Validate checksums after write |
+| `UpdateMD5Sum()` | ✅ | Reads md5sum.txt, recomputes MD5 for each `modified_files` entry, patches hex in-place, writes back; bootloader rename (`GetResource`/IDR_MD5_BOOT) is Windows-only and intentionally omitted; 4 tests pass |
+| `ValidateMD5Sum` flag | ✅ | Respected by `UpdateMD5Sum`; `validate_md5sum` global wired |
 
 ### 3e. Networking (`net.c`)
 
@@ -392,7 +392,7 @@ This is the most structurally significant porting gap.
 | Windows `HANDLE`-based threads (`CreateThread` / `WaitForSingleObject`) | ✅ | pthread bridge complete — `CreateThread`, `WaitForSingleObject`, `WaitForMultipleObjects`, `TerminateThread`, `GetExitCodeThread` all implemented |
 | `PostMessage` / `SendMessage` for cross-thread UI updates | ✅ | `msg_dispatch.c` bridge: handler registry, async `g_idle_add` scheduler, cross-thread blocking SendMessage via condvar; `hMainDialog` handler handles all `UM_*` messages; 61 tests pass |
 | `WM_DEVICECHANGE` device-arrival events | ✅ | `device_monitor.c`: udev netlink monitor thread (libudev); debounce 1 s; `device_monitor_inject()` for manual refresh/testing; posts `UM_MEDIA_CHANGE` → `GetDevices()` on GTK main thread; 20 tests pass |
-| Windows timer (`SetTimer` / `KillTimer`) | 🟡 | Replace with `g_timeout_add` |
+| Windows timer (`SetTimer` / `KillTimer`) | ✅ | Not used by any Linux source file; stubs in `compat/windows.h` are sufficient |
 | `CRITICAL_SECTION` / `Mutex` | ✅ | `CRITICAL_SECTION` (recursive pthread mutex) and `CreateMutex`/`ReleaseMutex` implemented in compat layer |
 | `op_in_progress` flag | ✅ | Set TRUE on format start, cleared + thread handle closed in `UM_FORMAT_COMPLETED` handler |
 

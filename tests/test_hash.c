@@ -362,6 +362,9 @@ extern char   hash_str[HASH_MAX][150];
 extern BOOL   enable_extra_hashes;
 extern RUFUS_IMG_REPORT img_report;
 extern DWORD  ErrorStatus;
+extern BOOL   validate_md5sum;
+extern uint64_t md5sum_totalbytes;
+extern StrArray modified_files;
 
 /* Helper: create a temp file and fill it with 'content' bytes */
 static char ht_tmp[256];
@@ -574,6 +577,160 @@ TEST(hashthread_is_file_in_db_miss)
 	unlink(ht_tmp);
 }
 
+/* ====================================================================
+ * UpdateMD5Sum tests
+ *
+ * UpdateMD5Sum(dest_dir, md5sum_name):
+ *  - reads dest_dir/md5sum_name
+ *  - for each path in modified_files, finds the matching 32-hex entry
+ *    and updates it in-place with the new MD5
+ *  - writes the file back
+ * ==================================================================== */
+
+/* Write 'content' (null-terminated) to path */
+static void write_str(const char *path, const char *content)
+{
+	FILE *f = fopen(path, "w");
+	if (!f) return;
+	fputs(content, f);
+	fclose(f);
+}
+
+/* Read full file into static buffer (≤ 4 KB for tests); returns pointer */
+static char md5_rd_buf[4096];
+static const char *read_str(const char *path)
+{
+	FILE *f = fopen(path, "r");
+	if (!f) { md5_rd_buf[0] = '\0'; return md5_rd_buf; }
+	size_t n = fread(md5_rd_buf, 1, sizeof(md5_rd_buf) - 1, f);
+	fclose(f);
+	md5_rd_buf[n] = '\0';
+	return md5_rd_buf;
+}
+
+/* Create a temp dir under /tmp; returns fd of a sentinel file (ignored),
+ * path written to dir_out[64].  Caller must rmdir after cleanup. */
+static void make_tmp_dir(char dir_out[64])
+{
+	snprintf(dir_out, 64, "/tmp/rufus_md5_XXXXXX");
+	char *r = mkdtemp(dir_out);
+	if (!r) dir_out[0] = '\0';
+}
+
+/* ---- no-op when has_md5sum is FALSE and validate_md5sum is FALSE ---- */
+TEST(update_md5sum_noop_when_disabled)
+{
+	char dir[64];
+	make_tmp_dir(dir);
+	if (dir[0] == '\0') { CHECK(0); return; }
+
+	/* Write a sentinel md5sum.txt — it must NOT be modified */
+	char md5path[128];
+	snprintf(md5path, sizeof(md5path), "%s/md5sum.txt", dir);
+	write_str(md5path, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  ./boot/grub.cfg\n");
+
+	img_report.has_md5sum = FALSE;
+	validate_md5sum = FALSE;
+	StrArrayClear(&modified_files);
+
+	UpdateMD5Sum(dir, "md5sum.txt");
+
+	/* File content must be unchanged */
+	const char *got = read_str(md5path);
+	CHECK(strstr(got, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") != NULL);
+
+	unlink(md5path);
+	rmdir(dir);
+}
+
+/* ---- updates the MD5 entry for a modified file ---- */
+TEST(update_md5sum_updates_hash)
+{
+	char dir[64];
+	make_tmp_dir(dir);
+	if (dir[0] == '\0') { CHECK(0); return; }
+
+	/* Create a file with known content "abc" → MD5 = 900150983cd24fb0d6963f7d28e17f72 */
+	char data_path[128];
+	snprintf(data_path, sizeof(data_path), "%s/boot/grub.cfg", dir);
+	mkdir("%s/boot", 0755); /* ignore error if exists */
+	{
+		char boot_dir[128];
+		snprintf(boot_dir, sizeof(boot_dir), "%s/boot", dir);
+		mkdir(boot_dir, 0755);
+	}
+	write_str(data_path, "abc");
+
+	/* md5sum.txt has a wrong hash for this file */
+	char md5path[128];
+	snprintf(md5path, sizeof(md5path), "%s/md5sum.txt", dir);
+	write_str(md5path, "00000000000000000000000000000000  ./boot/grub.cfg\n");
+
+	img_report.has_md5sum = TRUE;
+	validate_md5sum = FALSE;
+	StrArrayClear(&modified_files);
+	StrArrayCreate(&modified_files, 4);
+	StrArrayAdd(&modified_files, data_path, TRUE);
+
+	UpdateMD5Sum(dir, "md5sum.txt");
+
+	const char *got = read_str(md5path);
+	CHECK(strstr(got, "900150983cd24fb0d6963f7d28e17f72") != NULL);
+
+	unlink(data_path);
+	unlink(md5path);
+	{
+		char boot_dir[128];
+		snprintf(boot_dir, sizeof(boot_dir), "%s/boot", dir);
+		rmdir(boot_dir);
+	}
+	rmdir(dir);
+}
+
+/* ---- file not listed in md5sum.txt → entry untouched ---- */
+TEST(update_md5sum_skips_unlisted_file)
+{
+	char dir[64];
+	make_tmp_dir(dir);
+	if (dir[0] == '\0') { CHECK(0); return; }
+
+	char data_path[128];
+	snprintf(data_path, sizeof(data_path), "%s/other.bin", dir);
+	write_str(data_path, "abc");
+
+	char md5path[128];
+	snprintf(md5path, sizeof(md5path), "%s/md5sum.txt", dir);
+	write_str(md5path, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  ./boot/grub.cfg\n");
+
+	img_report.has_md5sum = TRUE;
+	validate_md5sum = FALSE;
+	StrArrayClear(&modified_files);
+	StrArrayCreate(&modified_files, 4);
+	StrArrayAdd(&modified_files, data_path, TRUE);
+
+	UpdateMD5Sum(dir, "md5sum.txt");
+
+	const char *got = read_str(md5path);
+	/* The boot/grub.cfg entry must be unchanged */
+	CHECK(strstr(got, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") != NULL);
+
+	unlink(data_path);
+	unlink(md5path);
+	rmdir(dir);
+}
+
+/* ---- nonexistent md5sum file → no crash ---- */
+TEST(update_md5sum_no_crash_missing_file)
+{
+	img_report.has_md5sum = TRUE;
+	validate_md5sum = FALSE;
+	StrArrayClear(&modified_files);
+
+	/* Should return silently without crashing */
+	UpdateMD5Sum("/tmp/nonexistent_rufus_dir_xyz", "md5sum.txt");
+	CHECK(1);  /* just check no crash/abort */
+}
+
 #endif /* __linux__ */
 
 int main(void)
@@ -635,6 +792,12 @@ int main(void)
 	RUN(hashthread_fox_message);
 	RUN(hashthread_is_buffer_in_db_miss);
 	RUN(hashthread_is_file_in_db_miss);
+
+	printf("\n  UpdateMD5Sum (Linux only)\n");
+	RUN(update_md5sum_noop_when_disabled);
+	RUN(update_md5sum_updates_hash);
+	RUN(update_md5sum_skips_unlisted_file);
+	RUN(update_md5sum_no_crash_missing_file);
 #endif
 
 	TEST_RESULTS();

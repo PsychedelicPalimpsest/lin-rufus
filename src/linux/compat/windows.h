@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
+#include <sched.h>
 #include <pthread.h>
 
 /*

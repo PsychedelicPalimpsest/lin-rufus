@@ -216,9 +216,11 @@ HASH_LINUX_EXTRA := \
 	$(SRC_DIR)/linux/stdfn.c \
 	$(SRC_DIR)/linux/ui.c \
 	$(SRC_DIR)/linux/stdlg.c \
+	$(SRC_DIR)/linux/parser.c \
 	$(COMPAT)/msg_dispatch.c
 CFLAGS_LINUX_test_hash := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-                          -I$(SRC_DIR)/common \
+                          -I$(SRC_DIR)/common -I$(SRC_DIR)/bled -I$(SRC_DIR) \
+                          -D_GNU_SOURCE \
                           -Wno-unused-function -Wno-sign-compare \
                           -Wno-implicit-function-declaration -Wno-unused-parameter \
                           -Wno-missing-field-initializers \

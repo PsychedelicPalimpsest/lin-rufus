@@ -153,7 +153,65 @@ BOOL BufferMatchesHash(const uint8_t* buf, const size_t len, const char* str)
 
 BOOL IsSignedBySecureBootAuthority(uint8_t* b, uint32_t l)       { (void)b; (void)l; return FALSE; }
 int  IsBootloaderRevoked(uint8_t* b, uint32_t l)                  { (void)b; (void)l; return 0; }
-void UpdateMD5Sum(const char* d, const char* m)                   { (void)d; (void)m; }
+void UpdateMD5Sum(const char* dest_dir, const char* md5sum_name)
+{
+    if (!img_report.has_md5sum && !validate_md5sum)
+        return;
+
+    char md5_path[MAX_PATH];
+    snprintf(md5_path, sizeof(md5_path), "%s/%s", dest_dir, md5sum_name);
+
+    char *md5_data = NULL;
+    uint32_t md5_size = read_file(md5_path, (uint8_t **)&md5_data);
+    if (md5_size == 0)
+        return;
+
+    BOOL display_header = TRUE;
+
+    /* Update MD5 entries for each modified file */
+    for (uint32_t i = 0; i < modified_files.Index; i++) {
+        char *file_path = modified_files.String[i];
+
+        /* Convert all backslashes to forward slashes (Windows compat) */
+        for (size_t j = 0; j < strlen(file_path); j++)
+            if (file_path[j] == '\\')
+                file_path[j] = '/';
+
+        /* Find the basename portion starting after the mount point
+         * (strip leading dest_dir prefix, then one path separator) */
+        const char *rel = file_path;
+        if (strncmp(file_path, dest_dir, strlen(dest_dir)) == 0)
+            rel = file_path + strlen(dest_dir) + 1; /* skip dest_dir + '/' */
+
+        /* Look for this relative path in the md5sum file */
+        char *str_pos = strstr(md5_data, rel);
+        if (str_pos == NULL)
+            continue;  /* file not listed */
+
+        if (display_header) {
+            uprintf("Updating %s:", md5_path);
+            display_header = FALSE;
+        }
+        uprintf("● %s", rel);
+
+        /* Walk back to start of this line */
+        intptr_t pos = str_pos - md5_data;
+        while (pos > 0 && md5_data[pos - 1] != '\n')
+            pos--;
+
+        /* Recompute MD5 and patch the hex string in-place */
+        uint8_t sum[MD5_HASHSIZE];
+        HashFile(HASH_MD5, file_path, sum);
+        for (uint32_t j = 0; j < MD5_HASHSIZE; j++) {
+            static const char hx[] = "0123456789abcdef";
+            md5_data[pos + 2*j]     = hx[sum[j] >> 4];
+            md5_data[pos + 2*j + 1] = hx[sum[j] & 0x0F];
+        }
+    }
+
+    write_file(md5_path, (const uint8_t *)md5_data, md5_size);
+    free(md5_data);
+}
 BOOL efi_image_parse(uint8_t* e, size_t l, struct efi_image_regions** r)
                                                                    { (void)e; (void)l; (void)r; return FALSE; }
 BOOL PE256Buffer(uint8_t* b, uint32_t l, uint8_t* h)              { (void)b; (void)l; (void)h; return FALSE; }
