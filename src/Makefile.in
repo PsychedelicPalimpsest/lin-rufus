@@ -352,7 +352,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 @TARGET_WINDOWS_FALSE@SUBDIRS = bled ext2fs ms-sys syslinux/libfat syslinux/libinstaller syslinux/win libcdio/iso9660 libcdio/udf libcdio/driver wimlib ../res/loc
-@TARGET_WINDOWS_TRUE@SUBDIRS = ../.mingw bled ext2fs ms-sys syslinux/libfat syslinux/libinstaller syslinux/win libcdio/iso9660 libcdio/udf libcdio/driver wimlib ../res/loc common windows linux
+@TARGET_WINDOWS_TRUE@SUBDIRS = ../.mingw bled ext2fs ms-sys syslinux/libfat syslinux/libinstaller syslinux/win libcdio/iso9660 libcdio/udf libcdio/driver wimlib ../res/loc
 @TARGET_WINDOWS_FALSE@NONVULNERABLE_LIBS = 
 
 # As far as I can tell, the following libraries are *not* vulnerable to side-loading, so we link using their regular version:
