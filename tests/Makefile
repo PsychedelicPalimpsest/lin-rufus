@@ -333,6 +333,24 @@ CFLAGS_LINUX_test_dbx_linux := \
 LDFLAGS_LINUX_test_dbx_linux := -lcurl -lpthread -lssl -lcrypto $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_dbx_linux := $(DBX_LINUX_SRC)
 
+# fido_linux tests: Fido script version-check (fido_check_url_updated).
+# Uses real common/parser.c for settings (ReadSettingStr/WriteSettingStr).
+FIDO_LINUX_SRC := $(SRC_DIR)/linux/net.c \
+                  $(SRC_DIR)/linux/stdfn.c \
+                  $(SRC_DIR)/linux/stdio.c \
+                  $(SRC_DIR)/linux/parser.c \
+                  $(COMMON)/parser.c \
+                  $(COMMON)/localization.c \
+                  fido_linux_glue.c
+CFLAGS_LINUX_test_fido_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) -I$(SRC_DIR)/bled -I$(SRC_DIR)/../res \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
+LDFLAGS_LINUX_test_fido_linux := -lcurl -lpthread -lssl -lcrypto $(shell pkg-config --libs fontconfig 2>/dev/null)
+EXTRA_SRC_LINUX_test_fido_linux := $(FIDO_LINUX_SRC)
+
 # settings_linux tests: FileIO, ReadSetting*/WriteSetting*, XDG path init.
 SETTINGS_LINUX_SRC := \
 	$(SRC_DIR)/linux/stdfn.c \

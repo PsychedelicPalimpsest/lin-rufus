@@ -774,6 +774,24 @@ static BOOL find_pwsh(char *out, size_t out_len)
 	return FALSE;
 }
 
+/*
+ * Compare new_url against the cached SETTING_FIDO_URL.
+ * If they differ (or no URL was cached), saves new_url and returns TRUE.
+ * Returns FALSE if new_url is NULL or matches the cached value.
+ * This is the core version-check helper for Fido script auto-update detection.
+ */
+BOOL fido_check_url_updated(const char *new_url)
+{
+	const char *stored;
+	if (new_url == NULL)
+		return FALSE;
+	stored = ReadSettingStr(SETTING_FIDO_URL);
+	if (stored[0] != '\0' && strcmp(stored, new_url) == 0)
+		return FALSE;
+	WriteSettingStr(SETTING_FIDO_URL, new_url);
+	return TRUE;
+}
+
 /* Thread: downloads Fido.ver, validates and stores the fido_url.
  * On success posts UM_ENABLE_DOWNLOAD_ISO so the UI can show the option. */
 static DWORD WINAPI CheckForFidoThread(LPVOID param)
@@ -803,6 +821,9 @@ static DWORD WINAPI CheckForFidoThread(LPVOID param)
 		safe_free(fido_url);
 		goto out;
 	}
+
+	if (fido_check_url_updated(fido_url))
+		uprintf("Fido: newer download script available: %s", fido_url);
 
 	if (IsDownloadable(fido_url)) {
 		uprintf("Fido download script available: %s", fido_url);
@@ -882,6 +903,27 @@ static DWORD WINAPI DownloadISOThread(LPVOID param)
 			uprintf("DownloadISO: mkfifo failed: %s", strerror(errno));
 			goto out;
 		}
+	}
+
+	/* Re-fetch Fido.ver to ensure we use the latest script URL in case it
+	 * changed since startup (transparent auto-update). */
+	{
+		char *loc2 = NULL;
+		uint64_t loc_len = DownloadToFileOrBuffer(RUFUS_URL "/Fido.ver", NULL,
+		                                          (BYTE**)&loc2, NULL, FALSE);
+		if (loc_len > 0 && loc_len < 4 * 1024) {
+			loc_len++;
+			char *fresh = get_token_data_buffer(FIDO_VERSION, 1, loc2, (size_t)loc_len);
+			if (fresh && safe_strncmp(fresh, "https://github.com/pbatard/Fido", 31) == 0) {
+				if (fido_check_url_updated(fresh)) {
+					uprintf("DownloadISO: using updated Fido script: %s", fresh);
+					free(fido_url);
+					fido_url = strdup(fresh);
+				}
+				free(fresh);
+			}
+		}
+		free(loc2);
 	}
 
 	/* Download the Fido script (compressed lzma) */
