@@ -1,5 +1,7 @@
 /* Linux: stdio.c - I/O utilities and process execution */
 #include "rufus.h"
+#include "resource.h"
+#include "localization.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -95,9 +97,86 @@ char* _printbits(size_t const size, void const* const ptr, int lz) {
 
 void DumpBufferHex(void* buf, size_t size) { (void)buf;(void)size; }
 
-const char* WindowsErrorString(void) { return strerror(errno); }
-const char* _StrError(DWORD code)    { return strerror((int)code); }
-const char* StrError(DWORD code, BOOL use_default) { (void)use_default; return strerror((int)code); }
+/* Map Windows DWORD error codes (non-FACILITY_STORAGE) to POSIX errno */
+static int windows_dword_to_errno(DWORD code)
+{
+	switch (code) {
+	case ERROR_SUCCESS:             return 0;
+	case ERROR_FILE_NOT_FOUND:      return ENOENT;
+	case ERROR_PATH_NOT_FOUND:      return ENOENT;
+	case ERROR_TOO_MANY_OPEN_FILES: return EMFILE;
+	case ERROR_ACCESS_DENIED:       return EACCES;
+	case ERROR_INVALID_HANDLE:      return EBADF;
+	case ERROR_NOT_ENOUGH_MEMORY:   return ENOMEM;
+	case ERROR_OUTOFMEMORY:         return ENOMEM;
+	case ERROR_WRITE_PROTECT:       return EROFS;
+	case ERROR_NO_MORE_FILES:       return ENOENT;
+	case ERROR_WRITE_FAULT:         return EIO;
+	case ERROR_READ_FAULT:          return EIO;
+	case ERROR_NOT_SUPPORTED:       return ENOTSUP;
+	case ERROR_FILE_EXISTS:         return EEXIST;
+	case ERROR_INVALID_PARAMETER:   return EINVAL;
+	case ERROR_INSUFFICIENT_BUFFER: return ENOBUFS;
+	case ERROR_NOT_READY:           return ENODEV;
+	case ERROR_DEVICE_IN_USE:       return EBUSY;
+	case ERROR_OPEN_FAILED:         return ENOENT;
+	case ERROR_CANCELLED:           return ECANCELED;
+	default:                        return errno;
+	}
+}
+
+const char* _StrError(DWORD error_code)
+{
+	if (!IS_ERROR(error_code) || SCODE_CODE(error_code) == ERROR_SUCCESS)
+		return lmprintf(MSG_050);
+	if (SCODE_FACILITY(error_code) != FACILITY_STORAGE)
+		return strerror(windows_dword_to_errno(SCODE_CODE(error_code)));
+	switch (SCODE_CODE(error_code)) {
+	case ERROR_GEN_FAILURE:          return lmprintf(MSG_051);
+	case ERROR_INCOMPATIBLE_FS:      return lmprintf(MSG_052);
+	case ERROR_ACCESS_DENIED:        return lmprintf(MSG_053);
+	case ERROR_WRITE_PROTECT:        return lmprintf(MSG_054);
+	case ERROR_DEVICE_IN_USE:        return lmprintf(MSG_055);
+	case ERROR_CANT_QUICK_FORMAT:    return lmprintf(MSG_056);
+	case ERROR_LABEL_TOO_LONG:       return lmprintf(MSG_057);
+	case ERROR_INVALID_HANDLE:       return lmprintf(MSG_058);
+	case ERROR_INVALID_CLUSTER_SIZE: return lmprintf(MSG_059);
+	case ERROR_INVALID_VOLUME_SIZE:  return lmprintf(MSG_060);
+	case ERROR_NO_MEDIA_IN_DRIVE:    return lmprintf(MSG_061);
+	case ERROR_NOT_SUPPORTED:        return lmprintf(MSG_062);
+	case ERROR_NOT_ENOUGH_MEMORY:    return lmprintf(MSG_063);
+	case ERROR_READ_FAULT:           return lmprintf(MSG_064);
+	case ERROR_WRITE_FAULT:          return lmprintf(MSG_065);
+	case ERROR_INSTALL_FAILURE:      return lmprintf(MSG_066);
+	case ERROR_OPEN_FAILED:          return lmprintf(MSG_067);
+	case ERROR_PARTITION_FAILURE:    return lmprintf(MSG_068);
+	case ERROR_CANNOT_COPY:          return lmprintf(MSG_069);
+	case ERROR_CANCELLED:            return lmprintf(MSG_070);
+	case ERROR_CANT_START_THREAD:    return lmprintf(MSG_071);
+	case ERROR_BADBLOCKS_FAILURE:    return lmprintf(MSG_072);
+	case ERROR_ISO_SCAN:             return lmprintf(MSG_073);
+	case ERROR_ISO_EXTRACT:          return lmprintf(MSG_074);
+	case ERROR_CANT_REMOUNT_VOLUME:  return lmprintf(MSG_075);
+	case ERROR_CANT_PATCH:           return lmprintf(MSG_076);
+	case ERROR_CANT_ASSIGN_LETTER:   return lmprintf(MSG_077);
+	case ERROR_CANT_MOUNT_VOLUME:    return lmprintf(MSG_078);
+	case ERROR_NOT_READY:            return lmprintf(MSG_079);
+	case ERROR_BAD_SIGNATURE:        return lmprintf(MSG_172);
+	case ERROR_CANT_DOWNLOAD:        return lmprintf(MSG_242);
+	default:
+		return strerror(windows_dword_to_errno(SCODE_CODE(error_code)));
+	}
+}
+
+const char* WindowsErrorString(void)
+{
+	DWORD code = _win_last_error ? _win_last_error : (DWORD)errno;
+	if (IS_ERROR(code))
+		return _StrError(code);
+	return strerror(windows_dword_to_errno(code));
+}
+
+const char* StrError(DWORD code, BOOL use_default) { (void)use_default; return _StrError(code); }
 
 /* ---------------------------------------------------------------------------
  * CreateFileWithTimeout — open a file/device with a deadline.

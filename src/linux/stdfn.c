@@ -12,6 +12,9 @@
 #include <fontconfig/fontconfig.h>
 #include "freedos_data.h"
 
+/* Emulates Windows SetLastError / GetLastError */
+DWORD _win_last_error = 0;
+
 /*
  * Weak fallback for fd_resources: used when freedos_data.c is not linked
  * (e.g. in unit tests that don't need FreeDOS resources).  The strong

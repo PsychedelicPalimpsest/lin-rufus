@@ -643,9 +643,9 @@ static __inline int strncat_s(char* dest, size_t destsz, const char* src, size_t
 
 /* ---- Stub function declarations for commonly used Win32 APIs ---- */
 /* These are declared but NOT defined here; Linux stubs provide the bodies */
-static inline DWORD GetLastError(void) { return (DWORD)errno; }
-static inline void  SetLastError(DWORD e) { (void)e; }
-static inline DWORD GetTickCount(void) { return 0; }
+extern DWORD _win_last_error;
+static inline DWORD GetLastError(void)    { return _win_last_error; }
+static inline void  SetLastError(DWORD e) { _win_last_error = e; }
 static inline ULONGLONG GetTickCount64(void) { return 0; }
 
 static inline HANDLE GetCurrentProcess(void) { return (HANDLE)(intptr_t)getpid(); }
@@ -845,6 +845,9 @@ typedef void* FARPROC;
 #ifndef SCODE_CODE
 #define SCODE_CODE(sc)       ((DWORD)(sc) & 0xFFFF)
 #endif
+#ifndef SCODE_FACILITY
+#define SCODE_FACILITY(sc)   (((DWORD)(sc) >> 16) & 0x1FFF)
+#endif
 #ifndef SCODE_SEVERITY
 #define SCODE_SEVERITY(sc)   (((DWORD)(sc) >> 31) & 0x1)
 #endif
@@ -919,6 +922,12 @@ typedef void* FARPROC;
 #define ERROR_PRIVILEGE_NOT_HELD     1314L
 #define ERROR_DEVICE_NOT_CONNECTED   1167L
 #define ERROR_DEVICE_BUSY            1165L
+#define ERROR_DEVICE_IN_USE          2404L
+#define ERROR_LABEL_TOO_LONG         154L
+#define ERROR_NO_MEDIA_IN_DRIVE      1112L
+#define ERROR_INSTALL_FAILURE        1603L
+#define ERROR_PARTITION_FAILURE      1105L
+#define ERROR_CANNOT_COPY            266L
 
 /* ---- File I/O stubs ---- */
 static inline BOOL ReadFile(HANDLE h, LPVOID buf, DWORD n, LPDWORD rd, LPOVERLAPPED ov) {

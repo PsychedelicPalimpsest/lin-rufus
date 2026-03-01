@@ -201,12 +201,15 @@ EXTRA_SRC_LINUX_test_partition_ops_linux := $(PARTITION_OPS_LINUX_SRC) $(BLED_LI
 
 # stdio_linux tests: RunCommandWithProgress, SizeToHumanReadable, WindowsErrorString,
 #                    ListDirectoryContent, ExtractZip
-STDIO_LINUX_SRC := $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/stdfn.c
+STDIO_LINUX_SRC := $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/stdfn.c \
+                   $(COMMON)/localization.c $(COMMON)/parser.c \
+                   $(SRC_DIR)/linux/parser.c
 CFLAGS_LINUX_test_stdio_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-                                   -I$(SRC_DIR)/bled -I$(SRC_DIR) \
+                                   -I$(SRC_DIR)/bled -I$(SRC_DIR) -I$(COMMON) \
                                    -Wno-implicit-function-declaration -Wno-unused-function \
-                                   -Wno-sign-compare -Wno-unused-parameter
-LDFLAGS_LINUX_test_stdio_linux := -lz
+                                   -Wno-sign-compare -Wno-unused-parameter \
+                                   $(FONTCONFIG_CFLAGS)
+LDFLAGS_LINUX_test_stdio_linux := -lz $(FONTCONFIG_LIBS)
 EXTRA_SRC_LINUX_test_stdio_linux := $(STDIO_LINUX_SRC) $(BLED_LIB)
 
 # stdlg_linux tests: NotificationEx, FileDialog, CustomSelectionDialog, ListDialog

@@ -40,6 +40,11 @@ extern void     StrArrayDestroy(StrArray *arr);
 /* Log handler API from stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
 
+/* Error string APIs from stdio.c */
+extern const char* WindowsErrorString(void);
+extern const char* _StrError(DWORD code);
+extern const char* StrError(DWORD code, BOOL use_default);
+
 /* ---- test stubs for symbols that stdio.c needs from ui / globals ---- */
 
 /* These are normally in globals.c; we define minimal versions here */
@@ -47,6 +52,16 @@ DWORD ErrorStatus = 0;
 DWORD DownloadStatus = 0;
 DWORD MainThreadId = 0;
 DWORD LastWriteError = 0;
+
+/* Needed by localization.c and parser.c */
+BOOL right_to_left_mode = FALSE;
+windows_version_t WindowsVersion = {0};
+RUFUS_UPDATE update = {{0}, {0}, NULL, NULL};
+
+/* Point msg_table at default_msg_table so lmprintf returns "MSG_XXX UNTRANSLATED"
+ * rather than crashing when localization data is not loaded. */
+extern char** msg_table;
+extern char*  default_msg_table[];
 
 /* Capture UpdateProgressWithInfo calls */
 static int progress_calls = 0;
@@ -230,6 +245,75 @@ TEST(windows_error_string_non_null)
 {
     const char* s = WindowsErrorString();
     CHECK_MSG(s != NULL, "WindowsErrorString should not return NULL");
+}
+
+/* ===========================================================================
+ * _StrError / StrError / WindowsErrorString — proper DWORD mapping
+ * =========================================================================*/
+TEST(strerror_success_returns_non_null)
+{
+    /* _StrError(0) = not an error → MSG_050 "Success." */
+    const char* s = _StrError(0);
+    CHECK_MSG(s != NULL, "_StrError(0) should return non-NULL");
+    CHECK_MSG(s[0] != '\0', "_StrError(0) should return non-empty string");
+}
+
+TEST(strerror_access_denied_non_null)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_ACCESS_DENIED));
+    CHECK_MSG(s != NULL, "_StrError(ACCESS_DENIED) must not return NULL");
+    CHECK_MSG(s[0] != '\0', "_StrError(ACCESS_DENIED) must not return empty string");
+}
+
+TEST(strerror_write_protect_non_null)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_WRITE_PROTECT));
+    CHECK_MSG(s != NULL, "_StrError(WRITE_PROTECT) must not return NULL");
+}
+
+TEST(strerror_different_codes_give_different_strings)
+{
+    const char* s1 = _StrError(RUFUS_ERROR(ERROR_ACCESS_DENIED));
+    const char* s2 = _StrError(RUFUS_ERROR(ERROR_WRITE_PROTECT));
+    /* Both non-NULL and different — different error codes must produce different messages */
+    CHECK_MSG(s1 != NULL && s2 != NULL, "both must be non-NULL");
+    CHECK_MSG(strcmp(s1, s2) != 0, "different error codes must give different strings");
+}
+
+TEST(strerror_unknown_storage_code_returns_non_null)
+{
+    /* Unknown FACILITY_STORAGE code falls through to strerror */
+    const char* s = _StrError(RUFUS_ERROR(0x9999));
+    CHECK_MSG(s != NULL, "unknown storage code must return non-NULL");
+}
+
+TEST(strerror_non_storage_code_returns_non_null)
+{
+    /* A plain errno wrapped in IS_ERROR but not FACILITY_STORAGE */
+    const char* s = _StrError(ERROR_ACCESS_DENIED);  /* raw, no RUFUS_ERROR wrapper */
+    CHECK_MSG(s != NULL, "non-storage code must return non-NULL");
+}
+
+TEST(setlasterror_affects_windows_error_string)
+{
+    /* After SetLastError with a RUFUS_ERROR, WindowsErrorString should use it */
+    extern DWORD _win_last_error;
+    _win_last_error = 0;  /* reset */
+    SetLastError(RUFUS_ERROR(ERROR_ACCESS_DENIED));
+    const char* s = WindowsErrorString();
+    _win_last_error = 0;  /* cleanup */
+    CHECK_MSG(s != NULL, "WindowsErrorString after SetLastError must not return NULL");
+    CHECK_MSG(s[0] != '\0', "WindowsErrorString after SetLastError must not return empty");
+}
+
+TEST(windows_error_string_without_setlasterror)
+{
+    /* Without SetLastError, WindowsErrorString falls back to strerror(errno) */
+    extern DWORD _win_last_error;
+    _win_last_error = 0;
+    errno = EACCES;
+    const char* s = WindowsErrorString();
+    CHECK_MSG(s != NULL, "WindowsErrorString without SetLastError must not return NULL");
 }
 
 /* ===========================================================================
@@ -658,6 +742,10 @@ TEST(create_file_with_timeout_creates_file)
  * =========================================================================*/
 int main(void)
 {
+    /* Initialize msg_table so lmprintf returns "MSG_XXX UNTRANSLATED" strings
+     * rather than crashing when no locale file is loaded. */
+    msg_table = default_msg_table;
+
     printf("=== stdio_linux tests ===\n");
 
     RUN(run_command_exit_zero);
@@ -675,6 +763,16 @@ int main(void)
     RUN(size_to_human_readable_kb);
     RUN(size_to_human_readable_gb);
     RUN(windows_error_string_non_null);
+
+    printf("\n  _StrError / WindowsErrorString DWORD mapping\n");
+    RUN(strerror_success_returns_non_null);
+    RUN(strerror_access_denied_non_null);
+    RUN(strerror_write_protect_non_null);
+    RUN(strerror_different_codes_give_different_strings);
+    RUN(strerror_unknown_storage_code_returns_non_null);
+    RUN(strerror_non_storage_code_returns_non_null);
+    RUN(setlasterror_affects_windows_error_string);
+    RUN(windows_error_string_without_setlasterror);
     RUN(uprintf_calls_registered_handler);
     RUN(uprintf_formats_multiple_args);
     RUN(uprintf_no_crash_without_handler);
