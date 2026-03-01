@@ -295,12 +295,12 @@ BOOL CyclePort(int index)
 	uprintf("Resetting USB device %s", path);
 	int fd = open(path, O_WRONLY);
 	if (fd < 0) {
-		uprintf("Could not open %s: %s", path, strerror(errno));
+		uprintf_errno("Could not open %s", path);
 		return FALSE;
 	}
 	BOOL r = (ioctl(fd, USBDEVFS_RESET, 0) == 0);
 	if (!r)
-		uprintf("Failed to reset USB device: %s", strerror(errno));
+		uprintf_errno("Failed to reset USB device");
 	else
 		uprintf("Please wait for the device to re-appear...");
 	close(fd);
@@ -326,7 +326,7 @@ int CycleDevice(int index)
 	/* Unbind */
 	int fd = open("/sys/bus/usb/drivers/usb/unbind", O_WRONLY);
 	if (fd < 0) {
-		uprintf("Could not open USB unbind: %s", strerror(errno));
+		uprintf_errno("Could not open USB unbind");
 		return (int)errno;
 	}
 	uprintf("Unbinding USB device %s", dev_id);
@@ -339,7 +339,7 @@ int CycleDevice(int index)
 	/* Rebind */
 	fd = open("/sys/bus/usb/drivers/usb/bind", O_WRONLY);
 	if (fd < 0) {
-		uprintf("Could not open USB bind: %s", strerror(errno));
+		uprintf_errno("Could not open USB bind");
 		return (int)errno;
 	}
 	uprintf("Rebinding USB device %s", dev_id);

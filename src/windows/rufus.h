@@ -216,6 +216,20 @@ extern void uprintf(const char *format, ...);
 extern void uprintfs(const char *str);
 extern void wuprintf(const wchar_t* format, ...);
 extern void uprint_progress(uint64_t cur_value, uint64_t max_value);
+/*
+ * uprintf_errno(fmt, ...) — like uprintf() but automatically appends
+ * ": <strerror> (<errno>)" using the errno value captured at the call site.
+ * Linux-only; on Windows errno semantics differ and Win32 error codes are
+ * used instead (see WindowsErrorString()).
+ */
+#ifndef _WIN32
+#include <errno.h>
+#include <string.h>  /* strerror */
+#define uprintf_errno(fmt, ...) do { \
+    int _e = errno; \
+    uprintf(fmt ": %s (%d)", ##__VA_ARGS__, strerror(_e), _e); \
+} while (0)
+#endif
 #define vuprintf(...) do { if (verbose) uprintf(__VA_ARGS__); } while(0)
 #define vvuprintf(...) do { if (verbose > 1) uprintf(__VA_ARGS__); } while(0)
 #define suprintf(...) do { if (!bSilent) uprintf(__VA_ARGS__); } while(0)

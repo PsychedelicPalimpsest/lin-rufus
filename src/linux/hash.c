@@ -746,7 +746,7 @@ DWORD WINAPI HashThread(void* param)
 	/* Open the image file */
 	fd = open(image_path, O_RDONLY);
 	if (fd < 0) {
-		uprintf("HashThread: could not open '%s': %s", image_path, strerror(errno));
+		uprintf_errno("HashThread: could not open '%s'", image_path);
 		ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
 		goto out;
 	}

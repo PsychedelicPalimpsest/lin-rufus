@@ -232,6 +232,13 @@ CFLAGS_LINUX_test_notify_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/
                                    -Wno-unused-parameter -Wno-implicit-function-declaration
 EXTRA_SRC_LINUX_test_notify_linux := $(SRC_DIR)/linux/notify.c
 
+# crash_handler_linux tests: signal handler, log file creation, backtrace
+CFLAGS_LINUX_test_crash_handler_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                          -D_GNU_SOURCE -DRUFUS_TEST \
+                                          -Wno-unused-function -Wno-sign-compare \
+                                          -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_crash_handler_linux := $(SRC_DIR)/linux/crash_handler.c
+
 # compat_linux tests: shlwapi.h (PathFileExistsA, PathCombineA) and shellapi.h (ShellExecuteA)
 # Pure header-only implementation — no extra .c sources needed
 CFLAGS_LINUX_test_compat_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \

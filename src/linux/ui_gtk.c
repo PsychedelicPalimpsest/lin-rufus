@@ -40,6 +40,7 @@
 #include "settings.h"
 #include "version.h"
 #include "window_text_bridge.h"
+#include "crash_handler.h"
 #include "device_combo.h"
 #include "status_history.h"
 #include "notify.h"
@@ -1833,6 +1834,8 @@ int main(int argc, char *argv[])
 {
 	GtkApplication *app;
 	int status;
+
+	install_crash_handlers();
 
 	/* Re-launch under pkexec if not already running as root.
 	 * rufus_try_pkexec() does not return on success; on failure (pkexec not

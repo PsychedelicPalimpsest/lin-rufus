@@ -238,7 +238,7 @@ BOOL FormatExtFs(DWORD DriveIndex, uint64_t PartitionOffset, DWORD BlockSize,
 			struct stat st;
 			if (dev_fd < 0) {
 				SET_EXT2_FORMAT_ERROR(ERROR_READ_FAULT);
-				uprintf("Could not open '%s': %s", volume_name, strerror(errno));
+				uprintf_errno("Could not open '%s'", volume_name);
 				goto out;
 			}
 			if (fstat(dev_fd, &st) == 0 && S_ISREG(st.st_mode)) {

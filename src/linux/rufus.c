@@ -3,6 +3,7 @@
 #include "missing.h"
 #include "version.h"
 #include "polkit.h"
+#include "crash_handler.h"
 #ifndef USE_GTK
 #include "cli.h"
 #endif
@@ -219,8 +220,11 @@ void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f
 int main(int argc, char *argv[])
 {
 	cli_options_t opts;
+	int r;
 
-	int r = cli_parse_args(argc, argv, &opts);
+	install_crash_handlers();
+
+	r = cli_parse_args(argc, argv, &opts);
 	if (r == CLI_PARSE_HELP)
 		return 0;
 	if (r != CLI_PARSE_OK)

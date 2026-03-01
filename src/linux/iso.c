@@ -463,7 +463,7 @@ static int udf_extract_files(udf_t* p_udf, udf_dirent_t* p_udf_dirent,
 			}
 			fd = open(psz_sanpath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 			if (fd < 0) {
-				uprintf("  Unable to create '%s': %s", psz_sanpath, strerror(errno));
+				uprintf_errno("  Unable to create '%s'", psz_sanpath);
 				goto out;
 			}
 			while (file_length > 0) {
@@ -476,7 +476,7 @@ static int udf_extract_files(udf_t* p_udf, udf_dirent_t* p_udf_dirent,
 				}
 				size_t to_write = (size_t)MIN(file_length, read_n);
 				if (!write_all(fd, buf, to_write)) {
-					uprintf("  Error writing: %s", strerror(errno)); goto out;
+					uprintf_errno("  Error writing"); goto out;
 				}
 				file_length -= (int64_t)to_write;
 				nb_blocks   += nb;
@@ -584,7 +584,7 @@ static int iso_extract_files(iso9660_t* p_iso, const char* psz_path)
 				/* Create symlink relative to directory */
 				if (symlink(p_statbuf->rr.psz_symlink, psz_sanpath) < 0 &&
 				    errno != EEXIST)
-					uprintf("  Could not create symlink: %s", strerror(errno));
+					uprintf_errno("  Could not create symlink");
 				safe_free(psz_sanpath);
 				continue;
 			}
@@ -606,7 +606,7 @@ static int iso_extract_files(iso9660_t* p_iso, const char* psz_path)
 					fd = open(psz_sanpath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 				}
 				if (fd < 0) {
-					uprintf("  Unable to create '%s': %s", psz_sanpath, strerror(errno));
+					uprintf_errno("  Unable to create '%s'", psz_sanpath);
 					goto out;
 				}
 			}
@@ -623,7 +623,7 @@ static int iso_extract_files(iso9660_t* p_iso, const char* psz_path)
 				}
 				size_t to_write = (size_t)MIN((int64_t)(nb * ISO_BLOCKSIZE), file_length);
 				if (!write_all(fd, buf, to_write)) {
-					uprintf("  Write error: %s", strerror(errno)); goto out;
+					uprintf_errno("  Write error"); goto out;
 				}
 				file_length -= (int64_t)to_write;
 				nb_blocks   += nb;
@@ -883,7 +883,7 @@ int64_t ExtractISOFile(const char* iso, const char* iso_file,
 	if (!iso || !iso_file || !dest_file) return 0;
 
 	fd = open(dest_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-	if (fd < 0) { uprintf("Could not create '%s': %s", dest_file, strerror(errno)); goto out; }
+	if (fd < 0) { uprintf_errno("Could not create '%s'", dest_file); goto out; }
 
 	/* Try UDF first */
 	p_udf = udf_open(iso);
@@ -899,7 +899,7 @@ int64_t ExtractISOFile(const char* iso, const char* iso_file,
 			if (nr < 0) { uprintf("UDF read error"); goto out; }
 			size_t to_write = (size_t)MIN(file_length, nr);
 			if (!write_all(fd, blk_buf, to_write)) {
-				uprintf("Write error: %s", strerror(errno)); goto out;
+				uprintf_errno("Write error"); goto out;
 			}
 			file_length -= (int64_t)to_write;
 			r           += (int64_t)to_write;
@@ -926,7 +926,7 @@ try_iso:
 			}
 			size_t to_write = (size_t)MIN(remaining, ISO_BLOCKSIZE);
 			if (!write_all(fd, blk_buf, to_write)) {
-				uprintf("Write error: %s", strerror(errno)); goto out;
+				uprintf_errno("Write error"); goto out;
 			}
 			remaining -= (int64_t)to_write;
 			r         += (int64_t)to_write;

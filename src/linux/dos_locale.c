@@ -28,7 +28,7 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     snprintf(filename, sizeof(filename), "%sAUTOEXEC.BAT", path);
     FILE* fd = fopen(filename, "w");
     if (fd == NULL) {
-        uprintf("SetDOSLocale: cannot create AUTOEXEC.BAT: %s", strerror(errno));
+        uprintf_errno("SetDOSLocale: cannot create AUTOEXEC.BAT");
         return FALSE;
     }
     fprintf(fd, "@echo off\r\n");
@@ -41,7 +41,7 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     fd = fopen(filename, "w");
     if (fd == NULL) {
         /* Non-fatal — AUTOEXEC.BAT is sufficient for basic boot */
-        uprintf("SetDOSLocale: cannot create FDCONFIG.SYS: %s", strerror(errno));
+        uprintf_errno("SetDOSLocale: cannot create FDCONFIG.SYS");
         return TRUE;
     }
     fprintf(fd, "!DEVICE=\\LOCALE\\DISPLAY.EXE CON=(EGA,,1)\r\n");

@@ -109,13 +109,13 @@ static BOOL write_resource_to_file(const char *path, const uint8_t *buf, DWORD l
 {
     int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
     if (fd < 0) {
-        uprintf("ExtractFreeDOS: cannot create '%s': %s", path, strerror(errno));
+        uprintf_errno("ExtractFreeDOS: cannot create '%s'", path);
         return FALSE;
     }
     ssize_t written = write(fd, buf, (size_t)len);
     close(fd);
     if (written < 0 || (DWORD)written != len) {
-        uprintf("ExtractFreeDOS: write error on '%s': %s", path, strerror(errno));
+        uprintf_errno("ExtractFreeDOS: write error on '%s'", path);
         return FALSE;
     }
     return TRUE;
@@ -128,13 +128,13 @@ static BOOL copy_file(const char *src, const char *dst)
 {
     int sfd = open(src, O_RDONLY | O_CLOEXEC);
     if (sfd < 0) {
-        uprintf("ExtractFreeDOS: cannot open source '%s': %s", src, strerror(errno));
+        uprintf_errno("ExtractFreeDOS: cannot open source '%s'", src);
         return FALSE;
     }
 
     int dfd = open(dst, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
     if (dfd < 0) {
-        uprintf("ExtractFreeDOS: cannot create '%s': %s", dst, strerror(errno));
+        uprintf_errno("ExtractFreeDOS: cannot create '%s'", dst);
         close(sfd);
         return FALSE;
     }
@@ -147,7 +147,7 @@ static BOOL copy_file(const char *src, const char *dst)
         while (written < n) {
             ssize_t w = write(dfd, buf + written, (size_t)(n - written));
             if (w < 0) {
-                uprintf("ExtractFreeDOS: write error on '%s': %s", dst, strerror(errno));
+                uprintf_errno("ExtractFreeDOS: write error on '%s'", dst);
                 ok = FALSE;
                 break;
             }
@@ -156,7 +156,7 @@ static BOOL copy_file(const char *src, const char *dst)
         if (!ok) break;
     }
     if (n < 0) {
-        uprintf("ExtractFreeDOS: read error on '%s': %s", src, strerror(errno));
+        uprintf_errno("ExtractFreeDOS: read error on '%s'", src);
         ok = FALSE;
     }
 

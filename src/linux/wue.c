@@ -441,7 +441,7 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 		/* Windows To Go: copy to <mount>/Windows/Panther/unattend.xml */
 		snprintf(dir_path, sizeof(dir_path), "%s/Windows/Panther", s_mount_path);
 		if (!mkdir_all(dir_path)) {
-			uprintf("Could not create '%s': %s", dir_path, strerror(errno));
+			uprintf_errno("Could not create '%s'", dir_path);
 			return FALSE;
 		}
 		snprintf(file_path, sizeof(file_path), "%s/unattend.xml", dir_path);
@@ -459,7 +459,7 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 		snprintf(dir_path, sizeof(dir_path),
 		         "%s/sources/$OEM$/$$/Panther", s_mount_path);
 		if (!mkdir_all(dir_path)) {
-			uprintf("Could not create '%s': %s", dir_path, strerror(errno));
+			uprintf_errno("Could not create '%s'", dir_path);
 			return FALSE;
 		}
 		snprintf(file_path, sizeof(file_path), "%s/unattend.xml", dir_path);
@@ -473,7 +473,7 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 		snprintf(dir_path, sizeof(dir_path),
 		         "%s/sources/$OEM$/$$/Panther", s_mount_path);
 		if (!mkdir_all(dir_path)) {
-			uprintf("Could not create '%s': %s", dir_path, strerror(errno));
+			uprintf_errno("Could not create '%s'", dir_path);
 			return FALSE;
 		}
 		snprintf(file_path, sizeof(file_path), "%s/unattend.xml", dir_path);

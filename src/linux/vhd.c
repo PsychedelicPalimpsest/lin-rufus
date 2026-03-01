@@ -145,7 +145,7 @@ int8_t IsBootableImage(const char* path)
 	uprintf("Disk image analysis:");
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
-		uprintf("  Could not open image '%s': %s", path, strerror(errno));
+		uprintf_errno("  Could not open image '%s'", path);
 		is_bootable_img = -1;
 		goto out;
 	}
@@ -157,7 +157,7 @@ int8_t IsBootableImage(const char* path)
 	}
 
 	if (fstat(fd, &st) != 0) {
-		uprintf("  Could not get image size: %s", strerror(errno));
+		uprintf_errno("  Could not get image size");
 		is_bootable_img = -2;
 		goto out;
 	}
@@ -309,7 +309,7 @@ BOOL WimExtractFile(const char* image, int index, const char* src, const char* d
 		static_strcat(tmp, strrchr(src, '/'));
 		*p = '/';
 		if (rename(tmp, dst) != 0) {
-			uprintf("  Could not rename %s to %s: %s", tmp, dst, strerror(errno));
+			uprintf_errno("  Could not rename %s to %s", tmp, dst);
 			r = 1;
 		}
 	}

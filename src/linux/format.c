@@ -178,7 +178,7 @@ BOOL format_linux_clear_mbr_gpt(HANDLE hDrive, LONGLONG DiskSize, DWORD SectorSi
 				uprintf("Zeroed %s at the end of the drive",
 				        SizeToHumanReadable(tail_sz, FALSE, FALSE));
 			else
-				uprintf("WARNING: Could not clear the backup GPT area: %s", strerror(errno));
+				uprintf_errno("WARNING: Could not clear the backup GPT area");
 			free(tail_zeros);
 		}
 	}
@@ -322,7 +322,7 @@ BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive)
 	int src_fd = open(image_path, O_RDONLY | O_CLOEXEC);
 	if (src_fd < 0) {
 		ErrorStatus = RUFUS_ERROR(ERROR_FILE_NOT_FOUND);
-		uprintf("Could not open image '%s': %s", image_path, strerror(errno));
+		uprintf_errno("Could not open image '%s'", image_path);
 		return FALSE;
 	}
 
@@ -421,7 +421,7 @@ BOOL InstallGrub4DOS(const char *mount_dir)
 	int dst_fd = open(dst, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
 	if (dst_fd < 0) {
 		close(src_fd);
-		uprintf("InstallGrub4DOS: could not create '%s': %s", dst, strerror(errno));
+		uprintf_errno("InstallGrub4DOS: could not create '%s'", dst);
 		return FALSE;
 	}
 
@@ -431,7 +431,7 @@ BOOL InstallGrub4DOS(const char *mount_dir)
 	ssize_t n;
 	while ((n = read(src_fd, buf, sizeof(buf))) > 0) {
 		if (write(dst_fd, buf, (size_t)n) != n) {
-			uprintf("InstallGrub4DOS: write to '%s' failed: %s", dst, strerror(errno));
+			uprintf_errno("InstallGrub4DOS: write to '%s' failed", dst);
 			ok = FALSE;
 			break;
 		}

@@ -770,7 +770,7 @@ BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
         return FALSE;
 
     if (umount2(dn, 0) != 0) {
-        uprintf("AltUnmountVolume: umount2('%s') failed: %s", dn, strerror(errno));
+        uprintf_errno("AltUnmountVolume: umount2('%s') failed", dn);
         return FALSE;
     }
     rmdir(dn);
@@ -1107,7 +1107,7 @@ BOOL MountVolume(char* dn, char* dg)
         mount(dn, dg, "vfat", 0, NULL)  != 0 &&
         mount(dn, dg, "ntfs", 0, NULL)  != 0 &&
         mount(dn, dg, "ext4", 0, NULL)  != 0) {
-        uprintf("MountVolume: mount '%s' -> '%s' failed: %s", dn, dg, strerror(errno));
+        uprintf_errno("MountVolume: mount '%s' -> '%s' failed", dn, dg);
         return FALSE;
     }
     return TRUE;
@@ -1136,7 +1136,7 @@ char* AltMountVolume(DWORD di, uint64_t off, BOOL s)
     char template[] = "/tmp/rufus_XXXXXX";
     char *mount_point = mkdtemp(template);
     if (!mount_point) {
-        uprintf("AltMountVolume: mkdtemp failed: %s", strerror(errno));
+        uprintf_errno("AltMountVolume: mkdtemp failed");
         free(dev_path);
         return NULL;
     }
@@ -1153,7 +1153,7 @@ char* AltMountVolume(DWORD di, uint64_t off, BOOL s)
     }
 
     if (!mounted) {
-        uprintf("AltMountVolume: could not mount '%s': %s", dev_path, strerror(errno));
+        uprintf_errno("AltMountVolume: could not mount '%s'", dev_path);
         rmdir(mount_point);
         free(mount_point);
         free(dev_path);

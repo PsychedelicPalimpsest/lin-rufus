@@ -637,6 +637,137 @@ TEST(uprintf_set_and_clear_handler)
 }
 
 /* ===========================================================================
+ * uprintf_errno — appends ": strerror(errno) (errno)" to a log message
+ * =========================================================================*/
+
+TEST(uprintf_errno_appends_strerror)
+{
+    /* ENOENT is "No such file or directory" — errno 2 */
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    errno = ENOENT;
+    uprintf_errno("open failed");
+    rufus_set_log_handler(NULL);
+    /* Must contain the base message */
+    CHECK_MSG(strstr(captured_log, "open failed") != NULL,
+              "base message present");
+    /* Must contain the colon separator */
+    CHECK_MSG(strstr(captured_log, ": ") != NULL,
+              "colon separator present");
+    /* Must contain the strerror text */
+    CHECK_MSG(strstr(captured_log, strerror(ENOENT)) != NULL,
+              "strerror text present");
+    /* Must contain the errno number */
+    CHECK_MSG(strstr(captured_log, "2)") != NULL,
+              "errno number present");
+}
+
+TEST(uprintf_errno_with_format_args)
+{
+    /* EACCES is "Permission denied" */
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    errno = EACCES;
+    uprintf_errno("cannot open %s", "/dev/sda");
+    rufus_set_log_handler(NULL);
+    CHECK_MSG(strstr(captured_log, "/dev/sda") != NULL,
+              "format argument (/dev/sda) present");
+    CHECK_MSG(strstr(captured_log, strerror(EACCES)) != NULL,
+              "strerror(EACCES) present");
+    {
+        char num[16];
+        snprintf(num, sizeof(num), "(%d)", EACCES);
+        CHECK_MSG(strstr(captured_log, num) != NULL, "errno number present");
+    }
+}
+
+TEST(uprintf_errno_saves_errno_at_call_site)
+{
+    /* Verify errno is snapshotted at the macro call site, not later */
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    errno = EINVAL;
+    uprintf_errno("bad arg");
+    rufus_set_log_handler(NULL);
+    CHECK_MSG(strstr(captured_log, strerror(EINVAL)) != NULL,
+              "EINVAL strerror captured at call site");
+    {
+        char num[16];
+        snprintf(num, sizeof(num), "(%d)", EINVAL);
+        CHECK_MSG(strstr(captured_log, num) != NULL, "EINVAL number present");
+    }
+}
+
+TEST(uprintf_errno_zero_errno_shows_success)
+{
+    /* errno == 0 should show "Success" (POSIX strerror(0)) */
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    errno = 0;
+    uprintf_errno("no error");
+    rufus_set_log_handler(NULL);
+    CHECK_MSG(strstr(captured_log, "no error") != NULL,
+              "base message present for errno==0");
+    /* strerror(0) is typically "Success" on Linux */
+    CHECK_MSG(strstr(captured_log, "(0)") != NULL,
+              "errno==0 number present");
+}
+
+TEST(uprintf_errno_format_is_base_colon_strerror_num)
+{
+    /* Verify exact format: "msg: strerror (N)" */
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    errno = ENOENT;
+    uprintf_errno("test");
+    rufus_set_log_handler(NULL);
+    /* Should be: "test: No such file or directory (2)" */
+    {
+        char expected[256];
+        snprintf(expected, sizeof(expected), "test: %s (%d)",
+                 strerror(ENOENT), ENOENT);
+        CHECK_MSG(strstr(captured_log, expected) != NULL,
+                  "full formatted string matches expected pattern");
+    }
+}
+
+TEST(uprintf_errno_multiple_calls_independent)
+{
+    /* Each call uses its own errno snapshot */
+    rufus_set_log_handler(test_log_handler);
+
+    captured_log[0] = '\0';
+    errno = ENOMEM;
+    uprintf_errno("alloc failed");
+    CHECK_MSG(strstr(captured_log, strerror(ENOMEM)) != NULL,
+              "first call: ENOMEM present");
+
+    captured_log[0] = '\0';
+    errno = ETIMEDOUT;
+    uprintf_errno("connect failed");
+    CHECK_MSG(strstr(captured_log, strerror(ETIMEDOUT)) != NULL,
+              "second call: ETIMEDOUT present");
+
+    rufus_set_log_handler(NULL);
+}
+
+TEST(uprintf_errno_two_format_args)
+{
+    /* Macro must handle two format arguments */
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    errno = EBUSY;
+    uprintf_errno("device %s at index %d busy", "/dev/sdb", 1);
+    rufus_set_log_handler(NULL);
+    CHECK_MSG(strstr(captured_log, "/dev/sdb") != NULL,
+              "first format arg present");
+    CHECK_MSG(strstr(captured_log, "1") != NULL,
+              "second format arg present");
+    CHECK_MSG(strstr(captured_log, strerror(EBUSY)) != NULL,
+              "strerror(EBUSY) present");
+}
+
+/* ===========================================================================
  * wuprintf — converts wchar_t format to UTF-8 and routes to log handler
  * =========================================================================*/
 extern void wuprintf(const wchar_t* format, ...);
@@ -1362,6 +1493,15 @@ int main(void)
     RUN(uprintf_no_crash_without_handler);
     RUN(uprintf_handler_receives_no_newline);
     RUN(uprintf_set_and_clear_handler);
+
+    printf("\n  uprintf_errno — appends strerror(errno) suffix\n");
+    RUN(uprintf_errno_appends_strerror);
+    RUN(uprintf_errno_with_format_args);
+    RUN(uprintf_errno_saves_errno_at_call_site);
+    RUN(uprintf_errno_zero_errno_shows_success);
+    RUN(uprintf_errno_format_is_base_colon_strerror_num);
+    RUN(uprintf_errno_multiple_calls_independent);
+    RUN(uprintf_errno_two_format_args);
 
     printf("\n  _printbits — binary string representation\n");
     RUN(printbits_byte_one_no_lz);

@@ -516,7 +516,7 @@ DWORD RunCommandWithProgress(const char* cmd, const char* dir,
     int pipefd[2] = { -1, -1 };
     if (log || program != NULL) {
         if (pipe(pipefd) != 0) {
-            uprintf("RunCommandWithProgress: pipe() failed: %s", strerror(errno));
+            uprintf_errno("RunCommandWithProgress: pipe() failed");
             cregex_compile_free(program);
             return (DWORD)errno;
         }
@@ -526,7 +526,7 @@ DWORD RunCommandWithProgress(const char* cmd, const char* dir,
 
     pid_t pid = fork();
     if (pid < 0) {
-        uprintf("RunCommandWithProgress: fork() failed: %s", strerror(errno));
+        uprintf_errno("RunCommandWithProgress: fork() failed");
         if (pipefd[0] != -1) { close(pipefd[0]); close(pipefd[1]); }
         cregex_compile_free(program);
         return (DWORD)errno;

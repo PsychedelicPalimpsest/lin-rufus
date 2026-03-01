@@ -452,7 +452,7 @@ DWORD DownloadSignedFile(const char *url, const char *file, HWND hDlg, BOOL sile
 
 	fp = fopen(file, "wb");
 	if (fp == NULL) {
-		uprintf("Unable to create '%s': %s", file, strerror(errno));
+		uprintf_errno("Unable to create '%s'", file);
 		goto out;
 	}
 	written = fwrite(buf, 1, (size_t)buf_len, fp);
@@ -934,7 +934,7 @@ static DWORD WINAPI DownloadISOThread(LPVOID param)
 	/* Create a unique FIFO path */
 	int tmpfd = mkstemps(script_path, 4);  /* suffix length 4 = ".ps1" */
 	if (tmpfd < 0) {
-		uprintf("DownloadISO: cannot create temp script file: %s", strerror(errno));
+		uprintf_errno("DownloadISO: cannot create temp script file");
 		goto out;
 	}
 	close(tmpfd);
@@ -944,13 +944,13 @@ static DWORD WINAPI DownloadISOThread(LPVOID param)
 	{
 		int ffd = mkstemp(fifo_path);
 		if (ffd < 0) {
-			uprintf("DownloadISO: cannot create temp FIFO path: %s", strerror(errno));
+			uprintf_errno("DownloadISO: cannot create temp FIFO path");
 			goto out;
 		}
 		close(ffd);
 		unlink(fifo_path);
 		if (mkfifo(fifo_path, 0600) != 0) {
-			uprintf("DownloadISO: mkfifo failed: %s", strerror(errno));
+			uprintf_errno("DownloadISO: mkfifo failed");
 			goto out;
 		}
 	}
@@ -1053,7 +1053,7 @@ static DWORD WINAPI DownloadISOThread(LPVOID param)
 	/* Launch pwsh in a child process */
 	child_pid = fork();
 	if (child_pid < 0) {
-		uprintf("DownloadISO: fork failed: %s", strerror(errno));
+		uprintf_errno("DownloadISO: fork failed");
 		goto out;
 	}
 
@@ -1066,7 +1066,7 @@ static DWORD WINAPI DownloadISOThread(LPVOID param)
 	/* Parent: open FIFO for reading (blocks until child writes) */
 	fifo_fd = open(fifo_path, O_RDONLY);
 	if (fifo_fd < 0) {
-		uprintf("DownloadISO: cannot open FIFO: %s", strerror(errno));
+		uprintf_errno("DownloadISO: cannot open FIFO");
 		goto out;
 	}
 

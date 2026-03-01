@@ -212,7 +212,7 @@ static BOOL write_ldlinux_via_mcopy(const char *part_path, int ldlinux_idx)
     char tmpfile[] = "/tmp/rufus_ldlinux_XXXXXX";
     int  fd = mkstemp(tmpfile);
     if (fd < 0) {
-        uprintf("Could not create temp file for ldlinux.sys: %s", strerror(errno));
+        uprintf_errno("Could not create temp file for ldlinux.sys");
         return FALSE;
     }
 
@@ -316,7 +316,7 @@ BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
     /* ---- 6. Open partition fd ---- */
     int d_fd = open(part_path, O_RDWR | O_CLOEXEC);
     if (d_fd < 0) {
-        uprintf("InstallSyslinux: could not open %s: %s", part_path, strerror(errno));
+        uprintf_errno("InstallSyslinux: could not open %s", part_path);
         goto out_path;
     }
 
@@ -401,7 +401,7 @@ BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
     {
         uint8_t vbr[512];
         if (pread(d_fd, vbr, sizeof(vbr), 0) != (ssize_t)sizeof(vbr)) {
-            uprintf("InstallSyslinux: could not read VBR: %s", strerror(errno));
+            uprintf_errno("InstallSyslinux: could not read VBR");
             goto out_sectors;
         }
 
