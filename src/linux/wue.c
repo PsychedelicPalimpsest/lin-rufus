@@ -21,6 +21,7 @@
 #include "xml.h"
 #include "wue.h"
 #include "wimlib.h"
+#include "timezone.h"
 
 /* bypass registry key names (same as Windows) */
 const char* bypass_name[] = { "BypassTPMCheck", "BypassSecureBootCheck", "BypassRAMCheck" };
@@ -33,7 +34,6 @@ BOOL is_bootloader_revoked = FALSE;
 /* -----------------------------------------------------------------------
  * CreateUnattendXml
  *   Generate an autounattend.xml answer file.
- *   Timezone section is skipped on Linux (no GetTimeZoneInformation).
  * ----------------------------------------------------------------------- */
 char* CreateUnattendXml(int arch, int flags)
 {
@@ -141,7 +141,11 @@ char* CreateUnattendXml(int arch, int flags)
 				fprintf(fd, "        <ProtectYourPC>3</ProtectYourPC>\n");
 				fprintf(fd, "      </OOBE>\n");
 			}
-			/* UNATTEND_DUPLICATE_LOCALE: timezone section skipped on Linux */
+			if (flags & UNATTEND_DUPLICATE_LOCALE) {
+				const char* wintz = IanaToWindowsTimezone();
+				uprintf("• Timezone: %s", wintz);
+				fprintf(fd, "      <TimeZone>%s</TimeZone>\n", wintz);
+			}
 			if (flags & UNATTEND_SET_USER) {
 				int allowed = 1;
 				for (i = 0; i < ARRAYSIZE(unallowed_account_names); i++) {

@@ -521,6 +521,13 @@ EXTRA_SRC_LINUX_test_wue_linux := \
 	$(WIM_LIB) \
 	$(XML_SRC)
 
+# timezone_linux tests: IanaToWindowsTimezone, system TZ detection
+CFLAGS_LINUX_test_timezone_linux := \
+	-DRUFUS_TEST \
+	-I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_timezone_linux := $(SRC_DIR)/linux/timezone.c
+
 # system_info_linux tests: GetTPMVersion, IsSecureBootEnabled, IsSetupModeEnabled
 CFLAGS_LINUX_test_system_info_linux := \
 	-DRUFUS_TEST \
