@@ -16,9 +16,7 @@
 #ifndef LIBBB_H
 #define LIBBB_H 1
 
-#ifndef _WIN32
-#error Only Windows platforms are supported
-#endif
+/* Platform support: Windows natively; Linux via compat layer */
 
 #include "platform.h"
 #include "msapi_utf8.h"
@@ -34,10 +32,17 @@
 #include <stddef.h>
 #include <string.h>
 #include <time.h>
+#ifdef __linux__
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <io.h>
+#else
 #include <direct.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <io.h>
+#endif
 
 #define ONE_TB                          1099511627776ULL
 
@@ -73,22 +78,30 @@
 
 #ifndef _MODE_T_
 #define _MODE_T_
+#ifndef __linux__
 typedef unsigned short mode_t;
+#endif
 #endif
 
 #ifndef _PID_T_
 #define _PID_T_
+#ifndef __linux__
 typedef int pid_t;
+#endif
 #endif
 
 #ifndef _GID_T_
 #define _GID_T_
+#ifndef __linux__
 typedef unsigned int gid_t;
+#endif
 #endif
 
 #ifndef _UID_T_
 #define _UID_T_
+#ifndef __linux__
 typedef unsigned int uid_t;
+#endif
 #endif
 
 #ifndef MIN
@@ -180,15 +193,30 @@ static inline void *xrealloc(void *ptr, size_t size) {
 
 #define bb_msg_read_error "read error"
 #define bb_msg_write_error "write error"
+#ifdef __linux__
+#include <ftw.h>
+#include <sys/wait.h>
+static inline int bb_make_directory_impl(const char* path) { return mkdir(path, 0755); }
+#define bb_make_directory(path, mode, flags) bb_make_directory_impl(path)
+#else
 #define bb_make_directory(path, mode, flags) SHCreateDirectoryExU(NULL, path, NULL)
+#endif
 
+#ifndef __linux__
 static inline int link(const char *oldpath, const char *newpath) { errno = ENOSYS; return -1; }
 static inline int symlink(const char *oldpath, const char *newpath) { errno = ENOSYS; return -1; }
 static inline int chown(const char *path, uid_t owner, gid_t group) { errno = ENOSYS; return -1; }
 static inline int mknod(const char *pathname, mode_t mode, dev_t dev) { errno = ENOSYS; return -1; }
+#endif
 static inline int utimes64(const char* filename, const struct timeval64 times64[2]) { errno = ENOSYS; return -1; }
+#ifdef __linux__
+#include <fnmatch.h>
+#else
 static inline int fnmatch(const char *pattern, const char *string, int flags) { return PathMatchSpecA(string, pattern) ? 0 : 1; }
+#endif
+#ifndef __linux__
 static inline pid_t wait(int* status) { *status = 4; return -1; }
+#endif
 #define wait_any_nohang wait
 
 /* This enables the display of a progress based on the number of bytes read */
@@ -283,17 +311,30 @@ static inline void bb_copyfd_exact_size(int fd1, int fd2, off_t size)
 	free(buf);
 }
 
+#ifndef __linux__
 static inline struct tm *localtime_r(const time_t *timep, struct tm *result) {
 	if (localtime_s(result, timep) != 0)
 		result = NULL;
 	return result;
 }
+#endif
 
 #define safe_read full_read
 #define lstat stat
 #define xmalloc malloc
 #define xzalloc(x) calloc(x, 1)
 #define malloc_or_warn malloc
+#ifdef __linux__
+#define xlseek lseek
+#define xread safe_read
+static inline void xmove_fd(int from, int to)
+{
+	if (from != to) {
+		(void)dup2(from, to);
+		close(from);
+	}
+}
+#else
 #define mkdir(x, y) _mkdirU(x)
 struct fd_pair { int rd; int wr; };
 void xpipe(int filedes[2]) FAST_FUNC;
@@ -308,6 +349,7 @@ static inline void xmove_fd(int from, int to)
 		_close(from);
 	}
 }
+#endif
 
 #if defined(_MSC_VER)
 #define _S_IFBLK 0x3000

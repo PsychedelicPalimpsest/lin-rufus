@@ -1,10 +1,28 @@
 AC_INIT([rufus], [4.13], [https://github.com/pbatard/rufus/issues], [rufus], [https://rufus.ie])
-AM_INIT_AUTOMAKE([-Wno-portability foreign no-dist no-dependencies])
-AC_CONFIG_SRCDIR([src/rufus.c])
+AM_INIT_AUTOMAKE([-Wno-portability foreign no-dist no-dependencies subdir-objects])
+AC_CONFIG_SRCDIR([src/windows/rufus.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
 
 AC_PREREQ([2.50])
+
+# OS target selection -- must be processed before AC_PROG_CC so we can set CC
+AC_ARG_WITH([os],
+	[AS_HELP_STRING([--with-os=OS],
+		[target OS: linux or windows (default=windows)])],
+	[target_os=$withval],
+	[target_os='windows'])
+
+if test "x$target_os" = "xwindows"; then
+  # Default to MinGW cross-compiler when targeting Windows and CC is not set
+  if test "x${CC+set}" != "xset"; then
+    CC="x86_64-w64-mingw32-gcc"
+  fi
+  AC_MSG_NOTICE([Targeting Windows; CC=${CC}])
+else
+  AC_MSG_NOTICE([Targeting Linux])
+fi
+
 AC_PROG_CC
 # autoconf 2.61 doesn't have AC_PROG_AR, but 2.63 has it
 AC_DEFUN([AC_PROG_AR], [AC_CHECK_TOOL(AR, ar, :)])
@@ -18,10 +36,12 @@ AC_CHECK_TOOL(WINDRES, windres, :)
 AC_C_INLINE
 AC_DEFINE([_GNU_SOURCE], [], [Use GNU extensions])
 
-AM_CFLAGS="${AM_CFLAGS} -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -D_WIN32_IE=0x0A00"
-# "-Wl,--nxcompat" to enable DEP (Data Execution Prevention)
-# "-Wl,--dynamicbase" to enable ASLR (Address Space Layout Randomization)
-AM_LDFLAGS="${AM_LDFLAGS} -Wl,-no-undefined -Wl,--nxcompat -Wl,--no-insert-timestamp -Wl,--dynamicbase"
+if test "x$target_os" = "xwindows"; then
+  AM_CFLAGS="${AM_CFLAGS} -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -D_WIN32_IE=0x0A00"
+  # "-Wl,--nxcompat" to enable DEP (Data Execution Prevention)
+  # "-Wl,--dynamicbase" to enable ASLR (Address Space Layout Randomization)
+  AM_LDFLAGS="${AM_LDFLAGS} -Wl,-no-undefined -Wl,--nxcompat -Wl,--no-insert-timestamp -Wl,--dynamicbase"
+fi
 
 # Debug symbols
 AC_ARG_ENABLE([debug],
@@ -66,7 +86,14 @@ CFLAGS="${saved_CFLAGS}"
 
 # NB: The DECLSPEC_IMPORT redefinition below is a temporary(?) workaround for MinGW32 delay-loading
 # See https://github.com/pbatard/rufus/pull/2513 as well as https://sourceware.org/bugzilla/show_bug.cgi?id=14339
-AM_CFLAGS="$AM_CFLAGS -DUNICODE -D_UNICODE -UNDEBUG -DCOBJMACROS -D__USE_MINGW_ANSI_STDIO=0 -UDECLSPEC_IMPORT -DDECLSPEC_IMPORT=__attribute__\(\(visibility\(\\\"hidden\\\"\)\)\) -std=gnu11 -Wshadow -Wall -Wformat-security -Wundef -Wunused -Wstrict-prototypes -Wno-restrict -Wno-array-bounds -Werror-implicit-function-declaration -Wbidi-chars=none $nopointersign_cflags"
+if test "x$target_os" = "xwindows"; then
+  AM_CFLAGS="$AM_CFLAGS -DUNICODE -D_UNICODE -UNDEBUG -DCOBJMACROS -D__USE_MINGW_ANSI_STDIO=0 -UDECLSPEC_IMPORT -DDECLSPEC_IMPORT=__attribute__\(\(visibility\(\\\"hidden\\\"\)\)\) -std=gnu11 -Wshadow -Wall -Wformat-security -Wundef -Wunused -Wstrict-prototypes -Wno-restrict -Wno-array-bounds -Werror-implicit-function-declaration -Wbidi-chars=none $nopointersign_cflags"
+else
+  AM_CFLAGS="$AM_CFLAGS -I\$(top_srcdir)/src/linux/compat -I\$(top_srcdir)/src/windows -UNDEBUG -std=gnu11 -Wshadow -Wall -Wformat-security -Wundef -Wunused -Wstrict-prototypes -Wno-restrict -Wno-array-bounds -Werror-implicit-function-declaration -Wbidi-chars=none $nopointersign_cflags"
+fi
+
+AM_CONDITIONAL([TARGET_WINDOWS], [test "x$target_os" = "xwindows"])
+AM_CONDITIONAL([TARGET_LINUX],   [test "x$target_os" = "xlinux"])
 
 AC_SUBST([VISIBILITY_CFLAGS])
 AC_SUBST([AM_CFLAGS])
@@ -74,7 +101,9 @@ AC_SUBST([AM_LDFLAGS])
 AC_SUBST([SUFFIX])
 
 AC_CONFIG_FILES([Makefile])
-AC_CONFIG_FILES([.mingw/Makefile])
+if test "x$target_os" = "xwindows"; then
+  AC_CONFIG_FILES([.mingw/Makefile])
+fi
 AC_CONFIG_FILES([src/Makefile])
 AC_CONFIG_FILES([src/bled/Makefile])
 AC_CONFIG_FILES([src/ext2fs/Makefile])

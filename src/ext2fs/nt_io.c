@@ -13,6 +13,7 @@
  * %End-Header%
  */
 
+#ifndef __linux__
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -720,3 +721,45 @@ static errcode_t nt_flush(io_channel channel)
 
 	return 0;
 }
+
+#else /* __linux__ */
+
+/* Linux stub: nt_io_manager is Windows-only. Use format_ext.c stubs on Linux. */
+#include "ext2fs.h"
+
+static errcode_t nt_open(const char *n, int f, io_channel *c) { (void)n;(void)f;(void)c; return EXT2_ET_BAD_DEVICE_NAME; }
+static errcode_t nt_close(io_channel c) { (void)c; return 0; }
+static errcode_t nt_set_blksize(io_channel c, int sz) { (void)c;(void)sz; return 0; }
+static errcode_t nt_read_blk(io_channel c, unsigned long b, int n, void *d) { (void)c;(void)b;(void)n;(void)d; return EXT2_ET_SHORT_READ; }
+static errcode_t nt_write_blk(io_channel c, unsigned long b, int n, const void *d) { (void)c;(void)b;(void)n;(void)d; return EXT2_ET_SHORT_WRITE; }
+static errcode_t nt_flush(io_channel c) { (void)c; return 0; }
+static errcode_t nt_write_byte(io_channel c, unsigned long o, int n, const void *d) { (void)c;(void)o;(void)n;(void)d; return EXT2_ET_SHORT_WRITE; }
+static errcode_t nt_set_option(io_channel c, const char *o, const char *r) { (void)c;(void)o;(void)r; return 0; }
+static errcode_t nt_get_stats(io_channel c, io_stats *s) { (void)c;(void)s; return 0; }
+static errcode_t nt_read_blk64(io_channel c, unsigned long long b, int n, void *d) { (void)c;(void)b;(void)n;(void)d; return EXT2_ET_SHORT_READ; }
+static errcode_t nt_write_blk64(io_channel c, unsigned long long b, int n, const void *d) { (void)c;(void)b;(void)n;(void)d; return EXT2_ET_SHORT_WRITE; }
+static errcode_t nt_discard(io_channel c, unsigned long long b, unsigned long long n) { (void)c;(void)b;(void)n; return 0; }
+static errcode_t nt_cache_readahead(io_channel c, unsigned long long b, unsigned long long n) { (void)c;(void)b;(void)n; return 0; }
+static errcode_t nt_zeroout(io_channel c, unsigned long long b, unsigned long long n) { (void)c;(void)b;(void)n; return 0; }
+
+static struct struct_io_manager struct_nt_manager = {
+	.magic		= EXT2_ET_MAGIC_IO_MANAGER,
+	.name		= "NT I/O Manager (stub)",
+	.open		= nt_open,
+	.close		= nt_close,
+	.set_blksize	= nt_set_blksize,
+	.read_blk	= nt_read_blk,
+	.write_blk	= nt_write_blk,
+	.flush		= nt_flush,
+	.write_byte	= nt_write_byte,
+	.set_option	= nt_set_option,
+	.get_stats	= nt_get_stats,
+	.read_blk64	= nt_read_blk64,
+	.write_blk64	= nt_write_blk64,
+	.discard	= nt_discard,
+	.cache_readahead = nt_cache_readahead,
+	.zeroout	= nt_zeroout,
+};
+io_manager nt_io_manager = &struct_nt_manager;
+
+#endif /* __linux__ */

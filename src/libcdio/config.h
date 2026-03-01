@@ -50,6 +50,9 @@
 
 /* Define if you have the iconv() function and it works. */
 /* #undef HAVE_ICONV */
+#ifdef __linux__
+#define HAVE_ICONV 1
+#endif
 
 /* Define this if you want to use the 2020 version of the libcdio API. */
 #define DO_NOT_WANT_COMPATIBILITY /**/
@@ -96,6 +99,13 @@
 
 /* Define to 1 if you have the `setenv' function. */
 /* #undef HAVE_SETENV */
+#ifdef __linux__
+#define HAVE_SETENV 1
+#define HAVE_UNSETENV 1
+#define HAVE_TIMEGM 1
+#define HAVE_GMTIME_R 1
+#define HAVE_LOCALTIME_R 1
+#endif
 
 /* Define to 1 if you have the `seteuid' function. */
 /* #undef HAVE_SETEUID */
@@ -201,10 +211,15 @@
 #define HAVE_WINDOWS_H 1
 
 /* Define to 1 if you have the `_stati64' function. */
+#ifndef __linux__
 #define HAVE__STATI64 1
+#endif
 
 /* Define as const if the declaration of iconv() needs const. */
 /* #undef ICONV_CONST  */
+#ifndef ICONV_CONST
+#define ICONV_CONST
+#endif
 
 /* Is set when libcdio's config.h has been included. Applications wishing to
    sue their own config.h values (such as set by the application's configure

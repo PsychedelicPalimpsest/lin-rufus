@@ -145,10 +145,20 @@ typedef char tchar;
 #  define tstrdup	strdup
 #  define tgetenv	getenv
 #  define TSTRDUP	STRDUP
-#  define tstrerror_r	strerror_r
+/* GNU strerror_r returns char*, not int; wrap to match POSIX interface */
+#ifdef _GNU_SOURCE
+#include <string.h>
+static inline int _wimlib_strerror_r(int e, char* buf, size_t sz) {
+    char* r = strerror_r(e, buf, sz); if (r != buf) strncpy(buf, r, sz - 1); buf[sz-1] = '\0'; return 0;
+}
+#  define tstrerror_r _wimlib_strerror_r
+#else
+#  define tstrerror_r strerror_r
+#endif
 #  define trename	rename
 #  define taccess	access
 #  define tglob		glob
+#  define tsnprintf	snprintf
 #endif /* !_WIN32 */
 
 #endif /* _WIMLIB_TCHAR_H */

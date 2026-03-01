@@ -41,12 +41,20 @@ typedef int32_t __s32;
 
 #ifndef HAVE___U64
 #define HAVE___U64
+#if defined(__linux__) && defined(__GNUC__)
+typedef unsigned long long __u64;
+#else
 typedef uint64_t __u64;
+#endif
 #endif /* HAVE___U64 */
 
 #ifndef HAVE___S64
 #define HAVE___S64
+#if defined(__linux__) && defined(__GNUC__)
+typedef long long __s64;
+#else
 typedef int64_t __s64;
+#endif
 #endif /* HAVE___S64 */
 
 #undef __S8_TYPEDEF

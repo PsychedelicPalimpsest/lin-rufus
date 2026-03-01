@@ -174,7 +174,9 @@
 #define HAVE_WINT_T 1
 
 /* Define if you have 'winsock.h'. */
+#ifndef __linux__
 #define HAVE_WINSOCK_H 1
+#endif
 
 /* Define to 1 if O_NOATIME works. */
 #define HAVE_WORKING_O_NOATIME 0

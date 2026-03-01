@@ -609,7 +609,7 @@ PACKAGE_STRING='rufus 4.13'
 PACKAGE_BUGREPORT='https://github.com/pbatard/rufus/issues'
 PACKAGE_URL='https://rufus.ie'
 
-ac_unique_file="src/rufus.c"
+ac_unique_file="src/windows/rufus.c"
 ac_subst_vars='am__EXEEXT_FALSE
 am__EXEEXT_TRUE
 LTLIBOBJS
@@ -618,6 +618,10 @@ SUFFIX
 AM_LDFLAGS
 AM_CFLAGS
 VISIBILITY_CFLAGS
+TARGET_LINUX_FALSE
+TARGET_LINUX_TRUE
+TARGET_WINDOWS_FALSE
+TARGET_WINDOWS_TRUE
 WINDRES
 DLLTOOL
 RM
@@ -706,6 +710,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 enable_silent_rules
+with_os
 enable_debug
 enable_alpha
 enable_beta
@@ -1348,6 +1353,11 @@ Optional Features:
   --enable-alpha          build an ALPHA release (default=no)
   --enable-beta           build a BETA release (default=no)
   --enable-test=#         build a TEST release (default=no)
+
+Optional Packages:
+  --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
+  --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+  --with-os=OS            target OS: linux or windows (default=windows)
 
 Some influential environment variables:
   CC          C compiler command
@@ -3169,6 +3179,31 @@ AM_DEFAULT_VERBOSITY=0
 
 
 
+# OS target selection -- must be processed before AC_PROG_CC so we can set CC
+
+# Check whether --with-os was given.
+if test ${with_os+y}
+then :
+  withval=$with_os; target_os=$withval
+else case e in #(
+  e) target_os='windows' ;;
+esac
+fi
+
+
+if test "x$target_os" = "xwindows"; then
+  # Default to MinGW cross-compiler when targeting Windows and CC is not set
+  if test "x${CC+set}" != "xset"; then
+    CC="x86_64-w64-mingw32-gcc"
+  fi
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: Targeting Windows; CC=${CC}" >&5
+printf "%s\n" "$as_me: Targeting Windows; CC=${CC}" >&6;}
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: Targeting Linux" >&5
+printf "%s\n" "$as_me: Targeting Linux" >&6;}
+fi
+
+
 
 
 
@@ -4954,10 +4989,12 @@ esac
 printf "%s\n" "#define _GNU_SOURCE /**/" >>confdefs.h
 
 
-AM_CFLAGS="${AM_CFLAGS} -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -D_WIN32_IE=0x0A00"
-# "-Wl,--nxcompat" to enable DEP (Data Execution Prevention)
-# "-Wl,--dynamicbase" to enable ASLR (Address Space Layout Randomization)
-AM_LDFLAGS="${AM_LDFLAGS} -Wl,-no-undefined -Wl,--nxcompat -Wl,--no-insert-timestamp -Wl,--dynamicbase"
+if test "x$target_os" = "xwindows"; then
+  AM_CFLAGS="${AM_CFLAGS} -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -D_WIN32_IE=0x0A00"
+  # "-Wl,--nxcompat" to enable DEP (Data Execution Prevention)
+  # "-Wl,--dynamicbase" to enable ASLR (Address Space Layout Randomization)
+  AM_LDFLAGS="${AM_LDFLAGS} -Wl,-no-undefined -Wl,--nxcompat -Wl,--no-insert-timestamp -Wl,--dynamicbase"
+fi
 
 # Debug symbols
 # Check whether --enable-debug was given.
@@ -5048,7 +5085,28 @@ CFLAGS="${saved_CFLAGS}"
 
 # NB: The DECLSPEC_IMPORT redefinition below is a temporary(?) workaround for MinGW32 delay-loading
 # See https://github.com/pbatard/rufus/pull/2513 as well as https://sourceware.org/bugzilla/show_bug.cgi?id=14339
-AM_CFLAGS="$AM_CFLAGS -DUNICODE -D_UNICODE -UNDEBUG -DCOBJMACROS -D__USE_MINGW_ANSI_STDIO=0 -UDECLSPEC_IMPORT -DDECLSPEC_IMPORT=__attribute__\(\(visibility\(\\\"hidden\\\"\)\)\) -std=gnu11 -Wshadow -Wall -Wformat-security -Wundef -Wunused -Wstrict-prototypes -Wno-restrict -Wno-array-bounds -Werror-implicit-function-declaration -Wbidi-chars=none $nopointersign_cflags"
+if test "x$target_os" = "xwindows"; then
+  AM_CFLAGS="$AM_CFLAGS -DUNICODE -D_UNICODE -UNDEBUG -DCOBJMACROS -D__USE_MINGW_ANSI_STDIO=0 -UDECLSPEC_IMPORT -DDECLSPEC_IMPORT=__attribute__\(\(visibility\(\\\"hidden\\\"\)\)\) -std=gnu11 -Wshadow -Wall -Wformat-security -Wundef -Wunused -Wstrict-prototypes -Wno-restrict -Wno-array-bounds -Werror-implicit-function-declaration -Wbidi-chars=none $nopointersign_cflags"
+else
+  AM_CFLAGS="$AM_CFLAGS -I\$(top_srcdir)/src/linux/compat -I\$(top_srcdir)/src/windows -UNDEBUG -std=gnu11 -Wshadow -Wall -Wformat-security -Wundef -Wunused -Wstrict-prototypes -Wno-restrict -Wno-array-bounds -Werror-implicit-function-declaration -Wbidi-chars=none $nopointersign_cflags"
+fi
+
+ if test "x$target_os" = "xwindows"; then
+  TARGET_WINDOWS_TRUE=
+  TARGET_WINDOWS_FALSE='#'
+else
+  TARGET_WINDOWS_TRUE='#'
+  TARGET_WINDOWS_FALSE=
+fi
+
+ if test "x$target_os" = "xlinux"; then
+  TARGET_LINUX_TRUE=
+  TARGET_LINUX_FALSE='#'
+else
+  TARGET_LINUX_TRUE='#'
+  TARGET_LINUX_FALSE=
+fi
+
 
 
 
@@ -5057,8 +5115,10 @@ AM_CFLAGS="$AM_CFLAGS -DUNICODE -D_UNICODE -UNDEBUG -DCOBJMACROS -D__USE_MINGW_A
 
 ac_config_files="$ac_config_files Makefile"
 
-ac_config_files="$ac_config_files .mingw/Makefile"
+if test "x$target_os" = "xwindows"; then
+  ac_config_files="$ac_config_files .mingw/Makefile"
 
+fi
 ac_config_files="$ac_config_files src/Makefile"
 
 ac_config_files="$ac_config_files src/bled/Makefile"
@@ -5254,6 +5314,14 @@ else
   am__EXEEXT_FALSE=
 fi
 
+if test -z "${TARGET_WINDOWS_TRUE}" && test -z "${TARGET_WINDOWS_FALSE}"; then
+  as_fn_error $? "conditional \"TARGET_WINDOWS\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${TARGET_LINUX_TRUE}" && test -z "${TARGET_LINUX_FALSE}"; then
+  as_fn_error $? "conditional \"TARGET_LINUX\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
 
 : "${CONFIG_STATUS=./config.status}"
 ac_write_fail=0

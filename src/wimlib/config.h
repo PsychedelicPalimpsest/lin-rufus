@@ -63,6 +63,9 @@
 
 /* Define to 1 if you have the 'mempcpy' function. */
 /* #undef HAVE_MEMPCPY */
+#ifdef __linux__
+#define HAVE_MEMPCPY 1
+#endif
 
 /* Define to 1 if you have the 'openat' function. */
 /* #undef HAVE_OPENAT */
@@ -199,4 +202,17 @@
 # ifndef WORDS_BIGENDIAN
 /* #  undef WORDS_BIGENDIAN */
 # endif
+#endif
+
+/* Linux CRT compatibility */
+#ifdef __linux__
+#include <unistd.h>
+#define _lseeki64 lseek
+#define _telli64(fd) lseek(fd, 0, SEEK_CUR)
+#endif
+#ifdef __linux__
+#include <sys/time.h>
+#endif
+#ifdef __linux__
+#define _stat64 stat
 #endif
