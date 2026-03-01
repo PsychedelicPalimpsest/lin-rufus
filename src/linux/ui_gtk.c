@@ -102,6 +102,7 @@ static gboolean idle_update_progress(gpointer data)
 static void on_start_clicked(GtkButton *btn, gpointer data);
 static void on_close_clicked(GtkButton *btn, gpointer data);
 static void on_select_clicked(GtkButton *btn, gpointer data);
+static void on_download_iso_clicked(GtkButton *btn, gpointer data);
 static void on_lang_clicked(GtkButton *btn, gpointer data);
 static void on_lang_menu_activate(GtkMenuItem *item, gpointer data);
 static void on_device_changed(GtkComboBox *combo, gpointer data);
@@ -110,6 +111,8 @@ static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 void ShowLanguageMenu(RECT rcExclude);
 extern DWORD WINAPI ImageScanThread(LPVOID param); /* image_scan.c */
+extern void SetFidoCheck(void);                    /* net.c */
+extern BOOL DownloadISO(void);                     /* net.c */
 extern void SetFSFromISO(void);                    /* rufus.c stubs */
 extern void SetPartitionSchemeAndTargetSystem(BOOL only_target);
 static GtkWidget *build_toolbar(void);
@@ -238,9 +241,17 @@ static GtkWidget *build_boot_row(void)
 	rw.select_btn = gtk_button_new_with_label("SELECT");
 	g_signal_connect(rw.select_btn, "clicked", G_CALLBACK(on_select_clicked), NULL);
 
+	rw.download_iso_btn = gtk_button_new_with_label("⬇ Download ISO");
+	gtk_widget_set_tooltip_text(rw.download_iso_btn,
+		"Download an ISO image using the Fido script");
+	g_signal_connect(rw.download_iso_btn, "clicked",
+		G_CALLBACK(on_download_iso_clicked), NULL);
+	gtk_widget_set_visible(rw.download_iso_btn, FALSE);
+
 	gtk_box_pack_start(GTK_BOX(hbox), rw.boot_selection_label, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(hbox), rw.boot_combo,           TRUE,  TRUE,  0);
 	gtk_box_pack_start(GTK_BOX(hbox), rw.select_btn,           FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(hbox), rw.download_iso_btn,     FALSE, FALSE, 0);
 
 	return hbox;
 }
@@ -642,6 +653,12 @@ static void on_select_clicked(GtkButton *btn, gpointer data)
 		rufus_gtk_update_status(image_path);
 	}
 	gtk_widget_destroy(dlg);
+}
+
+static void on_download_iso_clicked(GtkButton *btn, gpointer data)
+{
+	(void)btn; (void)data;
+	DownloadISO();
 }
 
 static void on_device_changed(GtkComboBox *combo, gpointer data)
@@ -1056,6 +1073,13 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		break;
 	}
 
+	case UM_ENABLE_DOWNLOAD_ISO:
+		/* CheckForFidoThread found a valid Fido URL — enable the "Download ISO" option.
+		 * On Linux we reveal a dedicated "Download ISO" button that was hidden at start. */
+		if (rw.download_iso_btn)
+			gtk_widget_set_visible(rw.download_iso_btn, TRUE);
+		break;
+
 	case UM_MEDIA_CHANGE:
 		/* Block-device hotplug event — refresh the device list.
 		 * Guard against triggering a refresh while a format is in progress. */
@@ -1361,6 +1385,10 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	 * the configured interval has elapsed since the last successful check). */
 	if (SetUpdateCheck())
 		CheckForUpdates(FALSE);
+
+	/* Check for Fido (ISO download script) availability.
+	 * If found, this posts UM_ENABLE_DOWNLOAD_ISO to reveal the Download ISO button. */
+	SetFidoCheck();
 }
 
 int main(int argc, char *argv[])
@@ -1379,3 +1407,4 @@ int main(int argc, char *argv[])
 
 	return status;
 }
+

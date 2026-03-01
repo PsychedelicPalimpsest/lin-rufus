@@ -192,7 +192,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `DownloadSignedFile()` | 🔧 | Delegates to `DownloadToFileOrBufferEx`; signature verification not yet implemented (needs `pki.c`) |
 | `DownloadSignedFileThreaded()` | ✅ | Wraps `DownloadSignedFile` in a `CreateThread`; `malloc`'d args freed on exit; 2 new tests (55 net tests pass) |
 | `CheckForUpdates()` | ✅ | Fetches `rufus_linux.ver` via libcurl; compares versions with `rufus_is_newer_version()`; respects update interval; calls `parse_update()`/`DownloadNewVersion()`; 10 tests pass |
-| `DownloadISO()` | 🟡 | Stub; Fido script launcher — needs `process.c` |
+| `DownloadISO()` | ✅ | Full implementation: downloads+decompresses Fido script, creates POSIX FIFO, forks pwsh, reads URL, calls FileDialog, downloads ISO; 57 net tests pass |
 | `UseLocalDbx()` | 🟡 | Stub; use local DBX (revocation) database |
 | `configure.ac` libcurl detection | ✅ | `PKG_CHECK_MODULES([CURL], [libcurl >= 7.50])` added; flags propagated to AM_CFLAGS/AM_LDFLAGS |
 
@@ -271,7 +271,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `CreateAboutBox()` / `AboutCallback()` | 🔧 | GTK About dialog implemented in `ui_gtk.c`; callback stub unused |
 | `LicenseCallback()` | 🟡 | Show license in a `GtkDialog` |
 | `UpdateCallback()` / `NewVersionCallback()` | 🟡 | Update dialog; low priority |
-| `SetFidoCheck()` / `SetUpdateCheck()` | ✅ | `SetUpdateCheck` implemented: settings commcheck roundtrip; first-run sets 86400s interval; disabled if interval<0; wired into `on_app_activate` GTK startup; 4 tests pass |
+| `SetFidoCheck()` / `SetUpdateCheck()` | ✅ | Both implemented: `SetFidoCheck` checks for pwsh, spawns `CheckForFidoThread` (downloads Fido.ver, validates URL, posts `UM_ENABLE_DOWNLOAD_ISO` to reveal Download ISO button); wired into `on_app_activate`; 57 net tests pass |
 | `FlashTaskbar()` | 🚫 | N/A on Linux |
 | `MyCreateDialog()` / `MyDialogBox()` | 🔧 | Windows dialog resource system; `IDD_HASH` replaced with `UM_HASH_COMPLETED` → GTK dialog; others still stub |
 | `GetDialogTemplate()` | 🚫 | Windows `.rc` resource — not applicable on Linux |

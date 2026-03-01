@@ -95,6 +95,9 @@ typedef struct {
 	GtkWidget *drive_props_label;     /* IDS_DRIVE_PROPERTIES_TXT (2016) */
 	GtkWidget *format_options_label;  /* IDS_FORMAT_OPTIONS_TXT (2017) */
 	GtkWidget *status_txt_label;      /* IDS_STATUS_TXT         (2018) */
+
+	/* Fido / Download ISO button (hidden until SetFidoCheck succeeds) */
+	GtkWidget *download_iso_btn;
 } RufusWidgets;
 
 extern RufusWidgets rw;

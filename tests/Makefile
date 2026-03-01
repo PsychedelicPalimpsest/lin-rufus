@@ -247,11 +247,11 @@ NET_LINUX_SRC := $(SRC_DIR)/linux/net.c \
                  net_linux_glue.c
 CFLAGS_LINUX_test_net_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-	-I$(SRC_DIR) \
+	-I$(SRC_DIR) -I$(COMMON) -I$(SRC_DIR)/bled \
 	-Wno-unused-function -Wno-sign-compare \
 	-Wno-implicit-function-declaration -Wno-unused-parameter \
 	-Wno-missing-field-initializers
-LDFLAGS_LINUX_test_net_linux := -lcurl -lpthread
+LDFLAGS_LINUX_test_net_linux := -lcurl -lpthread $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_net_linux := $(NET_LINUX_SRC)
 
 # settings_linux tests: FileIO, ReadSetting*/WriteSetting*, XDG path init.
