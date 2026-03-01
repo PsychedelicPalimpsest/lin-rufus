@@ -580,6 +580,18 @@ CFLAGS_LINUX_test_compat_layer := \
 	-Wno-unused-function -Wno-unused-parameter \
 	-Wno-implicit-function-declaration
 
+# loopback_linux tests: integration tests using real /dev/loop* block devices
+# Requires root (tests skip gracefully when not root via SKIP_NOT_ROOT()).
+# Uses the same source set as format_thread_linux.
+CFLAGS_LINUX_test_loopback := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_loopback := -lpthread -lblkid
+EXTRA_SRC_LINUX_test_loopback := \
+	$(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) loopback_linux_glue.c
+
 # download_resume_linux tests: .partial file helpers for resumable downloads
 CFLAGS_LINUX_test_download_resume_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
