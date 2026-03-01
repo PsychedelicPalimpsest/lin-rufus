@@ -231,7 +231,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `MountRegistryHive()` / `UnmountRegistryHive()` | 🚫 | Windows Registry — no Linux equivalent |
 | `TakeOwnership()` | 🚫 | Windows ACL — no Linux equivalent; use `chown` if ever needed |
 | `SetPrivilege()` | 🚫 | Windows token privilege — no Linux equivalent |
-| `SetThreadAffinity()` | 🟡 | Use `pthread_setaffinity_np()` |
+| `SetThreadAffinity()` | ✅ | Uses `sched_getaffinity` to get available CPUs; spreads across threads with disjoint bitmasks; `SetThreadAffinityMask` uses `pthread_setaffinity_np`; 5 tests pass |
 | `GetWindowsVersion()` | 🚫 | N/A; return zeroed struct (done) |
 | `GetExecutableVersion()` | 🟡 | Read `ELF` / PE version; low priority |
 | `IsFontAvailable()` | 🟡 | Use `pango_font_description_from_string` or `fontconfig` |

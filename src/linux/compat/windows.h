@@ -1368,8 +1368,25 @@ static inline BOOL SetThreadPriority(HANDLE h, int prio)
 
 static inline DWORD_PTR SetThreadAffinityMask(HANDLE h, DWORD_PTR mask)
 {
-    (void)h; (void)mask;
-    return 0;   /* thread affinity — not enforced on Linux */
+    if (mask == 0) return 0;
+
+    cpu_set_t cs;
+    CPU_ZERO(&cs);
+    for (int i = 0; i < (int)(sizeof(DWORD_PTR) * 8); i++) {
+        if (mask & ((DWORD_PTR)1 << i))
+            CPU_SET(i, &cs);
+    }
+
+    /* Handle GetCurrentThread() pseudo-handle (returns 0 on Linux) */
+    if (h == NULL || h == (HANDLE)0) {
+        pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs);
+        return mask;
+    }
+    if (!_wh_is_sync(h)) return 0;
+    _win_handle_t *wh = (_win_handle_t *)h;
+    if (wh->type != WH_THREAD) return 0;
+    pthread_setaffinity_np(wh->u.thread.tid, sizeof(cs), &cs);
+    return mask; /* approximate: return new mask as old */
 }
 
 static inline BOOL GetExitCodeThread(HANDLE h, LPDWORD code)

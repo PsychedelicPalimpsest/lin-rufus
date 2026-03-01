@@ -1,10 +1,14 @@
 /* Linux stub: stdfn.c - standard functions (stub for porting) */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "rufus.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sched.h>
 
 
 /*
@@ -265,7 +269,47 @@ DWORD   GetResourceSize(HMODULE m, char* n, char* t, const char* d) { (void)m;(v
 BOOL    IsFontAvailable(const char* fn)                           { (void)fn; return FALSE; }
 DWORD WINAPI SetLGPThread(LPVOID param)                           { (void)param; return 0; }
 BOOL    SetLGP(BOOL r, BOOL* ek, const char* p, const char* pol, DWORD v) { (void)r;(void)ek;(void)p;(void)pol;(void)v; return FALSE; }
-BOOL    SetThreadAffinity(DWORD_PTR* ta, size_t n)               { (void)ta;(void)n; return TRUE; }
+BOOL    SetThreadAffinity(DWORD_PTR* ta, size_t n)
+{
+    if (!ta || n == 0) return FALSE;
+    memset(ta, 0, n * sizeof(DWORD_PTR));
+
+    /* Get the set of CPUs available to this process */
+    cpu_set_t cs;
+    CPU_ZERO(&cs);
+    if (sched_getaffinity(0, sizeof(cs), &cs) != 0)
+        return FALSE;
+
+    /* Collect the available CPU indices into a local array */
+    int cpus[CPU_SETSIZE];
+    int ncpu = 0;
+    for (int i = 0; i < CPU_SETSIZE && ncpu < (int)(sizeof(DWORD_PTR) * 8); i++) {
+        if (CPU_ISSET(i, &cs))
+            cpus[ncpu++] = i;
+    }
+
+    /* Need at least n CPUs to spread across n threads */
+    if ((size_t)ncpu < n)
+        return FALSE;
+
+    /* Spread CPUs across threads, last slot gets the remainder */
+    int per = ncpu / (int)n;
+    int ci = 0;
+    ta[n - 1] = 0;
+    for (size_t i = 0; i < n - 1; i++) {
+        for (int j = 0; j < per; j++)
+            ta[i] |= (DWORD_PTR)1 << cpus[ci++];
+        ta[n - 1] |= ta[i]; /* accumulate for complement below */
+    }
+    /* Remaining CPUs assigned to last thread */
+    for (int i = ci; i < ncpu; i++)
+        ta[n - 1] |= (DWORD_PTR)1 << cpus[i];
+    /* Remove earlier threads' bits from last slot */
+    for (size_t i = 0; i < n - 1; i++)
+        ta[n - 1] ^= ta[i];
+
+    return TRUE;
+}
 BOOL    IsCurrentProcessElevated(void)                            { return (geteuid() == 0); }
 char*   ToLocaleName(DWORD lang_id)                              { (void)lang_id; return "en"; }
 BOOL    SetPrivilege(HANDLE hToken, LPCWSTR priv, BOOL enable)   { (void)hToken;(void)priv;(void)enable; return FALSE; }

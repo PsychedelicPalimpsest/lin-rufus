@@ -20,6 +20,7 @@ int main(void) { return 0; } /* Skip on non-Linux */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sched.h>
 
 /* --------------------------------------------------------------------------
  * Minimal stubs required by stdfn.c
@@ -343,6 +344,81 @@ TEST(strarray_empty_string)
 }
 
 /* ===========================================================================
+ * SetThreadAffinity tests
+ * =========================================================================*/
+
+extern BOOL SetThreadAffinity(DWORD_PTR* ta, size_t n);
+
+/* NULL array returns FALSE */
+TEST(set_thread_affinity_null_array)
+{
+    BOOL r = SetThreadAffinity(NULL, 4);
+    CHECK(r == FALSE);
+}
+
+/* n=0 returns FALSE */
+TEST(set_thread_affinity_zero_n)
+{
+    DWORD_PTR ta[1] = { 0xDEAD };
+    BOOL r = SetThreadAffinity(ta, 0);
+    CHECK(r == FALSE);
+}
+
+/* n=1 succeeds when at least 1 CPU is available */
+TEST(set_thread_affinity_single_thread)
+{
+    cpu_set_t cs;
+    CPU_ZERO(&cs);
+    sched_getaffinity(0, sizeof(cs), &cs);
+    int ncpu = CPU_COUNT(&cs);
+    if (ncpu < 1) { return; }
+
+    DWORD_PTR ta[1] = { 0 };
+    BOOL r = SetThreadAffinity(ta, 1);
+    CHECK(r == TRUE);
+    CHECK(ta[0] != 0);
+}
+
+/* n=2 fills two distinct non-zero masks, masks are disjoint */
+TEST(set_thread_affinity_two_threads)
+{
+    cpu_set_t cs;
+    CPU_ZERO(&cs);
+    sched_getaffinity(0, sizeof(cs), &cs);
+    int ncpu = CPU_COUNT(&cs);
+    if (ncpu < 2) { return; }
+
+    DWORD_PTR ta[2] = { 0, 0 };
+    BOOL r = SetThreadAffinity(ta, 2);
+    CHECK(r == TRUE);
+    CHECK(ta[0] != 0);
+    CHECK(ta[1] != 0);
+    /* Each CPU assigned to at most one thread */
+    CHECK((ta[0] & ta[1]) == 0);
+}
+
+/* Masks cover all available CPUs (union = full CPU set) */
+TEST(set_thread_affinity_covers_all_cpus)
+{
+    cpu_set_t cs;
+    CPU_ZERO(&cs);
+    sched_getaffinity(0, sizeof(cs), &cs);
+    int ncpu = CPU_COUNT(&cs);
+    if (ncpu < 2) { return; }
+
+    DWORD_PTR ta[2] = { 0, 0 };
+    BOOL r = SetThreadAffinity(ta, 2);
+    CHECK(r == TRUE);
+
+    DWORD_PTR expected = 0;
+    for (int i = 0; i < CPU_SETSIZE && i < (int)(sizeof(DWORD_PTR) * 8); i++) {
+        if (CPU_ISSET(i, &cs))
+            expected |= (DWORD_PTR)1 << i;
+    }
+    CHECK((ta[0] | ta[1]) == expected);
+}
+
+/* ===========================================================================
  * main
  * ========================================================================= */
 
@@ -381,6 +457,13 @@ int main(void)
     RUN(strarray_destroy);
     RUN(strarray_find_null);
     RUN(strarray_empty_string);
+
+    printf("\n=== SetThreadAffinity ===\n");
+    RUN(set_thread_affinity_null_array);
+    RUN(set_thread_affinity_zero_n);
+    RUN(set_thread_affinity_single_thread);
+    RUN(set_thread_affinity_two_threads);
+    RUN(set_thread_affinity_covers_all_cpus);
 
     TEST_RESULTS();
 }
