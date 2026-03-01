@@ -251,7 +251,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 |----------|--------|-------|
 | `uprintf()` / `uprintfs()` | ✅ | Routes to GTK log widget via `rufus_set_log_handler()`; falls back to stderr |
 | `wuprintf()` | 🔧 | `wchar_t` print; works but GTK uses UTF-8 — may need conversion |
-| `uprint_progress()` | 🟡 | Needs to update progress bar |
+| `uprint_progress()` | ✅ | Calls `_UpdateProgressWithInfo(OP_FORMAT, ...)` when max > 0 |
 | `read_file()` / `write_file()` | ✅ | Work correctly |
 | `DumpBufferHex()` | 🟡 | Debug helper; low priority |
 | `_printbits()` | 🟡 | Debug helper; low priority |
@@ -333,9 +333,9 @@ These headers allow Windows source files to compile on Linux unchanged.
 |----------|--------|-------|
 | `ExtractFreeDOS()` / `ExtractDOS()` | ✅ | Copies FreeDOS boot files from `res/freedos/` to target; dispatches on `boot_type`; 23 tests pass |
 | `SetDOSLocale()` | ✅ | Creates AUTOEXEC.BAT + FDCONFIG.SYS with US/CP437 defaults; 23 tests pass |
-| `InstallSyslinux()` | 🟡 | Write syslinux boot sector; `syslinux/libinstaller` is bundled |
-| `GetSyslinuxVersion()` | 🟡 | Parse version from bundled ldlinux data |
-| `libfat_readfile()` | 🟡 | FAT filesystem read callback for syslinux |
+| `InstallSyslinux()` | ✅ | Uses mcopy+libfat+pwrite; requires FAT32 image with >65524 clusters (libfat FAT28 detection); 36 tests pass |
+| `GetSyslinuxVersion()` | ✅ | Verbatim port from Windows; scans buffer for SYSLINUX/ISOLINUX version string |
+| `libfat_readfile()` | ✅ | pread-based FAT sector reader; `intptr_t` fd cast |
 | GRUB support | ❌ | GRUB write not yet wired (ISO extraction only) |
 
 ### 3n. WIM / VHD / WUE (`vhd.c`, `wue.c`)

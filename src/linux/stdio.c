@@ -61,7 +61,11 @@ void wuprintf(const wchar_t* format, ...) {
 
 void uprintfs(const char* str) { if(str) fputs(str, stderr); }
 
-void uprint_progress(uint64_t cur, uint64_t max) { (void)cur;(void)max; }
+void uprint_progress(uint64_t cur, uint64_t max)
+{
+    if (max > 0)
+        _UpdateProgressWithInfo(OP_FORMAT, 0, cur, max, FALSE);
+}
 
 uint32_t read_file(const char* path, uint8_t** buf) {
     FILE* f = fopen(path, "rb");

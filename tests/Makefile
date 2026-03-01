@@ -411,6 +411,24 @@ CFLAGS_LINUX_test_dos_linux := \
 LDFLAGS_LINUX_test_dos_linux :=
 EXTRA_SRC_LINUX_test_dos_linux := $(DOS_LINUX_SRC) dos_linux_glue.c
 
+# syslinux_linux tests: GetSyslinuxVersion, libfat_readfile, InstallSyslinux
+LIBFAT_LIB       := $(SRC_DIR)/syslinux/libfat/libfat.a
+LIBINSTALLER_LIB := $(SRC_DIR)/syslinux/libinstaller/libinstaller.a
+SYSLINUX_LINUX_SRC := \
+	$(SRC_DIR)/linux/syslinux.c \
+	$(SRC_DIR)/linux/stdfn.c \
+	$(SRC_DIR)/linux/drive.c \
+	$(FORMAT_MS_SRC)
+CFLAGS_LINUX_test_syslinux_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
+	-I$(SRC_DIR)/syslinux/libinstaller -I$(SRC_DIR)/ms-sys/inc \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_syslinux_linux := -lblkid
+EXTRA_SRC_LINUX_test_syslinux_linux := \
+	$(SYSLINUX_LINUX_SRC) $(LIBFAT_LIB) $(LIBINSTALLER_LIB) $(BLED_LIB) syslinux_linux_glue.c
+
 .PHONY: all linux windows run-linux run-wine clean
 
 all: linux windows
