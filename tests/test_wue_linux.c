@@ -337,9 +337,200 @@ TEST(stub_set_wintogo_index_returns_neg1)
 	CHECK(SetWinToGoIndex() == -1);
 }
 
-TEST(stub_apply_customization_returns_false)
+/* ================================================================
+ * Helper: create a temp directory, return path (must free)
+ * ================================================================ */
+static char* make_temp_dir(void)
 {
-	CHECK(ApplyWindowsCustomization('C', 0) == FALSE);
+	char *path = strdup("/tmp/rufus-wue-test-XXXXXX");
+	if (!path) return NULL;
+	if (!mkdtemp(path)) { free(path); return NULL; }
+	return path;
+}
+
+/* Helper: recursively mkdir (2 levels max) */
+static int mkdir_p(const char *path)
+{
+	char buf[512];
+	snprintf(buf, sizeof(buf), "%s", path);
+	for (char *p = buf + 1; *p; p++) {
+		if (*p == '/') {
+			*p = '\0';
+			mkdir(buf, 0755);
+			*p = '/';
+		}
+	}
+	return mkdir(buf, 0755);
+}
+
+/* Helper: check if file exists */
+static int file_exists(const char *path)
+{
+	struct stat st;
+	return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+/* Helper: cleanup a temp directory tree (2 levels) */
+static void rmdir_tree(const char *root)
+{
+	if (!root) return;
+	char cmd[1024];
+	snprintf(cmd, sizeof(cmd), "rm -rf %s", root);
+	system(cmd);
+}
+
+/* ================================================================
+ * Tests: ApplyWindowsCustomization
+ * ================================================================ */
+
+extern void wue_set_mount_path(const char *path);
+
+/* 1. NULL unattend_xml_path → returns FALSE */
+TEST(apply_customization_null_unattend_returns_false)
+{
+	unattend_xml_path = NULL;
+	BOOL r = ApplyWindowsCustomization(0, UNATTEND_NO_DATA_COLLECTION);
+	CHECK(r == FALSE);
+}
+
+/* 2. OOBE-only (no WINPE_SETUP_MASK): copies to sources/$OEM$/$$/Panther/unattend.xml */
+TEST(apply_customization_oobe_copies_to_oem_panther)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	/* Create a fake sources/ directory so mkdir_p only needs Panther */
+	char sources_dir[512];
+	snprintf(sources_dir, sizeof(sources_dir), "%s/sources", mount);
+	mkdir(sources_dir, 0755);
+
+	/* Create a fake unattend.xml */
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_NO_DATA_COLLECTION);
+	SKIP_IF(unattend_xml_path == NULL);
+
+	wue_set_mount_path(mount);
+	BOOL r = ApplyWindowsCustomization(0, UNATTEND_NO_DATA_COLLECTION);
+	CHECK(r == TRUE);
+
+	/* Verify the file was copied to the right place */
+	char expected[512];
+	snprintf(expected, sizeof(expected),
+	         "%s/sources/$OEM$/$$/Panther/unattend.xml", mount);
+	CHECK_MSG(file_exists(expected), "unattend.xml must be in sources/$OEM$/$$/Panther/");
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 3. WinToGo flag: copies to Windows/Panther/unattend.xml */
+TEST(apply_customization_wintogo_copies_to_windows_panther)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_NO_DATA_COLLECTION);
+	SKIP_IF(unattend_xml_path == NULL);
+
+	wue_set_mount_path(mount);
+	int flags = UNATTEND_NO_DATA_COLLECTION | UNATTEND_WINDOWS_TO_GO;
+	BOOL r = ApplyWindowsCustomization(0, flags);
+	CHECK(r == TRUE);
+
+	char expected[512];
+	snprintf(expected, sizeof(expected), "%s/Windows/Panther/unattend.xml", mount);
+	CHECK_MSG(file_exists(expected), "unattend.xml must be in Windows/Panther/");
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 4. Copied file content matches the source */
+TEST(apply_customization_content_matches)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	char sources_dir[512];
+	snprintf(sources_dir, sizeof(sources_dir), "%s/sources", mount);
+	mkdir(sources_dir, 0755);
+
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_NO_ONLINE_ACCOUNT);
+	SKIP_IF(unattend_xml_path == NULL);
+
+	char *orig = slurp(unattend_xml_path);
+	SKIP_IF(orig == NULL);
+
+	wue_set_mount_path(mount);
+	BOOL r = ApplyWindowsCustomization(0, UNATTEND_NO_ONLINE_ACCOUNT);
+	CHECK(r == TRUE);
+
+	char copied_path[512];
+	snprintf(copied_path, sizeof(copied_path),
+	         "%s/sources/$OEM$/$$/Panther/unattend.xml", mount);
+	char *copy = slurp(copied_path);
+	CHECK_MSG(copy != NULL, "copied file must be readable");
+	if (copy) {
+		CHECK_STR_EQ(orig, copy);
+		free(copy);
+	}
+
+	free(orig);
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 5. NULL mount path → returns FALSE */
+TEST(apply_customization_null_mount_returns_false)
+{
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_NO_DATA_COLLECTION);
+	SKIP_IF(unattend_xml_path == NULL);
+
+	wue_set_mount_path(NULL);
+	BOOL r = ApplyWindowsCustomization(0, UNATTEND_NO_DATA_COLLECTION);
+	CHECK(r == FALSE);
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+}
+
+/* 6. Multiple OOBE flags: file still copies correctly */
+TEST(apply_customization_multiple_flags)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	char sources_dir[512];
+	snprintf(sources_dir, sizeof(sources_dir), "%s/sources", mount);
+	mkdir(sources_dir, 0755);
+
+	int flags = UNATTEND_NO_DATA_COLLECTION | UNATTEND_NO_ONLINE_ACCOUNT
+	            | UNATTEND_DUPLICATE_LOCALE;
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, flags);
+	SKIP_IF(unattend_xml_path == NULL);
+
+	wue_set_mount_path(mount);
+	BOOL r = ApplyWindowsCustomization(0, flags);
+	CHECK(r == TRUE);
+
+	char expected[512];
+	snprintf(expected, sizeof(expected),
+	         "%s/sources/$OEM$/$$/Panther/unattend.xml", mount);
+	CHECK_MSG(file_exists(expected), "unattend.xml must exist for multi-flag case");
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
 }
 
 /* ================================================================
@@ -368,7 +559,14 @@ int main(void)
 	RUN(stub_setup_wintogo_returns_false);
 	RUN(stub_copy_sku_returns_false);
 	RUN(stub_set_wintogo_index_returns_neg1);
-	RUN(stub_apply_customization_returns_false);
+
+	printf("\n=== ApplyWindowsCustomization tests ===\n");
+	RUN(apply_customization_null_unattend_returns_false);
+	RUN(apply_customization_oobe_copies_to_oem_panther);
+	RUN(apply_customization_wintogo_copies_to_windows_panther);
+	RUN(apply_customization_content_matches);
+	RUN(apply_customization_null_mount_returns_false);
+	RUN(apply_customization_multiple_flags);
 
 	TEST_RESULTS();
 }

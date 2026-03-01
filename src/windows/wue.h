@@ -31,3 +31,6 @@ int SetWinToGoIndex(void);
 BOOL SetupWinPE(char drive_letter);
 BOOL SetupWinToGo(DWORD DriveIndex, const char* drive_name, BOOL use_esp);
 BOOL PopulateWindowsVersion(void);
+#ifdef __linux__
+void wue_set_mount_path(const char *path);
+#endif

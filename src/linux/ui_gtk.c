@@ -45,6 +45,7 @@
 #include "notify.h"
 #include "system_info.h"
 #include "darkmode.h"
+#include "wue.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -711,6 +712,54 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 		if (Notification(MB_OKCANCEL | MB_ICONWARNING, APPLICATION_NAME,
 		                 lmprintf(MSG_003, dev_name)) != IDOK)
 			return;
+	}
+
+	/* Windows User Experience dialog — show before formatting a Windows 10/11 image */
+	if (boot_type == BT_IMAGE && IS_WINDOWS_1X(img_report)) {
+		if (img_report.has_panther_unattend) {
+			uprintf("NOTICE: A '/sources/$OEM$/$$/Panther/unattend.xml' was detected on the ISO. "
+			        "The Windows User Experience dialog will not be displayed.");
+		} else {
+			StrArray options;
+			int arch = _log2(img_report.has_efi >> 1);
+			uint16_t map[16] = { 0 }, b = 1;
+			int username_index = -1;
+			StrArrayCreate(&options, 10);
+			if (IS_WINDOWS_11(img_report)) {
+				StrArrayAdd(&options, lmprintf(MSG_329), TRUE);
+				MAP_BIT(UNATTEND_SECUREBOOT_TPM_MINRAM);
+			}
+			if (img_report.win_version.build >= 22500) {
+				StrArrayAdd(&options, lmprintf(MSG_330), TRUE);
+				MAP_BIT(UNATTEND_NO_ONLINE_ACCOUNT);
+			}
+			StrArrayAdd(&options, lmprintf(MSG_333), TRUE);
+			username_index = _log2(b);
+			MAP_BIT(UNATTEND_SET_USER);
+			StrArrayAdd(&options, lmprintf(MSG_334), TRUE);
+			MAP_BIT(UNATTEND_DUPLICATE_LOCALE);
+			StrArrayAdd(&options, lmprintf(MSG_331), TRUE);
+			MAP_BIT(UNATTEND_NO_DATA_COLLECTION);
+			StrArrayAdd(&options, lmprintf(MSG_335), TRUE);
+			MAP_BIT(UNATTEND_DISABLE_BITLOCKER);
+
+			int i = CustomSelectionDialog(BS_AUTOCHECKBOX, lmprintf(MSG_327), lmprintf(MSG_328),
+			        options.String, options.Index, remap16(unattend_xml_mask, map, FALSE),
+			        username_index);
+			StrArrayDestroy(&options);
+			if (i < 0) {
+				/* User cancelled the WUE dialog — abort the format */
+				return;
+			}
+			i = remap16((uint16_t)i, map, TRUE);
+			free(unattend_xml_path);
+			unattend_xml_path = (i != 0) ? CreateUnattendXml(arch, i) : NULL;
+			/* Remember the user preferences for this session */
+			unattend_xml_mask &= ~((int)remap16(UNATTEND_FULL_MASK, map, TRUE));
+			unattend_xml_mask |= i;
+			WriteSetting32(SETTING_WUE_OPTIONS,
+			               (UNATTEND_DEFAULT_MASK << 16) | unattend_xml_mask);
+		}
 	}
 
 	if (format_thread == NULL) {
@@ -1659,6 +1708,16 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 			}
 		} else {
 			uprintf("localization: embedded.loc not found — UI strings will be untranslated");
+		}
+	}
+
+	/* Restore saved Windows User Experience options */
+	{
+		uint32_t wue_options = ReadSetting32(SETTING_WUE_OPTIONS);
+		if ((wue_options >> 16) != 0) {
+			uint32_t mask = wue_options >> 16;
+			unattend_xml_mask &= ~(int)mask;
+			unattend_xml_mask |= (int)(wue_options & mask);
 		}
 	}
 

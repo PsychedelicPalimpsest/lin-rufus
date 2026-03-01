@@ -15,6 +15,8 @@
 #include <string.h>
 #include <assert.h>
 #include <strings.h>  /* strcasecmp */
+#include <sys/stat.h>
+#include <errno.h>
 
 #include "rufus.h"
 #include "vhd.h"
@@ -371,8 +373,116 @@ int SetWinToGoIndex(void)
 	return -1;
 }
 
+/* Module-level mount path set by the caller before ApplyWindowsCustomization */
+static char *s_mount_path = NULL;
+
+void wue_set_mount_path(const char *path)
+{
+	free(s_mount_path);
+	s_mount_path = path ? strdup(path) : NULL;
+}
+
+/* Recursively create a directory hierarchy (up to 8 path components deep) */
+static BOOL mkdir_all(const char *path)
+{
+	char buf[MAX_PATH];
+	if (!path || strlen(path) >= sizeof(buf))
+		return FALSE;
+	strncpy(buf, path, sizeof(buf) - 1);
+	buf[sizeof(buf) - 1] = '\0';
+	for (char *p = buf + 1; *p; p++) {
+		if (*p == '/') {
+			*p = '\0';
+			if (mkdir(buf, 0755) != 0 && errno != EEXIST)
+				return FALSE;
+			*p = '/';
+		}
+	}
+	if (mkdir(buf, 0755) != 0 && errno != EEXIST)
+		return FALSE;
+	return TRUE;
+}
+
+/* Copy a file from src_path to dst_path */
+static BOOL copy_file(const char *src, const char *dst)
+{
+	FILE *in = fopen(src, "rb");
+	if (!in) return FALSE;
+	FILE *out = fopen(dst, "wb");
+	if (!out) { fclose(in); return FALSE; }
+	char buf[4096];
+	size_t n;
+	BOOL ok = TRUE;
+	while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
+		if (fwrite(buf, 1, n, out) != n) { ok = FALSE; break; }
+	}
+	fclose(in);
+	fclose(out);
+	return ok;
+}
+
 BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 {
-	(void)drive_letter; (void)flags;
-	return FALSE;
+	(void)drive_letter;
+	char dir_path[MAX_PATH], file_path[MAX_PATH];
+
+	if (unattend_xml_path == NULL) {
+		uprintf("ApplyWindowsCustomization: unattend_xml_path is NULL");
+		return FALSE;
+	}
+	if (s_mount_path == NULL) {
+		uprintf("ApplyWindowsCustomization: mount path not set");
+		return FALSE;
+	}
+
+	uprintf("Applying Windows customization:");
+
+	if (flags & UNATTEND_WINDOWS_TO_GO) {
+		/* Windows To Go: copy to <mount>/Windows/Panther/unattend.xml */
+		snprintf(dir_path, sizeof(dir_path), "%s/Windows/Panther", s_mount_path);
+		if (!mkdir_all(dir_path)) {
+			uprintf("Could not create '%s': %s", dir_path, strerror(errno));
+			return FALSE;
+		}
+		snprintf(file_path, sizeof(file_path), "%s/unattend.xml", dir_path);
+		if (!copy_file(unattend_xml_path, file_path)) {
+			uprintf("Could not copy unattend.xml to '%s'", file_path);
+			return FALSE;
+		}
+		uprintf("Created '%s'", file_path);
+	} else if (flags & UNATTEND_WINPE_SETUP_MASK) {
+		/* TPM/SB bypass requires boot.wim patching — not yet implemented on Linux */
+		uprintf("WARNING: Windows PE/setup customisation (TPM/SB bypass) requires "
+		        "boot.wim patching which is not yet implemented on Linux");
+		uprintf("The unattend.xml bypass will be skipped; other OOBE settings will apply");
+		/* Fall through to copy the OOBE parts via the OEM Panther path */
+		snprintf(dir_path, sizeof(dir_path),
+		         "%s/sources/$OEM$/$$/Panther", s_mount_path);
+		if (!mkdir_all(dir_path)) {
+			uprintf("Could not create '%s': %s", dir_path, strerror(errno));
+			return FALSE;
+		}
+		snprintf(file_path, sizeof(file_path), "%s/unattend.xml", dir_path);
+		if (!copy_file(unattend_xml_path, file_path)) {
+			uprintf("Could not copy unattend.xml to '%s'", file_path);
+			return FALSE;
+		}
+		uprintf("Created '%s'", file_path);
+	} else {
+		/* OOBE-only: copy to <mount>/sources/$OEM$/$$/Panther/unattend.xml */
+		snprintf(dir_path, sizeof(dir_path),
+		         "%s/sources/$OEM$/$$/Panther", s_mount_path);
+		if (!mkdir_all(dir_path)) {
+			uprintf("Could not create '%s': %s", dir_path, strerror(errno));
+			return FALSE;
+		}
+		snprintf(file_path, sizeof(file_path), "%s/unattend.xml", dir_path);
+		if (!copy_file(unattend_xml_path, file_path)) {
+			uprintf("Could not copy unattend.xml to '%s'", file_path);
+			return FALSE;
+		}
+		uprintf("Created '%s'", file_path);
+	}
+
+	return TRUE;
 }

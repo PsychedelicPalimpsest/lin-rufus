@@ -518,6 +518,7 @@ CFLAGS_LINUX_test_wue_linux := \
 LDFLAGS_LINUX_test_wue_linux := -lz -lpthread -lxml2 -lm -lcdio -liso9660 -ludf
 EXTRA_SRC_LINUX_test_wue_linux := \
 	$(SRC_DIR)/linux/wue.c \
+	$(SRC_DIR)/linux/timezone.c \
 	$(WIM_LIB) \
 	$(XML_SRC)
 

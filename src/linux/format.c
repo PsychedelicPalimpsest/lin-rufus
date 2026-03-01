@@ -22,6 +22,7 @@
 #include "format_linux.h"
 #include "badblocks.h"
 #include "settings.h"
+#include "wue.h"
 #include "ms-sys/inc/file.h"
 #include "ms-sys/inc/br.h"
 #include "ms-sys/inc/fat32.h"
@@ -753,6 +754,16 @@ DWORD WINAPI FormatThread(void* param)
 			if (!ExtractISO(image_path, mount_path, FALSE)) {
 				if (!IS_ERROR(ErrorStatus))
 					ErrorStatus = RUFUS_ERROR(APPERR(ERROR_ISO_EXTRACT));
+			}
+
+			/* Apply Windows User Experience customisation (unattend.xml) if set */
+			if (!IS_ERROR(ErrorStatus) && unattend_xml_path != NULL) {
+				wue_set_mount_path(mount_path);
+				if (!ApplyWindowsCustomization(0, unattend_xml_flags))
+					uprintf("WARNING: Windows customization could not be applied");
+				wue_set_mount_path(NULL);
+				free(unattend_xml_path);
+				unattend_xml_path = NULL;
 			}
 
 			/* Install GRUB2 core.img for BIOS-boot GRUB2 images */
