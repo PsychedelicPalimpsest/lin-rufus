@@ -39,6 +39,7 @@
 #include "combo_bridge.h"
 #include "settings.h"
 #include "version.h"
+#include "window_text_bridge.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -1502,6 +1503,13 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	hMainDialog = (HWND)rw.window;
 	hLabel      = (HWND)rw.label_entry;
 	hProgress   = (HWND)rw.progress_bar;
+
+	/* Register the label entry with the window-text bridge so that
+	 * FormatThread can read the label via GetWindowTextA(hLabel, ...).
+	 * The "changed" signal keeps the bridge cache in sync as the user types. */
+	window_text_register_gtk(hLabel, rw.label_entry);
+	g_signal_connect(rw.label_entry, "changed",
+	                 G_CALLBACK(window_text_on_entry_changed), (gpointer)hLabel);
 
 	/* Check for root privileges: Rufus requires them to write to block devices.
 	 * Warn the user — but still let the app run so they can browse options.

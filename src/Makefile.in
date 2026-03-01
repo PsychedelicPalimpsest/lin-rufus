@@ -116,6 +116,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-device_monitor.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-dos.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-dos_locale.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-freedos_data.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-drive.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-format.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-format_ext.$(OBJEXT) \
@@ -138,6 +139,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-syslinux.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	$(am__objects_2) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-vhd.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-window_text_bridge.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-wue.$(OBJEXT)
 @TARGET_WINDOWS_TRUE@am__objects_3 =  \
 @TARGET_WINDOWS_TRUE@	windows/rufus-badblocks.$(OBJEXT) \
@@ -408,11 +410,11 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 
 @TARGET_WINDOWS_FALSE@OS_SOURCES = linux/compat/msg_dispatch.c \
 @TARGET_WINDOWS_FALSE@	linux/badblocks.c linux/combo_bridge.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
-@TARGET_WINDOWS_FALSE@	linux/dos.c linux/dos_locale.c \
+@TARGET_WINDOWS_FALSE@	linux/dos.c linux/dos_locale.c linux/freedos_data.c \
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/wue.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/wue.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -505,6 +507,7 @@ linux/rufus-dev.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-device_monitor.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-dos.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-dos_locale.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-freedos_data.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-drive.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-format.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-format_ext.$(OBJEXT): linux/$(am__dirstamp)
@@ -528,6 +531,7 @@ linux/rufus-syslinux.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui_gtk.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-vhd.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-window_text_bridge.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-wue.$(OBJEXT): linux/$(am__dirstamp)
 windows/$(am__dirstamp):
 	@$(MKDIR_P) windows
@@ -662,6 +666,12 @@ linux/rufus-dos_locale.o: linux/dos_locale.c
 
 linux/rufus-dos_locale.obj: linux/dos_locale.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-dos_locale.obj `if test -f 'linux/dos_locale.c'; then $(CYGPATH_W) 'linux/dos_locale.c'; else $(CYGPATH_W) '$(srcdir)/linux/dos_locale.c'; fi`
+
+linux/rufus-freedos_data.o: linux/freedos_data.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-freedos_data.o `test -f 'linux/freedos_data.c' || echo '$(srcdir)/'`linux/freedos_data.c
+
+linux/rufus-freedos_data.obj: linux/freedos_data.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-freedos_data.obj `if test -f 'linux/freedos_data.c'; then $(CYGPATH_W) 'linux/freedos_data.c'; else $(CYGPATH_W) '$(srcdir)/linux/freedos_data.c'; fi`
 
 linux/rufus-drive.o: linux/drive.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-drive.o `test -f 'linux/drive.c' || echo '$(srcdir)/'`linux/drive.c
@@ -800,6 +810,12 @@ linux/rufus-vhd.o: linux/vhd.c
 
 linux/rufus-vhd.obj: linux/vhd.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-vhd.obj `if test -f 'linux/vhd.c'; then $(CYGPATH_W) 'linux/vhd.c'; else $(CYGPATH_W) '$(srcdir)/linux/vhd.c'; fi`
+
+linux/rufus-window_text_bridge.o: linux/window_text_bridge.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-window_text_bridge.o `test -f 'linux/window_text_bridge.c' || echo '$(srcdir)/'`linux/window_text_bridge.c
+
+linux/rufus-window_text_bridge.obj: linux/window_text_bridge.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-window_text_bridge.obj `if test -f 'linux/window_text_bridge.c'; then $(CYGPATH_W) 'linux/window_text_bridge.c'; else $(CYGPATH_W) '$(srcdir)/linux/window_text_bridge.c'; fi`
 
 linux/rufus-wue.o: linux/wue.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-wue.o `test -f 'linux/wue.c' || echo '$(srcdir)/'`linux/wue.c

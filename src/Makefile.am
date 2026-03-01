@@ -49,7 +49,7 @@ OS_SOURCES = linux/compat/msg_dispatch.c \
 	linux/drive.c linux/format.c linux/format_ext.c linux/format_fat32.c linux/globals.c \
 	linux/hash.c linux/icon.c linux/image_scan.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/wue.c
+	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/wue.c
 endif
 
 rufus_SOURCES = $(COMMON_SOURCES) $(OS_SOURCES)

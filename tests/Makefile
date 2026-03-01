@@ -437,6 +437,15 @@ CFLAGS_LINUX_test_combo_linux := \
 LDFLAGS_LINUX_test_combo_linux := -lpthread
 EXTRA_SRC_LINUX_test_combo_linux := $(COMBO_LINUX_SRC)
 
+# window_text_linux tests: GetWindowTextA / SetWindowTextA bridge (no GTK required)
+WINDOW_TEXT_SRC := $(SRC_DIR)/linux/window_text_bridge.c
+CFLAGS_LINUX_test_window_text_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_window_text_linux := -lpthread
+EXTRA_SRC_LINUX_test_window_text_linux := $(WINDOW_TEXT_SRC)
+
 # wue_linux tests: CreateUnattendXml, PopulateWindowsVersion
 # Links against wue.c (Linux impl), libwim.a (WIM), xml.c (ezxml)
 CFLAGS_LINUX_test_wue_linux := \

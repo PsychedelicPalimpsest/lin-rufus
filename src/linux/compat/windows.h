@@ -1588,9 +1588,9 @@ extern LRESULT SendMessageA(HWND h, UINT m, WPARAM w, LPARAM l);
 #define SendMessage  SendMessageA
 /* Wide-char variant — forward to the ANSI version (Rufus uses UTF-8 on Linux) */
 static inline LRESULT SendMessageW(HWND h, UINT m, WPARAM w, LPARAM l) { return SendMessageA(h, m, w, l); }
-static inline int GetWindowTextA(HWND h, LPSTR s, int max) { (void)h;(void)s;(void)max; return 0; }
+extern int  GetWindowTextA(HWND h, LPSTR s, int max);
 #define GetWindowText GetWindowTextA
-static inline BOOL SetWindowTextA(HWND h, LPCSTR s) { (void)h;(void)s; return FALSE; }
+extern BOOL SetWindowTextA(HWND h, LPCSTR s);
 #define SetWindowText SetWindowTextA
 static inline BOOL IsWindowEnabled(HWND h) { (void)h; return FALSE; }
 static inline BOOL IsWindowVisible(HWND h) { (void)h; return FALSE; }

@@ -88,6 +88,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Header | Status | Notes |
 |--------|--------|-------|
 | `windows.h` | 🔧 | ~1 200 lines; types, macros, most stubs present. `SendMessage`/`PostMessage` are no-ops — needs GTK dispatch integration |
+| `GetWindowTextA` / `SetWindowTextA` | ✅ | Real implementation via `window_text_bridge` — thread-safe HWND→text registry; GTK main thread keeps cache in sync via "changed" signal; worker threads (FormatThread) read cache safely; `window_text_register_gtk()` wired in `ui_gtk.c` for volume-label entry; 20 tests, 30 assertions pass |
 | `commctrl.h` | 🔧 | ComboBox/ListBox macros present, most map to GTK stubs |
 | `setupapi.h` | 🟡 | Empty stub; needed by `dev.c` device enumeration |
 | `wincrypt.h` / `wintrust.h` | 🟡 | Needed by `pki.c` — use OpenSSL as replacement |
@@ -546,7 +547,7 @@ This is the most structurally significant porting gap.
 ### Filesystem & Format Enhancements
 
 73. **UDF formatter** — add `FS_UDF` path to `FormatPartition()` using `mkudffs` via `RunCommandWithProgress()`; detect `mkudffs` at configure time in `configure.ac`; add UDF to `populate_fs_combo()` when target is DVD/optical
-74. **Volume-label enforcement per filesystem** — `FormatLargeFAT32()` already sets the label; implement label setting for ext2/3/4 (`e2label`), exFAT (`exfatlabel`), NTFS (`ntfslabel`), and UDF (`udflabel`) after format so the label entered in the GTK UI is always applied
+74. 🔧 **Volume-label enforcement per filesystem** — `GetWindowTextA(hLabel,...)` now works via `window_text_bridge` so the user-typed label flows from GTK to FormatThread. Still needed: call `e2label`/`exfatlabel`/`ntfslabel`/`udflabel` post-format for ext2/3/4, exFAT, NTFS, UDF filesystems
 75. ~~**Cluster-size passthrough**~~ ✅ **DONE** — `format_ntfs_build_cmd()` accepts `cluster_size` and passes `-c <bytes>` to `mkntfs`; `format_exfat_build_cmd()` passes `-c <bytes>` to `mkfs.exfat`; `FormatNTFS()`/`FormatExFAT()` receive `UnitAllocationSize` from `FormatPartition()`; `populate_cluster_combo()` in `ui_gtk.c` offers standard cluster sizes for NTFS and exFAT; `on_fs_changed()` callback updates cluster combo when FS changes
 76. **Write-and-verify pass** — after writing an image or formatting, re-read every written sector and compare SHA-256 against the in-memory digest; report mismatches with sector offset; add a "Verify after write" checkbox to the Advanced format options expander
 77. ~~**Bad-blocks pre-scan integration**~~ ✅ **DONE** — `enable_bad_blocks` + `nb_passes_sel` globals added to `globals.c`; `FormatThread` runs `BadBlocks()` before partitioning when enabled, with retry/abort/ignore dialog loop and destructive-pass re-init; `ui_gtk.c` reads `bad_blocks_check` checkbox + `nb_passes_combo` into globals on start; `MB_ABORTRETRYIGNORE` added to compat layer; 15 integration tests pass (34 checks) in `test_badblocks_integration_linux`
