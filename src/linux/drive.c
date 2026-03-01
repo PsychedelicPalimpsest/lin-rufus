@@ -43,3 +43,4 @@ uint64_t GetEspOffset(DWORD di)                       { (void)di; return 0; }
 BOOL ToggleEsp(DWORD di, uint64_t off)                { (void)di;(void)off; return FALSE; }
 BOOL IsMsDevDrive(DWORD di)                           { (void)di; return FALSE; }
 BOOL IsFilteredDrive(DWORD di)                        { (void)di; return FALSE; }
+int  IsHDD(DWORD di, uint16_t vid, uint16_t pid, const char* strid) { (void)di;(void)vid;(void)pid;(void)strid; return 0; }

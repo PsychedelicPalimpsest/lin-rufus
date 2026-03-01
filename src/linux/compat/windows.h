@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
 
 /* ---- Calling conventions (no-ops on Linux/GCC) ---- */
 /* NOTE: WINAPI/CALLBACK etc. will be re-defined later with correct values */
@@ -186,6 +187,12 @@ typedef void* LPVOID;
 #define MAXWORD          0xFFFF
 #define INFINITE         0xFFFFFFFF
 
+/* ---- WaitForSingleObject / WaitForMultipleObjects return codes ---- */
+#define WAIT_OBJECT_0    ((DWORD)0x00000000)
+#define WAIT_ABANDONED   ((DWORD)0x00000080)
+#define WAIT_TIMEOUT     ((DWORD)0x00000102)
+#define WAIT_FAILED      ((DWORD)0xFFFFFFFF)
+
 /* ---- File access ---- */
 #define GENERIC_READ          0x80000000
 #define GENERIC_WRITE         0x40000000
@@ -316,6 +323,7 @@ typedef void* LPVOID;
 #define WM_CLOSE         0x0010
 #define WM_TIMER         0x0113
 #define WM_COMMAND       0x0111
+#define WM_NEXTDLGCTL    0x0028
 #define WM_NOTIFY        0x004E
 #define WM_INITDIALOG    0x0110
 #define WM_USER          0x0400
@@ -845,8 +853,162 @@ static inline HANDLE CreateFileA(LPCSTR path, DWORD access, DWORD share,
     return (fd >= 0) ? (HANDLE)(intptr_t)fd : INVALID_HANDLE_VALUE;
 }
 #define CreateFile CreateFileA
-static inline BOOL CloseHandle(HANDLE h) {
+/* ===========================================================================
+ * Threading / synchronisation bridge (pthread → Win32 API)
+ *
+ * HANDLE values are one of:
+ *   • A raw file descriptor cast:   (HANDLE)(intptr_t)fd   — small integer
+ *   • A win_handle_t* (heap):       thread / event / mutex  — large pointer
+ *
+ * We distinguish them by: if (uintptr_t)h < WIN_HANDLE_ADDR_THRESHOLD, treat
+ * as fd; otherwise check the win_handle_t magic word.  On any modern 64-bit
+ * Linux, malloc() never returns a pointer below 64 KB, while fds are always
+ * small (< ~1 M in practice, well below the 1 MB threshold).
+ * =========================================================================*/
+
+#define WIN_HANDLE_MAGIC          0x57494E48u   /* "WINH" */
+#define WIN_HANDLE_ADDR_THRESHOLD ((uintptr_t)(1u << 20)) /* 1 MB */
+
+typedef enum {
+    WH_THREAD = 1,
+    WH_EVENT  = 2,
+    WH_MUTEX  = 3
+} _wh_type_t;
+
+typedef struct _win_handle_s {
+    uint32_t    magic;   /* WIN_HANDLE_MAGIC — must be first field */
+    _wh_type_t  type;
+    union {
+        /* --- Thread --- */
+        struct {
+            pthread_t tid;
+            DWORD     exit_code;
+            int       joined;   /* 1 after pthread_join completes */
+        } thread;
+        /* --- Event (auto-reset or manual-reset) --- */
+        struct {
+            pthread_mutex_t mx;
+            pthread_cond_t  cond;
+            int             signaled;
+            int             manual_reset;
+        } event;
+        /* --- Mutex --- */
+        struct {
+            pthread_mutex_t mx;
+        } mutex;
+    } u;
+} _win_handle_t;
+
+/* Returns 1 if h points to a valid win_handle_t (thread/event/mutex).
+ * Returns 0 if h is NULL, INVALID_HANDLE_VALUE, or a raw fd cast.       */
+static inline int _wh_is_sync(HANDLE h)
+{
+    uintptr_t v = (uintptr_t)h;
+    if (v < WIN_HANDLE_ADDR_THRESHOLD) return 0;
+    if (h == INVALID_HANDLE_VALUE)     return 0;
+    return ((_win_handle_t *)h)->magic == WIN_HANDLE_MAGIC;
+}
+
+/* Internal helper: compute an absolute timespec deadline for timeouts.   */
+static inline struct timespec _wh_deadline(DWORD ms)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_sec  += (time_t)(ms / 1000);
+    ts.tv_nsec += (long)(ms % 1000) * 1000000L;
+    if (ts.tv_nsec >= 1000000000L) {
+        ts.tv_sec++;
+        ts.tv_nsec -= 1000000000L;
+    }
+    return ts;
+}
+
+/* ---------------------------------------------------------------------------
+ * Thread wrapper: adapts pthreads void* return to Windows DWORD exit code.
+ * -------------------------------------------------------------------------*/
+typedef struct {
+    DWORD (WINAPI *fn)(LPVOID);
+    LPVOID         param;
+    _win_handle_t *handle;
+} _wh_thread_args_t;
+
+static void * __attribute__((unused))
+_wh_thread_wrapper(void *raw)
+{
+    _wh_thread_args_t *a = (_wh_thread_args_t *)raw;
+    _win_handle_t     *h = a->handle;
+    DWORD (WINAPI *fn)(LPVOID) = a->fn;
+    LPVOID param = a->param;
+    free(a);
+    h->u.thread.exit_code = fn(param);
+    return NULL;
+}
+
+/* ---------------------------------------------------------------------------
+ * CRITICAL_SECTION  (recursive mutex)
+ * -------------------------------------------------------------------------*/
+typedef struct {
+    pthread_mutex_t _mx;
+} CRITICAL_SECTION, *LPCRITICAL_SECTION, *PCRITICAL_SECTION;
+
+static inline void InitializeCriticalSection(LPCRITICAL_SECTION cs)
+{
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&cs->_mx, &attr);
+    pthread_mutexattr_destroy(&attr);
+}
+static inline void InitializeCriticalSectionEx(LPCRITICAL_SECTION cs,
+                                               DWORD spin, DWORD flags)
+{
+    (void)spin; (void)flags;
+    InitializeCriticalSection(cs);
+}
+static inline void EnterCriticalSection(LPCRITICAL_SECTION cs)
+{
+    pthread_mutex_lock(&cs->_mx);
+}
+static inline void LeaveCriticalSection(LPCRITICAL_SECTION cs)
+{
+    pthread_mutex_unlock(&cs->_mx);
+}
+static inline BOOL TryEnterCriticalSection(LPCRITICAL_SECTION cs)
+{
+    return pthread_mutex_trylock(&cs->_mx) == 0;
+}
+static inline void DeleteCriticalSection(LPCRITICAL_SECTION cs)
+{
+    pthread_mutex_destroy(&cs->_mx);
+}
+
+/* ---------------------------------------------------------------------------
+ * CloseHandle: close fd *or* free a win_handle_t sync object.
+ * -------------------------------------------------------------------------*/
+static inline BOOL CloseHandle(HANDLE h)
+{
     if (!h || h == INVALID_HANDLE_VALUE) return FALSE;
+
+    if (_wh_is_sync(h)) {
+        _win_handle_t *wh = (_win_handle_t *)h;
+        switch (wh->type) {
+        case WH_THREAD:
+            if (!wh->u.thread.joined)
+                pthread_join(wh->u.thread.tid, NULL);
+            break;
+        case WH_EVENT:
+            pthread_cond_destroy(&wh->u.event.cond);
+            pthread_mutex_destroy(&wh->u.event.mx);
+            break;
+        case WH_MUTEX:
+            pthread_mutex_destroy(&wh->u.mutex.mx);
+            break;
+        }
+        wh->magic = 0;   /* invalidate */
+        free(wh);
+        return TRUE;
+    }
+
     return close((int)(intptr_t)h) == 0;
 }
 static inline BOOL GetFileSizeEx(HANDLE h, PLARGE_INTEGER size) {
@@ -875,33 +1037,240 @@ static inline BOOL DeviceIoControl(HANDLE h, DWORD ctl, LPVOID in, DWORD insz,
 static inline BOOL GetOverlappedResult(HANDLE h, LPOVERLAPPED ov, LPDWORD tr, BOOL w) {
     (void)h;(void)ov;(void)tr;(void)w; return FALSE;
 }
-static inline HANDLE CreateEventA(LPSECURITY_ATTRIBUTES sa, BOOL manual, BOOL init, LPCSTR name) {
-    (void)sa;(void)manual;(void)init;(void)name; return (HANDLE)1;
+static inline HANDLE CreateEventA(LPSECURITY_ATTRIBUTES sa, BOOL manual,
+                                  BOOL init, LPCSTR name)
+{
+    (void)sa; (void)name;
+    _win_handle_t *wh = (_win_handle_t *)malloc(sizeof(_win_handle_t));
+    if (!wh) return NULL;
+    wh->magic             = WIN_HANDLE_MAGIC;
+    wh->type              = WH_EVENT;
+    pthread_mutex_init(&wh->u.event.mx, NULL);
+    pthread_cond_init(&wh->u.event.cond, NULL);
+    wh->u.event.signaled     = init     ? 1 : 0;
+    wh->u.event.manual_reset = manual   ? 1 : 0;
+    return (HANDLE)wh;
 }
 #define CreateEvent CreateEventA
-static inline BOOL SetEvent(HANDLE h) { (void)h; return TRUE; }
-static inline BOOL ResetEvent(HANDLE h) { (void)h; return TRUE; }
-static inline DWORD WaitForSingleObject(HANDLE h, DWORD ms) { (void)h;(void)ms; return 0; }
-static inline DWORD WaitForMultipleObjects(DWORD n, const HANDLE* h, BOOL all, DWORD ms) { (void)n;(void)h;(void)all;(void)ms; return 0; }
 
-/* ---- Semaphore ---- */
-static inline HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES sa, BOOL own, LPCSTR name) { (void)sa;(void)own;(void)name; return (HANDLE)1; }
-#define CreateMutex CreateMutexA
-static inline BOOL ReleaseMutex(HANDLE h) { (void)h; return TRUE; }
-
-/* ---- Thread stubs ---- */
-typedef DWORD (WINAPI *LPTHREAD_START_ROUTINE)(LPVOID);
-static inline HANDLE CreateThread(LPSECURITY_ATTRIBUTES sa, SIZE_T stack, LPTHREAD_START_ROUTINE fn, LPVOID param, DWORD flags, LPDWORD tid) {
-    (void)sa;(void)stack;(void)fn;(void)param;(void)flags;(void)tid; return NULL;
+static inline BOOL SetEvent(HANDLE h)
+{
+    if (!_wh_is_sync(h)) return FALSE;
+    _win_handle_t *wh = (_win_handle_t *)h;
+    if (wh->type != WH_EVENT) return FALSE;
+    pthread_mutex_lock(&wh->u.event.mx);
+    wh->u.event.signaled = 1;
+    /* Manual-reset: wake all waiters; auto-reset: wake one */
+    if (wh->u.event.manual_reset)
+        pthread_cond_broadcast(&wh->u.event.cond);
+    else
+        pthread_cond_signal(&wh->u.event.cond);
+    pthread_mutex_unlock(&wh->u.event.mx);
+    return TRUE;
 }
-static inline BOOL TerminateThread(HANDLE h, DWORD code) { (void)h;(void)code; return FALSE; }
-static inline BOOL SetThreadPriority(HANDLE h, int prio) { (void)h;(void)prio; return TRUE; }
+
+static inline BOOL ResetEvent(HANDLE h)
+{
+    if (!_wh_is_sync(h)) return FALSE;
+    _win_handle_t *wh = (_win_handle_t *)h;
+    if (wh->type != WH_EVENT) return FALSE;
+    pthread_mutex_lock(&wh->u.event.mx);
+    wh->u.event.signaled = 0;
+    pthread_mutex_unlock(&wh->u.event.mx);
+    return TRUE;
+}
+
+static inline DWORD WaitForSingleObject(HANDLE h, DWORD ms)
+{
+    if (!h || h == INVALID_HANDLE_VALUE) return WAIT_FAILED;
+
+    if (!_wh_is_sync(h))
+        /* Raw fd handle — not a waitable object in the sync sense */
+        return WAIT_OBJECT_0;
+
+    _win_handle_t *wh = (_win_handle_t *)h;
+
+    switch (wh->type) {
+
+    case WH_THREAD: {
+        if (wh->u.thread.joined) return WAIT_OBJECT_0;
+        if (ms == INFINITE) {
+            pthread_join(wh->u.thread.tid, NULL);
+            wh->u.thread.joined = 1;
+            return WAIT_OBJECT_0;
+        }
+        struct timespec ts = _wh_deadline(ms);
+        int r = pthread_timedjoin_np(wh->u.thread.tid, NULL, &ts);
+        if (r == 0) { wh->u.thread.joined = 1; return WAIT_OBJECT_0; }
+        if (r == ETIMEDOUT) return WAIT_TIMEOUT;
+        return WAIT_FAILED;
+    }
+
+    case WH_EVENT: {
+        pthread_mutex_lock(&wh->u.event.mx);
+        DWORD result;
+        if (ms == INFINITE) {
+            while (!wh->u.event.signaled)
+                pthread_cond_wait(&wh->u.event.cond, &wh->u.event.mx);
+            result = WAIT_OBJECT_0;
+        } else {
+            struct timespec ts = _wh_deadline(ms);
+            int r = 0;
+            while (!wh->u.event.signaled && r != ETIMEDOUT)
+                r = pthread_cond_timedwait(&wh->u.event.cond,
+                                           &wh->u.event.mx, &ts);
+            result = wh->u.event.signaled ? WAIT_OBJECT_0 : WAIT_TIMEOUT;
+        }
+        /* Auto-reset: clear signal after waking one waiter */
+        if (result == WAIT_OBJECT_0 && !wh->u.event.manual_reset)
+            wh->u.event.signaled = 0;
+        pthread_mutex_unlock(&wh->u.event.mx);
+        return result;
+    }
+
+    case WH_MUTEX: {
+        if (ms == INFINITE) {
+            pthread_mutex_lock(&wh->u.mutex.mx);
+            return WAIT_OBJECT_0;
+        }
+        struct timespec ts = _wh_deadline(ms);
+        int r = pthread_mutex_timedlock(&wh->u.mutex.mx, &ts);
+        if (r == 0)         return WAIT_OBJECT_0;
+        if (r == ETIMEDOUT) return WAIT_TIMEOUT;
+        return WAIT_FAILED;
+    }
+
+    default:
+        return WAIT_FAILED;
+    }
+}
+
+static inline DWORD WaitForMultipleObjects(DWORD n, const HANDLE *handles,
+                                           BOOL all, DWORD ms)
+{
+    if (all) {
+        for (DWORD i = 0; i < n; i++) {
+            DWORD r = WaitForSingleObject(handles[i], ms);
+            if (r != WAIT_OBJECT_0)
+                return r;  /* propagate TIMEOUT / FAILED */
+        }
+        return WAIT_OBJECT_0;
+    } else {
+        /* Wait-for-any: poll in a loop with a short sleep between rounds */
+        struct timespec deadline = {0,0};
+        int has_deadline = 0;
+        if (ms != INFINITE) {
+            deadline    = _wh_deadline(ms);
+            has_deadline = 1;
+        }
+        for (;;) {
+            for (DWORD i = 0; i < n; i++) {
+                DWORD r = WaitForSingleObject(handles[i], 0);
+                if (r == WAIT_OBJECT_0)
+                    return WAIT_OBJECT_0 + i;
+            }
+            if (has_deadline) {
+                struct timespec now;
+                clock_gettime(CLOCK_REALTIME, &now);
+                if (now.tv_sec > deadline.tv_sec ||
+                    (now.tv_sec == deadline.tv_sec &&
+                     now.tv_nsec >= deadline.tv_nsec))
+                    return WAIT_TIMEOUT;
+            }
+            struct timespec sl = {0, 1000000}; /* 1 ms */
+            nanosleep(&sl, NULL);
+        }
+    }
+}
+
+/* ---- Mutex ---- */
+static inline HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES sa, BOOL own,
+                                   LPCSTR name)
+{
+    (void)sa; (void)name;
+    _win_handle_t *wh = (_win_handle_t *)malloc(sizeof(_win_handle_t));
+    if (!wh) return NULL;
+    wh->magic = WIN_HANDLE_MAGIC;
+    wh->type  = WH_MUTEX;
+    pthread_mutex_init(&wh->u.mutex.mx, NULL);
+    if (own) pthread_mutex_lock(&wh->u.mutex.mx);
+    return (HANDLE)wh;
+}
+#define CreateMutex CreateMutexA
+
+static inline BOOL ReleaseMutex(HANDLE h)
+{
+    if (!_wh_is_sync(h)) return FALSE;
+    _win_handle_t *wh = (_win_handle_t *)h;
+    if (wh->type != WH_MUTEX) return FALSE;
+    return pthread_mutex_unlock(&wh->u.mutex.mx) == 0;
+}
+
+/* ---- Thread ---- */
+typedef DWORD (WINAPI *LPTHREAD_START_ROUTINE)(LPVOID);
+
+static inline HANDLE CreateThread(LPSECURITY_ATTRIBUTES sa, SIZE_T stack,
+                                   LPTHREAD_START_ROUTINE fn, LPVOID param,
+                                   DWORD flags, LPDWORD out_tid)
+{
+    (void)sa; (void)stack; (void)flags;
+
+    _win_handle_t *wh = (_win_handle_t *)malloc(sizeof(_win_handle_t));
+    if (!wh) return NULL;
+    wh->magic              = WIN_HANDLE_MAGIC;
+    wh->type               = WH_THREAD;
+    wh->u.thread.exit_code = 0;
+    wh->u.thread.joined    = 0;
+
+    _wh_thread_args_t *a = (_wh_thread_args_t *)malloc(sizeof(_wh_thread_args_t));
+    if (!a) { free(wh); return NULL; }
+    a->fn     = fn;
+    a->param  = param;
+    a->handle = wh;
+
+    if (pthread_create(&wh->u.thread.tid, NULL, _wh_thread_wrapper, a) != 0) {
+        free(a);
+        free(wh);
+        return NULL;
+    }
+
+    if (out_tid) *out_tid = (DWORD)wh->u.thread.tid;
+    return (HANDLE)wh;
+}
+
+static inline BOOL TerminateThread(HANDLE h, DWORD code)
+{
+    (void)code;
+    if (!_wh_is_sync(h)) return FALSE;
+    _win_handle_t *wh = (_win_handle_t *)h;
+    if (wh->type != WH_THREAD) return FALSE;
+    return pthread_cancel(wh->u.thread.tid) == 0;
+}
+
+static inline BOOL SetThreadPriority(HANDLE h, int prio)
+{
+    (void)h; (void)prio;
+    return TRUE;   /* scheduler priority — ignored on Linux */
+}
+
+static inline BOOL GetExitCodeThread(HANDLE h, LPDWORD code)
+{
+    if (!_wh_is_sync(h)) return FALSE;
+    _win_handle_t *wh = (_win_handle_t *)h;
+    if (wh->type != WH_THREAD) return FALSE;
+    if (!wh->u.thread.joined) {
+        /* Thread still running — return STILL_ACTIVE */
+        if (code) *code = 259; /* STILL_ACTIVE */
+        return TRUE;
+    }
+    if (code) *code = wh->u.thread.exit_code;
+    return TRUE;
+}
 
 /* ---- Process stubs ---- */
 static inline HANDLE OpenProcess(DWORD access, BOOL inh, DWORD pid) { (void)access;(void)inh;(void)pid; return NULL; }
 static inline BOOL TerminateProcess(HANDLE h, UINT code) { (void)h;(void)code; return FALSE; }
 static inline BOOL GetExitCodeProcess(HANDLE h, LPDWORD code) { (void)h;(void)code; return FALSE; }
-static inline BOOL GetExitCodeThread(HANDLE h, LPDWORD code) { (void)h;(void)code; return FALSE; }
 
 /* ---- Token/privilege stubs ---- */
 #define TOKEN_QUERY         0x0008
@@ -1048,10 +1417,15 @@ static inline HWND GetDlgCtrlID(HWND h) { (void)h; return NULL; }
 static inline BOOL GetWindowRect(HWND h, LPRECT r) { (void)h;(void)r; return FALSE; }
 static inline BOOL GetClientRect(HWND h, LPRECT r) { (void)h;(void)r; return FALSE; }
 static inline BOOL InvalidateRect(HWND h, const RECT* r, BOOL e) { (void)h;(void)r;(void)e; return FALSE; }
-static inline BOOL PostMessageA(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return FALSE; }
-static inline LRESULT SendMessageA(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return 0; }
-#define PostMessage PostMessageA
-#define SendMessage SendMessageA
+/* PostMessage / SendMessage — real implementations in msg_dispatch.c.
+ * Declared extern so any TU that calls them will link against the dispatch
+ * module; TUs that never call them (e.g. test_threading) incur no penalty. */
+extern BOOL    PostMessageA(HWND h, UINT m, WPARAM w, LPARAM l);
+extern LRESULT SendMessageA(HWND h, UINT m, WPARAM w, LPARAM l);
+#define PostMessage  PostMessageA
+#define SendMessage  SendMessageA
+/* Wide-char variant — forward to the ANSI version (Rufus uses UTF-8 on Linux) */
+static inline LRESULT SendMessageW(HWND h, UINT m, WPARAM w, LPARAM l) { return SendMessageA(h, m, w, l); }
 static inline int GetWindowTextA(HWND h, LPSTR s, int max) { (void)h;(void)s;(void)max; return 0; }
 #define GetWindowText GetWindowTextA
 static inline BOOL SetWindowTextA(HWND h, LPCSTR s) { (void)h;(void)s; return FALSE; }
@@ -1095,6 +1469,9 @@ static inline BOOL EndPaint(HWND h, const PAINTSTRUCT* ps) { (void)h;(void)ps; r
 #define CB_GETITEMDATA   0x0150
 #define CB_FINDSTRINGEXACT 0x0158
 #define CB_SETMINVISIBLE 0x1701
+#define CB_GETCOUNT      0x0146
+#define CB_SETDROPPEDWIDTH 0x0160
+#define CBN_SELCHANGE    1
 #define LB_ADDSTRING     0x0180
 #define LB_RESETCONTENT  0x0184
 #define LB_SETCURSEL     0x0186
@@ -1112,6 +1489,11 @@ static inline BOOL EndPaint(HWND h, const PAINTSTRUCT* ps) { (void)h;(void)ps; r
 #define EM_SETLIMITTEXT  0x00C5
 static inline LRESULT ComboBox_AddString(HWND h, LPCSTR s) { return SendMessageA(h, CB_ADDSTRING, 0, (LPARAM)s); }
 static inline LRESULT ComboBox_ResetContent(HWND h) { return SendMessageA(h, CB_RESETCONTENT, 0, 0); }
+static inline LRESULT ComboBox_AddStringU(HWND h, LPCSTR s) { return SendMessageA(h, CB_ADDSTRING, 0, (LPARAM)s); }
+static inline LRESULT ComboBox_SetItemData(HWND h, int i, DWORD_PTR d) { return SendMessageA(h, CB_SETITEMDATA, (WPARAM)i, (LPARAM)d); }
+static inline LRESULT ComboBox_GetItemData(HWND h, int i) { return SendMessageA(h, CB_GETITEMDATA, (WPARAM)i, 0); }
+static inline int     ComboBox_GetCount(HWND h) { return (int)SendMessageA(h, CB_GETCOUNT, 0, 0); }
+static inline int     ComboBox_SetCurSel(HWND h, int i) { return (int)SendMessageA(h, CB_SETCURSEL, (WPARAM)i, 0); }
 
 /* ---- Misc missing items ---- */
 #define APIPRIVATE WINAPI

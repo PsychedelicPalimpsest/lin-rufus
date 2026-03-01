@@ -47,3 +47,4 @@ void FlashTaskbar(HANDLE handle)                           { (void)handle; }
 HICON CreateMirroredIcon(HICON hIcon)                      { return hIcon; }
 INT_PTR CALLBACK SelectionDynCallback(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return 0; }
 int SelectionDyn(char* title, char* msg, char** choices, int n) { (void)title;(void)msg;(void)choices;(void)n; return 0; }
+LONG GetEntryWidth(HWND hDropDown, const char* entry) { (void)hDropDown;(void)entry; return 0; }

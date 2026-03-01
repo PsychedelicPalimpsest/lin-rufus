@@ -98,8 +98,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `gpedit.h` | 🚫 | Group Policy — N/A on Linux |
 | `delayimp.h` | 🚫 | Delay-load DLL mechanism — N/A on Linux |
 | All others | 🔧 | Typedefs / empty stubs compile; runtime behaviour untested |
-| `SendMessage` / `PostMessage` | 🟡 | Currently no-ops; business logic uses them to trigger UI updates — needs a real async dispatch to GTK main loop |
-| `CreateThread` / `WaitForSingleObject` | 🟡 | Mapped to no-ops; needs `pthread` wrappers to actually run worker threads |
+| `SendMessage` / `PostMessage` | ✅ | Full `msg_dispatch` bridge: thread-safe handler registry, async `PostMessage` via pluggable `MsgPostScheduler` (GTK: `g_idle_add`), synchronous `SendMessage` with pthread condvar blocking for cross-thread calls; 61 tests pass; GTK scheduler and main dialog handler registered in `ui_gtk.c` |
+| `CreateThread` / `WaitForSingleObject` | ✅ | Full pthread bridge: threads, events (auto/manual-reset), mutexes, `CRITICAL_SECTION`, `WaitForMultipleObjects`, `GetExitCodeThread`, `TerminateThread` — 51 tests pass |
 | Windows Registry (`RegOpenKey` etc.) | 🟡 | All no-ops; settings storage needs a Linux equivalent (e.g., `GKeyFile` / INI file) |
 
 ---
@@ -110,8 +110,9 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `GetDevices()` | 🟡 | Stub; needs `libudev` or `/sys/block` scan to find removable block devices |
+| `GetDevices()` | ✅ | sysfs scan: removable flag, size, vendor/model; sorted by size; 79 tests pass |
 | `CycleDevice()` / `CyclePort()` | 🟡 | Stub; needed to refresh the device dropdown |
+| `ClearDrives()` | ✅ | Frees rufus_drive[] strings and zeros the array |
 | `GetPhysicalName()` | 🟡 | Should return `/dev/sdX` path |
 | `GetPhysicalHandle()` | 🟡 | Should open `/dev/sdX` with `O_RDWR` |
 | `GetLogicalName()` / `GetLogicalHandle()` | 🟡 | Should return/open `/dev/sdXN` |
@@ -132,7 +133,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `DeletePartition()` | 🟡 | `ioctl(BLKPG_DEL_PARTITION)` |
 | `SetAutoMount()` / `GetAutoMount()` | 🚫 | Windows auto-mount concept; Linux equivalent is `udisks2` policy |
 | `GetOpticalMedia()` | 🟡 | Scan `/dev/sr*` |
-| `ClearDrives()` | 🟡 | Free drive list |
+| `ClearDrives()` | ✅ | Done (part of GetDevices implementation) |
 | `IsMsDevDrive()` | 🚫 | Windows Dev Drive feature; always return FALSE |
 | `IsFilteredDrive()` | 🟡 | May need per-device filtering for safety |
 | `IsVdsAvailable()` / `ListVdsVolumes()` / `VdsRescan()` | 🚫 | VDS is Windows-only |
@@ -218,7 +219,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `htab_create()` / `htab_destroy()` / `htab_hash()` | 🔧 | Create/destroy work; `htab_hash()` is a stub — needs real hash function from Windows impl |
+| `htab_create()` / `htab_destroy()` / `htab_hash()` | ✅ | Full implementation ported from Windows stdfn.c; 299 tests pass |
 | `StrArray*` functions | ✅ | Implemented and work |
 | `FileIO()` | 🟡 | Read/write whole file; trivial with POSIX `fopen` |
 | `GetResource()` / `GetResourceSize()` | 🚫 | Windows PE resource API; resources are compiled into the binary — embed as C arrays or load from disk |
@@ -384,11 +385,11 @@ This is the most structurally significant porting gap.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Windows `HANDLE`-based threads (`CreateThread` / `WaitForSingleObject`) | 🟡 | All worker threads (format, hash, scan, download) must be converted to `pthread`; compat-layer wrappers needed |
-| `PostMessage` / `SendMessage` for cross-thread UI updates | 🟡 | Currently no-ops; needs a GLib `g_idle_add` / `g_main_context_invoke` bridge so worker threads can safely update GTK widgets |
+| Windows `HANDLE`-based threads (`CreateThread` / `WaitForSingleObject`) | ✅ | pthread bridge complete — `CreateThread`, `WaitForSingleObject`, `WaitForMultipleObjects`, `TerminateThread`, `GetExitCodeThread` all implemented |
+| `PostMessage` / `SendMessage` for cross-thread UI updates | ✅ | `msg_dispatch.c` bridge: handler registry, async `g_idle_add` scheduler, cross-thread blocking SendMessage via condvar; `hMainDialog` handler handles all `UM_*` messages; 61 tests pass |
 | `WM_DEVICECHANGE` device-arrival events | 🟡 | Replace with `udev_monitor` thread that calls `GetDevices()` and posts a GTK refresh |
 | Windows timer (`SetTimer` / `KillTimer`) | 🟡 | Replace with `g_timeout_add` |
-| `CRITICAL_SECTION` / `Mutex` | 🟡 | Map to `pthread_mutex_t` in compat layer |
+| `CRITICAL_SECTION` / `Mutex` | ✅ | `CRITICAL_SECTION` (recursive pthread mutex) and `CreateMutex`/`ReleaseMutex` implemented in compat layer |
 | `op_in_progress` flag | 🔧 | Defined in `globals.c`; needs atomic set/clear around thread lifetime |
 
 ---
@@ -429,33 +430,37 @@ This is the most structurally significant porting gap.
 | Area | Status | Notes |
 |------|--------|-------|
 | `common/cregex` tests | ✅ | 37 tests, Linux + Wine |
+| Threading compat layer tests | ✅ | 51 tests covering threads, events, mutexes, CRITICAL_SECTION |
 | `common/xml` (ezxml) tests | ❌ | No tests yet; XML parsing used by localization and WIM |
-| `stdfn.c` (htab, StrArray) tests | ❌ | |
+| `stdfn.c` (htab, StrArray) tests | ✅ | 299 tests; htab_create/hash/destroy, StrArray, NULL guards |
 | `parser.c` token functions tests | ❌ | |
 | PE parsing functions tests | ❌ | `GetPeArch`, `GetPeSection` etc. are portable C |
-| Drive geometry / partition math tests | ❌ | |
+| `msg_dispatch` (PostMessage/SendMessage bridge) tests | ✅ | 61 tests: handler registry, sync/async dispatch, cross-thread SendMessage, concurrent posts, macro aliases, UM_* constants |
 | Format logic tests (unit) | ❌ | Requires mock block device abstraction |
+| Device enumeration tests (`test_dev_linux`) | ✅ | 79 tests: fake sysfs, removable/HDD/size/sort/name/index/cleanup |
 
 ---
 
 ## 9. Priority Order (Suggested)
 
-1. **Threading bridge** — wire `CreateThread` → `pthread`, `PostMessage` → `g_idle_add`; nothing else will work without this
-2. **Device enumeration** (`dev.c` / `drive.c`) — populate the device dropdown; core to usability
-3. **`stdfn.c` htab** — complete the hash table; needed by localization and parser
-4. **Localization + parser** — get locale loading working so all strings are correct
-5. **Format thread** (`format.c`) — the core write operation; start with FAT32 quick-format
-6. **FAT32 formatter** (`format_fat32.c`) — self-contained; relatively mechanical port
-7. **ext formatter** (`format_ext.c`) — `ext2fs` lib is already bundled and compiles
-8. **ISO extraction** (`iso.c`) — `libcdio` is bundled; wire up real I/O
-9. **Hashing** (`hash.c`) — algorithms are pure C; just need POSIX I/O wrappers
-10. **Networking** (`net.c`) — replace `WinInet` with `libcurl`
-11. **PKI / signatures** (`pki.c`) — replace `WinTrust` with OpenSSL
-12. **Bad blocks** (`badblocks.c`) — straightforward block I/O loop
-13. **S.M.A.R.T.** (`smart.c`) — `SG_IO` ioctl
-14. **WIM / VHD** (`vhd.c`, `wue.c`) — `wimlib` is bundled; VHD needs `nbd`
-15. **Settings persistence** — `~/.config/rufus/rufus.ini`
-16. **Elevation / polkit** — for proper desktop integration
-17. **Syslinux / DOS bootloaders** — finish installer wiring
-18. **Language menu** (`ShowLanguageMenu` TODO in `ui_gtk.c`)
-19. **Desktop integration** — `.desktop` file, icon, AppStream metadata
+1. ~~**Threading bridge**~~ ✅ **DONE** — `CreateThread` → `pthread`, events, mutexes, `CRITICAL_SECTION` all implemented with 51 passing tests
+2. ~~**`PostMessage`/`SendMessage` → GTK dispatch**~~ ✅ **DONE** — `msg_dispatch.c` bridge with 61 passing tests; GTK `g_idle_add` scheduler and main dialog handler registered in `ui_gtk.c`
+3. ~~**`stdfn.c` htab**~~ ✅ **DONE** — full hash table + StrArray ported; 299 tests pass
+4. ~~**Device enumeration** (`dev.c`)~~ ✅ **DONE** — sysfs scan with sort, filtering, combo population; 79 tests pass using fake sysfs
+5. **Device combo hot-plug** — wire `WM_DEVICECHANGE` to udev monitor; call `GetDevices()` on hot-plug events
+6. **Localization + parser** — get locale loading working so all strings are correct
+6. **Format thread** (`format.c`) — the core write operation; start with FAT32 quick-format
+7. **FAT32 formatter** (`format_fat32.c`) — self-contained; relatively mechanical port
+8. **ext formatter** (`format_ext.c`) — `ext2fs` lib is already bundled and compiles
+9. **ISO extraction** (`iso.c`) — `libcdio` is bundled; wire up real I/O
+10. **Hashing** (`hash.c`) — algorithms are pure C; just need POSIX I/O wrappers
+11. **Networking** (`net.c`) — replace `WinInet` with `libcurl`
+12. **PKI / signatures** (`pki.c`) — replace `WinTrust` with OpenSSL
+13. **Bad blocks** (`badblocks.c`) — straightforward block I/O loop
+14. **S.M.A.R.T.** (`smart.c`) — `SG_IO` ioctl
+15. **WIM / VHD** (`vhd.c`, `wue.c`) — `wimlib` is bundled; VHD needs `nbd`
+16. **Settings persistence** — `~/.config/rufus/rufus.ini`
+17. **Elevation / polkit** — for proper desktop integration
+18. **Syslinux / DOS bootloaders** — finish installer wiring
+19. **Language menu** (`ShowLanguageMenu` TODO in `ui_gtk.c`)
+20. **Desktop integration** — `.desktop` file, icon, AppStream metadata

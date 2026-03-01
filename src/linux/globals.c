@@ -121,3 +121,6 @@ const int nb_steps[FS_MAX] = { 0 };
 
 /* ---- From rufus.c ---- */
 HANDLE dialog_handle = NULL, format_thread = NULL;
+
+/* ---- From dev.c / rufus.c ---- */
+RUFUS_DRIVE rufus_drive[MAX_DRIVES] = { 0 };

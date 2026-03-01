@@ -67,3 +67,19 @@ BOOL  WriteFileWithRetry(HANDLE h, const void* buf, DWORD n, DWORD* written, DWO
     (void)h;(void)buf;(void)n;(void)written;(void)retries;
     return FALSE;
 }
+
+char* SizeToHumanReadable(uint64_t size, BOOL copy_to_log, BOOL fake_units)
+{
+    static char str[32];
+    static const char* suffix[] = { "B", "KB", "MB", "GB", "TB", "PB" };
+    double hr = (double)size;
+    int s = 0;
+    const double div = fake_units ? 1000.0 : 1024.0;
+    (void)copy_to_log;
+    while (s < 5 && hr >= div) { hr /= div; s++; }
+    if (s == 0)
+        snprintf(str, sizeof(str), "%d %s", (int)hr, suffix[s]);
+    else
+        snprintf(str, sizeof(str), (hr - (int)hr < 0.05) ? "%.0f %s" : "%.1f %s", hr, suffix[s]);
+    return str;
+}
