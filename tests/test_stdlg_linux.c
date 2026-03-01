@@ -26,6 +26,9 @@
  * 22.  stdlg_set_test_response — clears after use (one-shot semantics)
  * 23.  NotificationEx — test mode cleared: returns default (IDOK) for MB_OK
  * 24.  Notification macro — delegates to NotificationEx correctly
+ * 31.  NotificationEx fallback — MB_OKCANCEL without test mode returns IDOK
+ * 32.  NotificationEx fallback — MB_YESNO without test mode returns IDNO (safe)
+ * 33.  NotificationEx fallback — MB_YESNOCANCEL without test mode returns IDNO
  */
 
 #include "framework.h"
@@ -445,6 +448,39 @@ TEST(destroy_tooltip_valid_does_not_crash)
 }
 
 /* =========================================================================
+ * 31. NotificationEx fallback — MB_OKCANCEL without GTK returns IDOK
+ * =========================================================================*/
+TEST(notification_ex_fallback_okcancel_returns_idok)
+{
+    stdlg_clear_test_mode();
+    int r = NotificationEx(MB_ICONWARNING | MB_OKCANCEL, NULL, NULL, "T", "msg");
+    CHECK_MSG(r == IDOK,
+              "MB_OKCANCEL fallback should return IDOK (safe to proceed)");
+}
+
+/* =========================================================================
+ * 32. NotificationEx fallback — MB_YESNO without GTK returns IDNO (safe)
+ * =========================================================================*/
+TEST(notification_ex_fallback_yesno_returns_idno)
+{
+    stdlg_clear_test_mode();
+    int r = NotificationEx(MB_ICONWARNING | MB_YESNO, NULL, NULL, "T", "msg");
+    CHECK_MSG(r == IDNO,
+              "MB_YESNO fallback should return IDNO (safe conservative default)");
+}
+
+/* =========================================================================
+ * 33. NotificationEx fallback — MB_YESNOCANCEL without GTK returns IDNO
+ * =========================================================================*/
+TEST(notification_ex_fallback_yesnocancel_returns_idno)
+{
+    stdlg_clear_test_mode();
+    int r = NotificationEx(MB_ICONWARNING | MB_YESNOCANCEL, NULL, NULL, "T", "msg");
+    CHECK_MSG(r == IDNO,
+              "MB_YESNOCANCEL fallback should return IDNO");
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -484,6 +520,12 @@ int main(void)
     RUN(destroy_tooltip_null_does_not_crash);
     RUN(destroy_tooltip_valid_does_not_crash);
 
+    printf("\n=== NotificationEx fallback defaults ===\n");
+    RUN(notification_ex_fallback_okcancel_returns_idok);
+    RUN(notification_ex_fallback_yesno_returns_idno);
+    RUN(notification_ex_fallback_yesnocancel_returns_idno);
+
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;
 }
+/* end */

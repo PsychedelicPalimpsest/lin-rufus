@@ -574,6 +574,15 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	uprintf("Format started by user (drive=%u, fs=%d, part=%d, target=%d, boot=%d, quick=%d)",
 	        di, fs_type, partition_type, target_type, boot_type, quick_format);
 
+	/* Show "WARNING: ALL DATA ON DEVICE WILL BE DESTROYED" confirmation */
+	{
+		char dev_name[256] = "the selected device";
+		SendMessageA(hDeviceList, CB_GETLBTEXT, (WPARAM)sel, (LPARAM)dev_name);
+		if (Notification(MB_OKCANCEL | MB_ICONWARNING, APPLICATION_NAME,
+		                 lmprintf(MSG_003, dev_name)) != IDOK)
+			return;
+	}
+
 	if (format_thread == NULL) {
 		op_in_progress = TRUE;
 		ErrorStatus = 0;

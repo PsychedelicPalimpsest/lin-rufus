@@ -96,7 +96,48 @@ int NotificationEx(int type, const char* dont_display_setting,
     if (_test_active && _test_response >= 0)
         return _test_response;
 
-    /* Fallback: log to stderr and return IDOK for MB_OK / IDCANCEL for others */
+#ifdef USE_GTK
+    {
+        GtkMessageType msg_type;
+        GtkButtonsType btn_type;
+        int buttons = type & 0x0F;
+
+        if (type & MB_ICONERROR)
+            msg_type = GTK_MESSAGE_ERROR;
+        else if (type & MB_ICONWARNING)
+            msg_type = GTK_MESSAGE_WARNING;
+        else if (type & MB_ICONQUESTION)
+            msg_type = GTK_MESSAGE_QUESTION;
+        else
+            msg_type = GTK_MESSAGE_INFO;
+
+        if (buttons == MB_YESNO || buttons == MB_YESNOCANCEL)
+            btn_type = GTK_BUTTONS_YES_NO;
+        else if (buttons == MB_OKCANCEL)
+            btn_type = GTK_BUTTONS_OK_CANCEL;
+        else
+            btn_type = GTK_BUTTONS_OK;
+
+        GtkWidget *dlg = gtk_message_dialog_new(
+            hMainDialog ? GTK_WINDOW((GtkWidget*)hMainDialog) : NULL,
+            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+            msg_type, btn_type, "%s", msg);
+        if (title)
+            gtk_window_set_title(GTK_WINDOW(dlg), title);
+
+        gint response = gtk_dialog_run(GTK_DIALOG(dlg));
+        gtk_widget_destroy(dlg);
+
+        if (response == GTK_RESPONSE_YES)    return IDYES;
+        if (response == GTK_RESPONSE_NO)     return IDNO;
+        if (response == GTK_RESPONSE_CANCEL ||
+            response == GTK_RESPONSE_DELETE_EVENT)
+            return (buttons == MB_OK) ? IDOK : IDCANCEL;
+        return IDOK;  /* GTK_RESPONSE_OK */
+    }
+#endif
+
+    /* Fallback: log to stderr and return IDOK for MB_OK / IDNO for others */
     fprintf(stderr, "[Notification] %s: %s\n",
             title ? title : "Rufus", msg);
 
@@ -113,7 +154,7 @@ int NotificationEx(int type, const char* dont_display_setting,
 
 char* FileDialog(BOOL save, char* path, const ext_t* ext, UINT* selected_ext)
 {
-    (void)save; (void)path; (void)ext; (void)selected_ext;
+    (void)ext; (void)selected_ext;
 
     if (_test_active) {
         /* One-shot: clear test mode after use so a single
@@ -124,6 +165,29 @@ char* FileDialog(BOOL save, char* path, const ext_t* ext, UINT* selected_ext)
             return strdup(_test_file_path);
         return NULL; /* IDCANCEL or empty path → no selection */
     }
+
+#ifdef USE_GTK
+    {
+        GtkFileChooserAction action = save ?
+            GTK_FILE_CHOOSER_ACTION_SAVE : GTK_FILE_CHOOSER_ACTION_OPEN;
+        GtkWidget *dlg = gtk_file_chooser_dialog_new(
+            save ? "Save file" : "Open file",
+            hMainDialog ? GTK_WINDOW((GtkWidget*)hMainDialog) : NULL,
+            action,
+            "Cancel", GTK_RESPONSE_CANCEL,
+            save ? "Save" : "Open", GTK_RESPONSE_ACCEPT,
+            NULL);
+        if (path && path[0])
+            gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dlg), path);
+
+        char *result = NULL;
+        if (gtk_dialog_run(GTK_DIALOG(dlg)) == GTK_RESPONSE_ACCEPT)
+            result = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dlg));
+        gtk_widget_destroy(dlg);
+        return result;  /* caller must g_free() — but rufus uses free(), which works
+                         * with glib's g_malloc on Linux */
+    }
+#endif
 
     /* No GTK available in this build — cannot show a dialog */
     return NULL;

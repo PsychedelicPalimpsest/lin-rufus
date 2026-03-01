@@ -262,8 +262,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `FileDialog()` | ✅ | Test-injectable stub; returns preset path or NULL in tests; GTK impl in `stdlg_gtk.c` (pending) |
-| `NotificationEx()` / notification popups | ✅ | Test-injectable; logs to stderr in non-GTK mode; GTK `GtkMessageDialog` impl pending |
+| `FileDialog()` | ✅ | Test-injectable; GTK `GtkFileChooserDialog` impl via `#ifdef USE_GTK` in `stdlg.c`; returns preset path or NULL in tests |
+| `NotificationEx()` / notification popups | ✅ | Test-injectable; GTK `GtkMessageDialog` impl via `#ifdef USE_GTK` in `stdlg.c`; maps MB_* flags to GTK message/button types; 36 tests pass |
 | `CustomSelectionDialog()` | ✅ | Test-injectable; returns preset mask in tests; GTK impl pending |
 | `ListDialog()` | ✅ | Dumps to stderr in non-GTK; test-mode no-op |
 | `CreateTooltip()` / `DestroyTooltip()` | ✅ | Uses `gtk_widget_set_tooltip_text` / `gtk_widget_set_has_tooltip`; `#ifdef USE_GTK` guard; 6 tests pass; wired into `on_app_activate` for device, boot, filesystem, cluster, label, select, start controls |
@@ -295,7 +295,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Device combo population | ✅ | `combo_bridge.c`: full CB_* message dispatch for all combo boxes; `GetDevices()` populates device list via combo_bridge; 105 tests pass |
 | Boot type combo population | ✅ | `populate_boot_combo()` adds Non-bootable/ISO Image/FreeDOS; wired in `combo_register_all()` |
 | Partition scheme / target system / FS / cluster combos | ✅ | `populate_partition_combos()`, `populate_fs_combo()`, `populate_cluster_combo()` all implemented; driven by device selection via `on_device_changed()` |
-| On-START → `FormatThread` launch | ✅ | `on_start_clicked()` reads combo selections into globals (fs_type, partition_type, target_type, boot_type) then launches FormatThread with drive index |
+| On-START → `FormatThread` launch | ✅ | `on_start_clicked()` reads combo selections into globals; shows MSG_003 "WARNING: ALL DATA WILL BE DESTROYED" GTK confirmation dialog; launches FormatThread with drive index on IDOK |
 | Cancel in-progress operation | ✅ | `on_close_clicked` sets `ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED)` |
 | Language menu (`ShowLanguageMenu`) | ✅ | Builds GTK menu from `locale_list`; activates via `PostMessage → main_dialog_handler` |
 | `SetAccessibleName()` | 🔧 | Maps to tooltip; should use `atk_object_set_name` for true accessibility |
