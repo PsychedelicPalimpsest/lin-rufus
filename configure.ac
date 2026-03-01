@@ -18,6 +18,13 @@ if test "x$target_os" = "xwindows"; then
   if test "x${CC+set}" != "xset"; then
     CC="x86_64-w64-mingw32-gcc"
   fi
+  # Derive the MinGW tool prefix from CC and pre-set WINDRES so AC_CHECK_TOOL picks it up
+  if test "x${WINDRES+set}" != "xset"; then
+    _mingw_prefix=$(echo "$CC" | sed 's/-gcc$//')
+    if test "x$_mingw_prefix" != "x$CC"; then
+      WINDRES="${_mingw_prefix}-windres"
+    fi
+  fi
   AC_MSG_NOTICE([Targeting Windows; CC=${CC}])
 else
   AC_MSG_NOTICE([Targeting Linux])
@@ -106,9 +113,41 @@ AC_ARG_WITH([ui],
 	[if test "x$target_os" = "xwindows"; then ui_backend='win'; else ui_backend='gtk'; fi])
 
 if test "x$ui_backend" = "xgtk"; then
-  PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.18],
-    [AC_MSG_NOTICE([GTK3 found: building GTK UI])],
-    [AC_MSG_ERROR([GTK3 >= 3.18 required for --with-ui=gtk])])
+  if test "x$target_os" = "xwindows"; then
+    # For MinGW cross-compilation, override pkg-config to only search MinGW paths.
+    # Derive the sysroot prefix from CC (e.g. x86_64-w64-mingw32-gcc -> x86_64-w64-mingw32).
+    _cc_base=$(basename "${CC:-gcc}")
+    _host_prefix=$(echo "$_cc_base" | sed 's/-gcc$//')
+    if test "x$_host_prefix" != "x$_cc_base"; then
+      _mingw_sysroot="/usr/${_host_prefix}"
+    else
+      _mingw_sysroot="/usr/x86_64-w64-mingw32"
+    fi
+    _mingw_pkgconfig="${_mingw_sysroot}/lib/pkgconfig"
+    AC_MSG_CHECKING([for MinGW pkg-config path])
+    if test -d "$_mingw_pkgconfig"; then
+      AC_MSG_RESULT([$_mingw_pkgconfig])
+      PKG_CONFIG_LIBDIR="$_mingw_pkgconfig"
+      PKG_CONFIG_PATH=""
+      export PKG_CONFIG_LIBDIR PKG_CONFIG_PATH
+    else
+      AC_MSG_RESULT([not found])
+      # Point to a non-existent path so Linux GTK is NOT accidentally found
+      PKG_CONFIG_LIBDIR="${_mingw_pkgconfig}"
+      PKG_CONFIG_PATH=""
+      export PKG_CONFIG_LIBDIR PKG_CONFIG_PATH
+    fi
+    PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.18],
+      [AC_MSG_NOTICE([MinGW GTK3 found: building GTK UI for Windows])],
+      [AC_MSG_ERROR([MinGW-targeted GTK3 >= 3.18 not found.
+  Install mingw-w64-gtk3 (AUR) or set PKG_CONFIG_LIBDIR to a MinGW GTK pkg-config directory.
+  On Arch Linux: yay -S mingw-w64-gtk3
+  On MSYS2/mingw64: pacman -S mingw-w64-x86_64-gtk3])])
+  else
+    PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.18],
+      [AC_MSG_NOTICE([GTK3 found: building GTK UI])],
+      [AC_MSG_ERROR([GTK3 >= 3.18 required for --with-ui=gtk])])
+  fi
   AM_CFLAGS="$AM_CFLAGS $GTK_CFLAGS -DUSE_GTK"
   AM_LDFLAGS="$AM_LDFLAGS $GTK_LIBS"
 fi

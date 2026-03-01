@@ -118,3 +118,6 @@ const loc_parse parse_cmd[7] = { 0 };
 
 /* ---- nb_steps from format.c ---- */
 const int nb_steps[FS_MAX] = { 0 };
+
+/* ---- From rufus.c ---- */
+HANDLE dialog_handle = NULL, format_thread = NULL;

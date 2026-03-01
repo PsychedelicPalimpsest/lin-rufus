@@ -3218,6 +3218,13 @@ if test "x$target_os" = "xwindows"; then
   if test "x${CC+set}" != "xset"; then
     CC="x86_64-w64-mingw32-gcc"
   fi
+  # Derive the MinGW tool prefix from CC and pre-set WINDRES so AC_CHECK_TOOL picks it up
+  if test "x${WINDRES+set}" != "xset"; then
+    _mingw_prefix=$(echo "$CC" | sed 's/-gcc$//')
+    if test "x$_mingw_prefix" != "x$CC"; then
+      WINDRES="${_mingw_prefix}-windres"
+    fi
+  fi
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: Targeting Windows; CC=${CC}" >&5
 printf "%s\n" "$as_me: Targeting Windows; CC=${CC}" >&6;}
 else
@@ -5280,6 +5287,112 @@ fi
 
 
 if test "x$ui_backend" = "xgtk"; then
+  if test "x$target_os" = "xwindows"; then
+    # For MinGW cross-compilation, override pkg-config to only search MinGW paths.
+    # Derive the sysroot prefix from CC (e.g. x86_64-w64-mingw32-gcc -> x86_64-w64-mingw32).
+    _cc_base=$(basename "${CC:-gcc}")
+    _host_prefix=$(echo "$_cc_base" | sed 's/-gcc$//')
+    if test "x$_host_prefix" != "x$_cc_base"; then
+      _mingw_sysroot="/usr/${_host_prefix}"
+    else
+      _mingw_sysroot="/usr/x86_64-w64-mingw32"
+    fi
+    _mingw_pkgconfig="${_mingw_sysroot}/lib/pkgconfig"
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for MinGW pkg-config path" >&5
+printf %s "checking for MinGW pkg-config path... " >&6; }
+    if test -d "$_mingw_pkgconfig"; then
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $_mingw_pkgconfig" >&5
+printf "%s\n" "$_mingw_pkgconfig" >&6; }
+      PKG_CONFIG_LIBDIR="$_mingw_pkgconfig"
+      PKG_CONFIG_PATH=""
+      export PKG_CONFIG_LIBDIR PKG_CONFIG_PATH
+    else
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+printf "%s\n" "not found" >&6; }
+      # Point to a non-existent path so Linux GTK is NOT accidentally found
+      PKG_CONFIG_LIBDIR="${_mingw_pkgconfig}"
+      PKG_CONFIG_PATH=""
+      export PKG_CONFIG_LIBDIR PKG_CONFIG_PATH
+    fi
+
+pkg_failed=no
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for gtk+-3.0 >= 3.18" >&5
+printf %s "checking for gtk+-3.0 >= 3.18... " >&6; }
+
+if test -n "$GTK_CFLAGS"; then
+    pkg_cv_GTK_CFLAGS="$GTK_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"gtk+-3.0 >= 3.18\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "gtk+-3.0 >= 3.18") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_GTK_CFLAGS=`$PKG_CONFIG --cflags "gtk+-3.0 >= 3.18" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$GTK_LIBS"; then
+    pkg_cv_GTK_LIBS="$GTK_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"gtk+-3.0 >= 3.18\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "gtk+-3.0 >= 3.18") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_GTK_LIBS=`$PKG_CONFIG --libs "gtk+-3.0 >= 3.18" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+                GTK_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "gtk+-3.0 >= 3.18" 2>&1`
+        else
+                GTK_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "gtk+-3.0 >= 3.18" 2>&1`
+        fi
+        # Put the nasty error message in config.log where it belongs
+        echo "$GTK_PKG_ERRORS" >&5
+
+        as_fn_error $? "MinGW-targeted GTK3 >= 3.18 not found.
+  Install mingw-w64-gtk3 (AUR) or set PKG_CONFIG_LIBDIR to a MinGW GTK pkg-config directory.
+  On Arch Linux: yay -S mingw-w64-gtk3
+  On MSYS2/mingw64: pacman -S mingw-w64-x86_64-gtk3" "$LINENO" 5
+elif test $pkg_failed = untried; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+        as_fn_error $? "MinGW-targeted GTK3 >= 3.18 not found.
+  Install mingw-w64-gtk3 (AUR) or set PKG_CONFIG_LIBDIR to a MinGW GTK pkg-config directory.
+  On Arch Linux: yay -S mingw-w64-gtk3
+  On MSYS2/mingw64: pacman -S mingw-w64-x86_64-gtk3" "$LINENO" 5
+else
+        GTK_CFLAGS=$pkg_cv_GTK_CFLAGS
+        GTK_LIBS=$pkg_cv_GTK_LIBS
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: MinGW GTK3 found: building GTK UI for Windows" >&5
+printf "%s\n" "$as_me: MinGW GTK3 found: building GTK UI for Windows" >&6;}
+fi
+  else
 
 pkg_failed=no
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for gtk+-3.0 >= 3.18" >&5
@@ -5352,6 +5465,7 @@ printf "%s\n" "yes" >&6; }
         { printf "%s\n" "$as_me:${as_lineno-$LINENO}: GTK3 found: building GTK UI" >&5
 printf "%s\n" "$as_me: GTK3 found: building GTK UI" >&6;}
 fi
+  fi
   AM_CFLAGS="$AM_CFLAGS $GTK_CFLAGS -DUSE_GTK"
   AM_LDFLAGS="$AM_LDFLAGS $GTK_LIBS"
 fi

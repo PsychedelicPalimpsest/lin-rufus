@@ -32,8 +32,26 @@
 #include "missing.h"
 #include <windowsx.h>
 
+/* format_thread and dialog_handle are defined in globals.c */
+extern HANDLE format_thread;
+extern HANDLE dialog_handle;
+
 /* ---- Global widget registry ---- */
 RufusWidgets rw = { 0 };
+
+/* Struct used to pass progress data to the GTK main thread via g_idle_add. */
+typedef struct { int op; float pct; } ProgressData;
+
+/* Idle callback: update progress bar from main thread. */
+static gboolean idle_update_progress(gpointer data)
+{
+	ProgressData *p = (ProgressData *)data;
+	if (rw.progress_bar)
+		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(rw.progress_bar),
+			CLAMP((double)p->pct / 100.0, 0.0, 1.0));
+	free(p);
+	return G_SOURCE_REMOVE;
+}
 
 /* ---- Forward declarations ---- */
 static void on_start_clicked(GtkButton *btn, gpointer data);
@@ -269,8 +287,8 @@ static GtkWidget *build_format_options(void)
 	gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(rw.nb_passes_combo), "4 (TLC)");
 	gtk_combo_box_set_active(GTK_COMBO_BOX(rw.nb_passes_combo), 0);
 	gtk_widget_set_sensitive(rw.nb_passes_combo, FALSE);
-	g_signal_connect(rw.bad_blocks_check, "toggled", G_CALLBACK(
-		(void (*)(GtkToggleButton*, gpointer))gtk_widget_set_sensitive), rw.nb_passes_combo);
+	g_signal_connect_swapped(rw.bad_blocks_check, "toggled",
+		G_CALLBACK(gtk_widget_set_sensitive), rw.nb_passes_combo);
 	gtk_box_pack_start(GTK_BOX(row1), rw.quick_format_check, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(row1), rw.bad_blocks_check,   FALSE, FALSE, 8);
 	gtk_box_pack_start(GTK_BOX(row1), lbl_np,                FALSE, FALSE, 8);
@@ -357,6 +375,35 @@ static GtkWidget *build_action_buttons(void)
 }
 
 /* ---- Build the log dialog ---- */
+/* ---- Log dialog response callback ---- */
+static void on_log_response(GtkDialog *dlg, gint r, gpointer data)
+{
+	(void)data;
+	if (r == GTK_RESPONSE_REJECT) {
+		gtk_text_buffer_set_text(rw.log_textbuf, "", 0);
+	} else if (r == GTK_RESPONSE_ACCEPT) {
+		GtkWidget *fs = gtk_file_chooser_dialog_new(
+			"Save log", GTK_WINDOW(dlg),
+			GTK_FILE_CHOOSER_ACTION_SAVE,
+			"Cancel", GTK_RESPONSE_CANCEL,
+			"Save",   GTK_RESPONSE_ACCEPT,
+			NULL);
+		gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(fs), "rufus.log");
+		if (gtk_dialog_run(GTK_DIALOG(fs)) == GTK_RESPONSE_ACCEPT) {
+			char *fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(fs));
+			GtkTextIter s, e;
+			gtk_text_buffer_get_bounds(rw.log_textbuf, &s, &e);
+			char *txt = gtk_text_buffer_get_text(rw.log_textbuf, &s, &e, FALSE);
+			FILE *f = fopen(fn, "w");
+			if (f) { fputs(txt, f); fclose(f); }
+			g_free(txt); g_free(fn);
+		}
+		gtk_widget_destroy(fs);
+	} else {
+		gtk_widget_hide(GTK_WIDGET(dlg));
+	}
+}
+
 static GtkWidget *build_log_dialog(GtkWidget *parent)
 {
 	GtkWidget *dlg = gtk_dialog_new_with_buttons(
@@ -387,36 +434,7 @@ static GtkWidget *build_log_dialog(GtkWidget *parent)
 	gtk_widget_show_all(gtk_dialog_get_content_area(GTK_DIALOG(dlg)));
 
 	/* Handle response buttons */
-	g_signal_connect(dlg, "response", G_CALLBACK((void (*)(GtkDialog*, gint, gpointer))
-		({
-			void _cb(GtkDialog *d, gint r, gpointer u) {
-				(void)u;
-				if (r == GTK_RESPONSE_REJECT) {
-					gtk_text_buffer_set_text(rw.log_textbuf, "", 0);
-				} else if (r == GTK_RESPONSE_ACCEPT) {
-					GtkWidget *fs = gtk_file_chooser_dialog_new(
-						"Save log", GTK_WINDOW(d),
-						GTK_FILE_CHOOSER_ACTION_SAVE,
-						"Cancel", GTK_RESPONSE_CANCEL,
-						"Save",   GTK_RESPONSE_ACCEPT,
-						NULL);
-					gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(fs), "rufus.log");
-					if (gtk_dialog_run(GTK_DIALOG(fs)) == GTK_RESPONSE_ACCEPT) {
-						char *fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(fs));
-						GtkTextIter s, e;
-						gtk_text_buffer_get_bounds(rw.log_textbuf, &s, &e);
-						char *txt = gtk_text_buffer_get_text(rw.log_textbuf, &s, &e, FALSE);
-						FILE *f = fopen(fn, "w");
-						if (f) { fputs(txt, f); fclose(f); }
-						g_free(txt); g_free(fn);
-					}
-					gtk_widget_destroy(fs);
-				} else {
-					gtk_widget_hide(GTK_WIDGET(d));
-				}
-			}
-			_cb;
-		})), NULL);
+	g_signal_connect(dlg, "response", G_CALLBACK(on_log_response), NULL);
 
 	/* Suppress destroy; just hide on close */
 	g_signal_connect(dlg, "delete-event", G_CALLBACK(gtk_widget_hide_on_delete), NULL);
@@ -482,10 +500,9 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	}
 	uprintf("Format started by user");
 	/* The actual format logic runs in a separate thread via FormatThread().
-	 * Here we just kick it off the same way the Windows UI does. */
-	extern HANDLE format_thread;
+	 * format_thread is declared in globals.c and used by the format layer. */
 	if (format_thread == NULL) {
-		/* format_thread = CreateThread(…); — implemented in format.c */
+		/* format_thread = CreateThread(…); — wired up in format.c */
 		rufus_gtk_update_status("Format not yet wired on Linux");
 	}
 }
@@ -724,23 +741,12 @@ void UpdateProgress(int op, float percent)
 {
 	(void)op;
 	if (!rw.progress_bar) return;
-	/* Must marshal to the GTK main thread. */
-	typedef struct { int op; float pct; } ProgressData;
+	/* Must marshal to the GTK main thread via an idle callback. */
 	ProgressData *pd = malloc(sizeof(*pd));
 	if (!pd) return;
 	pd->op  = op;
 	pd->pct = percent;
-	g_idle_add((GSourceFunc)({
-		gboolean _f(gpointer d) {
-			ProgressData *p = (ProgressData *)d;
-			if (rw.progress_bar)
-				gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(rw.progress_bar),
-					CLAMP((double)p->pct / 100.0, 0.0, 1.0));
-			free(p);
-			return G_SOURCE_REMOVE;
-		}
-		_f;
-	}), pd);
+	g_idle_add(idle_update_progress, pd);
 }
 
 void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f)
@@ -754,9 +760,6 @@ void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f
 /* ======================================================================
  * main() — GTK application entry point
  * ====================================================================== */
-
-/* Forward-declared in linux/rufus.c stubs */
-extern void EnableControls(BOOL enable, BOOL remove_checkboxes);
 
 static void on_app_activate(GtkApplication *app, gpointer data)
 {
