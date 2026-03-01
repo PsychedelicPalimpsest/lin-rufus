@@ -560,8 +560,12 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	if (ts_sel >= 0) target_type    = (int)ComboBox_GetItemData(hTargetSystem,    ts_sel);
 	if (bt_sel >= 0) boot_type      = (int)ComboBox_GetItemData(hBootType,        bt_sel);
 
-	uprintf("Format started by user (drive=%u, fs=%d, part=%d, target=%d, boot=%d)",
-	        di, fs_type, partition_type, target_type, boot_type);
+	/* Read format options from checkboxes */
+	quick_format = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.quick_format_check));
+	zero_drive   = FALSE;  /* future: read from UI when zero-drive option added */
+
+	uprintf("Format started by user (drive=%u, fs=%d, part=%d, target=%d, boot=%d, quick=%d)",
+	        di, fs_type, partition_type, target_type, boot_type, quick_format);
 
 	if (format_thread == NULL) {
 		op_in_progress = TRUE;

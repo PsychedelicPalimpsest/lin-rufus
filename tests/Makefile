@@ -156,6 +156,19 @@ CFLAGS_LINUX_test_drive2_linux := \
 LDFLAGS_LINUX_test_drive2_linux := -lblkid
 EXTRA_SRC_LINUX_test_drive2_linux := $(DRIVE2_LINUX_SRC) $(BLED_LIB)
 
+# partition_ops_linux tests: DeletePartition, GetEspOffset, ToggleEsp
+PARTITION_OPS_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
+                            $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
+                            $(SRC_DIR)/linux/ui.c \
+                            $(FORMAT_MS_SRC)
+CFLAGS_LINUX_test_partition_ops_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_partition_ops_linux := -lblkid
+EXTRA_SRC_LINUX_test_partition_ops_linux := $(PARTITION_OPS_LINUX_SRC) $(BLED_LIB)
+
 # stdio_linux tests: RunCommandWithProgress, SizeToHumanReadable, WindowsErrorString,
 #                    ListDirectoryContent, ExtractZip
 STDIO_LINUX_SRC := $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/stdfn.c

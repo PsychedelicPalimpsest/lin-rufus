@@ -70,6 +70,7 @@ BOOL enable_ntfs_compression = FALSE;
 BOOL enable_file_indexing  = FALSE;
 BOOL allow_dual_uefi_bios  = FALSE;
 BOOL usb_debug             = FALSE;
+BOOL quick_format          = TRUE;
 BOOL detect_fakes          = FALSE;
 BOOL use_own_c32[NB_OLD_C32];
 BOOL has_uefi_csm          = FALSE;
@@ -158,6 +159,9 @@ uint8_t *grub2_buf = NULL;
 long grub2_len = 0;
 uint8_t *sec_buf = NULL;
 unsigned long syslinux_ldlinux_len[2] = {0, 0};
+
+/* Exposed by format_thread_linux_glue.c for stub inspection */
+extern int install_syslinux_call_count;
 
 /* ================================================================
  * Stub functions
@@ -295,6 +299,7 @@ static void reset_globals(void)
 	LastWriteError = 0;
 	img_report     = (RUFUS_IMG_REPORT){ 0 };
 	use_rufus_mbr  = TRUE;
+	install_syslinux_call_count = 0;
 }
 
 /* Read bytes from a file at offset. Returns 0 on success, -1 on error. */
@@ -856,6 +861,89 @@ TEST(format_thread_syslinux_fat32_has_syslinux_mbr)
 	unlink(path); free(path);
 }
 
+TEST(format_thread_syslinux_v6_attempts_install_syslinux)
+{
+	/*
+	 * BT_SYSLINUX_V6 → FormatThread must call InstallSyslinux().
+	 * syslinux_ldlinux_len is 0 so InstallSyslinux returns FALSE,
+	 * which means FormatThread sets ErrorStatus to ERROR_INSTALL_FAILURE.
+	 * We verify that: the thread does NOT return cleanly (rc != 0 OR
+	 * IS_ERROR(ErrorStatus)) — proving the call was made.
+	 */
+	char* path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type      = BT_SYSLINUX_V6;
+	partition_type = PARTITION_STYLE_MBR;
+	fs_type        = FS_FAT32;
+	target_type    = TT_BIOS;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	/* InstallSyslinux should have been attempted and failed (no ldlinux data) */
+	CHECK(install_syslinux_call_count == 1);
+	CHECK(IS_ERROR(ErrorStatus));
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_image_with_syslinux_attempts_install_syslinux)
+{
+	/*
+	 * BT_IMAGE + img_report.sl_version != 0 → FormatThread must call
+	 * InstallSyslinux().  Without real ldlinux data it will fail and set
+	 * ErrorStatus, proving the call was made.
+	 */
+	char* path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type             = BT_IMAGE;
+	partition_type        = PARTITION_STYLE_MBR;
+	fs_type               = FS_FAT32;
+	target_type           = TT_BIOS;
+	img_report.sl_version = 0x0600; /* Syslinux 6.x */
+	img_report.is_iso     = 0;      /* skip ISO extraction */
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	/* InstallSyslinux should have been attempted and failed (no ldlinux data) */
+	CHECK(install_syslinux_call_count == 1);
+	CHECK(IS_ERROR(ErrorStatus));
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_image_no_syslinux_skips_install_syslinux)
+{
+	/*
+	 * BT_IMAGE + img_report.sl_version == 0 → FormatThread must NOT call
+	 * InstallSyslinux().  If it were called it would fail and set ErrorStatus.
+	 * We verify that ErrorStatus is clean after a successful format.
+	 */
+	char* path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type             = BT_IMAGE;
+	partition_type        = PARTITION_STYLE_MBR;
+	fs_type               = FS_FAT32;
+	target_type           = TT_BIOS;
+	img_report.sl_version = 0; /* No Syslinux */
+	img_report.is_iso     = 0;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(install_syslinux_call_count == 0);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
 TEST(format_thread_gpt_partition_style)
 {
 	/* GPT partition style: check for protective MBR marker (0xEE) */
@@ -1011,6 +1099,9 @@ int main(void)
 	RUN(format_thread_non_bootable_ext2_creates_valid_partition);
 	RUN(format_thread_non_bootable_ext3_creates_valid_partition);
 	RUN(format_thread_syslinux_fat32_has_syslinux_mbr);
+	RUN(format_thread_syslinux_v6_attempts_install_syslinux);
+	RUN(format_thread_image_with_syslinux_attempts_install_syslinux);
+	RUN(format_thread_image_no_syslinux_skips_install_syslinux);
 	RUN(format_thread_gpt_partition_style);
 	RUN(format_thread_write_as_image_copies_content);
 	RUN(format_thread_zero_drive_zeroes_everything);

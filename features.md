@@ -131,27 +131,27 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `AnalyzeMBR()` / `AnalyzePBR()` | ✅ | ms-sys boot record analysis via FAKE_FD trick; tests pass |
 | `GetDrivePartitionData()` | 🟡 | Parse partition table via `libfdisk` or `/proc/partitions` |
 | `GetMBRPartitionType()` / `GetGPTPartitionType()` | ✅ | Lookup in `mbr_types.h` / `gpt_types.h` tables (no Windows dep); tests pass |
-| `DeletePartition()` | 🟡 | `ioctl(BLKPG_DEL_PARTITION)` |
+| `DeletePartition()` | ✅ | MBR+GPT table manipulation + `BLKPG_DEL_PARTITION` ioctl for real block devices; 42 tests pass |
 | `SetAutoMount()` / `GetAutoMount()` | 🚫 | Windows auto-mount concept; Linux equivalent is `udisks2` policy |
 | `GetOpticalMedia()` | 🟡 | Scan `/dev/sr*` |
 | `ClearDrives()` | ✅ | Done (part of GetDevices implementation) |
 | `IsMsDevDrive()` | 🚫 | Windows Dev Drive feature; always return FALSE |
 | `IsFilteredDrive()` | 🟡 | May need per-device filtering for safety |
 | `IsVdsAvailable()` / `ListVdsVolumes()` / `VdsRescan()` | 🚫 | VDS is Windows-only |
-| `ToggleEsp()` / `GetEspOffset()` | 🟡 | Set ESP partition type flag via `libfdisk` |
+| `ToggleEsp()` / `GetEspOffset()` | ✅ | Toggle ESP↔MS-Basic-Data (GPT) or 0xEF↔0x0C (MBR); CRC recomputed; 42 tests pass |
 
 ### 3b. Formatting (`format.c`, `format_fat32.c`, `format_ext.c`)
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `FormatThread()` (main format worker) | ✅ | Full FormatThread workflow: ClearMBRGPT, CreatePartition, FormatPartition, WriteMBR, WritePBR; FAT32 + ext2/3; MBR + GPT; image write + zero-drive modes; 30 new tests (105 total) |
+| `FormatThread()` (main format worker) | ✅ | Full FormatThread workflow: ClearMBRGPT, CreatePartition, FormatPartition, WriteMBR, WritePBR; FAT32 + ext2/3; MBR + GPT; image write + zero-drive modes; Syslinux installation wired (BT_SYSLINUX_V4/V6 and BT_IMAGE+sl_version); quick_format checkbox wired; 115 tests pass |
 | `FormatPartition()` | ✅ | Routes FAT32 → `FormatLargeFAT32`, ext2/3/4 → `FormatExtFs`; 6 tests pass |
 | `WritePBR()` (partition boot record) | ✅ | FAT32: ms-sys `write_fat_32_br` + primary/backup sectors; ext: no-op TRUE; 3 tests pass |
 | `FormatLargeFAT32()` | ✅ | Full POSIX implementation; 16 tests pass |
 | `FormatExtFs()` | ✅ | Uses bundled `ext2fs` lib; 9 tests pass |
 | `error_message()` / `ext2fs_print_progress()` | ✅ | Implemented and working |
 | `GetExtFsLabel()` | ✅ | `ext2fs_get_label()` working |
-| Quick format vs. full zero-wipe | ❌ | Write-zero loop via `pwrite` for full format |
+| Quick format checkbox | ✅ | `quick_format` global wired to GTK checkbox in `on_start_clicked`; controls `FP_QUICK` flag in FormatThread |
 | Progress reporting from format thread | 🟡 | Route through `UpdateProgress()` → GTK idle |
 
 ### 3c. ISO / Image Handling (`iso.c`)

@@ -338,6 +338,7 @@ typedef void* LPVOID;
 #define ERROR_WRITE_FAULT                29L
 #define ERROR_READ_FAULT                 30L
 #define ERROR_PARTITION_FAILURE          1105L
+#define ERROR_INSTALL_FAILURE            1603L
 
 /* ---- Window messages ---- */
 #define WM_NULL          0x0000
@@ -1582,6 +1583,8 @@ static inline BOOL BeginPaint(HWND h, PAINTSTRUCT* ps) { (void)h;(void)ps; retur
 static inline BOOL EndPaint(HWND h, const PAINTSTRUCT* ps) { (void)h;(void)ps; return FALSE; }
 
 /* ---- Combo box / list box stubs ---- */
+#define CB_ERR           ((LRESULT)-1)   /* General combo-box error return */
+#define CB_ERRSPACE      ((LRESULT)-2)   /* Out-of-memory return */
 #define CB_ADDSTRING     0x0143
 #define CB_RESETCONTENT  0x014B
 #define CB_SETCURSEL     0x014E

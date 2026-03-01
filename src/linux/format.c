@@ -26,6 +26,7 @@ extern const char* FileSystemLabel[FS_MAX];
 extern BOOL force_large_fat32, enable_ntfs_compression, lock_drive, zero_drive, fast_zeroing;
 extern BOOL write_as_image, write_as_esp;
 extern BOOL use_rufus_mbr;
+extern BOOL quick_format;
 extern char *image_path;
 
 /* Updated by FormatPartition so that WritePBR knows which FS was formatted */
@@ -456,7 +457,7 @@ DWORD WINAPI FormatThread(void* param)
 	/* Get label from UI (may be empty) */
 	GetWindowTextA(hLabel, label, (int)sizeof(label));
 	DWORD fmt_flags = FP_FORCE;
-	if (!IS_EXT(fs_type))
+	if (quick_format && !IS_EXT(fs_type))
 		fmt_flags |= FP_QUICK;
 	if (!FormatPartition(DriveIndex, part_offset, 0, fs_type, label, fmt_flags)) {
 		uprintf("Format error: %s", WindowsErrorString());
@@ -499,6 +500,18 @@ DWORD WINAPI FormatThread(void* param)
 			free(mount_path);
 		}
 	}
+	CHECK_FOR_USER_CANCEL;
+
+	/* Install Syslinux bootloader when applicable */
+	if ( (boot_type == BT_SYSLINUX_V4) || (boot_type == BT_SYSLINUX_V6) ||
+	     ((boot_type == BT_IMAGE) && (HAS_SYSLINUX(img_report) || HAS_REACTOS(img_report))) ) {
+		if (!InstallSyslinux(DriveIndex, 0, fs_type)) {
+			uprintf("Syslinux installation failed");
+			if (!IS_ERROR(ErrorStatus))
+				ErrorStatus = RUFUS_ERROR(ERROR_INSTALL_FAILURE);
+		}
+	}
+
 	UpdateProgress(OP_FINALIZE, -1.0f);
 
 out:

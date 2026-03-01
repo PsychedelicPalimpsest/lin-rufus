@@ -25,6 +25,7 @@
 #include <sys/ioctl.h>
 #include <sys/mount.h>  /* mount(), umount2(), MS_MGC_VAL */
 #include <linux/fs.h>   /* BLKGETSIZE64, BLKRRPART, BLKSSZGET, BLKFLSBUF */
+#include <linux/blkpg.h> /* BLKPG, BLKPG_DEL_PARTITION, blkpg_partition */
 #include <time.h>
 
 /* GUID table: define the GUID constants in this translation unit */
@@ -726,8 +727,123 @@ BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
 
 BOOL SetAutoMount(BOOL enable)                        { (void)enable; return FALSE; }
 BOOL GetAutoMount(BOOL* enabled)                      { (void)enabled; return FALSE; }
-BOOL DeletePartition(DWORD di, ULONGLONG off, BOOL s) { (void)di;(void)off;(void)s; return FALSE; }
 BOOL IsVdsAvailable(BOOL bSilent)                     { (void)bSilent; return FALSE; }
+
+/* -------------------------------------------------------------------------
+ * update_gpt_crcs - recompute GPT entries CRC and header CRC, write back.
+ * hdr: 512-byte GPT primary header (read from disk sector 1).
+ * entries: GPT partition entries buffer.
+ * entries_sz: size of entries buffer.
+ * Returns TRUE if both writes succeed.
+ * --------------------------------------------------------------------- */
+static BOOL update_gpt_crcs(int fd, uint8_t *hdr, uint8_t *entries,
+                             size_t entries_sz)
+{
+    /* Recompute entries CRC */
+    uint32_t ecrc = crc32_ieee(entries, entries_sz);
+    hdr[88] = ecrc & 0xFF;
+    hdr[89] = (ecrc >>  8) & 0xFF;
+    hdr[90] = (ecrc >> 16) & 0xFF;
+    hdr[91] = (ecrc >> 24) & 0xFF;
+
+    /* Recompute header CRC (covers first 92 bytes, CRC field zeroed) */
+    uint8_t tmp[92];
+    memcpy(tmp, hdr, 92);
+    tmp[16] = tmp[17] = tmp[18] = tmp[19] = 0;
+    uint32_t hcrc = crc32_ieee(tmp, 92);
+    hdr[16] = hcrc & 0xFF;
+    hdr[17] = (hcrc >>  8) & 0xFF;
+    hdr[18] = (hcrc >> 16) & 0xFF;
+    hdr[19] = (hcrc >> 24) & 0xFF;
+
+    return (pwrite(fd, entries, entries_sz, 1024) == (ssize_t)entries_sz &&
+            pwrite(fd, hdr, 512, 512) == 512) ? TRUE : FALSE;
+}
+
+/* -------------------------------------------------------------------------
+ * DeletePartition — remove a partition entry from the on-disk table.
+ *
+ * For MBR: zero the matching 16-byte partition entry in the partition table.
+ * For GPT: zero the matching 128-byte entry, update CRC.
+ * For real block devices: also call ioctl(BLKPG_DEL_PARTITION).
+ * --------------------------------------------------------------------- */
+BOOL DeletePartition(DWORD di, ULONGLONG off, BOOL bSilent)
+{
+    RUFUS_DRIVE *e = get_entry(di);
+    if (!e || !e->id) return FALSE;
+
+    int fd = open(e->id, O_RDWR | O_CLOEXEC);
+    if (fd < 0) return FALSE;
+
+    uint8_t sector0[512] = { 0 };
+    if (pread(fd, sector0, 512, 0) != 512) { close(fd); return FALSE; }
+
+    BOOL ok = FALSE;
+
+    /* GPT: protective MBR has type 0xEE in partition table */
+    int is_gpt = 0;
+    if (sector0[510] == 0x55 && sector0[511] == 0xAA) {
+        for (int i = 0; i < 4; i++) {
+            if (sector0[446 + i * 16 + 4] == 0xEE) { is_gpt = 1; break; }
+        }
+    }
+
+    if (is_gpt) {
+        size_t entries_sz = 128 * 128;
+        uint8_t *entries = (uint8_t *)calloc(1, entries_sz);
+        uint8_t hdr[512] = { 0 };
+        if (!entries) { close(fd); return FALSE; }
+        if (pread(fd, hdr, 512, 512) != 512 ||
+            pread(fd, entries, entries_sz, 1024) != (ssize_t)entries_sz) {
+            free(entries); close(fd); return FALSE;
+        }
+        /* Find entry whose start LBA * sector_size == off */
+        for (int i = 0; i < 128; i++) {
+            uint8_t *pe = entries + i * 128;
+            /* Skip empty entry (type GUID all-zero) */
+            int empty = 1;
+            for (int b = 0; b < 16; b++) if (pe[b] != 0) { empty = 0; break; }
+            if (empty) continue;
+            uint64_t start = 0;
+            for (int b = 0; b < 8; b++) start |= ((uint64_t)pe[32 + b]) << (b * 8);
+            if (start * 512 == (uint64_t)off) {
+                memset(pe, 0, 128);
+                ok = update_gpt_crcs(fd, hdr, entries, entries_sz);
+                /* On real block devices, also tell the kernel */
+#ifdef BLKPG
+                {
+                    struct stat st;
+                    if (fstat(fd, &st) == 0 && S_ISBLK(st.st_mode)) {
+                        struct blkpg_partition part = { 0 };
+                        part.pno    = i + 1;
+                        part.start  = (long long)(start * 512);
+                        struct blkpg_ioctl_arg arg = { BLKPG_DEL_PARTITION, 0, sizeof(part), &part };
+                        ioctl(fd, BLKPG, &arg);  /* non-fatal */
+                    }
+                }
+#endif
+                break;
+            }
+        }
+        free(entries);
+    } else if (sector0[510] == 0x55 && sector0[511] == 0xAA) {
+        /* MBR: scan 4 primary partition entries at offsets 446,462,478,494 */
+        for (int i = 0; i < 4; i++) {
+            uint8_t *pe = sector0 + 446 + i * 16;
+            if (pe[4] == 0) continue;  /* empty entry */
+            uint32_t lba = (uint32_t)pe[8]  | ((uint32_t)pe[9]  << 8) |
+                           ((uint32_t)pe[10] << 16) | ((uint32_t)pe[11] << 24);
+            if ((uint64_t)lba * 512 == (uint64_t)off) {
+                memset(pe, 0, 16);
+                ok = (pwrite(fd, sector0, 512, 0) == 512) ? TRUE : FALSE;
+                break;
+            }
+        }
+    }
+
+    close(fd);
+    return ok;
+}
 BOOL ListVdsVolumes(BOOL bSilent)                     { (void)bSilent; return FALSE; }
 BOOL VdsRescan(DWORD rt, DWORD st, BOOL s)            { (void)rt;(void)st;(void)s; return FALSE; }
 BOOL GetDriveLetters(DWORD di, char* dl)              { (void)di;(void)dl; return FALSE; }
@@ -1034,8 +1150,150 @@ BOOL RefreshLayout(DWORD DriveIndex)
     /* BLKRRPART fails on non-block devices; treat as non-fatal */
     return (r == 0) ? TRUE : FALSE;
 }
-uint64_t GetEspOffset(DWORD di)                       { (void)di; return 0; }
-BOOL ToggleEsp(DWORD di, uint64_t off)                { (void)di;(void)off; return FALSE; }
+/* -------------------------------------------------------------------------
+ * GetEspOffset — return the byte offset of the EFI System Partition, or 0.
+ *
+ * For MBR: looks for partition type 0xEF.
+ * For GPT: looks for the ESP type GUID {C12A7328-F81F-11D2-BA4B-00A0C93EC93B}.
+ * --------------------------------------------------------------------- */
+uint64_t GetEspOffset(DWORD di)
+{
+    RUFUS_DRIVE *e = get_entry(di);
+    if (!e || !e->id) return 0;
+
+    int fd = open(e->id, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return 0;
+
+    uint8_t sector0[512] = { 0 };
+    if (pread(fd, sector0, 512, 0) != 512) { close(fd); return 0; }
+
+    /* ESP GUID on disk (little-endian): C12A7328-F81F-11D2-BA4B-00A0C93EC93B */
+    static const uint8_t esp_guid[16] = {
+        0x28,0x73,0x2A,0xC1, 0x1F,0xF8, 0xD2,0x11,
+        0xBA,0x4B, 0x00,0xA0,0xC9,0x3E,0xC9,0x3B
+    };
+
+    uint64_t result = 0;
+
+    /* Check for GPT */
+    int is_gpt = 0;
+    if (sector0[510] == 0x55 && sector0[511] == 0xAA) {
+        for (int i = 0; i < 4; i++) {
+            if (sector0[446 + i * 16 + 4] == 0xEE) { is_gpt = 1; break; }
+        }
+    }
+
+    if (is_gpt) {
+        size_t entries_sz = 128 * 128;
+        uint8_t *entries = (uint8_t *)calloc(1, entries_sz);
+        if (entries && pread(fd, entries, entries_sz, 1024) == (ssize_t)entries_sz) {
+            for (int i = 0; i < 128 && result == 0; i++) {
+                uint8_t *pe = entries + i * 128;
+                if (memcmp(pe, esp_guid, 16) == 0) {
+                    uint64_t start = 0;
+                    for (int b = 0; b < 8; b++)
+                        start |= ((uint64_t)pe[32 + b]) << (b * 8);
+                    result = start * 512;
+                }
+            }
+        }
+        free(entries);
+    } else if (sector0[510] == 0x55 && sector0[511] == 0xAA) {
+        /* MBR: look for type 0xEF (EFI System) */
+        for (int i = 0; i < 4 && result == 0; i++) {
+            uint8_t *pe = sector0 + 446 + i * 16;
+            if (pe[4] == 0xEF) {
+                uint32_t lba = (uint32_t)pe[8]  | ((uint32_t)pe[9]  << 8) |
+                               ((uint32_t)pe[10] << 16) | ((uint32_t)pe[11] << 24);
+                result = (uint64_t)lba * 512;
+            }
+        }
+    }
+
+    close(fd);
+    return result;
+}
+
+/* -------------------------------------------------------------------------
+ * ToggleEsp — toggle partition type between EFI System and MS Basic Data.
+ *
+ * For GPT: swaps the type GUID between ESP and MS Basic Data.
+ * For MBR: swaps the type byte between 0xEF (EFI) and 0x0C (FAT32 LBA).
+ * --------------------------------------------------------------------- */
+BOOL ToggleEsp(DWORD di, uint64_t off)
+{
+    RUFUS_DRIVE *e = get_entry(di);
+    if (!e || !e->id) return FALSE;
+
+    int fd = open(e->id, O_RDWR | O_CLOEXEC);
+    if (fd < 0) return FALSE;
+
+    uint8_t sector0[512] = { 0 };
+    if (pread(fd, sector0, 512, 0) != 512) { close(fd); return FALSE; }
+
+    /* ESP and MS Basic Data GUIDs in on-disk little-endian form */
+    static const uint8_t esp_guid[16] = {
+        0x28,0x73,0x2A,0xC1, 0x1F,0xF8, 0xD2,0x11,
+        0xBA,0x4B, 0x00,0xA0,0xC9,0x3E,0xC9,0x3B
+    };
+    static const uint8_t msbd_guid[16] = {
+        0xA2,0xA0,0xD0,0xEB, 0xE5,0xB9, 0x33,0x44,
+        0x87,0xC0, 0x68,0xB6,0xB7,0x26,0x99,0xC7
+    };
+
+    BOOL ok = FALSE;
+
+    int is_gpt = 0;
+    if (sector0[510] == 0x55 && sector0[511] == 0xAA) {
+        for (int i = 0; i < 4; i++) {
+            if (sector0[446 + i * 16 + 4] == 0xEE) { is_gpt = 1; break; }
+        }
+    }
+
+    if (is_gpt) {
+        size_t entries_sz = 128 * 128;
+        uint8_t *entries = (uint8_t *)calloc(1, entries_sz);
+        uint8_t hdr[512] = { 0 };
+        if (!entries) { close(fd); return FALSE; }
+        if (pread(fd, hdr, 512, 512) != 512 ||
+            pread(fd, entries, entries_sz, 1024) != (ssize_t)entries_sz) {
+            free(entries); close(fd); return FALSE;
+        }
+        for (int i = 0; i < 128; i++) {
+            uint8_t *pe = entries + i * 128;
+            /* Check if entry is empty */
+            int empty = 1;
+            for (int b = 0; b < 16; b++) if (pe[b] != 0) { empty = 0; break; }
+            if (empty) continue;
+            uint64_t start = 0;
+            for (int b = 0; b < 8; b++) start |= ((uint64_t)pe[32 + b]) << (b * 8);
+            if (start * 512 == off) {
+                if (memcmp(pe, esp_guid, 16) == 0)
+                    memcpy(pe, msbd_guid, 16);
+                else
+                    memcpy(pe, esp_guid, 16);
+                ok = update_gpt_crcs(fd, hdr, entries, entries_sz);
+                break;
+            }
+        }
+        free(entries);
+    } else if (sector0[510] == 0x55 && sector0[511] == 0xAA) {
+        for (int i = 0; i < 4; i++) {
+            uint8_t *pe = sector0 + 446 + i * 16;
+            if (pe[4] == 0) continue;
+            uint32_t lba = (uint32_t)pe[8]  | ((uint32_t)pe[9]  << 8) |
+                           ((uint32_t)pe[10] << 16) | ((uint32_t)pe[11] << 24);
+            if ((uint64_t)lba * 512 == off) {
+                pe[4] = (pe[4] == 0xEF) ? 0x0C : 0xEF;
+                ok = (pwrite(fd, sector0, 512, 0) == 512) ? TRUE : FALSE;
+                break;
+            }
+        }
+    }
+
+    close(fd);
+    return ok;
+}
 BOOL IsMsDevDrive(DWORD di)                           { (void)di; return FALSE; }
 BOOL IsFilteredDrive(DWORD di)                        { (void)di; return FALSE; }
 int  IsHDD(DWORD di, uint16_t vid, uint16_t pid, const char* strid) { (void)di;(void)vid;(void)pid;(void)strid; return 0; }

@@ -57,6 +57,7 @@ BOOL enable_vmdk = FALSE, force_large_fat32 = FALSE;
 BOOL use_fake_units = FALSE, preserve_timestamps = FALSE;
 BOOL fast_zeroing = FALSE, app_changed_size = FALSE;
 BOOL zero_drive = FALSE, list_non_usb_removable_drives = FALSE;
+BOOL quick_format = TRUE;
 BOOL enable_file_indexing = FALSE;
 BOOL write_as_image = FALSE, write_as_esp = FALSE;
 BOOL use_vds = FALSE, ignore_boot_marker = FALSE, save_image = FALSE;
@@ -118,6 +119,10 @@ const loc_parse parse_cmd[7] = { 0 };
 
 /* ---- nb_steps from format.c ---- */
 const int nb_steps[FS_MAX] = { 0 };
+
+/* ---- FileSystemLabel from format.c ---- */
+/* Must match the FS_* enum order: FAT=0,FAT32=1,NTFS=2,UDF=3,exFAT=4,ReFS=5,ext2=6,ext3=7,ext4=8 */
+const char* FileSystemLabel[FS_MAX] = { "FAT", "FAT32", "NTFS", "UDF", "exFAT", "ReFS", "ext2", "ext3", "ext4" };
 
 /* ---- From rufus.c ---- */
 HANDLE dialog_handle = NULL, format_thread = NULL;

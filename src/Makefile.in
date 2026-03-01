@@ -110,6 +110,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@am__objects_2 = linux/rufus-ui_gtk.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@am__objects_3 = linux/compat/rufus-msg_dispatch.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-badblocks.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-combo_bridge.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-darkmode.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-dev.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-device_monitor.$(OBJEXT) \
@@ -122,6 +123,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-globals.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-hash.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-icon.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-image_scan.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-iso.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-localization.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-net.$(OBJEXT) \
@@ -285,6 +287,8 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
+BLKID_CFLAGS = @BLKID_CFLAGS@
+BLKID_LIBS = @BLKID_LIBS@
 CC = @CC@
 CFLAGS = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@
@@ -396,10 +400,10 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 	common/localization.c common/parser.c
 
 @TARGET_WINDOWS_FALSE@OS_SOURCES = linux/compat/msg_dispatch.c \
-@TARGET_WINDOWS_FALSE@	linux/badblocks.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
+@TARGET_WINDOWS_FALSE@	linux/badblocks.c linux/combo_bridge.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
 @TARGET_WINDOWS_FALSE@	linux/dos.c linux/dos_locale.c \
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_fat32.c linux/globals.c \
-@TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
+@TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
 @TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/wue.c
 
@@ -421,15 +425,15 @@ rufus_SOURCES = $(COMMON_SOURCES) $(OS_SOURCES)
 @TARGET_WINDOWS_TRUE@rufus_CFLAGS = -I$(srcdir)/windows -I$(srcdir)/common \
 @TARGET_WINDOWS_TRUE@	-I$(srcdir)/ms-sys/inc -I$(srcdir)/syslinux/libfat -I$(srcdir)/syslinux/libinstaller \
 @TARGET_WINDOWS_TRUE@	-I$(srcdir)/syslinux/win -I$(srcdir)/libcdio -I$(srcdir)/wimlib -I$(srcdir)/../res \
-@TARGET_WINDOWS_TRUE@	$(AM_CFLAGS) -DEXT2_FLAT_INCLUDES=0 -D_RUFUS -DSOLUTION=rufus
+@TARGET_WINDOWS_TRUE@	$(AM_CFLAGS) -DEXT2_FLAT_INCLUDES=0 -D_RUFUS -DSOLUTION=rufus -DCOMMON_PARSER_PE_FUNCTIONS
 
 @TARGET_WINDOWS_FALSE@rufus_LDFLAGS = $(AM_LDFLAGS)
 @TARGET_WINDOWS_TRUE@rufus_LDFLAGS = $(AM_LDFLAGS) -mwindows -L../.mingw
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev
+@TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev -lssl -lcrypto
 
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev
+@TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev -lssl -lcrypto
 
 @TARGET_WINDOWS_TRUE@rufus_LDADD = windows/rufus_rc.o bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
 @TARGET_WINDOWS_TRUE@	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(NONVULNERABLE_LIBS) $(VULNERABLE_LIBS)
@@ -488,6 +492,7 @@ linux/$(am__dirstamp):
 	@$(MKDIR_P) linux
 	@: >>linux/$(am__dirstamp)
 linux/rufus-badblocks.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-combo_bridge.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-darkmode.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-dev.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-device_monitor.$(OBJEXT): linux/$(am__dirstamp)
@@ -500,6 +505,7 @@ linux/rufus-format_fat32.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-globals.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-hash.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-icon.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-image_scan.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-iso.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-localization.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-net.$(OBJEXT): linux/$(am__dirstamp)
@@ -614,6 +620,12 @@ linux/rufus-badblocks.o: linux/badblocks.c
 linux/rufus-badblocks.obj: linux/badblocks.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-badblocks.obj `if test -f 'linux/badblocks.c'; then $(CYGPATH_W) 'linux/badblocks.c'; else $(CYGPATH_W) '$(srcdir)/linux/badblocks.c'; fi`
 
+linux/rufus-combo_bridge.o: linux/combo_bridge.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-combo_bridge.o `test -f 'linux/combo_bridge.c' || echo '$(srcdir)/'`linux/combo_bridge.c
+
+linux/rufus-combo_bridge.obj: linux/combo_bridge.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-combo_bridge.obj `if test -f 'linux/combo_bridge.c'; then $(CYGPATH_W) 'linux/combo_bridge.c'; else $(CYGPATH_W) '$(srcdir)/linux/combo_bridge.c'; fi`
+
 linux/rufus-darkmode.o: linux/darkmode.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-darkmode.o `test -f 'linux/darkmode.c' || echo '$(srcdir)/'`linux/darkmode.c
 
@@ -685,6 +697,12 @@ linux/rufus-icon.o: linux/icon.c
 
 linux/rufus-icon.obj: linux/icon.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-icon.obj `if test -f 'linux/icon.c'; then $(CYGPATH_W) 'linux/icon.c'; else $(CYGPATH_W) '$(srcdir)/linux/icon.c'; fi`
+
+linux/rufus-image_scan.o: linux/image_scan.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-image_scan.o `test -f 'linux/image_scan.c' || echo '$(srcdir)/'`linux/image_scan.c
+
+linux/rufus-image_scan.obj: linux/image_scan.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-image_scan.obj `if test -f 'linux/image_scan.c'; then $(CYGPATH_W) 'linux/image_scan.c'; else $(CYGPATH_W) '$(srcdir)/linux/image_scan.c'; fi`
 
 linux/rufus-iso.o: linux/iso.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-iso.o `test -f 'linux/iso.c' || echo '$(srcdir)/'`linux/iso.c

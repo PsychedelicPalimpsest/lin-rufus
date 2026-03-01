@@ -23,6 +23,7 @@
 
 #include "rufus.h"
 #include "resource.h"
+#include "drive.h"
 #include "vhd.h"
 #include "wimlib.h"
 #include "bled/bled.h"
