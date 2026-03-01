@@ -608,6 +608,52 @@ TEST(wfsom_invalid_handle_returns_failed)
 }
 
 /* ===========================================================================
+ * CreateFileWithTimeout tests
+ * =========================================================================*/
+
+extern HANDLE CreateFileWithTimeout(LPCSTR lpFileName, DWORD dwDesiredAccess,
+    DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSa, DWORD dwCreationDisposition,
+    DWORD dwFlagsAndAttributes, HANDLE hTemplate, DWORD dwTimeOut);
+
+/* Opens an existing file for reading → valid handle */
+TEST(create_file_with_timeout_reads_existing)
+{
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "/tmp/rufus_cfwt_%d", (int)getpid());
+    int fd = open(tmp, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+    CHECK(fd >= 0); close(fd);
+
+    HANDLE h = CreateFileWithTimeout(tmp, GENERIC_READ, 0, NULL,
+                                     OPEN_EXISTING, 0, NULL, 1000);
+    CHECK(h != INVALID_HANDLE_VALUE);
+    CloseHandle(h);
+    unlink(tmp);
+}
+
+/* Non-existent file for OPEN_EXISTING → INVALID_HANDLE_VALUE */
+TEST(create_file_with_timeout_nonexistent)
+{
+    HANDLE h = CreateFileWithTimeout("/tmp/__no_such_file_rufus__", GENERIC_READ,
+                                     0, NULL, OPEN_EXISTING, 0, NULL, 200);
+    CHECK(h == INVALID_HANDLE_VALUE);
+}
+
+/* CREATE_ALWAYS creates a new file */
+TEST(create_file_with_timeout_creates_file)
+{
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "/tmp/rufus_cfwt2_%d", (int)getpid());
+    unlink(tmp); /* ensure file doesn't exist */
+
+    HANDLE h = CreateFileWithTimeout(tmp, GENERIC_WRITE, 0, NULL,
+                                     CREATE_ALWAYS, 0, NULL, 1000);
+    CHECK(h != INVALID_HANDLE_VALUE);
+    CloseHandle(h);
+    CHECK(access(tmp, F_OK) == 0); /* file was created */
+    unlink(tmp);
+}
+
+/* ===========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -653,6 +699,11 @@ int main(void)
     RUN(wfsom_returns_wait_object_0);
     RUN(wfsom_returns_wait_timeout);
     RUN(wfsom_invalid_handle_returns_failed);
+
+    printf("\n  CreateFileWithTimeout\n");
+    RUN(create_file_with_timeout_reads_existing);
+    RUN(create_file_with_timeout_nonexistent);
+    RUN(create_file_with_timeout_creates_file);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;

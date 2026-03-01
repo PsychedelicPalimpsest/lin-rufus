@@ -217,7 +217,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `SearchProcessAlt()` | ✅ | Scans `/proc/PID/comm`; 19 tests pass |
 | `PhEnumHandlesEx()` / `PhOpenProcess()` | 🚫 | NT internal APIs; not applicable on Linux |
 | `NtStatusError()` | 🚫 | NT status codes; not applicable |
-| `RunCommandWithProgress()` (in `stdfn.c`) | 🟡 | Spawn subprocess and read stdout; use `posix_spawn` + pipes |
+| `RunCommandWithProgress()` (in `stdfn.c`) | ✅ | Implemented in `stdio.c`: fork/pipe with regex progress tracking; cancellation support; multi-line output; 15 tests pass |
 
 ### 3h. Standard Functions / Utilities (`stdfn.c`)
 
@@ -235,7 +235,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `GetWindowsVersion()` | 🚫 | N/A; return zeroed struct (done) |
 | `GetExecutableVersion()` | 🟡 | Read `ELF` / PE version; low priority |
 | `IsFontAvailable()` | 🟡 | Use `pango_font_description_from_string` or `fontconfig` |
-| `ToLocaleName()` | 🟡 | Map locale code to BCP-47 string |
+| `ToLocaleName()` | ✅ | Returns BCP-47 locale from `LANG` env var (e.g. `en_US.UTF-8` → `en-US`); falls back to `en-US` for C/POSIX; 5 tests pass |
 | `IsCurrentProcessElevated()` | ✅ | Returns `geteuid() == 0` |
 | `isSMode()` | 🚫 | Windows S Mode — always FALSE |
 | `ExtractZip()` | ✅ | Implemented using bundled `bled` library (`bled_uncompress_to_dir`); fixed path separator and `bytes_out` tracking for stored files |
@@ -243,7 +243,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `WriteFileWithRetry()` | ✅ | `write()` retry loop with EINTR/EAGAIN handling; NULL-buf guard; 4 tests pass |
 | `ResolveDllAddress()` | 🚫 | DLL delay-load — N/A on Linux |
 | `WaitForSingleObjectWithMessages()` | ✅ | Delegates to `WaitForSingleObject`; no message pump needed on Linux (GTK runs its own loop); 3 tests pass |
-| `CreateFileWithTimeoutThread()` | 🟡 | Use `open()` with `O_NONBLOCK` + `alarm` |
+| `CreateFileWithTimeoutThread()` | ✅ | Opens file/device with O_NONBLOCK in a thread; clears O_NONBLOCK after open; `CreateFileWithTimeout` wrapper respects deadline via `WaitForSingleObject`; 3 tests pass |
 
 ### 3i. Standard I/O (`stdio.c`)
 

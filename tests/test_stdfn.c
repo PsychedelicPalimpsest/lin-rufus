@@ -419,6 +419,51 @@ TEST(set_thread_affinity_covers_all_cpus)
 }
 
 /* ===========================================================================
+ * ToLocaleName tests
+ * =========================================================================*/
+
+extern char* ToLocaleName(DWORD lang_id);
+
+/* Returns non-NULL string */
+TEST(to_locale_name_non_null)
+{
+    char* r = ToLocaleName(0);
+    CHECK(r != NULL);
+}
+
+/* "en-US" locale returns "en-US" */
+TEST(to_locale_name_en_us)
+{
+    setenv("LANG", "en_US.UTF-8", 1);
+    char* r = ToLocaleName(0);
+    CHECK(strcmp(r, "en-US") == 0);
+}
+
+/* underscore converted to hyphen */
+TEST(to_locale_name_underscore_to_hyphen)
+{
+    setenv("LANG", "fr_FR.UTF-8", 1);
+    char* r = ToLocaleName(0);
+    CHECK(strcmp(r, "fr-FR") == 0);
+}
+
+/* LANG=C falls back to en-US */
+TEST(to_locale_name_c_locale)
+{
+    setenv("LANG", "C", 1);
+    char* r = ToLocaleName(0);
+    CHECK(strcmp(r, "en-US") == 0);
+}
+
+/* Suffix after '@' is stripped */
+TEST(to_locale_name_strips_modifier)
+{
+    setenv("LANG", "de_DE@euro", 1);
+    char* r = ToLocaleName(0);
+    CHECK(strcmp(r, "de-DE") == 0);
+}
+
+/* ===========================================================================
  * main
  * ========================================================================= */
 
@@ -464,6 +509,13 @@ int main(void)
     RUN(set_thread_affinity_single_thread);
     RUN(set_thread_affinity_two_threads);
     RUN(set_thread_affinity_covers_all_cpus);
+
+    printf("\n=== ToLocaleName ===\n");
+    RUN(to_locale_name_non_null);
+    RUN(to_locale_name_en_us);
+    RUN(to_locale_name_underscore_to_hyphen);
+    RUN(to_locale_name_c_locale);
+    RUN(to_locale_name_strips_modifier);
 
     TEST_RESULTS();
 }

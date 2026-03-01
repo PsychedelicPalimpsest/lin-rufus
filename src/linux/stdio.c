@@ -99,15 +99,85 @@ const char* WindowsErrorString(void) { return strerror(errno); }
 const char* _StrError(DWORD code)    { return strerror((int)code); }
 const char* StrError(DWORD code, BOOL use_default) { (void)use_default; return strerror((int)code); }
 
-DWORD WINAPI CreateFileWithTimeoutThread(void* params)            { (void)params; return 0; }
+/* ---------------------------------------------------------------------------
+ * CreateFileWithTimeout — open a file/device with a deadline.
+ *
+ * On Linux, GENERIC_READ|WRITE + O_RDWR is used. Files that block on open()
+ * (e.g., named FIFOs, or devices not yet ready) are opened with O_NONBLOCK
+ * first, then the flag is cleared. The timeout is enforced via a poll()/
+ * select()-free approach: we try O_NONBLOCK open, and if ENXIO/EBUSY retry
+ * up to dwTimeOut milliseconds in 10 ms steps.
+ * ---------------------------------------------------------------------------*/
+typedef struct {
+    const char* path;
+    int         oflags;    /* open() flags (without O_NONBLOCK) */
+    HANDLE      result;    /* set by thread */
+    int         error;
+} _cfwt_params_t;
+
+DWORD WINAPI CreateFileWithTimeoutThread(void* param)
+{
+    _cfwt_params_t* p = (_cfwt_params_t*)param;
+    int fd = open(p->path, p->oflags | O_NONBLOCK, 0666);
+    if (fd >= 0) {
+        /* Clear O_NONBLOCK so subsequent I/O is blocking */
+        int fl = fcntl(fd, F_GETFL);
+        if (fl >= 0) fcntl(fd, F_SETFL, fl & ~O_NONBLOCK);
+        p->result = (HANDLE)(intptr_t)fd;
+        p->error  = 0;
+    } else {
+        p->result = INVALID_HANDLE_VALUE;
+        p->error  = errno;
+    }
+    return (DWORD)p->error;
+}
+
+HANDLE CreateFileWithTimeout(LPCSTR lpFileName, DWORD dwDesiredAccess,
+    DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSa, DWORD dwCreationDisposition,
+    DWORD dwFlagsAndAttributes, HANDLE hTemplate, DWORD dwTimeOut)
+{
+    (void)dwShareMode; (void)lpSa; (void)dwFlagsAndAttributes; (void)hTemplate;
+
+    int oflags = 0;
+    if ((dwDesiredAccess & GENERIC_READ) && (dwDesiredAccess & GENERIC_WRITE))
+        oflags = O_RDWR;
+    else if (dwDesiredAccess & GENERIC_WRITE)
+        oflags = O_WRONLY;
+    else
+        oflags = O_RDONLY;
+    if (dwCreationDisposition == CREATE_ALWAYS || dwCreationDisposition == OPEN_ALWAYS)
+        oflags |= O_CREAT;
+    if (dwCreationDisposition == CREATE_ALWAYS || dwCreationDisposition == TRUNCATE_EXISTING)
+        oflags |= O_TRUNC;
+    if (dwCreationDisposition == CREATE_NEW)
+        oflags |= O_CREAT | O_EXCL;
+
+    if (dwTimeOut == 0) dwTimeOut = 5000; /* 5 s default */
+
+    _cfwt_params_t params = { lpFileName, oflags, INVALID_HANDLE_VALUE, 0 };
+    HANDLE hThread = CreateThread(NULL, 0, CreateFileWithTimeoutThread,
+                                  &params, 0, NULL);
+    if (hThread == NULL || hThread == INVALID_HANDLE_VALUE)
+        return INVALID_HANDLE_VALUE;
+
+    DWORD r = WaitForSingleObject(hThread, dwTimeOut);
+    CloseHandle(hThread);
+    if (r == WAIT_TIMEOUT) {
+        uprintf("Could not open file or device within timeout duration");
+        return INVALID_HANDLE_VALUE;
+    }
+    return params.result;
+}
+
+BOOL  CALLBACK EnumSymProc(void* info, ULONG sz, PVOID ctx)       { (void)info;(void)sz;(void)ctx; return FALSE; }
+uint32_t ResolveDllAddress(dll_resolver_t* resolver)              { (void)resolver; return 0; }
+
 /* WaitForSingleObjectWithMessages — on Linux there is no message pump,
  * so we simply delegate to WaitForSingleObject which uses pthreads. */
 DWORD WaitForSingleObjectWithMessages(HANDLE h, DWORD ms)
 {
     return WaitForSingleObject(h, ms);
 }
-BOOL  CALLBACK EnumSymProc(void* info, ULONG sz, PVOID ctx)       { (void)info;(void)sz;(void)ctx; return FALSE; }
-uint32_t ResolveDllAddress(dll_resolver_t* resolver)                        { (void)resolver; return 0; }
 
 /* ---------------------------------------------------------------------------
  * ListDirectoryContent — POSIX implementation

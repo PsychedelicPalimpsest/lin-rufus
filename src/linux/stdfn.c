@@ -311,7 +311,31 @@ BOOL    SetThreadAffinity(DWORD_PTR* ta, size_t n)
     return TRUE;
 }
 BOOL    IsCurrentProcessElevated(void)                            { return (geteuid() == 0); }
-char*   ToLocaleName(DWORD lang_id)                              { (void)lang_id; return "en"; }
+
+/* ToLocaleName: on Linux, LCID is ignored. Instead we return the BCP-47
+ * locale name from the LANG/LANGUAGE environment (e.g. "en_US.UTF-8"
+ * → "en-US"), falling back to "en-US" if the locale is unset or "C". */
+char* ToLocaleName(DWORD lang_id)
+{
+    (void)lang_id;
+    static char locale_name[64];
+
+    const char* lang = getenv("LANG");
+    if (lang == NULL || lang[0] == '\0' || strcmp(lang, "C") == 0 ||
+        strcmp(lang, "POSIX") == 0) {
+        return "en-US";
+    }
+
+    /* Copy the lang code (up to '.', '@', or NUL) and convert '_' → '-' */
+    size_t i = 0;
+    while (lang[i] && lang[i] != '.' && lang[i] != '@' &&
+           i < sizeof(locale_name) - 1) {
+        locale_name[i] = (lang[i] == '_') ? '-' : lang[i];
+        i++;
+    }
+    locale_name[i] = '\0';
+    return (i > 0) ? locale_name : "en-US";
+}
 BOOL    SetPrivilege(HANDLE hToken, LPCWSTR priv, BOOL enable)   { (void)hToken;(void)priv;(void)enable; return FALSE; }
 BOOL    MountRegistryHive(const HKEY k, const char* n, const char* p) { (void)k;(void)n;(void)p; return FALSE; }
 BOOL    UnmountRegistryHive(const HKEY k, const char* n)         { (void)k;(void)n; return FALSE; }
