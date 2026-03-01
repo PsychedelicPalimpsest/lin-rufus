@@ -380,7 +380,13 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 ### 3r. Dark Mode (`darkmode.c`)
 
-All functions are no-ops on Linux — correct.  GTK theming handles dark mode automatically via `GTK_THEME` / `prefer-dark-appearance` setting.
+All functions are no-ops on Linux — correct.  GTK theming handles dark mode automatically via `GTK_THEME` / `prefer-dark-appearance` setting.  `is_darkmode_enabled` is now kept in sync with the GTK setting at runtime:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Manual dark mode toggle (Ctrl+Alt+D) | ✅ | Toggles `gtk-application-prefer-dark-theme` and saves preference |
+| Saved dark mode preference at startup | ✅ | Read from `SETTING_DARK_MODE` (0=system, 1=light, 2=dark) |
+| Reactive dark mode (item 55) | ✅ | `notify::gtk-application-prefer-dark-theme` signal connected in `on_app_activate`; `is_darkmode_enabled` updated on every system/user theme change |
 
 ---
 
@@ -559,8 +565,8 @@ This is the most structurally significant porting gap.
 
 ### Security & Boot Validation
 
-81. **TPM 2.0 detection** — read `/sys/class/tpm/tpm0/tpm_version_major` (or `tpm2_getcap` output) to populate a `tpm_version` global; surface the result in the image-scan report so the UI can warn when writing a Windows 11 image to a machine lacking TPM 2.0
-82. **Secure Boot status detection** — read `/sys/firmware/efi/efivars/SecureBoot-*` and `SetupMode-*` EFI variables to determine whether the running system has Secure Boot enabled; report in the image-scan tooltip alongside architecture and PE signing information
+81. ~~**TPM 2.0 detection**~~ ✅ **DONE** — `GetTPMVersion()` in `src/linux/system_info.c` reads `/sys/class/tpm/tpm0/tpm_version_major`; returns 0=none, 1=TPM 1.x, 2=TPM 2.0; fake-sysfs injectable via `sysinfo_set_sysfs_root()` in RUFUS_TEST builds; wired into `UM_IMAGE_SCANNED` handler in `ui_gtk.c` — logs TPM version and warns when a Windows 11 image is selected on a machine without TPM 2.0; 23 tests pass (`test_system_info_linux`)
+82. ~~**Secure Boot status detection**~~ ✅ **DONE** — `IsSecureBootEnabled()` and `IsSetupModeEnabled()` in `src/linux/system_info.c` read EFI variable files in `/sys/firmware/efi/efivars/`; 5-byte EFI variable format parsed (4-byte attrs + 1-byte data); injectable via `sysinfo_set_efi_root()`; shown in boot combo tooltip when a Windows image is selected; 23 tests pass
 83. **Signed bootloader selection** — when `img_report.has_efi` is TRUE and Secure Boot is active (item 82), prefer `shimx64.efi` over a direct `grubx64.efi` write; warn the user if the selected image's bootloader is revoked per the DBX (item 69)
 84. **PKCS7 full chain validation** — `GetIssuerCertificateInfo()` currently extracts the leaf CN and thumbprint; extend it to walk the full `PKCS7_get0_signers()` chain against an OpenSSL `X509_STORE` loaded with the system CA bundle (`/etc/ssl/certs/ca-certificates.crt`); add a "chain trusted" boolean to the hash dialog
 

@@ -43,6 +43,8 @@
 #include "device_combo.h"
 #include "status_history.h"
 #include "notify.h"
+#include "system_info.h"
+#include "darkmode.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -121,6 +123,7 @@ static void on_about_clicked(GtkButton *btn, gpointer data);
 static void on_toggle_dark_mode(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
 static void on_persistence_changed(GtkWidget *w, gpointer data);
+void SetPersistenceSize(void);   /* defined later in this file */
 extern DWORD WINAPI HashThread(void *param);  /* hash.c */
 void ShowLanguageMenu(RECT rcExclude);
 extern DWORD WINAPI ImageScanThread(LPVOID param); /* image_scan.c */
@@ -901,7 +904,21 @@ static void on_toggle_dark_mode(GtkWidget *w, gpointer data)
 	gboolean next = !current;
 	g_object_set(G_OBJECT(gsettings),
 	             "gtk-application-prefer-dark-theme", next, NULL);
+	/* Save explicit user preference: 1=light, 2=dark */
 	WriteSetting32(SETTING_DARK_MODE, next ? 2 : 1);
+	is_darkmode_enabled = next ? TRUE : FALSE;
+}
+
+/* Callback invoked when the GTK dark-theme preference changes (either by the
+ * user via Ctrl+Alt+D or because the desktop environment changed the system
+ * theme).  Keeps is_darkmode_enabled in sync with the actual GTK state. */
+static void on_gtk_dark_theme_changed(GObject *object, GParamSpec *pspec,
+                                       gpointer data)
+{
+	(void)pspec; (void)data;
+	gboolean dark = FALSE;
+	g_object_get(object, "gtk-application-prefer-dark-theme", &dark, NULL);
+	is_darkmode_enabled = dark ? TRUE : FALSE;
 }
 
 /* ======================================================================
@@ -1235,7 +1252,7 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		break;
 	}
 
-	case UM_IMAGE_SCANNED:
+	case UM_IMAGE_SCANNED: {
 		/* ImageScanThread finished — img_report is now populated.
 		 * Refresh boot type, filesystem, and partition-scheme combos
 		 * to reflect the scanned image content. */
@@ -1244,7 +1261,40 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		SetFSFromISO();
 		SetPartitionSchemeAndTargetSystem(FALSE);
 		TogglePersistenceControls(HAS_PERSISTENCE(img_report));
+
+		/* For Windows images, report host TPM and Secure Boot status so
+		 * the user can tell if the target machine meets requirements. */
+		if (IS_WINDOWS_1X(img_report)) {
+			int tpm_ver = GetTPMVersion();
+			BOOL sb_on  = IsSecureBootEnabled();
+			BOOL sm_on  = IsSetupModeEnabled();
+			char info[256];
+
+			/* Build human-readable status for the log */
+			snprintf(info, sizeof(info),
+			         "Host: TPM %s, Secure Boot %s%s",
+			         tpm_ver == 2 ? "2.0" :
+			         tpm_ver == 1 ? "1.x" : "not detected",
+			         sb_on ? "enabled" : "disabled",
+			         sm_on ? " (setup mode)" : "");
+			uprintf("%s", info);
+
+			/* Warn if this is a Windows 11 image and TPM 2.0 is missing */
+			if (IS_WINDOWS_11(img_report) && tpm_ver < 2) {
+				uprintf("WARNING: Windows 11 requires TPM 2.0 — "
+				        "this machine may not boot the written image");
+			}
+
+			/* Show host info as a tooltip on the boot combo */
+			if (rw.boot_combo) {
+				char tip[320];
+				snprintf(tip, sizeof(tip),
+				         "Boot type\n─────────\n%s", info);
+				gtk_widget_set_tooltip_text(rw.boot_combo, tip);
+			}
+		}
 		break;
+	}
 
 	case UM_HASH_COMPLETED: {
 		/* HashThread finished — show a dialog with MD5/SHA1/SHA256/(SHA512) results */
@@ -1624,6 +1674,18 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 			             "gtk-application-prefer-dark-theme", FALSE, NULL);
 		}
 		/* 0 = follow system default, no override needed */
+
+		/* Sync is_darkmode_enabled with the actual current preference and
+		 * connect a signal handler so it stays in sync at runtime. */
+		{
+			gboolean dark = FALSE;
+			g_object_get(G_OBJECT(gsettings),
+			             "gtk-application-prefer-dark-theme", &dark, NULL);
+			is_darkmode_enabled = dark ? TRUE : FALSE;
+		}
+		g_signal_connect(G_OBJECT(gsettings),
+		                 "notify::gtk-application-prefer-dark-theme",
+		                 G_CALLBACK(on_gtk_dark_theme_changed), NULL);
 	}
 
 	/* Initialise the message dispatch system on the main thread and hook

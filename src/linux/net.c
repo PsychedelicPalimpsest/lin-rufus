@@ -476,6 +476,9 @@ BOOL rufus_is_newer_version(uint16_t server[3], uint16_t current[3])
 static BOOL force_update_check = FALSE;
 static HANDLE update_check_thread = NULL;
 
+/* Forward declaration — defined below */
+void CheckForDBXUpdates(void);
+
 static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 {
 	(void)param;
@@ -521,6 +524,7 @@ static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 	CheckForDBXUpdates();
 	update_check_thread = NULL;
 	ExitThread(0);
+	return 0;
 }
 
 /*
@@ -1034,6 +1038,7 @@ out:
 	free(ctx);
 	PostMessage(hMainDialog, UM_ENABLE_CONTROLS, 0, 0);
 	ExitThread(success ? 0 : 1);
+	return 0;
 }
 
 BOOL DownloadISO(void)

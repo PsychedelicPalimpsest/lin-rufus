@@ -521,6 +521,14 @@ EXTRA_SRC_LINUX_test_wue_linux := \
 	$(WIM_LIB) \
 	$(XML_SRC)
 
+# system_info_linux tests: GetTPMVersion, IsSecureBootEnabled, IsSetupModeEnabled
+CFLAGS_LINUX_test_system_info_linux := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_system_info_linux := $(SRC_DIR)/linux/system_info.c
+
 # image_scan_linux tests: ImageScanThread — ISO scanning + img_report population
 # Links iso.c (ExtractISO + img_report), vhd.c (IsBootableImage), image_scan.c (thread),
 # plus stdfn.c, stdio.c, ui.c, localization chain, BLED (vhd decompression), WIM, XML.
