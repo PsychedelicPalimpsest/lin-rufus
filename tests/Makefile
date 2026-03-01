@@ -220,7 +220,8 @@ CFLAGS_LINUX_test_ui_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linu
                                -Wno-implicit-function-declaration \
                                $(FONTCONFIG_CFLAGS)
 LDFLAGS_LINUX_test_ui_linux := $(FONTCONFIG_LIBS)
-EXTRA_SRC_LINUX_test_ui_linux := $(SRC_DIR)/linux/globals.c
+EXTRA_SRC_LINUX_test_ui_linux := $(SRC_DIR)/linux/globals.c \
+                                  $(SRC_DIR)/linux/device_combo.c
 
 # compat_linux tests: shlwapi.h (PathFileExistsA, PathCombineA) and shellapi.h (ShellExecuteA)
 # Pure header-only implementation — no extra .c sources needed

@@ -40,6 +40,7 @@
 #include "settings.h"
 #include "version.h"
 #include "window_text_bridge.h"
+#include "device_combo.h"
 #include "status_history.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
@@ -128,6 +129,7 @@ extern void SetFSFromISO(void);                    /* rufus.c stubs */
 extern void SetPartitionSchemeAndTargetSystem(BOOL only_target);
 static GtkWidget *build_toolbar(void);
 static GtkWidget *build_device_row(void);
+static void on_device_combo_right_click(GtkWidget *widget, GdkEventButton *event, gpointer data);
 static GtkWidget *build_boot_row(void);
 static GtkWidget *build_image_option_row(void);
 static GtkWidget *build_drive_properties(void);
@@ -224,6 +226,62 @@ static GtkWidget *build_toolbar(void)
 	return bar;
 }
 
+/* ---- Device combo right-click context menu ---- */
+
+/* Callback: "Refresh" menu item — rescan devices. */
+static void on_device_ctx_refresh(GtkMenuItem *item, gpointer data)
+{
+	(void)item; (void)data;
+	if (!op_in_progress)
+		GetDevices((DWORD)ComboBox_GetCurItemData(hDeviceList));
+}
+
+/* Callback: "Open in File Manager" menu item — xdg-open the device path. */
+static void on_device_ctx_open_fm(GtkMenuItem *item, gpointer data)
+{
+	(void)item; (void)data;
+
+	int sel = ComboBox_GetCurSel(hDeviceList);
+	if (sel < 0)
+		return;
+
+	DWORD di = (DWORD)ComboBox_GetItemData(hDeviceList, sel);
+	char *dev_path = GetPhysicalName(di);
+	if (!dev_path)
+		return;
+
+	char cmd[512];
+	if (device_open_in_fm_build_cmd(dev_path, cmd, sizeof(cmd))) {
+		uprintf("Opening device in file manager: %s", cmd);
+		if (system(cmd) != 0)
+			uprintf("xdg-open returned non-zero for %s", dev_path);
+	}
+	free(dev_path);
+}
+
+/* Signal handler for button-press-event on the device combo.
+ * Shows a popup context menu on right-click (button 3). */
+static void on_device_combo_right_click(GtkWidget *widget, GdkEventButton *event, gpointer data)
+{
+	(void)widget; (void)data;
+
+	if (event->type != GDK_BUTTON_PRESS || event->button != 3)
+		return;
+
+	GtkWidget *menu      = gtk_menu_new();
+	GtkWidget *refresh   = gtk_menu_item_new_with_label("🔄 Refresh");
+	GtkWidget *open_fm   = gtk_menu_item_new_with_label("📂 Open in File Manager");
+
+	gtk_menu_shell_append(GTK_MENU_SHELL(menu), refresh);
+	gtk_menu_shell_append(GTK_MENU_SHELL(menu), open_fm);
+
+	g_signal_connect(refresh, "activate", G_CALLBACK(on_device_ctx_refresh), NULL);
+	g_signal_connect(open_fm, "activate", G_CALLBACK(on_device_ctx_open_fm),  NULL);
+
+	gtk_widget_show_all(menu);
+	gtk_menu_popup_at_pointer(GTK_MENU(menu), (GdkEvent *)event);
+}
+
 /* ---- Device row ---- */
 static GtkWidget *build_device_row(void)
 {
@@ -235,7 +293,8 @@ static GtkWidget *build_device_row(void)
 	gtk_widget_set_hexpand(rw.device_combo, TRUE);
 	gtk_widget_set_tooltip_text(rw.device_combo, "Select the USB drive to format");
 
-	g_signal_connect(rw.device_combo, "changed", G_CALLBACK(on_device_changed), NULL);
+	g_signal_connect(rw.device_combo, "changed",            G_CALLBACK(on_device_changed),          NULL);
+	g_signal_connect(rw.device_combo, "button-press-event", G_CALLBACK(on_device_combo_right_click), NULL);
 
 	GtkWidget *toolbar = build_toolbar();
 
