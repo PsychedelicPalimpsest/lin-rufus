@@ -423,7 +423,7 @@ This is the most structurally significant porting gap.
 | `GetResource()` — Windows PE resources | 🚫 | PE resource section not available on ELF Linux binary |
 | Embedded locale data (`res/loc/embedded.loc`) | 🟡 | Must be compiled in as a C array (`xxd -i`) or loaded from a data directory |
 | Embedded FreeDOS / MS-DOS boot files | 🟡 | Same — embed as binary arrays or install to `$datadir` |
-| Application icon (`.desktop` / `.png`) | ❌ | Need a `.desktop` file and icon for Linux desktop integration |
+| Application icon (`.desktop` / `.png`) | ✅ | `res/ie.akeo.rufus.desktop` + `res/ie.akeo.rufus.appdata.xml`; icons at 32/48/256px; install targets in `Makefile.am` |
 
 ---
 
@@ -454,8 +454,8 @@ This is the most structurally significant porting gap.
 7. ~~**Format thread** (`format.c`)~~ 🔧 **IN PROGRESS** — `FormatPartition` ✅, `WritePBR` ✅, `FormatThread` stub (routes through OS partitioning still needed); START button wired; 118 format tests pass
 8. ~~**FAT32 formatter** (`format_fat32.c`)~~ ✅ **DONE** — 16 tests pass
 9. ~~**ext formatter** (`format_ext.c`)~~ ✅ **DONE** — 9 tests pass
-10. **ISO extraction** (`iso.c`) — `libcdio` is bundled; wire up real I/O
-11. **Hashing** (`hash.c`) — algorithms are pure C; just need POSIX I/O wrappers
+10. ~~**ISO extraction** (`iso.c`)~~ ✅ **DONE** — full POSIX implementation using libcdio; 12345 tests pass
+11. ~~**Hashing** (`hash.c`)~~ ✅ **DONE** — all hash algorithms + HashThread/IndividualHashThread; 78 tests pass
 11. ~~**Networking** (`net.c`)~~ ✅ **DONE** — `IsDownloadable` + `DownloadToFileOrBufferEx` implemented with libcurl; 45 tests pass; `configure.ac` updated with `PKG_CHECK_MODULES` for libcurl; stubs remain for `CheckForUpdates`/`DownloadISO`/`DownloadSignedFileThreaded`
 12. ~~**PKI / signatures** (`pki.c`)~~ ✅ **DONE** — OpenSSL EVP API for `ValidateOpensslSignature`; mmap PE parsing for `GetSignatureName`/`GetSignatureTimeStamp`/`GetIssuerCertificateInfo`; 21 tests pass
 13. ~~**Bad blocks** (`badblocks.c`)~~ ✅ **DONE** — full POSIX port using `pread`/`pwrite`/`posix_memalign`/`clock_gettime`; bad-block list management ported verbatim; `ERROR_OBJECT_IN_LIST` added to compat; 43 tests pass
@@ -468,5 +468,5 @@ This is the most structurally significant porting gap.
 19a. ~~**uprintf → GTK log routing**~~ ✅ **DONE** — `rufus_set_log_handler()` API in `stdio.c`; registered in `on_app_activate()`; 5 new tests pass
 19b. ~~**Cancel operation**~~ ✅ **DONE** — `on_close_clicked` sets `ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED)`
 19c. ~~**stdlg test-injection API**~~ ✅ **DONE** — `stdlg_set_test_response()` / `stdlg_clear_test_mode()` in `stdlg.c`; 24 tests pass (all assertions pass)
-20. **Desktop integration** — `.desktop` file, icon, AppStream metadata
+20. ~~**Desktop integration**~~ ✅ **DONE** — `res/ie.akeo.rufus.desktop` + `res/ie.akeo.rufus.appdata.xml`; icons at 32/48/256px copied from appstore images; `Makefile.am` install-data-hook installs into hicolor theme tree
 

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream / Metainfo for Rufus (Linux desktop integration) -->
+<component type="desktop-application">
+  <id>ie.akeo.rufus</id>
+
+  <name>Rufus</name>
+  <summary>The Reliable USB Formatting Utility</summary>
+  <description>
+    <p>
+      Rufus is a utility that helps format and create bootable USB flash drives,
+      such as USB keys/pendrives, memory sticks, etc.
+    </p>
+    <p>It is especially useful for cases where:</p>
+    <ul>
+      <li>You need to create USB installation media from bootable ISOs
+          (Windows, Linux, UEFI, etc.)</li>
+      <li>You need to work on a system that doesn't have an OS installed</li>
+      <li>You need to flash a BIOS or other firmware from DOS</li>
+      <li>You want to run a low-level utility</li>
+    </ul>
+  </description>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <url type="homepage">https://rufus.ie</url>
+  <url type="bugtracker">https://github.com/pbatard/rufus/issues</url>
+  <url type="donation">https://rufus.ie/donate.html</url>
+
+  <developer id="ie.akeo">
+    <name>Akeo Consulting</name>
+  </developer>
+
+  <launchable type="desktop-id">ie.akeo.rufus.desktop</launchable>
+
+  <provides>
+    <binary>rufus</binary>
+  </provides>
+
+  <categories>
+    <category>System</category>
+    <category>Utility</category>
+  </categories>
+
+  <keywords>
+    <keyword>USB</keyword>
+    <keyword>format</keyword>
+    <keyword>bootable</keyword>
+    <keyword>ISO</keyword>
+    <keyword>flash</keyword>
+    <keyword>drive</keyword>
+    <keyword>UEFI</keyword>
+    <keyword>installer</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="4.13" date="2026-02-17">
+      <description>
+        <p>Fix UEFI:NTFS not selecting the proper driver for ARM/ARM64.</p>
+      </description>
+    </release>
+    <release version="4.12" date="2026-01-30">
+      <description>
+        <p>Various improvements and bug fixes including Bitdefender VHD filtering,
+           better Drive detection, and security fixes.</p>
+      </description>
+    </release>
+  </releases>
+</component>

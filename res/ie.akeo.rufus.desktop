@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Rufus
+GenericName=USB Formatting Utility
+Comment=The Reliable USB Formatting Utility
+Exec=rufus
+Icon=ie.akeo.rufus
+Terminal=false
+Categories=System;Utility;
+Keywords=USB;format;bootable;ISO;flash;drive;
+StartupNotify=true
+X-GNOME-UsesNotifications=true
