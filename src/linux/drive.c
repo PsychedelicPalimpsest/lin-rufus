@@ -49,6 +49,7 @@
  * const-definitions because INITGUID is defined above. */
 #include "../windows/mbr_types.h"
 #include "../windows/gpt_types.h"
+#include "settings.h"
 
 /* rufus_drive[] is defined in globals.c (production) or inline by tests */
 extern RUFUS_DRIVE rufus_drive[MAX_DRIVES];
@@ -1295,5 +1296,44 @@ BOOL ToggleEsp(DWORD di, uint64_t off)
     return ok;
 }
 BOOL IsMsDevDrive(DWORD di)                           { (void)di; return FALSE; }
-BOOL IsFilteredDrive(DWORD di)                        { (void)di; return FALSE; }
+
+BOOL IsFilteredDrive(DWORD di)
+{
+    /* Read the GPT disk GUID and compare against stored IgnoreDiskXX settings */
+    HANDLE hPhysical = GetPhysicalHandle(di, FALSE, FALSE, TRUE);
+    if (hPhysical == INVALID_HANDLE_VALUE)
+        return FALSE;
+
+    /* Seek to LBA 1 (GPT header) */
+    uint8_t header[512];
+    BOOL r = FALSE;
+    if (lseek((int)(intptr_t)hPhysical, 512, SEEK_SET) < 0)
+        goto out;
+    if (read((int)(intptr_t)hPhysical, header, sizeof(header)) != sizeof(header))
+        goto out;
+    if (memcmp(header, "EFI PART", 8) != 0)
+        goto out;
+
+    /* Disk GUID is at header offset 56 */
+    GUID disk_guid;
+    memcpy(&disk_guid, header + 56, sizeof(GUID));
+
+    char setting_name[32];
+    for (int i = 1; i <= MAX_IGNORE_USB; i++) {
+        snprintf(setting_name, sizeof(setting_name), "IgnoreDisk%02d", i);
+        const char *val = ReadSettingStr(setting_name);
+        if (val == NULL || val[0] == '\0') continue;
+        GUID *stored = StringToGuid(val);
+        if (stored != NULL && CompareGUID(&disk_guid, stored)) {
+            uprintf("Device eliminated because it matches Disk GUID %s",
+                    GuidToString(&disk_guid, TRUE));
+            r = TRUE;
+            break;
+        }
+    }
+
+out:
+    CloseHandle(hPhysical);
+    return r;
+}
 int  IsHDD(DWORD di, uint16_t vid, uint16_t pid, const char* strid) { (void)di;(void)vid;(void)pid;(void)strid; return 0; }

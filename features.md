@@ -136,7 +136,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `GetOpticalMedia()` | ✅ | Scans `/dev/sr*`; size check via `BLKGETSIZE64`/seek; reads ISO 9660 label at offset 0x8028; 8 tests pass |
 | `ClearDrives()` | ✅ | Done (part of GetDevices implementation) |
 | `IsMsDevDrive()` | 🚫 | Windows Dev Drive feature; always return FALSE |
-| `IsFilteredDrive()` | 🟡 | May need per-device filtering for safety |
+| `IsFilteredDrive()` | ✅ | Reads GPT Disk GUID from LBA 1 header offset 56; compares with `IgnoreDisk01`–`IgnoreDisk08` settings; returns FALSE for non-GPT disks; 5 tests pass |
 | `IsVdsAvailable()` / `ListVdsVolumes()` / `VdsRescan()` | 🚫 | VDS is Windows-only |
 | `ToggleEsp()` / `GetEspOffset()` | ✅ | Toggle ESP↔MS-Basic-Data (GPT) or 0xEF↔0x0C (MBR); CRC recomputed; 42 tests pass |
 

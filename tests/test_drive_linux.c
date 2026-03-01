@@ -16,12 +16,18 @@
  * 12. GetLogicalName        — partition path lookup via fake sysfs
  * 13. UnmountVolume         — graceful handling (no actual unmount in tests)
  * 14. AltUnmountVolume      — graceful handling
+ * 15. IsFilteredDrive       — GPT GUID matched against IgnoreDisk01-08 settings
  */
 
 #include "framework.h"
 
 /* Pull in the Linux drive.c internal API */
 #include "../src/linux/drive_linux.h"
+
+extern char *ini_file;
+extern char *GuidToString(const GUID *guid, BOOL bDecorated);
+extern GUID *StringToGuid(const char *str);
+extern BOOL IsFilteredDrive(DWORD di);
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1014,6 +1020,144 @@ TEST(get_drive_number_from_handle)
 }
 
 /* =========================================================================
+ * 15. IsFilteredDrive
+ * ====================================================================== */
+
+/* The disk GUID baked into build_gpt() header bytes [56..71]:
+ * 0xAB,0xAC,...,0xBA → Data1=0xAEADACAB, Data2=0xB0AF, Data3=0xB2B1,
+ * Data4={B3,B4,B5,B6,B7,B8,B9,BA}
+ */
+#define GPT_TEST_DISK_GUID "{AEADACAB-B0AF-B2B1-B3B4-B5B6B7B8B9BA}"
+
+/* Write an ini section + key to a file (append). */
+static void ini_write_key(const char *path, const char *section,
+                           const char *key, const char *value)
+{
+    FILE *f = fopen(path, "w");
+    if (!f) return;
+    fprintf(f, "[%s]\n%s=%s\n", section, key, value);
+    fclose(f);
+}
+
+/* Build a disk image (2 × 512 + partition-entries) with a valid GPT header
+ * and return the path.  Caller must unlink(). */
+static void make_gpt_disk(char path[64])
+{
+    int fd = make_temp_file(path, 0);
+    if (fd < 0) return;
+
+    uint64_t total_sectors = 100;
+    uint8_t mbr[512]      = {0};
+    uint8_t header[512];
+    uint8_t entries[128 * 128];
+    build_gpt(header, entries, total_sectors, 34, 99,
+              GUID_BASIC_DATA, TEST_PART_GUID);
+
+    write(fd, mbr, sizeof(mbr));       /* LBA 0 — protective MBR */
+    write(fd, header, sizeof(header)); /* LBA 1 — GPT header      */
+    write(fd, entries, sizeof(entries));
+    close(fd);
+}
+
+TEST(is_filtered_drive_invalid_index)
+{
+    drive_linux_reset_drives();
+    CHECK(IsFilteredDrive(DRIVE_INDEX_MIN) == FALSE);
+}
+
+TEST(is_filtered_drive_mbr_disk_not_filtered)
+{
+    /* MBR disk — no GPT signature → always returns FALSE */
+    char path[64];
+    int fd = make_temp_file(path, 1024);
+    if (fd < 0) return;
+    uint8_t mbr[512]; memset(mbr, 0, sizeof(mbr));
+    mbr[510] = 0x55; mbr[511] = 0xAA;
+    write(fd, mbr, sizeof(mbr));
+    close(fd);
+
+    drive_linux_reset_drives();
+    drive_linux_add_drive(path, "MBR Test", "1 KB", 1024ULL);
+
+    /* No IgnoreDisk setting configured */
+    ini_file = NULL;
+    CHECK(IsFilteredDrive(DRIVE_INDEX_MIN) == FALSE);
+    unlink(path);
+}
+
+TEST(is_filtered_drive_gpt_no_match)
+{
+    /* GPT disk whose GUID is NOT in the ignore list */
+    char dpath[64], ipath[64];
+    make_gpt_disk(dpath);
+    snprintf(ipath, sizeof(ipath), "/tmp/rufus_ini_XXXXXX");
+    int ifd = mkstemp(ipath);
+    if (ifd >= 0) close(ifd);
+
+    ini_write_key(ipath, "Rufus", "IgnoreDisk01", "{00000000-0000-0000-0000-000000000000}");
+    ini_file = ipath;
+
+    drive_linux_reset_drives();
+    drive_linux_add_drive(dpath, "GPT no-match", "50 KB", 51200ULL);
+
+    CHECK(IsFilteredDrive(DRIVE_INDEX_MIN) == FALSE);
+
+    ini_file = NULL;
+    unlink(ipath);
+    unlink(dpath);
+}
+
+TEST(is_filtered_drive_gpt_match)
+{
+    /* GPT disk whose GUID matches IgnoreDisk01 */
+    char dpath[64], ipath[64];
+    make_gpt_disk(dpath);
+    snprintf(ipath, sizeof(ipath), "/tmp/rufus_ini_XXXXXX");
+    int ifd = mkstemp(ipath);
+    if (ifd >= 0) close(ifd);
+
+    ini_write_key(ipath, "Rufus", "IgnoreDisk01", GPT_TEST_DISK_GUID);
+    ini_file = ipath;
+
+    drive_linux_reset_drives();
+    drive_linux_add_drive(dpath, "GPT match", "50 KB", 51200ULL);
+
+    CHECK(IsFilteredDrive(DRIVE_INDEX_MIN) == TRUE);
+
+    ini_file = NULL;
+    unlink(ipath);
+    unlink(dpath);
+}
+
+TEST(is_filtered_drive_gpt_match_second_slot)
+{
+    /* GUID in slot 02, slot 01 has a different GUID */
+    char dpath[64], ipath[64];
+    make_gpt_disk(dpath);
+    snprintf(ipath, sizeof(ipath), "/tmp/rufus_ini_XXXXXX");
+    int ifd = mkstemp(ipath);
+    if (ifd >= 0) close(ifd);
+
+    FILE *f = fopen(ipath, "w");
+    if (f) {
+        fprintf(f, "[Rufus]\n");
+        fprintf(f, "IgnoreDisk01={00000000-0000-0000-0000-000000000001}\n");
+        fprintf(f, "IgnoreDisk02=%s\n", GPT_TEST_DISK_GUID);
+        fclose(f);
+    }
+    ini_file = ipath;
+
+    drive_linux_reset_drives();
+    drive_linux_add_drive(dpath, "GPT slot2", "50 KB", 51200ULL);
+
+    CHECK(IsFilteredDrive(DRIVE_INDEX_MIN) == TRUE);
+
+    ini_file = NULL;
+    unlink(ipath);
+    unlink(dpath);
+}
+
+/* =========================================================================
  * Main
  * ====================================================================== */
 
@@ -1090,6 +1234,13 @@ int main(void)
 
 	/* GetDriveNumber */
 	RUN_TEST(get_drive_number_from_handle);
+
+	/* IsFilteredDrive */
+	RUN_TEST(is_filtered_drive_invalid_index);
+	RUN_TEST(is_filtered_drive_mbr_disk_not_filtered);
+	RUN_TEST(is_filtered_drive_gpt_no_match);
+	RUN_TEST(is_filtered_drive_gpt_match);
+	RUN_TEST(is_filtered_drive_gpt_match_second_slot);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;

@@ -134,6 +134,7 @@ EXTRA_SRC_LINUX_test_pe_parser_linux := $(PE_PARSER_SRC)
 DRIVE_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
                    $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
                    $(SRC_DIR)/linux/ui.c \
+                   $(SRC_DIR)/linux/parser.c \
                    $(FORMAT_MS_SRC)
 CFLAGS_LINUX_test_drive_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                    -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
@@ -255,6 +256,7 @@ SETTINGS_LINUX_SRC := \
 	$(COMMON)/localization.c \
 	$(SRC_DIR)/linux/stdio.c \
 	$(SRC_DIR)/linux/ui.c \
+	$(SRC_DIR)/linux/stdlg.c \
 	settings_linux_glue.c
 CFLAGS_LINUX_test_settings_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
@@ -485,3 +487,4 @@ run-wine: windows
 
 clean:
 	rm -f $(LINUX_BINS) $(WIN_BINS)
+
