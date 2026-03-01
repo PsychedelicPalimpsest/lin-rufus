@@ -264,8 +264,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 |----------|--------|-------|
 | `FileDialog()` | ✅ | Test-injectable; GTK `GtkFileChooserDialog` impl via `#ifdef USE_GTK` in `stdlg.c`; returns preset path or NULL in tests |
 | `NotificationEx()` / notification popups | ✅ | Test-injectable; GTK `GtkMessageDialog` impl via `#ifdef USE_GTK` in `stdlg.c`; maps MB_* flags to GTK message/button types; 36 tests pass |
-| `CustomSelectionDialog()` | ✅ | Test-injectable; returns preset mask in tests; GTK impl pending |
-| `ListDialog()` | ✅ | Dumps to stderr in non-GTK; test-mode no-op |
+| `CustomSelectionDialog()` | ✅ | GTK implementation: checkbox/radio-button grid GtkDialog; username_index creates inline GtkEntry; test-injectable; fallback returns mask; 40 tests pass |
+| `ListDialog()` | ✅ | GTK implementation: scrollable GtkListBox dialog; non-GTK dumps to stderr; 40 tests pass |
 | `CreateTooltip()` / `DestroyTooltip()` | ✅ | Uses `gtk_widget_set_tooltip_text` / `gtk_widget_set_has_tooltip`; `#ifdef USE_GTK` guard; 6 tests pass; wired into `on_app_activate` for device, boot, filesystem, cluster, label, select, start controls |
 | `SetTaskbarProgressValue()` | 🚫 | Windows taskbar — N/A; could map to GTK window urgency hint |
 | `CreateAboutBox()` / `AboutCallback()` | 🔧 | GTK About dialog implemented in `ui_gtk.c`; callback stub unused |

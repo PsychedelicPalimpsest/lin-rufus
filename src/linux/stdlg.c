@@ -200,9 +200,6 @@ char* FileDialog(BOOL save, char* path, const ext_t* ext, UINT* selected_ext)
 int CustomSelectionDialog(int style, char* title, char* msg,
                           char** choices, int sz, int mask, int username_index)
 {
-    (void)style; (void)title; (void)msg;
-    (void)choices; (void)sz; (void)username_index;
-
     if (_test_active) {
         int r = _test_response;
         /* IDCANCEL → return 0 (no selection) */
@@ -212,8 +209,96 @@ int CustomSelectionDialog(int style, char* title, char* msg,
         return (r >= 0) ? r : mask;
     }
 
+#ifdef USE_GTK
+    extern HWND hMainDialog;
+    GtkWidget *dlg, *content_area, *vbox, *label, *widget;
+    GtkWidget *entries[64];   /* text entry widgets for username_index slots */
+    GtkWidget *checks[64];    /* toggle widgets (check or radio) */
+    GSList *radio_group = NULL;
+    int i, result, ret = 0;
+
+    if (sz <= 0 || sz > 64)
+        return mask;
+
+    memset(entries, 0, sizeof(entries));
+    memset(checks,  0, sizeof(checks));
+
+    dlg = gtk_dialog_new_with_buttons(
+        title ? title : APPLICATION_NAME,
+        hMainDialog ? GTK_WINDOW(hMainDialog) : NULL,
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+        "_Cancel", GTK_RESPONSE_CANCEL,
+        "_OK",     GTK_RESPONSE_OK, NULL);
+
+    content_area = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
+    gtk_container_set_border_width(GTK_CONTAINER(content_area), 12);
+
+    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_container_add(GTK_CONTAINER(content_area), vbox);
+
+    /* Message label */
+    if (msg && msg[0]) {
+        label = gtk_label_new(msg);
+        gtk_widget_set_halign(label, GTK_ALIGN_START);
+        gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);
+    }
+
+    /* Build toggle widgets */
+    for (i = 0; i < sz; i++) {
+        const char *text = (choices && choices[i]) ? choices[i] : "";
+        if (style == BS_AUTORADIOBUTTON) {
+            widget = gtk_radio_button_new_with_label(radio_group, text);
+            radio_group = gtk_radio_button_get_group(GTK_RADIO_BUTTON(widget));
+            if (mask & (1 << i))
+                gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), TRUE);
+        } else {
+            widget = gtk_check_button_new_with_label(text);
+            if (mask & (1 << i))
+                gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), TRUE);
+        }
+        checks[i] = widget;
+
+        if (i == username_index) {
+            /* This choice has an editable username field below it */
+            GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+            gtk_box_pack_start(GTK_BOX(hbox), widget,          TRUE,  TRUE,  0);
+            GtkWidget *entry = gtk_entry_new();
+            gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Username");
+            gtk_box_pack_start(GTK_BOX(hbox), entry, FALSE, FALSE, 0);
+            entries[i] = entry;
+            gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
+        } else {
+            gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+        }
+    }
+
+    gtk_widget_show_all(dlg);
+    result = gtk_dialog_run(GTK_DIALOG(dlg));
+
+    if (result == GTK_RESPONSE_OK) {
+        ret = 0;
+        for (i = 0; i < sz; i++) {
+            if (checks[i] && gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(checks[i])))
+                ret |= (1 << i);
+        }
+        /* If username entry was provided, store it via uprintf for now */
+        if (username_index >= 0 && username_index < sz && entries[username_index]) {
+            const char *uname = gtk_entry_get_text(GTK_ENTRY(entries[username_index]));
+            if (uname && uname[0])
+                uprintf("Username set to: %s", uname);
+        }
+    } else {
+        ret = 0; /* cancelled */
+    }
+
+    gtk_widget_destroy(dlg);
+    return ret;
+#else
     /* Fallback: return the default mask unchanged */
+    (void)style; (void)title; (void)msg;
+    (void)choices; (void)sz; (void)username_index;
     return mask;
+#endif
 }
 
 /* =========================================================================
@@ -223,12 +308,57 @@ int CustomSelectionDialog(int style, char* title, char* msg,
 void ListDialog(char* title, char* msg, char** items, int sz)
 {
     if (!title || !msg) return;
-    /* In test/non-GTK builds: dump the list to stderr */
+
+#ifdef USE_GTK
+    extern HWND hMainDialog;
+    GtkWidget *dlg, *content_area, *vbox, *scrolled, *lbox, *label;
+    int i;
+
+    dlg = gtk_dialog_new_with_buttons(
+        title,
+        hMainDialog ? GTK_WINDOW(hMainDialog) : NULL,
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+        "_OK", GTK_RESPONSE_OK, NULL);
+
+    content_area = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
+    gtk_container_set_border_width(GTK_CONTAINER(content_area), 12);
+    gtk_widget_set_size_request(dlg, 480, 320);
+
+    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_container_add(GTK_CONTAINER(content_area), vbox);
+
+    label = gtk_label_new(msg);
+    gtk_widget_set_halign(label, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);
+
+    scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
+                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_box_pack_start(GTK_BOX(vbox), scrolled, TRUE, TRUE, 0);
+
+    lbox = gtk_list_box_new();
+    gtk_list_box_set_selection_mode(GTK_LIST_BOX(lbox), GTK_SELECTION_NONE);
+    gtk_container_add(GTK_CONTAINER(scrolled), lbox);
+
+    if (items) {
+        for (i = 0; i < sz && items[i]; i++) {
+            GtkWidget *row_label = gtk_label_new(items[i]);
+            gtk_widget_set_halign(row_label, GTK_ALIGN_START);
+            gtk_container_add(GTK_CONTAINER(lbox), row_label);
+        }
+    }
+
+    gtk_widget_show_all(dlg);
+    gtk_dialog_run(GTK_DIALOG(dlg));
+    gtk_widget_destroy(dlg);
+#else
+    /* In non-GTK builds: dump the list to stderr */
     fprintf(stderr, "[ListDialog] %s — %s (%d items)\n", title, msg, sz);
     if (items) {
         for (int i = 0; i < sz && items[i]; i++)
             fprintf(stderr, "  [%d] %s\n", i, items[i]);
     }
+#endif
 }
 
 /* =========================================================================

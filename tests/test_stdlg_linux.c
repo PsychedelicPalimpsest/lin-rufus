@@ -481,6 +481,53 @@ TEST(notification_ex_fallback_yesnocancel_returns_idno)
 }
 
 /* =========================================================================
+ * 34. CustomSelectionDialog — negative test_response returns mask unchanged
+ * =========================================================================*/
+TEST(custom_selection_dialog_neg_response_returns_mask)
+{
+    /* Setting a negative response (other than IDCANCEL) causes the current
+     * mask to be returned as-is — the default/current selection. */
+    stdlg_set_test_response(-99, NULL);
+    char *choices[] = { "A", "B", "C" };
+    int r = CustomSelectionDialog(BS_AUTOCHECKBOX, "T", "M", choices, 3, 0x06, -1);
+    stdlg_clear_test_mode();
+    CHECK_INT_EQ(0x06, r);
+}
+
+/* =========================================================================
+ * 35. CustomSelectionDialog — username_index in range does not crash
+ * =========================================================================*/
+TEST(custom_selection_dialog_username_index_no_crash)
+{
+    /* username_index >= 0 means one choice has an editable text field.
+     * The fallback (and GTK) path must not crash when this is set. */
+    stdlg_set_test_response(0x01, NULL);
+    char *choices[] = { "User: admin", "Skip" };
+    int r = CustomSelectionDialog(BS_AUTOCHECKBOX, "T", "M", choices, 2, 0x01, 0);
+    stdlg_clear_test_mode();
+    CHECK_MSG(r >= 0, "username_index in-range must not crash");
+}
+
+/* =========================================================================
+ * 36. ListDialog — null title returns without crash (guard check)
+ * =========================================================================*/
+TEST(list_dialog_null_title_returns_no_crash)
+{
+    /* ListDialog guards against NULL title and returns early */
+    ListDialog(NULL, "msg", NULL, 0);
+    CHECK(1);  /* no crash */
+}
+
+/* =========================================================================
+ * 37. ListDialog — null msg returns without crash (guard check)
+ * =========================================================================*/
+TEST(list_dialog_null_msg_returns_no_crash)
+{
+    ListDialog("Title", NULL, NULL, 0);
+    CHECK(1);  /* no crash */
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -524,6 +571,12 @@ int main(void)
     RUN(notification_ex_fallback_okcancel_returns_idok);
     RUN(notification_ex_fallback_yesno_returns_idno);
     RUN(notification_ex_fallback_yesnocancel_returns_idno);
+
+    printf("\n=== CustomSelectionDialog / ListDialog edge cases ===\n");
+    RUN(custom_selection_dialog_neg_response_returns_mask);
+    RUN(custom_selection_dialog_username_index_no_crash);
+    RUN(list_dialog_null_title_returns_no_crash);
+    RUN(list_dialog_null_msg_returns_no_crash);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;
