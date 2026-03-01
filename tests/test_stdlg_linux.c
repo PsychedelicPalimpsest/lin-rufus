@@ -530,6 +530,62 @@ TEST(list_dialog_null_msg_returns_no_crash)
 /* =========================================================================
  * main
  * =========================================================================*/
+
+/* app_dir stub — needed by find_license_file() in stdlg.c */
+char app_dir[MAX_PATH] = "";
+char app_data_dir[MAX_PATH] = "";
+char szFolderPath[MAX_PATH] = "";
+char system_dir[MAX_PATH] = "";
+char user_dir[MAX_PATH] = "";
+
+extern const char* find_license_file(void);
+
+/* =========================================================================
+ * LicenseCallback / find_license_file tests
+ * =========================================================================*/
+TEST(find_license_file_with_real_repo_path)
+{
+    /* Set app_dir to repo root so find_license_file finds LICENSE.txt there.
+     * The test binary runs from tests/, so ../  is the repo root. */
+    snprintf(app_dir, sizeof(app_dir), "../");
+    const char *path = find_license_file();
+    CHECK_MSG(path != NULL, "find_license_file must find LICENSE.txt in repo root");
+    /* Verify the file is readable */
+    FILE *f = fopen(path, "r");
+    CHECK_MSG(f != NULL, "found license file must be readable");
+    if (f) {
+        char buf[64];
+        const char *line = fgets(buf, sizeof(buf), f);
+        fclose(f);
+        CHECK_MSG(line != NULL, "LICENSE.txt must be non-empty");
+    }
+    app_dir[0] = '\0';
+}
+
+TEST(find_license_file_with_bad_path_returns_null)
+{
+    /* Set app_dir to a path that definitely has no LICENSE.txt */
+    snprintf(app_dir, sizeof(app_dir), "/tmp/definitely_no_license_here_rufus/");
+    const char *path = find_license_file();
+    /* Should be NULL since neither the dir nor its parent has LICENSE.txt */
+    /* (May find it via RUFUS_DATADIR if defined — accept either NULL or readable file) */
+    if (path != NULL) {
+        FILE *f = fopen(path, "r");
+        CHECK_MSG(f != NULL, "if non-NULL, returned path must be readable");
+        if (f) fclose(f);
+    } else {
+        CHECK(1); /* NULL is correct when not found */
+    }
+    app_dir[0] = '\0';
+}
+
+TEST(license_callback_returns_true)
+{
+    /* Non-GTK build: LicenseCallback should return TRUE without crashing */
+    INT_PTR r = LicenseCallback(NULL, 0, 0, 0);
+    CHECK_MSG(r == (INT_PTR)TRUE, "LicenseCallback must return TRUE");
+}
+
 int main(void)
 {
     printf("=== stdlg_linux tests ===\n");
@@ -577,6 +633,11 @@ int main(void)
     RUN(custom_selection_dialog_username_index_no_crash);
     RUN(list_dialog_null_title_returns_no_crash);
     RUN(list_dialog_null_msg_returns_no_crash);
+
+    printf("\n=== LicenseCallback / find_license_file ===\n");
+    RUN(find_license_file_with_real_repo_path);
+    RUN(find_license_file_with_bad_path_returns_null);
+    RUN(license_callback_returns_true);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;

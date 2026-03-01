@@ -389,8 +389,52 @@ TEST(uprintf_set_and_clear_handler)
 }
 
 /* ===========================================================================
- * ListDirectoryContent tests
+ * wuprintf — converts wchar_t format to UTF-8 and routes to log handler
  * =========================================================================*/
+extern void wuprintf(const wchar_t* format, ...);
+
+TEST(wuprintf_routes_to_handler)
+{
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    log_call_count = 0;
+    wuprintf(L"hello from wuprintf");
+    rufus_set_log_handler(NULL);
+    CHECK_MSG(log_call_count == 1, "wuprintf should call log handler exactly once");
+    CHECK_MSG(strstr(captured_log, "hello from wuprintf") != NULL,
+              "wuprintf should pass message to log handler");
+}
+
+TEST(wuprintf_ascii_roundtrip)
+{
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    wuprintf(L"value=%d", 99);
+    rufus_set_log_handler(NULL);
+    CHECK_MSG(strstr(captured_log, "value=99") != NULL,
+              "wuprintf should format and route integer arg");
+}
+
+TEST(wuprintf_no_crash_without_handler)
+{
+    rufus_set_log_handler(NULL);
+    /* Falls back to stderr — just verify no crash */
+    wuprintf(L"fallback wuprintf %d", 7);
+    CHECK(1);
+}
+
+TEST(wuprintf_non_ascii_no_crash)
+{
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    /* U+00E9 = é, valid UTF-8 and representable in wcstombs with LC_ALL=C setlocale */
+    wuprintf(L"caf\u00e9");
+    rufus_set_log_handler(NULL);
+    /* Just verify handler was called and no crash — locale may mangle chars */
+    CHECK_MSG(log_call_count > 0, "wuprintf with non-ASCII must call handler");
+}
+
+
 
 /* Helper: create a temp directory, populate with files and a subdir */
 static char list_dir_tmp[256] = "";
@@ -778,6 +822,13 @@ int main(void)
     RUN(uprintf_no_crash_without_handler);
     RUN(uprintf_handler_receives_no_newline);
     RUN(uprintf_set_and_clear_handler);
+
+    printf("\n  wuprintf — wchar_t to UTF-8 routing\n");
+    RUN(wuprintf_routes_to_handler);
+    RUN(wuprintf_ascii_roundtrip);
+    RUN(wuprintf_no_crash_without_handler);
+    RUN(wuprintf_non_ascii_no_crash);
+
     RUN(list_dir_files_only);
     RUN(list_dir_dirs_only);
     RUN(list_dir_recursive);

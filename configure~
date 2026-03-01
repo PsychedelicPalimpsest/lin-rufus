@@ -618,6 +618,8 @@ SUFFIX
 AM_LDFLAGS
 AM_CFLAGS
 VISIBILITY_CFLAGS
+FONTCONFIG_LIBS
+FONTCONFIG_CFLAGS
 BLKID_LIBS
 BLKID_CFLAGS
 CURL_LIBS
@@ -744,7 +746,9 @@ GTK_LIBS
 CURL_CFLAGS
 CURL_LIBS
 BLKID_CFLAGS
-BLKID_LIBS'
+BLKID_LIBS
+FONTCONFIG_CFLAGS
+FONTCONFIG_LIBS'
 
 
 # Initialize some variables set by options.
@@ -1402,6 +1406,10 @@ Some influential environment variables:
   BLKID_CFLAGS
               C compiler flags for BLKID, overriding pkg-config
   BLKID_LIBS  linker flags for BLKID, overriding pkg-config
+  FONTCONFIG_CFLAGS
+              C compiler flags for FONTCONFIG, overriding pkg-config
+  FONTCONFIG_LIBS
+              linker flags for FONTCONFIG, overriding pkg-config
 
 Use these variables to override the choices made by 'configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -5650,6 +5658,89 @@ printf "%s\n" "$as_me: libblkid found" >&6;}
 fi
   AM_CFLAGS="$AM_CFLAGS $BLKID_CFLAGS"
   AM_LDFLAGS="$AM_LDFLAGS $BLKID_LIBS"
+fi
+
+# fontconfig — required for IsFontAvailable() on Linux
+if test "x$target_os" = "xlinux"; then
+
+pkg_failed=no
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for fontconfig" >&5
+printf %s "checking for fontconfig... " >&6; }
+
+if test -n "$FONTCONFIG_CFLAGS"; then
+    pkg_cv_FONTCONFIG_CFLAGS="$FONTCONFIG_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fontconfig\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "fontconfig") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_FONTCONFIG_CFLAGS=`$PKG_CONFIG --cflags "fontconfig" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$FONTCONFIG_LIBS"; then
+    pkg_cv_FONTCONFIG_LIBS="$FONTCONFIG_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fontconfig\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "fontconfig") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_FONTCONFIG_LIBS=`$PKG_CONFIG --libs "fontconfig" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+                FONTCONFIG_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "fontconfig" 2>&1`
+        else
+                FONTCONFIG_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "fontconfig" 2>&1`
+        fi
+        # Put the nasty error message in config.log where it belongs
+        echo "$FONTCONFIG_PKG_ERRORS" >&5
+
+        as_fn_error $? "fontconfig required for Linux build.
+Install it with: apt install libfontconfig1-dev  OR  dnf install fontconfig-devel" "$LINENO" 5
+elif test $pkg_failed = untried; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+        as_fn_error $? "fontconfig required for Linux build.
+Install it with: apt install libfontconfig1-dev  OR  dnf install fontconfig-devel" "$LINENO" 5
+else
+        FONTCONFIG_CFLAGS=$pkg_cv_FONTCONFIG_CFLAGS
+        FONTCONFIG_LIBS=$pkg_cv_FONTCONFIG_LIBS
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: fontconfig found" >&5
+printf "%s\n" "$as_me: fontconfig found" >&6;}
+fi
+
+  # Define RUFUS_DATADIR as the installed package data directory
+
+printf "%s\n" "#define RUFUS_DATADIR \"${datadir}/rufus\"" >>confdefs.h
+
 fi
 
 

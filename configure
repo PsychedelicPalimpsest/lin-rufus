@@ -618,6 +618,9 @@ SUFFIX
 AM_LDFLAGS
 AM_CFLAGS
 VISIBILITY_CFLAGS
+MKEXFATFS
+MKFS_EXFAT
+MKNTFS
 FONTCONFIG_LIBS
 FONTCONFIG_CFLAGS
 BLKID_LIBS
@@ -5741,6 +5744,173 @@ fi
 
 printf "%s\n" "#define RUFUS_DATADIR \"${datadir}/rufus\"" >>confdefs.h
 
+
+  # Optional: detect NTFS and exFAT formatting tools (informational only —
+  # the binary searches at runtime, so absence does not abort the build).
+  # Extract the first word of "mkntfs", so it can be a program name with args.
+set dummy mkntfs; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_path_MKNTFS+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) case $MKNTFS in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_MKNTFS="$MKNTFS" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+as_dummy="/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+for as_dir in $as_dummy
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_path_MKNTFS="$as_dir$ac_word$ac_exec_ext"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_MKNTFS" && ac_cv_path_MKNTFS="not found"
+  ;;
+esac ;;
+esac
+fi
+MKNTFS=$ac_cv_path_MKNTFS
+if test -n "$MKNTFS"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $MKNTFS" >&5
+printf "%s\n" "$MKNTFS" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+  if test "x$MKNTFS" != "xnot found"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkntfs found at $MKNTFS — NTFS formatting will be available" >&5
+printf "%s\n" "$as_me: mkntfs found at $MKNTFS — NTFS formatting will be available" >&6;}
+  else
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkntfs not found — install ntfs-3g to enable NTFS formatting" >&5
+printf "%s\n" "$as_me: mkntfs not found — install ntfs-3g to enable NTFS formatting" >&6;}
+  fi
+
+  # Extract the first word of "mkfs.exfat", so it can be a program name with args.
+set dummy mkfs.exfat; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_path_MKFS_EXFAT+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) case $MKFS_EXFAT in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_MKFS_EXFAT="$MKFS_EXFAT" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+as_dummy="/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+for as_dir in $as_dummy
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_path_MKFS_EXFAT="$as_dir$ac_word$ac_exec_ext"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_MKFS_EXFAT" && ac_cv_path_MKFS_EXFAT="not found"
+  ;;
+esac ;;
+esac
+fi
+MKFS_EXFAT=$ac_cv_path_MKFS_EXFAT
+if test -n "$MKFS_EXFAT"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $MKFS_EXFAT" >&5
+printf "%s\n" "$MKFS_EXFAT" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+  if test "x$MKFS_EXFAT" != "xnot found"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkfs.exfat found at $MKFS_EXFAT — exFAT formatting will be available" >&5
+printf "%s\n" "$as_me: mkfs.exfat found at $MKFS_EXFAT — exFAT formatting will be available" >&6;}
+  else
+    # Extract the first word of "mkexfatfs", so it can be a program name with args.
+set dummy mkexfatfs; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_path_MKEXFATFS+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) case $MKEXFATFS in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_MKEXFATFS="$MKEXFATFS" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+as_dummy="/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+for as_dir in $as_dummy
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_path_MKEXFATFS="$as_dir$ac_word$ac_exec_ext"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_MKEXFATFS" && ac_cv_path_MKEXFATFS="not found"
+  ;;
+esac ;;
+esac
+fi
+MKEXFATFS=$ac_cv_path_MKEXFATFS
+if test -n "$MKEXFATFS"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $MKEXFATFS" >&5
+printf "%s\n" "$MKEXFATFS" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+    if test "x$MKEXFATFS" != "xnot found"; then
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkexfatfs found at $MKEXFATFS — exFAT formatting will be available" >&5
+printf "%s\n" "$as_me: mkexfatfs found at $MKEXFATFS — exFAT formatting will be available" >&6;}
+    else
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkfs.exfat/mkexfatfs not found — install exfatprogs to enable exFAT formatting" >&5
+printf "%s\n" "$as_me: mkfs.exfat/mkexfatfs not found — install exfatprogs to enable exFAT formatting" >&6;}
+    fi
+  fi
 fi
 
 

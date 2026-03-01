@@ -54,11 +54,24 @@ void uprintf(const char *format, ...) {
 }
 
 void wuprintf(const wchar_t* format, ...) {
+    wchar_t wbuf[4096];
+    char utf8[4096 * 4];
     va_list ap;
     va_start(ap, format);
-    vfwprintf(stderr, format, ap);
+    vswprintf(wbuf, sizeof(wbuf) / sizeof(wbuf[0]), format, ap);
     va_end(ap);
-    fputwc(L'\n', stderr);
+    /* Convert wchar_t (UTF-32 on Linux) to UTF-8 */
+    size_t n = wcstombs(utf8, wbuf, sizeof(utf8) - 1);
+    if (n == (size_t)-1)
+        n = 0;
+    utf8[n] = '\0';
+    /* Route through the same log handler as uprintf */
+    if (log_handler_fn) {
+        log_handler_fn(utf8);
+    } else {
+        fputs(utf8, stderr);
+        fputc('\n', stderr);
+    }
 }
 
 void uprintfs(const char* str) { if(str) fputs(str, stderr); }

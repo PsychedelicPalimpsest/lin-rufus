@@ -373,7 +373,96 @@ void ResizeMoveCtrl(HWND hDlg, HWND hCtrl, int dx, int dy,
                     int dw, int dh, float sc)
     { (void)hDlg;(void)hCtrl;(void)dx;(void)dy;(void)dw;(void)dh;(void)sc; }
 void ResizeButtonHeight(HWND hDlg, int id)  { (void)hDlg;(void)id; }
-INT_PTR CALLBACK LicenseCallback(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return 0; }
+
+/*
+ * find_license_file() — locate the LICENSE.txt file relative to app_dir.
+ *
+ * Searches in order:
+ *   1. <app_dir>/LICENSE.txt      (running from build root)
+ *   2. <app_dir>/../LICENSE.txt   (one level up, e.g. build subdirectory)
+ *   3. RUFUS_DATADIR/LICENSE.txt  (compile-time installed path, if defined)
+ *
+ * Returns a pointer to a static buffer on success, or NULL if not found.
+ */
+const char* find_license_file(void)
+{
+	static char path[MAX_PATH];
+	extern char app_dir[MAX_PATH];
+	struct stat st;
+
+	/* 1. Same directory as binary */
+	snprintf(path, sizeof(path), "%sLICENSE.txt", app_dir);
+	if (stat(path, &st) == 0 && S_ISREG(st.st_mode))
+		return path;
+
+	/* 2. One level up (running from tests/ or a build subdir) */
+	snprintf(path, sizeof(path), "%s../LICENSE.txt", app_dir);
+	if (stat(path, &st) == 0 && S_ISREG(st.st_mode))
+		return path;
+
+#ifdef RUFUS_DATADIR
+	/* 3. Compile-time data directory */
+	snprintf(path, sizeof(path), "%s/LICENSE.txt", RUFUS_DATADIR);
+	if (stat(path, &st) == 0 && S_ISREG(st.st_mode))
+		return path;
+#endif
+
+	return NULL;
+}
+
+INT_PTR CALLBACK LicenseCallback(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+	(void)h;(void)m;(void)w;(void)l;
+#ifdef USE_GTK
+	/* GTK build: show LICENSE.txt in a scrollable dialog */
+	const char *license_path = find_license_file();
+	GtkWidget *dlg = gtk_dialog_new_with_buttons(
+		"License", NULL,
+		GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+		"_Close", GTK_RESPONSE_CLOSE,
+		NULL);
+	gtk_window_set_default_size(GTK_WINDOW(dlg), 640, 480);
+
+	GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+	                               GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+	GtkWidget *text_view = gtk_text_view_new();
+	gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
+	gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_WORD_CHAR);
+	gtk_text_view_set_left_margin(GTK_TEXT_VIEW(text_view), 6);
+	gtk_text_view_set_right_margin(GTK_TEXT_VIEW(text_view), 6);
+
+	if (license_path != NULL) {
+		gchar *contents = NULL;
+		gsize length = 0;
+		if (g_file_get_contents(license_path, &contents, &length, NULL)) {
+			gtk_text_buffer_set_text(
+				gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view)),
+				contents, (gint)length);
+			g_free(contents);
+		}
+	} else {
+		gtk_text_buffer_set_text(
+			gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view)),
+			"GNU General Public License v3.0\n\n"
+			"This program is free software: you can redistribute it and/or\n"
+			"modify it under the terms of the GNU General Public License as\n"
+			"published by the Free Software Foundation, either version 3 of\n"
+			"the License, or (at your option) any later version.\n\n"
+			"See https://www.gnu.org/licenses/gpl-3.0.html for full text.",
+			-1);
+	}
+
+	gtk_container_add(GTK_CONTAINER(scroll), text_view);
+	GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
+	gtk_box_pack_start(GTK_BOX(content_area), scroll, TRUE, TRUE, 0);
+	gtk_widget_show_all(dlg);
+	gtk_dialog_run(GTK_DIALOG(dlg));
+	gtk_widget_destroy(dlg);
+#endif
+	return (INT_PTR)TRUE;
+}
+
 INT_PTR CALLBACK AboutCallback(HWND h, UINT m, WPARAM w, LPARAM l)   { (void)h;(void)m;(void)w;(void)l; return 0; }
 INT_PTR CreateAboutBox(void)                { return 0; }
 HICON FixWarningIcon(HICON hIcon)           { return hIcon; }
