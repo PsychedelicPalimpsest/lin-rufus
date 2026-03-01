@@ -459,6 +459,7 @@ unzip_extract(zip_header_t* zip, transformer_state_t* xstate)
 		/* Method 0 - stored (not compressed) */
 		if (xstate->dst_size) {
 			bb_copyfd_exact_size(xstate->src_fd, xstate->dst_fd, xstate->dst_size);
+			xstate->bytes_out += xstate->dst_size;
 		}
 		return xstate->dst_size;
 	}

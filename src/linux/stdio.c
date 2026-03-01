@@ -7,9 +7,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/poll.h>
+/* NO_ERROR and ERROR_INVALID_PARAMETER constants */
+#include "compat/winioctl.h"
 
 /* Forward declarations for cregex used by RunCommandWithProgress */
 #include "cregex.h"
@@ -95,8 +99,102 @@ DWORD WINAPI CreateFileWithTimeoutThread(void* params)            { (void)params
 DWORD WaitForSingleObjectWithMessages(HANDLE h, DWORD ms)         { (void)h;(void)ms; return 0; }
 BOOL  CALLBACK EnumSymProc(void* info, ULONG sz, PVOID ctx)       { (void)info;(void)sz;(void)ctx; return FALSE; }
 uint32_t ResolveDllAddress(dll_resolver_t* resolver)                        { (void)resolver; return 0; }
-BOOL  ExtractZip(const char* src, const char* dst)                { (void)src;(void)dst; return FALSE; }
-DWORD ListDirectoryContent(StrArray* arr, char* dir, uint8_t type) { (void)arr;(void)dir;(void)type; return 0; }
+
+/* ---------------------------------------------------------------------------
+ * ListDirectoryContent — POSIX implementation
+ *
+ * Fills `arr` with full paths of matching entries inside `dir`.
+ * `type` is a bitmask of LIST_DIR_TYPE_FILE, LIST_DIR_TYPE_DIRECTORY, and
+ * optionally LIST_DIR_TYPE_RECURSIVE.
+ *
+ * Returns NO_ERROR (0) when at least one file was found, ERROR_FILE_NOT_FOUND
+ * when the directory exists but has no matching entries, or a non-zero error
+ * code on failure.
+ * ---------------------------------------------------------------------------*/
+DWORD ListDirectoryContent(StrArray* arr, char* dir, uint8_t type)
+{
+    if (!arr || !dir || (type & 0x03) == 0)
+        return ERROR_INVALID_PARAMETER;
+
+    DIR *d = opendir(dir);
+    if (!d)
+        return (errno == ENOENT) ? ERROR_PATH_NOT_FOUND : (DWORD)errno;
+
+    DWORD result = ERROR_FILE_NOT_FOUND;
+    struct dirent *ent;
+
+    while ((ent = readdir(d)) != NULL) {
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+            continue;
+
+        /* Build full path */
+        size_t dirlen = strlen(dir);
+        size_t namlen = strlen(ent->d_name);
+        char *fullpath = (char*)malloc(dirlen + 1 + namlen + 2); /* +2: '/' + NUL */
+        if (!fullpath) continue;
+        memcpy(fullpath, dir, dirlen);
+        fullpath[dirlen] = '/';
+        memcpy(fullpath + dirlen + 1, ent->d_name, namlen + 1);
+
+        struct stat st;
+        if (stat(fullpath, &st) != 0) { free(fullpath); continue; }
+
+        if (S_ISDIR(st.st_mode)) {
+            if (type & LIST_DIR_TYPE_RECURSIVE) {
+                if (type & LIST_DIR_TYPE_DIRECTORY) {
+                    /* Append trailing slash for directories */
+                    fullpath[dirlen + 1 + namlen] = '/';
+                    fullpath[dirlen + 1 + namlen + 1] = '\0';
+                    StrArrayAdd(arr, fullpath, TRUE);
+                }
+                /* Recurse; strip trailing slash before recursing */
+                fullpath[dirlen + 1 + namlen] = '\0';
+                DWORD sub = ListDirectoryContent(arr, fullpath, type);
+                if (sub == NO_ERROR) result = NO_ERROR;
+            }
+        } else {
+            if (type & LIST_DIR_TYPE_FILE) {
+                StrArrayAdd(arr, fullpath, TRUE);
+                result = NO_ERROR;
+            }
+        }
+        free(fullpath);
+    }
+    closedir(d);
+    return result;
+}
+
+/* ---------------------------------------------------------------------------
+ * ExtractZip — extract a ZIP archive using the bundled bled library
+ * ---------------------------------------------------------------------------*/
+#include "bled/bled.h"
+
+/* progress callback — update UI if available */
+static void zip_progress(const uint64_t bytes)
+{
+    /* Route through UpdateProgressWithInfo when format thread is running;
+     * for now a no-op is fine — progress can be added later. */
+    (void)bytes;
+}
+
+/* per-file print callback */
+static void zip_print_file(const char *path, const uint64_t size) { (void)path; (void)size; }
+
+BOOL ExtractZip(const char* src, const char* dst)
+{
+    if (!src || !dst)
+        return FALSE;
+
+    if (bled_init(256 * 1024, NULL, NULL, NULL,
+                  zip_progress, zip_print_file,
+                  (unsigned long*)(void*)&ErrorStatus) != 0)
+        return FALSE;
+
+    uprintf("Extracting zip '%s' to '%s'", src, dst);
+    int64_t extracted = bled_uncompress_to_dir(src, dst, BLED_COMPRESSION_ZIP);
+    bled_exit();
+    return (extracted > 0) ? TRUE : FALSE;
+}
 BOOL  WriteFileWithRetry(HANDLE h, const void* buf, DWORD n, DWORD* written, DWORD retries) {
     if (h == INVALID_HANDLE_VALUE || !buf) return FALSE;
     int fd = (int)(intptr_t)h;

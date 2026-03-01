@@ -91,6 +91,7 @@ FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                     $(SRC_DIR)/linux/drive.c \
                     $(SRC_DIR)/ext2fs/posix_io.c
 EXT2FS_LIB := $(SRC_DIR)/ext2fs/libext2fs.a
+BLED_LIB   := $(SRC_DIR)/bled/libbled.a
 FORMAT_MS_SRC := $(SRC_DIR)/ms-sys/file.c \
                  $(SRC_DIR)/ms-sys/br.c \
                  $(SRC_DIR)/ms-sys/fat16.c \
@@ -152,12 +153,15 @@ CFLAGS_LINUX_test_drive2_linux := \
 LDFLAGS_LINUX_test_drive2_linux := -lblkid
 EXTRA_SRC_LINUX_test_drive2_linux := $(DRIVE2_LINUX_SRC)
 
-# stdio_linux tests: RunCommandWithProgress, SizeToHumanReadable, WindowsErrorString
+# stdio_linux tests: RunCommandWithProgress, SizeToHumanReadable, WindowsErrorString,
+#                    ListDirectoryContent, ExtractZip
 STDIO_LINUX_SRC := $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/stdfn.c
 CFLAGS_LINUX_test_stdio_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                   -I$(SRC_DIR)/bled -I$(SRC_DIR) \
                                    -Wno-implicit-function-declaration -Wno-unused-function \
                                    -Wno-sign-compare -Wno-unused-parameter
-EXTRA_SRC_LINUX_test_stdio_linux := $(STDIO_LINUX_SRC)
+LDFLAGS_LINUX_test_stdio_linux := -lz
+EXTRA_SRC_LINUX_test_stdio_linux := $(STDIO_LINUX_SRC) $(BLED_LIB)
 
 # stdlg_linux tests: NotificationEx, FileDialog, CustomSelectionDialog, ListDialog
 # Links against stdlg.c (which provides test-mode injection) and stdfn.c only;
@@ -272,7 +276,6 @@ EXTRA_SRC_LINUX_test_pki_linux := $(SRC_DIR)/linux/pki.c
 
 # vhd_linux tests: IsBootableImage, GetWimVersion, VhdMountImageAndGetSize
 # Links against vhd.c (Linux impl), libbled.a (compression), libwim.a (WIM)
-BLED_LIB := $(SRC_DIR)/bled/libbled.a
 WIM_LIB  := $(SRC_DIR)/wimlib/libwim.a
 XML_SRC  := $(COMMON)/xml.c
 CFLAGS_LINUX_test_vhd_linux := \
@@ -288,6 +291,15 @@ EXTRA_SRC_LINUX_test_vhd_linux := \
 	$(BLED_LIB) \
 	$(WIM_LIB) \
 	$(XML_SRC)
+
+# xml_linux tests: ezxml parse, navigate, build, round-trip
+CFLAGS_LINUX_test_xml_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux -I$(COMMON) \
+	-I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_xml_linux :=
+EXTRA_SRC_LINUX_test_xml_linux := $(XML_SRC)
 
 # wue_linux tests: CreateUnattendXml, PopulateWindowsVersion
 # Links against wue.c (Linux impl), libwim.a (WIM), xml.c (ezxml)

@@ -270,9 +270,13 @@ static inline int transformer_switch_file(transformer_state_t* xstate)
 	free(xstate->dst_name);
 	xstate->dst_name = NULL;
 	for (i = 0; i < strlen(dst); i++) {
+#ifdef _WIN32
 		if (dst[i] == '/')
 			dst[i] = '\\';
 		if (dst[i] == '\\')
+#else
+		if (dst[i] == '/')
+#endif
 			last_slash = i;
 	}
 	if (bled_switch != NULL)

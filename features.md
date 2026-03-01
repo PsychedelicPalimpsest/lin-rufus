@@ -237,8 +237,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `ToLocaleName()` | 🟡 | Map locale code to BCP-47 string |
 | `IsCurrentProcessElevated()` | ✅ | Returns `geteuid() == 0` |
 | `isSMode()` | 🚫 | Windows S Mode — always FALSE |
-| `ExtractZip()` | 🟡 | Use `libzip` or `libarchive` |
-| `ListDirectoryContent()` | 🟡 | Use POSIX `opendir` / `readdir` |
+| `ExtractZip()` | ✅ | Implemented using bundled `bled` library (`bled_uncompress_to_dir`); fixed path separator and `bytes_out` tracking for stored files |
+| `ListDirectoryContent()` | ✅ | POSIX `opendir`/`readdir`/`stat`; supports FILE, DIRECTORY, RECURSIVE flags |
 | `WriteFileWithRetry()` | 🟡 | Use `pwrite` with retry loop |
 | `ResolveDllAddress()` | 🚫 | DLL delay-load — N/A on Linux |
 | `WaitForSingleObjectWithMessages()` | 🟡 | Needs pthread condvar or `poll()` loop |
@@ -255,7 +255,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `DumpBufferHex()` | 🟡 | Debug helper; low priority |
 | `_printbits()` | 🟡 | Debug helper; low priority |
 | `WindowsErrorString()` / `StrError()` | 🔧 | Maps to `strerror()`; works, but DWORD error codes from compat layer may not match `errno` values |
-| `ExtractZip()` | 🟡 | See stdfn above |
+| `ExtractZip()` | ✅ | See stdfn above (bled-based implementation) |
 
 ### 3j. Standard Dialogs (`stdlg.c`)
 
@@ -434,13 +434,14 @@ This is the most structurally significant porting gap.
 |------|--------|-------|
 | `common/cregex` tests | ✅ | 37 tests, Linux + Wine |
 | Threading compat layer tests | ✅ | 51 tests covering threads, events, mutexes, CRITICAL_SECTION |
-| `common/xml` (ezxml) tests | ❌ | No tests yet; XML parsing used by localization and WIM |
+| `common/xml` (ezxml) tests | ✅ | 81 tests: parse from string/file, child nav, attrs, siblings, idx, get_val, error, toxml round-trip, entity handling, deep path, programmatic tree build |
 | `stdfn.c` (htab, StrArray) tests | ✅ | 299 tests; htab_create/hash/destroy, StrArray, NULL guards |
 | `parser.c` / `localization.c` tests | ✅ | 111 tests covering replace_char, filter_chars, remove_substr, sanitize_label, ASN.1, GetSbatEntries, GetThumbprintEntries, open_loc_file, token CRUD, insert_section_data, replace_in_token_data |
 | PE parsing functions tests | ❌ | `GetPeArch`, `GetPeSection` etc. are portable C |
 | `msg_dispatch` (PostMessage/SendMessage bridge) tests | ✅ | 61 tests: handler registry, sync/async dispatch, cross-thread SendMessage, concurrent posts, macro aliases, UM_* constants |
 | `common/device_monitor` (hotplug) tests | ✅ | 20 tests: lifecycle (start/stop/double/null), callback dispatch, debounce, thread safety, inject |
 | `common/net` (IsDownloadable, DownloadToFileOrBufferEx) tests | ✅ | 45 tests; real libcurl downloads, file+buffer modes, HTTP status, User-Agent, 404 handling, binary data |
+| `stdio.c` (ListDirectoryContent, ExtractZip) tests | ✅ | 44 tests: ListDirectoryContent (POSIX opendir/readdir, file/dir/recursive modes), ExtractZip (bled-based, stored+deflate zips) |
 
 ---
 

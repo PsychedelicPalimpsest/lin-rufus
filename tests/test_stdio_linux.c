@@ -23,9 +23,18 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 /* Pull in the public API */
 #include "../src/windows/rufus.h"
+/* NO_ERROR is in winioctl.h via the compat layer */
+#include "../src/linux/compat/winioctl.h"
+
+/* StrArray functions (from stdfn.c) */
+extern void     StrArrayCreate(StrArray *arr, uint32_t initial_size);
+extern int32_t  StrArrayAdd(StrArray *arr, const char *str, BOOL dup);
+extern void     StrArrayDestroy(StrArray *arr);
 
 /* Log handler API from stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -295,6 +304,224 @@ TEST(uprintf_set_and_clear_handler)
 }
 
 /* ===========================================================================
+ * ListDirectoryContent tests
+ * =========================================================================*/
+
+/* Helper: create a temp directory, populate with files and a subdir */
+static char list_dir_tmp[256] = "";
+static char list_dir_sub[512] = "";
+
+static void list_dir_setup(void)
+{
+    snprintf(list_dir_tmp, sizeof(list_dir_tmp), "/tmp/test_ldc_XXXXXX");
+    if (mkdtemp(list_dir_tmp) == NULL) { list_dir_tmp[0] = '\0'; return; }
+    snprintf(list_dir_sub, sizeof(list_dir_sub), "%s/subdir", list_dir_tmp);
+    mkdir(list_dir_sub, 0755);
+    /* Create files */
+    char path[640];
+    snprintf(path, sizeof(path), "%s/file1.txt", list_dir_tmp);
+    FILE *f = fopen(path, "w"); if (f) { fputs("a", f); fclose(f); }
+    snprintf(path, sizeof(path), "%s/file2.txt", list_dir_tmp);
+    f = fopen(path, "w"); if (f) { fputs("b", f); fclose(f); }
+    snprintf(path, sizeof(path), "%s/subdir/nested.txt", list_dir_tmp);
+    f = fopen(path, "w"); if (f) { fputs("c", f); fclose(f); }
+}
+
+static void list_dir_teardown(void)
+{
+    if (!list_dir_tmp[0]) return;
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "rm -rf %s", list_dir_tmp);
+    system(cmd);
+    list_dir_tmp[0] = '\0';
+}
+
+/* 21. ListDirectoryContent with FILES only */
+TEST(list_dir_files_only)
+{
+    list_dir_setup();
+    if (!list_dir_tmp[0]) { CHECK(0); return; }
+
+    StrArray arr;
+    StrArrayCreate(&arr, 8);
+    DWORD r = ListDirectoryContent(&arr, list_dir_tmp, LIST_DIR_TYPE_FILE);
+    CHECK(r == NO_ERROR || (int)arr.Index > 0);
+    /* Should find file1.txt and file2.txt (not the subdir) */
+    CHECK_INT_EQ(2, (int)(int)arr.Index);
+    /* Entries must be full paths */
+    BOOL found1 = FALSE, found2 = FALSE;
+    for (uint32_t i = 0; i < (int)arr.Index; i++) {
+        if (strstr(arr.String[i], "file1.txt")) found1 = TRUE;
+        if (strstr(arr.String[i], "file2.txt")) found2 = TRUE;
+    }
+    CHECK_MSG(found1, "file1.txt not found");
+    CHECK_MSG(found2, "file2.txt not found");
+    StrArrayDestroy(&arr);
+    list_dir_teardown();
+}
+
+/* 22. ListDirectoryContent with DIRECTORY only (non-recursive) */
+TEST(list_dir_dirs_only)
+{
+    list_dir_setup();
+    if (!list_dir_tmp[0]) { CHECK(0); return; }
+
+    StrArray arr;
+    StrArrayCreate(&arr, 8);
+    /* Non-recursive: LIST_DIR_TYPE_DIRECTORY — subdirs must be listed only if
+     * RECURSIVE flag is set; without RECURSIVE subdirs are not descended into.
+     * LIST_DIR_TYPE_DIRECTORY alone without RECURSIVE lists nothing on most
+     * implementations (the recursive flag is needed to emit dir names). */
+    DWORD r = ListDirectoryContent(&arr, list_dir_tmp,
+                                   LIST_DIR_TYPE_DIRECTORY | LIST_DIR_TYPE_RECURSIVE);
+    (void)r;
+    /* Should find the "subdir" entry */
+    BOOL found_subdir = FALSE;
+    for (uint32_t i = 0; i < (int)arr.Index; i++) {
+        if (strstr(arr.String[i], "subdir")) found_subdir = TRUE;
+    }
+    CHECK_MSG(found_subdir, "subdir not found in DIRECTORY listing");
+    StrArrayDestroy(&arr);
+    list_dir_teardown();
+}
+
+/* 23. ListDirectoryContent recursive (files + dirs) */
+TEST(list_dir_recursive)
+{
+    list_dir_setup();
+    if (!list_dir_tmp[0]) { CHECK(0); return; }
+
+    StrArray arr;
+    StrArrayCreate(&arr, 16);
+    ListDirectoryContent(&arr, list_dir_tmp,
+                         LIST_DIR_TYPE_FILE | LIST_DIR_TYPE_RECURSIVE);
+    /* Should find all 3 files: file1.txt, file2.txt, subdir/nested.txt */
+    CHECK_MSG((int)arr.Index >= 3, "Expected at least 3 files recursively");
+    BOOL found_nested = FALSE;
+    for (uint32_t i = 0; i < (int)arr.Index; i++) {
+        if (strstr(arr.String[i], "nested.txt")) found_nested = TRUE;
+    }
+    CHECK_MSG(found_nested, "nested.txt not found recursively");
+    StrArrayDestroy(&arr);
+    list_dir_teardown();
+}
+
+/* 24. ListDirectoryContent NULL args return error */
+TEST(list_dir_null_args)
+{
+    StrArray arr;
+    StrArrayCreate(&arr, 4);
+    DWORD r = ListDirectoryContent(NULL, list_dir_tmp, LIST_DIR_TYPE_FILE);
+    CHECK(r == ERROR_INVALID_PARAMETER);
+    r = ListDirectoryContent(&arr, NULL, LIST_DIR_TYPE_FILE);
+    CHECK(r == ERROR_INVALID_PARAMETER);
+    r = ListDirectoryContent(&arr, list_dir_tmp, 0);
+    CHECK(r == ERROR_INVALID_PARAMETER);
+    StrArrayDestroy(&arr);
+}
+
+/* 25. ListDirectoryContent on non-existent directory */
+TEST(list_dir_nonexistent)
+{
+    StrArray arr;
+    StrArrayCreate(&arr, 4);
+    DWORD r = ListDirectoryContent(&arr, "/tmp/__no_such_dir_rufus_test__",
+                                   LIST_DIR_TYPE_FILE);
+    CHECK(r != NO_ERROR);
+    CHECK_INT_EQ(0, (int)(int)arr.Index);
+    StrArrayDestroy(&arr);
+}
+
+/* ===========================================================================
+ * ExtractZip tests
+ * =========================================================================*/
+
+/* Helper: create a minimal zip file using the 'zip' command */
+static char zip_src[256] = "";
+static char zip_dst[256] = "";
+
+static int make_test_zip(void)
+{
+    /* Use mkdtemp + zip command to build a tiny zip */
+    char tmpdir[256];
+    snprintf(tmpdir, sizeof(tmpdir), "/tmp/test_zip_src_XXXXXX");
+    if (!mkdtemp(tmpdir)) return 0;
+
+    /* Write a couple of files into tmpdir */
+    char path[640];
+    snprintf(path, sizeof(path), "%s/hello.txt", tmpdir);
+    FILE *f = fopen(path, "w"); if (f) { fputs("hello\n", f); fclose(f); }
+    snprintf(path, sizeof(path), "%s/world.txt", tmpdir);
+    f = fopen(path, "w"); if (f) { fputs("world\n", f); fclose(f); }
+
+    /* Build the zip */
+    snprintf(zip_src, sizeof(zip_src), "/tmp/test_zip_%d.zip", (int)getpid());
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "cd %s && zip -q %s hello.txt world.txt", tmpdir, zip_src);
+    int rc = system(cmd);
+
+    /* Remove source dir */
+    snprintf(cmd, sizeof(cmd), "rm -rf %s", tmpdir);
+    system(cmd);
+
+    if (rc != 0 || access(zip_src, F_OK) != 0) {
+        zip_src[0] = '\0';
+        return 0;
+    }
+    return 1;
+}
+
+static void zip_teardown(void)
+{
+    if (zip_src[0]) { unlink(zip_src); zip_src[0] = '\0'; }
+    if (zip_dst[0]) {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "rm -rf %s", zip_dst);
+        system(cmd);
+        zip_dst[0] = '\0';
+    }
+}
+
+/* 26. ExtractZip returns TRUE for a valid zip */
+TEST(extract_zip_success)
+{
+    reset();  /* clear ErrorStatus from prior cancellation test */
+    if (!make_test_zip()) {
+        /* zip command may not be installed; skip test gracefully */
+        printf("  [SKIP] zip command not available\n");
+        return;
+    }
+    snprintf(zip_dst, sizeof(zip_dst), "/tmp/test_zip_dst_XXXXXX");
+    if (!mkdtemp(zip_dst)) { zip_teardown(); CHECK(0); return; }
+
+    BOOL r = ExtractZip(zip_src, zip_dst);
+    CHECK_MSG(r == TRUE, "ExtractZip should return TRUE for valid zip");
+
+    /* Verify extracted files exist */
+    char path[640];
+    snprintf(path, sizeof(path), "%s/hello.txt", zip_dst);
+    CHECK_MSG(access(path, F_OK) == 0, "hello.txt not extracted");
+    snprintf(path, sizeof(path), "%s/world.txt", zip_dst);
+    CHECK_MSG(access(path, F_OK) == 0, "world.txt not extracted");
+
+    zip_teardown();
+}
+
+/* 27. ExtractZip NULL source returns FALSE */
+TEST(extract_zip_null_src)
+{
+    BOOL r = ExtractZip(NULL, "/tmp");
+    CHECK(r == FALSE);
+}
+
+/* 28. ExtractZip non-existent source returns FALSE */
+TEST(extract_zip_nonexistent_src)
+{
+    BOOL r = ExtractZip("/tmp/__no_such_file_rufus_test__.zip", "/tmp");
+    CHECK(r == FALSE);
+}
+
+/* ===========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -321,6 +548,14 @@ int main(void)
     RUN(uprintf_no_crash_without_handler);
     RUN(uprintf_handler_receives_no_newline);
     RUN(uprintf_set_and_clear_handler);
+    RUN(list_dir_files_only);
+    RUN(list_dir_dirs_only);
+    RUN(list_dir_recursive);
+    RUN(list_dir_null_args);
+    RUN(list_dir_nonexistent);
+    RUN(extract_zip_success);
+    RUN(extract_zip_null_src);
+    RUN(extract_zip_nonexistent_src);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;
