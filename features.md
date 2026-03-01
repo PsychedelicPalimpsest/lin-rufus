@@ -157,14 +157,14 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `ExtractISO()` | 🟡 | Uses bundled `libcdio`; needs real file I/O and thread |
-| `ExtractISOFile()` | 🟡 | Single-file extraction from ISO |
-| `ReadISOFileToBuffer()` | 🟡 | Same |
-| `iso9660_readfat()` | 🟡 | FAT-within-ISO reader; tied to `syslinux/libfat` |
-| `HasEfiImgBootLoaders()` | 🟡 | Scan ISO for EFI images |
-| `GetGrubVersion()` / `GetGrubFs()` / `GetEfiBootInfo()` | 🟡 | Parse version strings from ISO files |
-| `DumpFatDir()` | 🟡 | Debug helper; low priority |
-| `OpticalDiscSaveImage()` / `IsoSaveImageThread()` / `SaveImage()` | 🟡 | Optical disc read; use `libcdio` / `dd` |
+| `ExtractISO()` | ✅ | Full POSIX implementation using system libcdio; ISO9660 + UDF; scan + extract modes; label, block count, EFI detection; 6 tests pass |
+| `ExtractISOFile()` | ✅ | Single-file extraction from ISO; UDF-first with ISO9660 fallback; 5 tests pass |
+| `ReadISOFileToBuffer()` | ✅ | Reads file from ISO into malloc'd buffer; UDF-first with ISO9660 fallback; 6 tests pass |
+| `GetGrubVersion()` / `GetGrubFs()` / `GetEfiBootInfo()` | ✅ | Pure buffer scans for version strings and filesystem modules; 11 tests pass |
+| `HasEfiImgBootLoaders()` | ✅ | Reads `img_report.efi_img_path`; 2 tests pass |
+| `iso9660_readfat()` | 🟡 | FAT-within-ISO reader; stub returns -1 (needed for syslinux patching) |
+| `DumpFatDir()` | 🟡 | Debug helper; stub returns FALSE; low priority |
+| `OpticalDiscSaveImage()` / `IsoSaveImageThread()` / `SaveImage()` | 🟡 | Optical disc read; stub no-op; low priority |
 
 ### 3d. Hashing (`hash.c`)
 

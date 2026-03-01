@@ -64,7 +64,7 @@ void PrintStatusInfo(BOOL info, BOOL debug, unsigned int duration, int msg_id, .
 	if (msg_id < 0)
 		return;
 
-	if ((msg_id >= MSG_000) && (msg_id < MSG_MAX))
+	if ((msg_id >= MSG_000) && (msg_id < MSG_MAX) && (msg_table != NULL))
 		format = msg_table[msg_id - MSG_000];
 	if (format == NULL)
 		return;

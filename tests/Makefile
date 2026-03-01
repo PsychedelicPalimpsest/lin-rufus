@@ -36,7 +36,10 @@ CREGEX_SRC := $(COMMON)/cregex_compile.c \
 # Discover all test_*.c files automatically
 TEST_SRCS  := $(wildcard test_*.c)
 LINUX_BINS := $(TEST_SRCS:.c=_linux)
-WIN_BINS   := $(TEST_SRCS:.c=.exe)
+# Tests whose names end in _linux or whose sources are Linux-only are excluded
+# from the Windows build (no Windows implementation exists for them).
+WIN_EXCLUDE_SRCS := $(wildcard test_*_linux.c) test_device_monitor.c
+WIN_BINS   := $(filter-out $(WIN_EXCLUDE_SRCS:.c=.exe), $(TEST_SRCS:.c=.exe))
 
 # ---------------------------------------------------------------------------
 # Per-test extra flags
@@ -116,14 +119,36 @@ CFLAGS_LINUX_test_stdio_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/
                                    -Wno-sign-compare -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_stdio_linux := $(STDIO_LINUX_SRC)
 
+# iso_linux tests: ISO image scanning and extraction via system libcdio
+ISO_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
+                 $(SRC_DIR)/linux/stdfn.c \
+                 $(SRC_DIR)/linux/stdio.c \
+                 $(SRC_DIR)/linux/ui.c \
+                 $(SRC_DIR)/linux/localization.c \
+                 $(COMMON)/parser.c \
+                 $(COMMON)/localization.c
+CFLAGS_LINUX_test_iso_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_iso_linux := -lcdio -liso9660 -ludf
+EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC)
+
 # hash tests: MD5/SHA1/SHA256/SHA512 via linux/hash.c (which includes common/hash_algos.c)
-HASH_SRC := $(SRC_DIR)/linux/hash.c
+HASH_SRC := hash_linux_glue.c
 CFLAGS_LINUX_test_hash := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                           -I$(SRC_DIR)/common \
                           -Wno-unused-function -Wno-sign-compare \
                           -Wno-implicit-function-declaration -Wno-unused-parameter \
                           -march=native
 EXTRA_SRC_LINUX_test_hash := $(HASH_SRC)
+
+CFLAGS_WIN_test_hash := -I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+                        -Wno-unused-function -Wno-sign-compare \
+                        -Wno-implicit-function-declaration -Wno-unused-parameter \
+                        -march=native
+EXTRA_SRC_WIN_test_hash := hash_win_glue.c
 
 .PHONY: all linux windows run-linux run-wine clean
 
@@ -142,8 +167,11 @@ _test_name = $(patsubst %_linux,%,$(notdir $@))
 	    $(EXTRA_SRC_LINUX_$(_test_name)) $(LDFLAGS_LINUX_$(_test_name))
 
 # Pattern rules for Windows binaries
+_win_test_name = $(patsubst %.exe,%,$(notdir $@))
+
 %.exe: %.c $(CREGEX_SRC)
-	$(CC_WIN) $(CFLAGS_WIN) -o $@ $^
+	$(CC_WIN) $(CFLAGS_WIN) $(CFLAGS_WIN_$(_win_test_name)) -o $@ $< $(CREGEX_SRC) \
+	    $(EXTRA_SRC_WIN_$(_win_test_name))
 
 run-linux: linux
 	@failed=0; \
