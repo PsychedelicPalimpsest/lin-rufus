@@ -564,6 +564,15 @@ CFLAGS_LINUX_test_polkit_linux := \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_polkit_linux := $(SRC_DIR)/linux/polkit.c
 
+# cli_linux tests: non-GTK CLI argument parser
+CFLAGS_LINUX_test_cli_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_cli_linux := \
+	$(SRC_DIR)/linux/cli.c \
+	cli_linux_glue.c
+
 # download_resume_linux tests: .partial file helpers for resumable downloads
 CFLAGS_LINUX_test_download_resume_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \

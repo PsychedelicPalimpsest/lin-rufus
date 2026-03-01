@@ -3,6 +3,9 @@
 #include "missing.h"
 #include "version.h"
 #include "polkit.h"
+#ifndef USE_GTK
+#include "cli.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -197,9 +200,32 @@ const char *find_loc_file(void)
 
 /* ---- Linux main entry point ---- */
 #ifndef USE_GTK
-int main(int argc, char* argv[]) {
-    (void)argc; (void)argv;
-    fprintf(stderr, "Rufus Linux port - not yet implemented\n");
-    return 1;
+
+/* Progress output for CLI mode — report to stdout */
+void UpdateProgress(int op, float percent)
+{
+	(void)op;
+	printf("[%3d%%]\r", (int)percent);
+	fflush(stdout);
+}
+
+void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f)
+{
+	(void)msg; (void)f;
+	if (tot == 0) return;
+	UpdateProgress(op, (float)((double)cur / (double)tot * 100.0));
+}
+
+int main(int argc, char *argv[])
+{
+	cli_options_t opts;
+
+	int r = cli_parse_args(argc, argv, &opts);
+	if (r == CLI_PARSE_HELP)
+		return 0;
+	if (r != CLI_PARSE_OK)
+		return 1;
+
+	return cli_run(&opts);
 }
 #endif /* !USE_GTK */
