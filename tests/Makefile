@@ -330,6 +330,17 @@ CFLAGS_LINUX_test_settings_linux := \
 	-Wno-missing-field-initializers
 EXTRA_SRC_LINUX_test_settings_linux := $(SETTINGS_LINUX_SRC)
 
+# update_check_linux tests: first-run consent dialog for SetUpdateCheck()
+# Uses the same sources as settings_linux (stdfn + parser + stdlg) for the full pipeline
+CFLAGS_LINUX_test_update_check_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
+LDFLAGS_LINUX_test_update_check_linux := -lpthread $(shell pkg-config --libs fontconfig 2>/dev/null)
+EXTRA_SRC_LINUX_test_update_check_linux := $(SETTINGS_LINUX_SRC)
+
 # badblocks_linux tests: bad block detection via pread/pwrite on temp files
 BADBLOCKS_LINUX_SRC := $(SRC_DIR)/linux/badblocks.c
 CFLAGS_LINUX_test_badblocks_linux := \

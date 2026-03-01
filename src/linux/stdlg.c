@@ -511,16 +511,27 @@ BOOL SetUpdateCheck(void)
 	if (ReadSetting64(SETTING_COMM_CHECK) != commcheck)
 		return FALSE;
 
-	/* If interval is 0 (first run) or -1 (explicitly disabled), set a
-	 * sensible default (daily) on first run, leave disabled alone. */
 	int32_t interval = (int32_t)ReadSetting32(SETTING_UPDATE_INTERVAL);
-	if (interval == 0) {
-		/* First run: enable daily updates without prompting the user
-		 * (the prompt dialog requires a full dialog subsystem not yet ported) */
-		WriteSetting32(SETTING_UPDATE_INTERVAL, 86400);
-	} else if (interval < 0) {
-		/* Updates explicitly disabled by the user */
+
+	if (interval < 0) {
+		/* Updates explicitly disabled by the user — respect the choice */
 		return FALSE;
+	}
+
+	if (interval == 0) {
+		/* First run: ask the user whether they want automatic update checks.
+		 * NotificationEx() uses test-injection in tests and a GTK dialog in
+		 * production, so no separate dialog implementation is needed here. */
+		int r = NotificationEx(MB_YESNO | MB_ICONQUESTION, NULL, NULL,
+		                       "Rufus Update Check",
+		                       "Would you like Rufus to automatically check for updates?\n\n"
+		                       "You can change this setting later in the application options.");
+		if (r == IDYES) {
+			WriteSetting32(SETTING_UPDATE_INTERVAL, 86400); /* daily */
+		} else {
+			WriteSetting32(SETTING_UPDATE_INTERVAL, -1);    /* disabled */
+			return FALSE;
+		}
 	}
 
 	return TRUE;
