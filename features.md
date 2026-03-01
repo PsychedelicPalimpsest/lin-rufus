@@ -330,8 +330,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `ExtractFreeDOS()` / `ExtractDOS()` | 🟡 | Extract FreeDOS/MS-DOS boot files from embedded data |
-| `SetDOSLocale()` | 🟡 | Write locale config to DOS boot drive |
+| `ExtractFreeDOS()` / `ExtractDOS()` | ✅ | Copies FreeDOS boot files from `res/freedos/` to target; dispatches on `boot_type`; 23 tests pass |
+| `SetDOSLocale()` | ✅ | Creates AUTOEXEC.BAT + FDCONFIG.SYS with US/CP437 defaults; 23 tests pass |
 | `InstallSyslinux()` | 🟡 | Write syslinux boot sector; `syslinux/libinstaller` is bundled |
 | `GetSyslinuxVersion()` | 🟡 | Parse version from bundled ldlinux data |
 | `libfat_readfile()` | 🟡 | FAT filesystem read callback for syslinux |
@@ -393,7 +393,7 @@ This is the most structurally significant porting gap.
 | `WM_DEVICECHANGE` device-arrival events | ✅ | `device_monitor.c`: udev netlink monitor thread (libudev); debounce 1 s; `device_monitor_inject()` for manual refresh/testing; posts `UM_MEDIA_CHANGE` → `GetDevices()` on GTK main thread; 20 tests pass |
 | Windows timer (`SetTimer` / `KillTimer`) | 🟡 | Replace with `g_timeout_add` |
 | `CRITICAL_SECTION` / `Mutex` | ✅ | `CRITICAL_SECTION` (recursive pthread mutex) and `CreateMutex`/`ReleaseMutex` implemented in compat layer |
-| `op_in_progress` flag | 🔧 | Defined in `globals.c`; needs atomic set/clear around thread lifetime |
+| `op_in_progress` flag | ✅ | Set TRUE on format start, cleared + thread handle closed in `UM_FORMAT_COMPLETED` handler |
 
 ---
 
@@ -437,7 +437,7 @@ This is the most structurally significant porting gap.
 | `common/xml` (ezxml) tests | ✅ | 81 tests: parse from string/file, child nav, attrs, siblings, idx, get_val, error, toxml round-trip, entity handling, deep path, programmatic tree build |
 | `stdfn.c` (htab, StrArray) tests | ✅ | 299 tests; htab_create/hash/destroy, StrArray, NULL guards |
 | `parser.c` / `localization.c` tests | ✅ | 111 tests covering replace_char, filter_chars, remove_substr, sanitize_label, ASN.1, GetSbatEntries, GetThumbprintEntries, open_loc_file, token CRUD, insert_section_data, replace_in_token_data |
-| PE parsing functions tests | ❌ | `GetPeArch`, `GetPeSection` etc. are portable C |
+| PE parsing functions tests | ✅ | 59 tests pass in `test_pe_parser_linux` |
 | `msg_dispatch` (PostMessage/SendMessage bridge) tests | ✅ | 61 tests: handler registry, sync/async dispatch, cross-thread SendMessage, concurrent posts, macro aliases, UM_* constants |
 | `common/device_monitor` (hotplug) tests | ✅ | 20 tests: lifecycle (start/stop/double/null), callback dispatch, debounce, thread safety, inject |
 | `common/net` (IsDownloadable, DownloadToFileOrBufferEx) tests | ✅ | 45 tests; real libcurl downloads, file+buffer modes, HTTP status, User-Agent, 404 handling, binary data |

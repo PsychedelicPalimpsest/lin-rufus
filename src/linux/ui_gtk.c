@@ -561,9 +561,12 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	        di, fs_type, partition_type, target_type, boot_type);
 
 	if (format_thread == NULL) {
+		op_in_progress = TRUE;
+		ErrorStatus = 0;
 		EnableControls(FALSE, FALSE);
 		format_thread = CreateThread(NULL, 0, FormatThread, (void*)(uintptr_t)di, 0, NULL);
 		if (format_thread == NULL) {
+			op_in_progress = FALSE;
 			rufus_gtk_update_status("Failed to start format thread");
 			EnableControls(TRUE, FALSE);
 		}
@@ -920,6 +923,9 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 	switch (msg) {
 	case UM_FORMAT_COMPLETED:
 		/* w = TRUE on success, FALSE on failure */
+		op_in_progress = FALSE;
+		safe_closehandle(format_thread);
+		format_thread = NULL;
 		EnableControls((BOOL)w, TRUE);
 		if (w)
 			rufus_gtk_update_status("Format completed successfully.");

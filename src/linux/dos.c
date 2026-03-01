@@ -1,6 +1,215 @@
-/* Linux stub: dos.c - MS-DOS boot file extraction (stub for porting) */
+/*
+ * Linux implementation: dos.c
+ * ExtractFreeDOS / ExtractDOS — copy FreeDOS boot files from the resource
+ * directory to a target FAT drive.
+ *
+ * The FreeDOS files ship in res/freedos/ alongside the binary.  We locate
+ * them via app_dir (set by rufus_init_paths()) and fall back to the
+ * compile-time PKGDATADIR if neither adjacent path is found.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include "rufus.h"
 #include "dos.h"
 
-BOOL ExtractFreeDOS(const char* path) { (void)path; return FALSE; }
-BOOL ExtractDOS(const char* path)     { (void)path; return FALSE; }
+extern char app_dir[MAX_PATH];
+extern int boot_type;
+
+/* Files to extract.  Index < 2 go to path, index >= 2 go to path/LOCALE/ */
+static const char* const fd_files[] = {
+    "COMMAND.COM",   /* 0 - root */
+    "KERNEL.SYS",    /* 1 - root */
+    "DISPLAY.EXE",   /* 2+ - LOCALE/ */
+    "KEYB.EXE",
+    "MODE.COM",
+    "KEYBOARD.SYS",
+    "KEYBRD2.SYS",
+    "KEYBRD3.SYS",
+    "KEYBRD4.SYS",
+    "EGA.CPX",
+    "EGA2.CPX",
+    "EGA3.CPX",
+    "EGA4.CPX",
+    "EGA5.CPX",
+    "EGA6.CPX",
+    "EGA7.CPX",
+    "EGA8.CPX",
+    "EGA9.CPX",
+    "EGA10.CPX",
+    "EGA11.CPX",
+    "EGA12.CPX",
+    "EGA13.CPX",
+    "EGA14.CPX",
+    "EGA15.CPX",
+    "EGA16.CPX",
+    "EGA17.CPX",
+    "EGA18.CPX",
+};
+#define FD_ROOT_FILES  2   /* number of files that go to path/ */
+#define FD_NFILES ((int)(sizeof(fd_files)/sizeof(fd_files[0])))
+
+/*
+ * get_freedos_source_dir — find the directory that contains the FreeDOS
+ * resource files.  Returns a newly-allocated path string (caller must free),
+ * or NULL if not found.
+ *
+ * Search order:
+ *   1. {app_dir}res/freedos/
+ *   2. {app_dir}../res/freedos/
+ *   3. PKGDATADIR "/rufus/freedos/"   (if compiled with autotools)
+ */
+static char* get_freedos_source_dir(void)
+{
+    char candidate[MAX_PATH];
+    struct stat st;
+
+    /* Try {app_dir}res/freedos/ */
+    snprintf(candidate, sizeof(candidate), "%sres/freedos", app_dir);
+    if (stat(candidate, &st) == 0 && S_ISDIR(st.st_mode)) {
+        char *ret = (char*)malloc(MAX_PATH);
+        if (ret) snprintf(ret, MAX_PATH, "%s/", candidate);
+        return ret;
+    }
+
+    /* Try {app_dir}../res/freedos/ */
+    snprintf(candidate, sizeof(candidate), "%s../res/freedos", app_dir);
+    if (stat(candidate, &st) == 0 && S_ISDIR(st.st_mode)) {
+        char *ret = (char*)malloc(MAX_PATH);
+        if (ret) snprintf(ret, MAX_PATH, "%s/", candidate);
+        return ret;
+    }
+
+#ifdef PKGDATADIR
+    /* Try installed data directory */
+    snprintf(candidate, sizeof(candidate), "%s/rufus/freedos", PKGDATADIR);
+    if (stat(candidate, &st) == 0 && S_ISDIR(st.st_mode)) {
+        char *ret = (char*)malloc(MAX_PATH);
+        if (ret) snprintf(ret, MAX_PATH, "%s/", candidate);
+        return ret;
+    }
+#endif
+
+    return NULL;
+}
+
+/*
+ * copy_file — copy src to dst.  Returns TRUE on success.
+ */
+static BOOL copy_file(const char *src, const char *dst)
+{
+    int sfd = open(src, O_RDONLY | O_CLOEXEC);
+    if (sfd < 0) {
+        uprintf("ExtractFreeDOS: cannot open source '%s': %s", src, strerror(errno));
+        return FALSE;
+    }
+
+    int dfd = open(dst, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (dfd < 0) {
+        uprintf("ExtractFreeDOS: cannot create '%s': %s", dst, strerror(errno));
+        close(sfd);
+        return FALSE;
+    }
+
+    char buf[65536];
+    ssize_t n;
+    BOOL ok = TRUE;
+    while ((n = read(sfd, buf, sizeof(buf))) > 0) {
+        ssize_t written = 0;
+        while (written < n) {
+            ssize_t w = write(dfd, buf + written, (size_t)(n - written));
+            if (w < 0) {
+                uprintf("ExtractFreeDOS: write error on '%s': %s", dst, strerror(errno));
+                ok = FALSE;
+                break;
+            }
+            written += w;
+        }
+        if (!ok) break;
+    }
+    if (n < 0) {
+        uprintf("ExtractFreeDOS: read error on '%s': %s", src, strerror(errno));
+        ok = FALSE;
+    }
+
+    close(sfd);
+    close(dfd);
+    return ok;
+}
+
+BOOL ExtractFreeDOS(const char* path)
+{
+    if (path == NULL) {
+        uprintf("ExtractFreeDOS: NULL path");
+        return FALSE;
+    }
+
+    /* Ensure target directory exists */
+    struct stat st;
+    if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        uprintf("ExtractFreeDOS: target '%s' is not a directory", path);
+        return FALSE;
+    }
+
+    char* src_dir = get_freedos_source_dir();
+    if (src_dir == NULL) {
+        uprintf("ExtractFreeDOS: could not find FreeDOS resource directory "
+                "(checked %sres/freedos/ and %s../res/freedos/)", app_dir, app_dir);
+        return FALSE;
+    }
+
+    /* Create LOCALE/ subdirectory */
+    char locale_path[MAX_PATH];
+    snprintf(locale_path, sizeof(locale_path), "%sLOCALE", path);
+    if (mkdir(locale_path, 0755) != 0 && errno != EEXIST) {
+        uprintf("ExtractFreeDOS: cannot create LOCALE dir '%s': %s",
+                locale_path, strerror(errno));
+        free(src_dir);
+        return FALSE;
+    }
+
+    /* Copy each file */
+    for (int i = 0; i < FD_NFILES; i++) {
+        char src[MAX_PATH], dst[MAX_PATH];
+        snprintf(src, sizeof(src), "%s%s", src_dir, fd_files[i]);
+
+        if (i < FD_ROOT_FILES)
+            snprintf(dst, sizeof(dst), "%s%s", path, fd_files[i]);
+        else
+            snprintf(dst, sizeof(dst), "%sLOCALE/%s", path, fd_files[i]);
+
+        if (!copy_file(src, dst)) {
+            /* Non-fatal for optional locale files; fatal for root files */
+            if (i < FD_ROOT_FILES) {
+                free(src_dir);
+                return FALSE;
+            }
+            uprintf("Warning: could not copy '%s' (optional)", fd_files[i]);
+        } else {
+            uprintf("Extracted '%s' (%s bytes)", fd_files[i],
+                    (i < FD_ROOT_FILES) ? "root" : "locale");
+        }
+
+        if ((i == 3) || (i == 9) || (i == 15) || (i == FD_NFILES - 1))
+            UpdateProgress(OP_FILE_COPY, -1.0f);
+    }
+
+    free(src_dir);
+    return SetDOSLocale(path, TRUE);
+}
+
+BOOL ExtractDOS(const char* path)
+{
+    switch (boot_type) {
+    case BT_FREEDOS:
+        return ExtractFreeDOS(path);
+    default:
+        return FALSE;
+    }
+}

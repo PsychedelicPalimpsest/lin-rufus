@@ -368,6 +368,20 @@ EXTRA_SRC_LINUX_test_wue_linux := \
 	$(WIM_LIB) \
 	$(XML_SRC)
 
+# dos_linux tests: ExtractFreeDOS, SetDOSLocale, ExtractDOS
+DOS_LINUX_SRC := $(SRC_DIR)/linux/dos.c \
+                 $(SRC_DIR)/linux/dos_locale.c \
+                 $(SRC_DIR)/linux/stdio.c \
+                 $(SRC_DIR)/linux/stdfn.c \
+                 $(SRC_DIR)/linux/globals.c
+CFLAGS_LINUX_test_dos_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_dos_linux :=
+EXTRA_SRC_LINUX_test_dos_linux := $(DOS_LINUX_SRC) dos_linux_glue.c
+
 .PHONY: all linux windows run-linux run-wine clean
 
 all: linux windows
