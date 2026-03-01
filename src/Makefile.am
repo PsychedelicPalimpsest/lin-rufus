@@ -58,7 +58,7 @@ if TARGET_WINDOWS
 rufus_CFLAGS = -I$(srcdir)/windows -I$(srcdir)/common \
 	-I$(srcdir)/ms-sys/inc -I$(srcdir)/syslinux/libfat -I$(srcdir)/syslinux/libinstaller \
 	-I$(srcdir)/syslinux/win -I$(srcdir)/libcdio -I$(srcdir)/wimlib -I$(srcdir)/../res \
-	$(AM_CFLAGS) -DEXT2_FLAT_INCLUDES=0 -D_RUFUS -DSOLUTION=rufus
+	$(AM_CFLAGS) -DEXT2_FLAT_INCLUDES=0 -D_RUFUS -DSOLUTION=rufus -DCOMMON_PARSER_PE_FUNCTIONS
 else
 rufus_CFLAGS = -I$(srcdir)/linux/compat -I$(srcdir)/linux -I$(srcdir)/windows -I$(srcdir)/common \
 	-I$(srcdir)/ms-sys/inc -I$(srcdir)/syslinux/libfat -I$(srcdir)/syslinux/libinstaller \

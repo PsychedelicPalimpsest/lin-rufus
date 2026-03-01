@@ -484,35 +484,5 @@ out:
 
 	return ret;
 }
-
-/* PE parsing is Windows-only: return safe no-op stubs on Linux */
-uint16_t GetPeArch(uint8_t* buf)
-{
-	(void)buf;
-	return 0;
-}
-
-uint8_t* GetPeSection(uint8_t* buf, const char* name, uint32_t* len)
-{
-	(void)buf; (void)name; (void)len;
-	return NULL;
-}
-
-uint8_t* RvaToPhysical(uint8_t* buf, uint32_t rva)
-{
-	(void)buf; (void)rva;
-	return NULL;
-}
-
-uint32_t FindResourceRva(const wchar_t* name, uint8_t* root, uint8_t* dir, uint32_t* len)
-{
-	(void)name; (void)root; (void)dir; (void)len;
-	return 0;
-}
-
-uint8_t* GetPeSignatureData(uint8_t* buf)
-{
-	(void)buf;
-	return NULL;
-}
+/* PE parsing functions are implemented in common/parser.c */
 

@@ -119,6 +119,15 @@ CFLAGS_LINUX_test_format_thread_linux := \
 LDFLAGS_LINUX_test_format_thread_linux := -lpthread
 EXTRA_SRC_LINUX_test_format_thread_linux := $(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB)
 
+# pe_parser_linux tests: PE binary parsing (GetPeArch, GetPeSection, RvaToPhysical, etc.)
+PE_PARSER_SRC := $(COMMON)/parser.c $(SRC_DIR)/linux/parser.c \
+                 $(COMMON)/localization.c $(SRC_DIR)/linux/stdfn.c
+CFLAGS_LINUX_test_pe_parser_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_pe_parser_linux := $(PE_PARSER_SRC)
+
 # drive_linux tests: block device ops, partition parsing, GPT/MBR creation
 DRIVE_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
                    $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \

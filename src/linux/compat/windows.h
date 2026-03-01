@@ -1753,6 +1753,9 @@ typedef LONG NTSTATUS;
 #include <unistd.h>
 
 
+/* ---- PE / COFF structures (from winnt.h) ---- */
+#include "winnt.h"
+
 /* ---- Prevent re-inclusion of other windows headers ---- */
 #define _WINDOWS_
 #define _INC_WINDOWS

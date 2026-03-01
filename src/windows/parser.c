@@ -755,8 +755,11 @@ out:
 
 
 /*
- * PE parsing functions
+ * PE parsing functions — moved to common/parser.c.
+ * They are platform-independent (pure buffer operations) and are now
+ * shared between Windows and Linux builds via common/parser.c.
  */
+#ifndef COMMON_PARSER_PE_FUNCTIONS
 
 // Return the arch of a PE executable buffer
 uint16_t GetPeArch(uint8_t* buf)
@@ -913,3 +916,4 @@ uint8_t* GetPeSignatureData(uint8_t* buf)
 
 	return (uint8_t*)cert;
 }
+#endif /* COMMON_PARSER_PE_FUNCTIONS */

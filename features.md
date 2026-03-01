@@ -323,7 +323,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `get_data_from_asn1()` | ✅ | Portable; in `common/parser.c` |
 | `sanitize_label()` | ✅ | Portable; in `common/parser.c` |
 | `GetSbatEntries()` / `GetThumbprintEntries()` | ✅ | Portable; in `common/parser.c` |
-| `GetPeArch()` / `GetPeSection()` / `RvaToPhysical()` / `FindResourceRva()` / `GetPeSignatureData()` | 🟡 | Linux stubs in `linux/parser.c`; PE struct compat not yet in compat layer |
+| `GetPeArch()` / `GetPeSection()` / `RvaToPhysical()` / `FindResourceRva()` / `GetPeSignatureData()` | ✅ | Portable; moved to `common/parser.c`; PE structs in `linux/compat/winnt.h`; 27 tests pass |
 
 ### 3m. DOS / Syslinux / Bootloader (`dos.c`, `dos_locale.c`, `syslinux.c`)
 
