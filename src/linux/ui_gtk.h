@@ -55,6 +55,7 @@ typedef struct {
 	/* Advanced format options (collapsible) */
 	GtkWidget *adv_format_expander;
 	GtkWidget *old_bios_check;      /* IDC_OLD_BIOS_FIXES */
+	GtkWidget *verify_write_check;  /* IDC_VERIFY_WRITE */
 
 	/* Persistence row (shown only for compatible images) */
 	GtkWidget *persistence_row;

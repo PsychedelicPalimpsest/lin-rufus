@@ -296,6 +296,7 @@ enum action_type {
 	OP_PATCH,
 	OP_FINALIZE,
 	OP_EXTRACT_ZIP,
+	OP_VERIFY,
 	OP_MAX
 };
 

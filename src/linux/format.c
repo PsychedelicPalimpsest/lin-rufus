@@ -22,6 +22,7 @@
 #include "format_linux.h"
 #include "badblocks.h"
 #include "settings.h"
+#include "verify.h"
 #include "wue.h"
 #include "ms-sys/inc/file.h"
 #include "ms-sys/inc/br.h"
@@ -35,6 +36,7 @@ extern BOOL write_as_image, write_as_esp;
 extern BOOL use_rufus_mbr;
 extern BOOL quick_format;
 extern BOOL enable_bad_blocks;
+extern BOOL enable_verify_write;
 extern int  nb_passes_sel;
 extern char *image_path;
 
@@ -537,7 +539,25 @@ DWORD WINAPI FormatThread(void* param)
 			ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
 			goto out;
 		}
-		format_linux_write_drive(hPhysicalDrive, FALSE);
+		if (!format_linux_write_drive(hPhysicalDrive, FALSE)) {
+			goto out;
+		}
+		if (enable_verify_write && image_path) {
+			struct stat _vst;
+			uint64_t img_sz = (stat(image_path, &_vst) == 0) ? (uint64_t)_vst.st_size : 0;
+			if (img_sz > 0) {
+				uprintf("Starting write-verify pass (%llu bytes)...",
+				        (unsigned long long)img_sz);
+				UpdateProgress(OP_VERIFY, 0.0f);
+				int dev_fd = (int)(intptr_t)hPhysicalDrive;
+				if (!verify_write_pass(image_path, dev_fd, img_sz)) {
+					if (!IS_ERROR(ErrorStatus))
+						ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
+					goto out;
+				}
+				uprintf("Write-verify pass completed successfully.");
+			}
+		}
 		goto out;
 	}
 

@@ -70,6 +70,7 @@ BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
  * production but defined here so the format-thread test binary links.
  */
 BOOL enable_bad_blocks = FALSE;
+BOOL enable_verify_write = FALSE;
 int  nb_passes_sel     = 0;
 
 /*
@@ -104,4 +105,17 @@ int NotificationEx(int type, const char *dont_display_setting,
     (void)type; (void)dont_display_setting; (void)more_info;
     (void)title; (void)format;
     return IDOK;
+}
+
+/* WUE stubs — format.c calls these after ISO extraction.  In
+ * format-thread tests we don't exercise the Windows customisation path
+ * so simple no-ops are sufficient. */
+char *unattend_xml_path = NULL;
+int   unattend_xml_flags = 0;
+
+void wue_set_mount_path(const char *path) { (void)path; }
+
+BOOL ApplyWindowsCustomization(char drive_letter, int flags)
+{
+    (void)drive_letter; (void)flags; return TRUE;
 }

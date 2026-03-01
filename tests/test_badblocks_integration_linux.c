@@ -98,6 +98,7 @@ BOOL its_a_me_mario                = FALSE;
 
 /* Bad-blocks globals under test */
 BOOL enable_bad_blocks  = FALSE;
+BOOL enable_verify_write = FALSE;
 int  nb_passes_sel      = 0;
 
 DWORD ErrorStatus    = 0;

@@ -617,6 +617,8 @@ t MSG_354 "Rufus has found an updated version of the DBX files used to perform U
 	"- Select 'Yes' to connect to the Internet and download this content\n"
 	"- Select 'No' to cancel the operation\n\n"
 	"Note: The files will be downloaded in the application's directory and will be reused automatically if present."
+t MSG_355 "Verifying write: %s"
+t MSG_356 "Write verify failed at offset 0x%08llX - aborting"
 # The following messages are for the Windows Store listing only and are not used by the application
 t MSG_900 "Rufus is a utility that helps format and create bootable USB flash drives, such as USB keys/pendrives, memory sticks, etc."
 t MSG_901 "Official site: %s"

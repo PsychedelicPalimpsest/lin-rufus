@@ -33,3 +33,17 @@ char *get_token_data_file_indexed(const char *token, const char *filename,
 {
     (void)token; (void)filename; (void)index; return NULL;
 }
+
+/* _win_last_error — owned by stdfn.c in production */
+DWORD _win_last_error = 0;
+
+/* WUE stubs for format.c */
+char *unattend_xml_path = NULL;
+int   unattend_xml_flags = 0;
+
+void wue_set_mount_path(const char *path) { (void)path; }
+
+BOOL ApplyWindowsCustomization(char drive_letter, int flags)
+{
+    (void)drive_letter; (void)flags; return TRUE;
+}

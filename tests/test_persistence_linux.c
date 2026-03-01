@@ -249,8 +249,20 @@ BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
 
 DWORD _win_last_error   = 0;
 BOOL enable_bad_blocks = FALSE;
+BOOL enable_verify_write = FALSE;
 int  nb_passes_sel     = 0;
 int  bad_blocks_call_count = 0;
+
+/* WUE stubs — format.c calls these after ISO extraction */
+char *unattend_xml_path  = NULL;
+int   unattend_xml_flags = 0;
+
+void wue_set_mount_path(const char *path) { (void)path; }
+
+BOOL ApplyWindowsCustomization(char drive_letter, int flags)
+{
+    (void)drive_letter; (void)flags; return TRUE;
+}
 
 #include "../src/windows/badblocks.h"
 BOOL BadBlocks(HANDLE hPhysicalDrive, ULONGLONG disk_size, int nb_passes,

@@ -143,6 +143,7 @@ FORMAT_THREAD_LINUX_SRC := \
 	$(SRC_DIR)/linux/format_ext_tools.c \
 	$(SRC_DIR)/linux/drive.c \
 	$(SRC_DIR)/linux/window_text_bridge.c \
+	$(SRC_DIR)/linux/verify.c \
 	$(SRC_DIR)/ext2fs/posix_io.c \
 	$(FORMAT_MS_SRC)
 CFLAGS_LINUX_test_format_thread_linux := \
@@ -559,6 +560,13 @@ CFLAGS_LINUX_test_polkit_linux := \
 	-I$(SRC_DIR)/linux \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_polkit_linux := $(SRC_DIR)/linux/polkit.c
+
+# verify_linux tests: write-and-verify pass
+CFLAGS_LINUX_test_verify_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_verify_linux := $(SRC_DIR)/linux/verify.c verify_linux_glue.c
 
 # system_info_linux tests: GetTPMVersion, IsSecureBootEnabled, IsSetupModeEnabled
 CFLAGS_LINUX_test_system_info_linux := \

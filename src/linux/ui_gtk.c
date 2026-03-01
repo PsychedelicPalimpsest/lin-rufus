@@ -58,6 +58,7 @@ extern BOOL SetUpdateCheck(void);
 extern BOOL CheckForUpdates(BOOL force);
 extern BOOL quick_format, zero_drive;
 extern BOOL enable_bad_blocks;
+extern BOOL enable_verify_write;
 extern int  nb_passes_sel;
 
 /* format_thread and dialog_handle are defined in globals.c */
@@ -451,6 +452,8 @@ static GtkWidget *build_format_options(void)
 	GtkWidget *adv_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
 	rw.old_bios_check = gtk_check_button_new_with_label("Add fixes for old BIOS (extra partition, align, etc.)");
 	gtk_box_pack_start(GTK_BOX(adv_box), rw.old_bios_check, FALSE, FALSE, 0);
+	rw.verify_write_check = gtk_check_button_new_with_label("Verify write (re-read and compare after write)");
+	gtk_box_pack_start(GTK_BOX(adv_box), rw.verify_write_check, FALSE, FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(rw.adv_format_expander), adv_box);
 	gtk_box_pack_start(GTK_BOX(vbox), rw.adv_format_expander, FALSE, FALSE, 2);
 
@@ -701,6 +704,7 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	enable_bad_blocks = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.bad_blocks_check));
 	nb_passes_sel     = gtk_combo_box_get_active(GTK_COMBO_BOX(rw.nb_passes_combo));
 	if (nb_passes_sel < 0) nb_passes_sel = 0;
+	enable_verify_write = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.verify_write_check));
 
 	uprintf("Format started by user (drive=%u, fs=%d, part=%d, target=%d, boot=%d, quick=%d, bad_blocks=%d, passes_sel=%d)",
 	        di, fs_type, partition_type, target_type, boot_type, quick_format,
@@ -1075,6 +1079,7 @@ void EnableControls(BOOL enable, BOOL remove_checkboxes)
 	if (rw.cluster_combo)     gtk_widget_set_sensitive(rw.cluster_combo,     e);
 	if (rw.label_entry)       gtk_widget_set_sensitive(rw.label_entry,       e);
 	if (rw.start_btn)         gtk_widget_set_sensitive(rw.start_btn,         e);
+	if (rw.verify_write_check) gtk_widget_set_sensitive(rw.verify_write_check, e);
 
 	/* While an operation is in progress, repurpose the close button as Cancel */
 	if (rw.close_btn) {
