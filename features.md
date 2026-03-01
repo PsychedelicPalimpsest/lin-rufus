@@ -271,7 +271,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `CreateAboutBox()` / `AboutCallback()` | 🔧 | GTK About dialog implemented in `ui_gtk.c`; callback stub unused |
 | `LicenseCallback()` | 🟡 | Show license in a `GtkDialog` |
 | `UpdateCallback()` / `NewVersionCallback()` | 🟡 | Update dialog; low priority |
-| `SetFidoCheck()` / `SetUpdateCheck()` | 🟡 | Fido / update check UI toggle |
+| `SetFidoCheck()` / `SetUpdateCheck()` | ✅ | `SetUpdateCheck` implemented: settings commcheck roundtrip; first-run sets 86400s interval; disabled if interval<0; wired into `on_app_activate` GTK startup; 4 tests pass |
 | `FlashTaskbar()` | 🚫 | N/A on Linux |
 | `MyCreateDialog()` / `MyDialogBox()` | 🟡 | Windows dialog resource system; replace with GTK `GtkDialog` builders |
 | `GetDialogTemplate()` | 🚫 | Windows `.rc` resource — not applicable on Linux |

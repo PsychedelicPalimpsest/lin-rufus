@@ -32,6 +32,11 @@ BOOL cpu_has_sha256_accel = FALSE;
 RUFUS_UPDATE update = { {0,0,0}, {0,0}, NULL, NULL };
 windows_version_t WindowsVersion = { 0 };
 
+/* bled stubs (needed by stdio.c's ExtractZip) */
+void bled_init(void *a, void *b, void *c, void *d, void *e, void *f, void *g) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g; }
+int  bled_uncompress_to_dir(const char *a, const char *b, int c) { (void)a;(void)b;(void)c; return -1; }
+void bled_exit(void) {}
+
 /* Pull in rufus_init_paths() without GTK's main() */
 #define USE_GTK
 #include "../src/linux/rufus.c"

@@ -43,6 +43,9 @@ extern char* ini_file;
 /* rufus_init_paths() is compiled in via settings_linux_glue.c */
 extern void rufus_init_paths(void);
 
+/* SetUpdateCheck() is compiled in via stdlg.c */
+extern BOOL SetUpdateCheck(void);
+
 /* ===================================================================
  * Helpers
  * =================================================================== */
@@ -511,6 +514,55 @@ CHECK(TRUE);
 }
 
 /* ===================================================================
+ * SetUpdateCheck tests
+ * =================================================================== */
+
+/* Returns FALSE when ini_file is NULL (settings unavailable) */
+TEST(set_update_check_no_ini_returns_false)
+{
+	ini_file = NULL;
+	BOOL r = SetUpdateCheck();
+	CHECK(r == FALSE);
+}
+
+/* Returns TRUE with valid settings on first run; sets default interval */
+TEST(set_update_check_first_run_sets_interval)
+{
+	settings_setup();
+	/* First run: SETTING_UPDATE_INTERVAL is 0 (not set) */
+	WriteSetting32(SETTING_UPDATE_INTERVAL, 0);
+	BOOL r = SetUpdateCheck();
+	CHECK(r == TRUE);
+	/* Default interval (86400) should have been written */
+	int32_t iv = ReadSetting32(SETTING_UPDATE_INTERVAL);
+	CHECK(iv == 86400);
+	settings_teardown();
+}
+
+/* Returns FALSE when updates explicitly disabled (interval = -1) */
+TEST(set_update_check_disabled_returns_false)
+{
+	settings_setup();
+	WriteSetting32(SETTING_UPDATE_INTERVAL, -1);
+	BOOL r = SetUpdateCheck();
+	CHECK(r == FALSE);
+	settings_teardown();
+}
+
+/* Returns TRUE when interval already set (not first run) */
+TEST(set_update_check_existing_interval_returns_true)
+{
+	settings_setup();
+	WriteSetting32(SETTING_UPDATE_INTERVAL, 3600);
+	BOOL r = SetUpdateCheck();
+	CHECK(r == TRUE);
+	/* Interval should not have been changed */
+	int32_t iv = ReadSetting32(SETTING_UPDATE_INTERVAL);
+	CHECK(iv == 3600);
+	settings_teardown();
+}
+
+/* ===================================================================
  * main
  * =================================================================== */
 
@@ -565,6 +617,12 @@ RUN(paths_user_dir_set);
 RUN(paths_app_data_dir_set);
 RUN(paths_ini_file_in_xdg_config);
 RUN(paths_ini_file_readable_after_init);
+
+printf("\n  SetUpdateCheck\n");
+RUN(set_update_check_no_ini_returns_false);
+RUN(set_update_check_first_run_sets_interval);
+RUN(set_update_check_disabled_returns_false);
+RUN(set_update_check_existing_interval_returns_true);
 
 TEST_RESULTS();
 }

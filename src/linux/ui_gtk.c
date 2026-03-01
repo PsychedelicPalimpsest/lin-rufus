@@ -42,6 +42,10 @@ extern void rufus_set_log_handler(void (*fn)(const char *msg));
 /* Status bar handler registration — implemented in linux/localization.c */
 extern void rufus_set_status_handler(void (*fn)(const char *msg));
 
+/* Update check — implemented in linux/stdlg.c and linux/net.c */
+extern BOOL SetUpdateCheck(void);
+extern BOOL CheckForUpdates(BOOL force);
+
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
 extern HANDLE dialog_handle;
@@ -1242,6 +1246,12 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 
 	rufus_gtk_update_status("Ready.");
 	uprintf("*** Rufus GTK UI started ***");
+
+	/* Run update check in background (SetUpdateCheck configures the interval,
+	 * CheckForUpdates respects it and only actually contacts the server when
+	 * the configured interval has elapsed since the last successful check). */
+	if (SetUpdateCheck())
+		CheckForUpdates(FALSE);
 }
 
 int main(int argc, char *argv[])
