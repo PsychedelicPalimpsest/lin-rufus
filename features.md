@@ -266,7 +266,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `NotificationEx()` / notification popups | ✅ | Test-injectable; logs to stderr in non-GTK mode; GTK `GtkMessageDialog` impl pending |
 | `CustomSelectionDialog()` | ✅ | Test-injectable; returns preset mask in tests; GTK impl pending |
 | `ListDialog()` | ✅ | Dumps to stderr in non-GTK; test-mode no-op |
-| `CreateTooltip()` / `DestroyTooltip()` | ✅ | Uses `gtk_widget_set_tooltip_text` / `gtk_widget_set_has_tooltip`; `#ifdef USE_GTK` guard; 6 tests pass |
+| `CreateTooltip()` / `DestroyTooltip()` | ✅ | Uses `gtk_widget_set_tooltip_text` / `gtk_widget_set_has_tooltip`; `#ifdef USE_GTK` guard; 6 tests pass; wired into `on_app_activate` for device, boot, filesystem, cluster, label, select, start controls |
 | `SetTaskbarProgressValue()` | 🚫 | Windows taskbar — N/A; could map to GTK window urgency hint |
 | `CreateAboutBox()` / `AboutCallback()` | 🔧 | GTK About dialog implemented in `ui_gtk.c`; callback stub unused |
 | `LicenseCallback()` | 🟡 | Show license in a `GtkDialog` |

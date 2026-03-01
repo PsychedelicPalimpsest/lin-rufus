@@ -1259,6 +1259,14 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	 * performs the initial population of each dropdown. */
 	combo_register_all();
 
+	/* Set tooltips on key UI controls, using localized strings if available. */
+	CreateTooltip((HWND)rw.filesystem_combo, lmprintf(MSG_157), -1);
+	CreateTooltip((HWND)rw.cluster_combo,    lmprintf(MSG_158), -1);
+	CreateTooltip((HWND)rw.label_entry,      lmprintf(MSG_159), -1);
+	CreateTooltip((HWND)rw.boot_combo,       lmprintf(MSG_164), -1);
+	CreateTooltip((HWND)rw.select_btn,       lmprintf(MSG_165), -1);
+	CreateTooltip((HWND)rw.start_btn,        lmprintf(MSG_171), -1);
+
 	/* Enumerate attached block devices and fill the device list. */
 	GetDevices(0);
 
