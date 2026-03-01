@@ -9,14 +9,18 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <linux/limits.h>
 
 #include "rufus.h"
 #include "resource.h"
+#include "localization.h"
 #include "drive.h"
 #include "format.h"
 #include "format_linux.h"
+#include "badblocks.h"
 #include "ms-sys/inc/file.h"
 #include "ms-sys/inc/br.h"
 #include "ms-sys/inc/fat32.h"
@@ -28,6 +32,8 @@ extern BOOL force_large_fat32, enable_ntfs_compression, lock_drive, zero_drive, 
 extern BOOL write_as_image, write_as_esp;
 extern BOOL use_rufus_mbr;
 extern BOOL quick_format;
+extern BOOL enable_bad_blocks;
+extern int  nb_passes_sel;
 extern char *image_path;
 
 /* Updated by FormatPartition so that WritePBR knows which FS was formatted */
@@ -566,6 +572,88 @@ DWORD WINAPI FormatThread(void* param)
 	if (!InitializeDisk(hPhysicalDrive)) {
 		ErrorStatus = RUFUS_ERROR(ERROR_PARTITION_FAILURE);
 		goto out;
+	}
+
+	/* -----------------------------------------------------------
+	 * Optional bad-blocks check: runs between ClearMBRGPT and
+	 * CreatePartition so a destructive test sees the full disk.
+	 * --------------------------------------------------------- */
+	if (enable_bad_blocks) {
+		int r = IDOK;
+		int sel    = nb_passes_sel;
+		int passes = (sel >= 2) ? 4 : (sel + 1);
+		int ft     = sel;   /* flash_type index */
+		badblocks_report report = { 0 };
+		do {
+			char   logpath[PATH_MAX];
+			FILE  *log_fd = NULL;
+			time_t now = time(NULL);
+			struct tm lt_buf, *lt = localtime_r(&now, &lt_buf);
+			snprintf(logpath, sizeof(logpath),
+			         "/tmp/rufus_%04d%02d%02d_%02d%02d%02d.log",
+			         lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday,
+			         lt->tm_hour, lt->tm_min, lt->tm_sec);
+			log_fd = fopen(logpath, "w+");
+			if (!log_fd) {
+				uprintf("Error: Could not create log file for bad blocks check");
+				goto out;
+			}
+			fprintf(log_fd,
+			        APPLICATION_NAME " bad blocks check started on: "
+			        "%04d-%02d-%02d %02d:%02d:%02d\n",
+			        lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday,
+			        lt->tm_hour, lt->tm_min, lt->tm_sec);
+			fflush(log_fd);
+
+			if (!BadBlocks(hPhysicalDrive, SelectedDrive.DiskSize,
+			               passes, ft, &report, log_fd)) {
+				uprintf("Bad blocks: Check failed.");
+				if (!IS_ERROR(ErrorStatus))
+					ErrorStatus = RUFUS_ERROR(APPERR(ERROR_BADBLOCKS_FAILURE));
+				fclose(log_fd);
+				unlink(logpath);
+				goto out;
+			}
+			uprintf("Bad Blocks: Check completed, %d bad block%s found."
+			        " (%d/%d/%d errors)",
+			        report.bb_count, (report.bb_count == 1) ? "" : "s",
+			        report.num_read_errors, report.num_write_errors,
+			        report.num_corruption_errors);
+			r = IDOK;
+			if (report.bb_count) {
+				char *bb_msg = lmprintf(MSG_011, report.bb_count,
+				                        report.num_read_errors,
+				                        report.num_write_errors,
+				                        report.num_corruption_errors);
+				fprintf(log_fd, "%s", bb_msg);
+				fclose(log_fd);
+				r = Notification(MB_ABORTRETRYIGNORE | MB_ICONWARNING,
+				                 lmprintf(MSG_010),
+				                 lmprintf(MSG_012, bb_msg, logpath));
+			} else {
+				fclose(log_fd);
+				unlink(logpath);
+			}
+		} while (r == IDRETRY);
+
+		if (r == IDABORT) {
+			ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED);
+			goto out;
+		}
+
+		/* After a destructive bad-blocks pass, zero MBR/GPT again */
+		if (!format_linux_clear_mbr_gpt(hPhysicalDrive,
+		                                SelectedDrive.DiskSize,
+		                                SelectedDrive.SectorSize)) {
+			uprintf("Could not zero MBR/GPT after bad blocks check");
+			if (!IS_ERROR(ErrorStatus))
+				ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
+			goto out;
+		}
+		if (!InitializeDisk(hPhysicalDrive)) {
+			ErrorStatus = RUFUS_ERROR(ERROR_PARTITION_FAILURE);
+			goto out;
+		}
 	}
 
 	/* Create partition table */

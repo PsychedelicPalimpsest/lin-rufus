@@ -47,6 +47,8 @@ extern void rufus_set_status_handler(void (*fn)(const char *msg));
 extern BOOL SetUpdateCheck(void);
 extern BOOL CheckForUpdates(BOOL force);
 extern BOOL quick_format, zero_drive;
+extern BOOL enable_bad_blocks;
+extern int  nb_passes_sel;
 
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
@@ -585,11 +587,15 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	if (bt_sel >= 0) boot_type      = (int)ComboBox_GetItemData(hBootType,        bt_sel);
 
 	/* Read format options from checkboxes */
-	quick_format = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.quick_format_check));
-	zero_drive   = FALSE;  /* future: read from UI when zero-drive option added */
+	quick_format     = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.quick_format_check));
+	zero_drive       = FALSE;  /* future: read from UI when zero-drive option added */
+	enable_bad_blocks = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.bad_blocks_check));
+	nb_passes_sel     = gtk_combo_box_get_active(GTK_COMBO_BOX(rw.nb_passes_combo));
+	if (nb_passes_sel < 0) nb_passes_sel = 0;
 
-	uprintf("Format started by user (drive=%u, fs=%d, part=%d, target=%d, boot=%d, quick=%d)",
-	        di, fs_type, partition_type, target_type, boot_type, quick_format);
+	uprintf("Format started by user (drive=%u, fs=%d, part=%d, target=%d, boot=%d, quick=%d, bad_blocks=%d, passes_sel=%d)",
+	        di, fs_type, partition_type, target_type, boot_type, quick_format,
+	        enable_bad_blocks, nb_passes_sel);
 
 	/* Show "WARNING: ALL DATA ON DEVICE WILL BE DESTROYED" confirmation */
 	{

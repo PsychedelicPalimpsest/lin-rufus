@@ -420,6 +420,7 @@ typedef void* LPVOID;
 
 #define MB_OK                0x00000000L
 #define MB_OKCANCEL          0x00000001L
+#define MB_ABORTRETRYIGNORE  0x00000002L
 #define MB_YESNOCANCEL       0x00000003L
 #define MB_YESNO             0x00000004L
 #define MB_RETRYCANCEL       0x00000005L

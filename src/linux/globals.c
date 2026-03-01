@@ -58,6 +58,8 @@ BOOL use_fake_units = FALSE, preserve_timestamps = FALSE;
 BOOL fast_zeroing = FALSE, app_changed_size = FALSE;
 BOOL zero_drive = FALSE, list_non_usb_removable_drives = FALSE;
 BOOL quick_format = TRUE;
+BOOL enable_bad_blocks = FALSE;
+int  nb_passes_sel = 0;   /* raw nb-passes combo index (0-4) */
 BOOL enable_file_indexing = FALSE;
 BOOL write_as_image = FALSE, write_as_esp = FALSE;
 BOOL use_vds = FALSE, ignore_boot_marker = FALSE, save_image = FALSE;

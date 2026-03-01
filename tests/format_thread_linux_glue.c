@@ -7,6 +7,7 @@
  */
 #include "../src/linux/compat/windows.h"
 #include "../src/windows/rufus.h"
+#include "../src/windows/badblocks.h"
 
 char *GuidToString(const GUID *guid, BOOL bDecorated)
 {
@@ -60,4 +61,45 @@ BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
     (void)drive_index; (void)drive_letter; (void)file_system;
     install_syslinux_call_count++;
     return FALSE; /* simulate failure: no real ldlinux data in tests */
+}
+
+/*
+ * enable_bad_blocks / nb_passes_sel globals — owned by globals.c in
+ * production but defined here so the format-thread test binary links.
+ */
+BOOL enable_bad_blocks = FALSE;
+int  nb_passes_sel     = 0;
+
+/*
+ * BadBlocks stub — the format-thread tests don't exercise real block I/O;
+ * a separate dedicated integration test (test_badblocks_integration) does.
+ * Here we just record the call and return success with zero bad blocks.
+ */
+int bad_blocks_call_count = 0;
+
+BOOL BadBlocks(HANDLE hPhysicalDrive, ULONGLONG disk_size, int nb_passes,
+               int flash_type, badblocks_report *report, FILE *fd)
+{
+    (void)hPhysicalDrive; (void)disk_size; (void)nb_passes;
+    (void)flash_type; (void)fd;
+    bad_blocks_call_count++;
+    if (report) {
+        report->bb_count             = 0;
+        report->num_read_errors      = 0;
+        report->num_write_errors     = 0;
+        report->num_corruption_errors = 0;
+    }
+    return TRUE;
+}
+
+/*
+ * NotificationEx stub — returns IDOK for all calls in format-thread tests.
+ */
+int NotificationEx(int type, const char *dont_display_setting,
+                   const notification_info *more_info, const char *title,
+                   const char *format, ...)
+{
+    (void)type; (void)dont_display_setting; (void)more_info;
+    (void)title; (void)format;
+    return IDOK;
 }
