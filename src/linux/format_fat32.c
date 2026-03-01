@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <stdint.h>
 #include <time.h>
 #include <assert.h>
@@ -189,6 +190,14 @@ BOOL FormatLargeFAT32(DWORD DriveIndex, uint64_t PartitionOffset,
 	}
 
 	VolumeId = GetVolumeID();
+
+	/* Encode the user-supplied label (up to 11 uppercase chars, space-padded) */
+	if (Label && Label[0] != '\0') {
+		memset(VolId, ' ', 11);
+		VolId[11] = '\0';
+		for (int li = 0; li < 11 && Label[li] != '\0'; li++)
+			VolId[li] = (char)toupper((unsigned char)Label[li]);
+	}
 
 	/* Open the device/file */
 	hLogicalVolume = write_as_esp

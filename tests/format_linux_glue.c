@@ -44,6 +44,7 @@ DWORD RunCommandWithProgress(const char *cmd, const char *dir,
 }
 
 /* ---- stdfn.c ---- */
+DWORD _win_last_error = 0;
 BOOL CompareGUID(const GUID *g1, const GUID *g2)
 {
     if (!g1 || !g2) return FALSE;

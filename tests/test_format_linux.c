@@ -631,6 +631,93 @@ TEST(fat32_two_fats_correctly_placed)
 	unlink(path); free(path);
 }
 
+TEST(fat32_volume_label_set_correctly)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", "MYLABEL", FP_NO_PROGRESS | FP_NO_BOOT);
+
+	FAT32_BS bs;
+	CHECK(read_at(path, 0, &bs, sizeof(bs)) == 0);
+	/* Label is 11 chars, space-padded, uppercase */
+	CHECK(memcmp(bs.sVolLab, "MYLABEL    ", 11) == 0);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(fat32_volume_label_lowercase_uppercased)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", "mytest", FP_NO_PROGRESS | FP_NO_BOOT);
+
+	FAT32_BS bs;
+	CHECK(read_at(path, 0, &bs, sizeof(bs)) == 0);
+	CHECK(memcmp(bs.sVolLab, "MYTEST     ", 11) == 0);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(fat32_volume_label_empty_uses_no_name)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", "", FP_NO_PROGRESS | FP_NO_BOOT);
+
+	FAT32_BS bs;
+	CHECK(read_at(path, 0, &bs, sizeof(bs)) == 0);
+	CHECK(memcmp(bs.sVolLab, "NO NAME    ", 11) == 0);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(fat32_volume_label_null_uses_no_name)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", NULL, FP_NO_PROGRESS | FP_NO_BOOT);
+
+	FAT32_BS bs;
+	CHECK(read_at(path, 0, &bs, sizeof(bs)) == 0);
+	CHECK(memcmp(bs.sVolLab, "NO NAME    ", 11) == 0);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(fat32_volume_label_truncated_to_11)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", "VERYLONGLABELNAME", FP_NO_PROGRESS | FP_NO_BOOT);
+
+	FAT32_BS bs;
+	CHECK(read_at(path, 0, &bs, sizeof(bs)) == 0);
+	/* Only first 11 chars kept */
+	CHECK(memcmp(bs.sVolLab, "VERYLONGLAB", 11) == 0);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
 /* ================================================================
  * ext2 / ext3 tests
  * ================================================================ */
@@ -990,6 +1077,11 @@ int main(void)
 	RUN(fat32_reject_too_small_image);
 	RUN(fat32_total_sectors_matches_image_size);
 	RUN(fat32_two_fats_correctly_placed);
+	RUN(fat32_volume_label_set_correctly);
+	RUN(fat32_volume_label_lowercase_uppercased);
+	RUN(fat32_volume_label_empty_uses_no_name);
+	RUN(fat32_volume_label_null_uses_no_name);
+	RUN(fat32_volume_label_truncated_to_11);
 
 	printf("\n=== format_ext tests ===\n");
 	RUN(ext2_format_returns_true);
