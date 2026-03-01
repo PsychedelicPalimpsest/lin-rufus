@@ -365,7 +365,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `BadBlocks()` | 🟡 | Write/read test patterns across the device; pure block I/O — relatively straightforward POSIX port |
+| `BadBlocks()` | ✅ | Implemented via `pread`/`pwrite`, `posix_memalign`, `clock_gettime`; bad-block list management ported verbatim; 43 tests pass |
 
 ### 3q. Icon / Autorun (`icon.c`)
 
@@ -457,7 +457,7 @@ This is the most structurally significant porting gap.
 11. **Hashing** (`hash.c`) — algorithms are pure C; just need POSIX I/O wrappers
 11. ~~**Networking** (`net.c`)~~ ✅ **DONE** — `IsDownloadable` + `DownloadToFileOrBufferEx` implemented with libcurl; 45 tests pass; `configure.ac` updated with `PKG_CHECK_MODULES` for libcurl; stubs remain for `CheckForUpdates`/`DownloadISO`/`DownloadSignedFileThreaded`
 12. **PKI / signatures** (`pki.c`) — replace `WinTrust` with OpenSSL
-13. **Bad blocks** (`badblocks.c`) — straightforward block I/O loop
+13. ~~**Bad blocks** (`badblocks.c`)~~ ✅ **DONE** — full POSIX port using `pread`/`pwrite`/`posix_memalign`/`clock_gettime`; bad-block list management ported verbatim; `ERROR_OBJECT_IN_LIST` added to compat; 43 tests pass
 14. **S.M.A.R.T.** (`smart.c`) — `SG_IO` ioctl
 15. **WIM / VHD** (`vhd.c`, `wue.c`) — `wimlib` is bundled; VHD needs `nbd`
 16. ~~**Settings persistence**~~ ✅ **DONE** — `FileIO()` implemented, `set_token_data_file()` fixed for new files, `src/linux/settings.h` with full `ReadSetting*`/`WriteSetting*` API, `rufus_init_paths()` with XDG paths, wired into `on_app_activate()`; 74 tests pass

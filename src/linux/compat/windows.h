@@ -843,6 +843,7 @@ typedef void* FARPROC;
 #define ERROR_TOO_MANY_OPEN_FILES    4L
 #define ERROR_ARENA_TRASHED          7L
 #define ERROR_INVALID_BLOCK          9L
+#define ERROR_OBJECT_IN_LIST         5000L
 #define ERROR_BAD_ENVIRONMENT        10L
 #define ERROR_BAD_FORMAT             11L
 #define ERROR_INVALID_ACCESS         12L
