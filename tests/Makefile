@@ -99,11 +99,11 @@ FORMAT_MS_SRC := $(SRC_DIR)/ms-sys/file.c \
                  $(SRC_DIR)/ms-sys/partition_info.c
 CFLAGS_LINUX_test_format_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc \
+	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_format_linux :=
-EXTRA_SRC_LINUX_test_format_linux := $(FORMAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB)
+LDFLAGS_LINUX_test_format_linux := -lblkid
+EXTRA_SRC_LINUX_test_format_linux := $(FORMAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB) $(BLED_LIB) format_linux_glue.c
 
 # format_thread_linux tests: FormatThread end-to-end, ClearMBRGPT, WriteMBR, WriteDrive
 FORMAT_THREAD_LINUX_SRC := \
@@ -115,11 +115,11 @@ FORMAT_THREAD_LINUX_SRC := \
 	$(FORMAT_MS_SRC)
 CFLAGS_LINUX_test_format_thread_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc \
+	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_format_thread_linux := -lpthread
-EXTRA_SRC_LINUX_test_format_thread_linux := $(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB)
+LDFLAGS_LINUX_test_format_thread_linux := -lpthread -lblkid
+EXTRA_SRC_LINUX_test_format_thread_linux := $(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) format_thread_linux_glue.c
 
 # pe_parser_linux tests: PE binary parsing (GetPeArch, GetPeSection, RvaToPhysical, etc.)
 PE_PARSER_SRC := $(COMMON)/parser.c $(SRC_DIR)/linux/parser.c \
@@ -133,11 +133,14 @@ EXTRA_SRC_LINUX_test_pe_parser_linux := $(PE_PARSER_SRC)
 # drive_linux tests: block device ops, partition parsing, GPT/MBR creation
 DRIVE_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
                    $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
-                   $(SRC_DIR)/linux/ui.c
+                   $(SRC_DIR)/linux/ui.c \
+                   $(FORMAT_MS_SRC)
 CFLAGS_LINUX_test_drive_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                   -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
                                    -Wno-implicit-function-declaration -Wno-unused-function \
                                    -Wno-sign-compare -Wno-unused-parameter
-EXTRA_SRC_LINUX_test_drive_linux := $(DRIVE_LINUX_SRC)
+LDFLAGS_LINUX_test_drive_linux := -lblkid
+EXTRA_SRC_LINUX_test_drive_linux := $(DRIVE_LINUX_SRC) $(BLED_LIB)
 
 # drive2_linux tests: GUID, partition types, AnalyzeMBR/PBR, RefreshLayout,
 #                     GetDriveTypeFromIndex, GetDriveLabel
@@ -147,11 +150,11 @@ DRIVE2_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
                     $(FORMAT_MS_SRC)
 CFLAGS_LINUX_test_drive2_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-	-I$(SRC_DIR)/ms-sys/inc \
+	-I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter
 LDFLAGS_LINUX_test_drive2_linux := -lblkid
-EXTRA_SRC_LINUX_test_drive2_linux := $(DRIVE2_LINUX_SRC)
+EXTRA_SRC_LINUX_test_drive2_linux := $(DRIVE2_LINUX_SRC) $(BLED_LIB)
 
 # stdio_linux tests: RunCommandWithProgress, SizeToHumanReadable, WindowsErrorString,
 #                    ListDirectoryContent, ExtractZip
@@ -257,6 +260,45 @@ CFLAGS_LINUX_test_badblocks_linux := \
 LDFLAGS_LINUX_test_badblocks_linux := -lrt
 EXTRA_SRC_LINUX_test_badblocks_linux := $(BADBLOCKS_LINUX_SRC)
 
+# process_linux tests: GetPPID, StartProcessSearch, SetProcessSearch,
+#                      GetProcessSearch, SearchProcessAlt (Linux /proc-based)
+CFLAGS_LINUX_test_process_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_process_linux :=
+EXTRA_SRC_LINUX_test_process_linux := $(SRC_DIR)/linux/process.c
+
+# mount_linux tests: AltMountVolume, AltUnmountVolume, MountVolume, RemountVolume
+MOUNT_LINUX_SRC := $(SRC_DIR)/linux/drive.c \
+                   $(SRC_DIR)/linux/stdfn.c \
+                   $(SRC_DIR)/linux/stdio.c \
+                   $(SRC_DIR)/linux/globals.c \
+                   $(SRC_DIR)/linux/ui.c \
+                   $(FORMAT_MS_SRC)
+CFLAGS_LINUX_test_mount_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_mount_linux := -lblkid
+EXTRA_SRC_LINUX_test_mount_linux := $(MOUNT_LINUX_SRC) $(BLED_LIB)
+
+# localization_linux tests: apply_localization, reset_localization,
+#                           dispatch_loc_cmd (GTK widget refs all NULL — no display needed)
+LOC_LINUX_SRC := $(SRC_DIR)/linux/localization.c \
+                 $(SRC_DIR)/linux/stdfn.c \
+                 $(COMMON)/localization.c \
+                 $(COMMON)/parser.c
+CFLAGS_LINUX_test_localization_linux := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(COMMON) -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_localization_linux :=
+EXTRA_SRC_LINUX_test_localization_linux := $(LOC_LINUX_SRC)
+
 # smart_linux tests: SMART HDD/UFD detection via SG_IO
 CFLAGS_LINUX_test_smart_linux := \
 	-DRUFUS_TEST \
@@ -300,6 +342,16 @@ CFLAGS_LINUX_test_xml_linux := \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_xml_linux :=
 EXTRA_SRC_LINUX_test_xml_linux := $(XML_SRC)
+
+# combo_linux tests: ComboBox message-dispatch bridge (no GTK required)
+COMBO_LINUX_SRC := $(SRC_DIR)/linux/combo_bridge.c \
+                   $(COMPAT)/msg_dispatch.c
+CFLAGS_LINUX_test_combo_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_combo_linux := -lpthread
+EXTRA_SRC_LINUX_test_combo_linux := $(COMBO_LINUX_SRC)
 
 # wue_linux tests: CreateUnattendXml, PopulateWindowsVersion
 # Links against wue.c (Linux impl), libwim.a (WIM), xml.c (ezxml)

@@ -82,6 +82,19 @@ typedef struct {
 	GtkWidget *log_dialog;
 	GtkWidget *log_textview;
 	GtkTextBuffer *log_textbuf;
+
+	/* Row label widgets — updated by apply_localization for IDS_* IDs */
+	GtkWidget *device_label;          /* IDS_DEVICE_TXT        (2000) */
+	GtkWidget *partition_type_label;  /* IDS_PARTITION_TYPE_TXT (2001) */
+	GtkWidget *filesystem_label;      /* IDS_FILE_SYSTEM_TXT    (2002) */
+	GtkWidget *cluster_size_label;    /* IDS_CLUSTER_SIZE_TXT   (2003) */
+	GtkWidget *volume_label_label;    /* IDS_LABEL_TXT          (2004) */
+	GtkWidget *target_system_label;   /* IDS_TARGET_SYSTEM_TXT  (2013) */
+	GtkWidget *image_option_label;    /* IDS_IMAGE_OPTION_TXT   (2014) */
+	GtkWidget *boot_selection_label;  /* IDS_BOOT_SELECTION_TXT (2015) */
+	GtkWidget *drive_props_label;     /* IDS_DRIVE_PROPERTIES_TXT (2016) */
+	GtkWidget *format_options_label;  /* IDS_FORMAT_OPTIONS_TXT (2017) */
+	GtkWidget *status_txt_label;      /* IDS_STATUS_TXT         (2018) */
 } RufusWidgets;
 
 extern RufusWidgets rw;

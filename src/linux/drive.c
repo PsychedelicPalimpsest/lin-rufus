@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/mount.h>  /* mount(), umount2(), MS_MGC_VAL */
 #include <linux/fs.h>   /* BLKGETSIZE64, BLKRRPART, BLKSSZGET, BLKFLSBUF */
 #include <time.h>
 
@@ -705,8 +706,18 @@ BOOL UnmountVolume(HANDLE hDrive)
 BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
 {
     (void)bSilent;
-    if (!dn) return FALSE;
-    return (access(dn, F_OK) == 0) ? TRUE : FALSE;
+    if (!dn || dn[0] == '\0') return FALSE;
+
+    struct stat st;
+    if (stat(dn, &st) != 0)
+        return FALSE;
+
+    if (umount2(dn, 0) != 0) {
+        uprintf("AltUnmountVolume: umount2('%s') failed: %s", dn, strerror(errno));
+        return FALSE;
+    }
+    rmdir(dn);
+    return TRUE;
 }
 
 /* -------------------------------------------------------------------------
@@ -909,8 +920,78 @@ BOOL AnalyzePBR(HANDLE hLogicalVolume)
     }
     return TRUE;
 }
-BOOL MountVolume(char* dn, char* dg)                  { (void)dn;(void)dg; return FALSE; }
-char* AltMountVolume(DWORD di, uint64_t off, BOOL s)  { (void)di;(void)off;(void)s; return NULL; }
+BOOL MountVolume(char* dn, char* dg)
+{
+    if (!dn || !dg)
+        return FALSE;
+
+    struct stat st;
+    if (stat(dn, &st) != 0 || !S_ISBLK(st.st_mode)) {
+        uprintf("MountVolume: '%s' is not a block device", dn);
+        return FALSE;
+    }
+
+    if (mount(dn, dg, NULL, MS_MGC_VAL, NULL) != 0 &&
+        mount(dn, dg, "vfat", 0, NULL)  != 0 &&
+        mount(dn, dg, "ntfs", 0, NULL)  != 0 &&
+        mount(dn, dg, "ext4", 0, NULL)  != 0) {
+        uprintf("MountVolume: mount '%s' -> '%s' failed: %s", dn, dg, strerror(errno));
+        return FALSE;
+    }
+    return TRUE;
+}
+
+char* AltMountVolume(DWORD di, uint64_t off, BOOL s)
+{
+    (void)s;
+
+    /* Resolve partition block-device path */
+    char *dev_path = GetLogicalName(di, off, FALSE, TRUE);
+    if (!dev_path)
+        dev_path = GetPhysicalName(di);
+    if (!dev_path)
+        return NULL;
+
+    /* Verify the path is a block device */
+    struct stat st;
+    if (stat(dev_path, &st) != 0 || !S_ISBLK(st.st_mode)) {
+        uprintf("AltMountVolume: '%s' is not a block device", dev_path);
+        free(dev_path);
+        return NULL;
+    }
+
+    /* Create a temp directory to serve as the mount point */
+    char template[] = "/tmp/rufus_XXXXXX";
+    char *mount_point = mkdtemp(template);
+    if (!mount_point) {
+        uprintf("AltMountVolume: mkdtemp failed: %s", strerror(errno));
+        free(dev_path);
+        return NULL;
+    }
+    mount_point = strdup(mount_point);
+
+    /* Try common filesystems in turn */
+    const char *fstypes[] = { "vfat", "ntfs", "exfat", "ext4", "ext3", "ext2", NULL };
+    BOOL mounted = FALSE;
+    for (int i = 0; fstypes[i] != NULL; i++) {
+        if (mount(dev_path, mount_point, fstypes[i], 0, NULL) == 0) {
+            mounted = TRUE;
+            break;
+        }
+    }
+
+    if (!mounted) {
+        uprintf("AltMountVolume: could not mount '%s': %s", dev_path, strerror(errno));
+        rmdir(mount_point);
+        free(mount_point);
+        free(dev_path);
+        return NULL;
+    }
+
+    free(dev_path);
+    return mount_point;
+}
+
 BOOL RemountVolume(char* dn, BOOL s)                  { (void)dn;(void)s; return FALSE; }
 
 /* -------------------------------------------------------------------------

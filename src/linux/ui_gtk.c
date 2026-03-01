@@ -35,6 +35,7 @@
 #include <windowsx.h>
 #include <msg_dispatch.h>
 #include "device_monitor.h"
+#include "combo_bridge.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -50,8 +51,30 @@ extern UINT_PTR UM_LANGUAGE_MENU_MAX;
 /* ---- Global widget registry ---- */
 RufusWidgets rw = { 0 };
 
+/* ---- Combo state objects (one per logical combo box) ---- */
+static combo_state_t *cs_device   = NULL;
+static combo_state_t *cs_boot     = NULL;
+static combo_state_t *cs_part     = NULL;
+static combo_state_t *cs_target   = NULL;
+static combo_state_t *cs_fs       = NULL;
+static combo_state_t *cs_cluster  = NULL;
+static combo_state_t *cs_imgopt   = NULL;
+
 /* Struct used to pass progress data to the GTK main thread via g_idle_add. */
 typedef struct { int op; float pct; } ProgressData;
+
+/* FileSystemLabel[] is defined in linux/format.c */
+extern const char* FileSystemLabel[FS_MAX];
+
+/* Forward declaration for combo registration helper */
+static void combo_register_all(void);
+/* Forward declaration for initial combo population */
+static void populate_boot_combo(void);
+static void populate_partition_combos(void);
+static void populate_fs_combo(void);
+static void populate_cluster_combo(int fs);
+/* Forward declaration for EnableControls (defined later in this file) */
+void EnableControls(BOOL enable, BOOL remove_checkboxes);
 
 /* Idle callback: update progress bar from main thread. */
 static gboolean idle_update_progress(gpointer data)
@@ -169,8 +192,8 @@ static GtkWidget *build_toolbar(void)
 static GtkWidget *build_device_row(void)
 {
 	GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-	GtkWidget *lbl  = gtk_label_new("Device");
-	gtk_widget_set_halign(lbl, GTK_ALIGN_START);
+	rw.device_label = gtk_label_new("Device");
+	gtk_widget_set_halign(rw.device_label, GTK_ALIGN_START);
 
 	rw.device_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.device_combo, TRUE);
@@ -180,7 +203,7 @@ static GtkWidget *build_device_row(void)
 
 	GtkWidget *toolbar = build_toolbar();
 
-	gtk_box_pack_start(GTK_BOX(hbox), lbl,             FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(hbox), rw.device_label, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(hbox), rw.device_combo, TRUE,  TRUE,  0);
 	gtk_box_pack_end  (GTK_BOX(hbox), toolbar,         FALSE, FALSE, 0);
 
@@ -191,8 +214,8 @@ static GtkWidget *build_device_row(void)
 static GtkWidget *build_boot_row(void)
 {
 	GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-	GtkWidget *lbl  = gtk_label_new("Boot selection");
-	gtk_widget_set_halign(lbl, GTK_ALIGN_START);
+	rw.boot_selection_label = gtk_label_new("Boot selection");
+	gtk_widget_set_halign(rw.boot_selection_label, GTK_ALIGN_START);
 
 	rw.boot_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.boot_combo, TRUE);
@@ -201,9 +224,9 @@ static GtkWidget *build_boot_row(void)
 	rw.select_btn = gtk_button_new_with_label("SELECT");
 	g_signal_connect(rw.select_btn, "clicked", G_CALLBACK(on_select_clicked), NULL);
 
-	gtk_box_pack_start(GTK_BOX(hbox), lbl,            FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(hbox), rw.boot_combo,  TRUE,  TRUE,  0);
-	gtk_box_pack_start(GTK_BOX(hbox), rw.select_btn,  FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(hbox), rw.boot_selection_label, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(hbox), rw.boot_combo,           TRUE,  TRUE,  0);
+	gtk_box_pack_start(GTK_BOX(hbox), rw.select_btn,           FALSE, FALSE, 0);
 
 	return hbox;
 }
@@ -212,13 +235,13 @@ static GtkWidget *build_boot_row(void)
 static GtkWidget *build_image_option_row(void)
 {
 	GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-	GtkWidget *lbl  = gtk_label_new("Image option");
-	gtk_widget_set_halign(lbl, GTK_ALIGN_START);
+	rw.image_option_label = gtk_label_new("Image option");
+	gtk_widget_set_halign(rw.image_option_label, GTK_ALIGN_START);
 
 	rw.image_option_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.image_option_combo, TRUE);
 
-	gtk_box_pack_start(GTK_BOX(hbox), lbl,                    FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(hbox), rw.image_option_label,  FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(hbox), rw.image_option_combo,  TRUE,  TRUE,  0);
 
 	rw.image_option_row = hbox;
@@ -230,43 +253,44 @@ static GtkWidget *build_image_option_row(void)
 static GtkWidget *build_drive_properties(void)
 {
 	GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
-	gtk_box_pack_start(GTK_BOX(vbox), make_section_label("Drive Properties"), FALSE, FALSE, 2);
+	rw.drive_props_label = make_section_label("Drive Properties");
+	gtk_box_pack_start(GTK_BOX(vbox), rw.drive_props_label, FALSE, FALSE, 2);
 
 	/* Row: Partition scheme + Target system */
 	GtkWidget *row1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-	GtkWidget *lbl_pt = gtk_label_new("Partition scheme");
+	rw.partition_type_label = gtk_label_new("Partition scheme");
 	rw.partition_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.partition_combo, TRUE);
-	GtkWidget *lbl_ts = gtk_label_new("Target system");
+	rw.target_system_label = gtk_label_new("Target system");
 	rw.target_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.target_combo, TRUE);
-	gtk_box_pack_start(GTK_BOX(row1), lbl_pt,             FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(row1), rw.partition_combo, TRUE,  TRUE,  0);
-	gtk_box_pack_start(GTK_BOX(row1), lbl_ts,             FALSE, FALSE, 8);
-	gtk_box_pack_start(GTK_BOX(row1), rw.target_combo,    TRUE,  TRUE,  0);
+	gtk_box_pack_start(GTK_BOX(row1), rw.partition_type_label, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(row1), rw.partition_combo,      TRUE,  TRUE,  0);
+	gtk_box_pack_start(GTK_BOX(row1), rw.target_system_label,  FALSE, FALSE, 8);
+	gtk_box_pack_start(GTK_BOX(row1), rw.target_combo,         TRUE,  TRUE,  0);
 	gtk_box_pack_start(GTK_BOX(vbox), row1, FALSE, FALSE, 0);
 
 	/* Row: File system + Cluster size */
 	GtkWidget *row2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-	GtkWidget *lbl_fs = gtk_label_new("File system");
+	rw.filesystem_label = gtk_label_new("File system");
 	rw.filesystem_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.filesystem_combo, TRUE);
-	GtkWidget *lbl_cs = gtk_label_new("Cluster size");
+	rw.cluster_size_label = gtk_label_new("Cluster size");
 	rw.cluster_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.cluster_combo, TRUE);
-	gtk_box_pack_start(GTK_BOX(row2), lbl_fs,              FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(row2), rw.filesystem_combo, TRUE,  TRUE,  0);
-	gtk_box_pack_start(GTK_BOX(row2), lbl_cs,              FALSE, FALSE, 8);
-	gtk_box_pack_start(GTK_BOX(row2), rw.cluster_combo,    TRUE,  TRUE,  0);
+	gtk_box_pack_start(GTK_BOX(row2), rw.filesystem_label,     FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(row2), rw.filesystem_combo,     TRUE,  TRUE,  0);
+	gtk_box_pack_start(GTK_BOX(row2), rw.cluster_size_label,   FALSE, FALSE, 8);
+	gtk_box_pack_start(GTK_BOX(row2), rw.cluster_combo,        TRUE,  TRUE,  0);
 	gtk_box_pack_start(GTK_BOX(vbox), row2, FALSE, FALSE, 0);
 
 	/* Row: Volume label */
 	GtkWidget *row3 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-	GtkWidget *lbl_lbl = gtk_label_new("Volume label");
+	rw.volume_label_label = gtk_label_new("Volume label");
 	rw.label_entry = gtk_entry_new();
 	gtk_widget_set_hexpand(rw.label_entry, TRUE);
-	gtk_box_pack_start(GTK_BOX(row3), lbl_lbl,        FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(row3), rw.label_entry, TRUE,  TRUE,  0);
+	gtk_box_pack_start(GTK_BOX(row3), rw.volume_label_label, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(row3), rw.label_entry,        TRUE,  TRUE,  0);
 	gtk_box_pack_start(GTK_BOX(vbox), row3, FALSE, FALSE, 0);
 
 	/* Advanced device options (expander) */
@@ -286,7 +310,8 @@ static GtkWidget *build_drive_properties(void)
 static GtkWidget *build_format_options(void)
 {
 	GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
-	gtk_box_pack_start(GTK_BOX(vbox), make_section_label("Format Options"), FALSE, FALSE, 2);
+	rw.format_options_label = make_section_label("Format Options");
+	gtk_box_pack_start(GTK_BOX(vbox), rw.format_options_label, FALSE, FALSE, 2);
 
 	/* Row: Quick format + Bad blocks */
 	GtkWidget *row1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
@@ -354,7 +379,8 @@ static GtkWidget *build_persistence_row(void)
 static GtkWidget *build_status_section(void)
 {
 	GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
-	gtk_box_pack_start(GTK_BOX(vbox), make_section_label("Status"), FALSE, FALSE, 2);
+	rw.status_txt_label = make_section_label("Status");
+	gtk_box_pack_start(GTK_BOX(vbox), rw.status_txt_label, FALSE, FALSE, 2);
 
 	rw.progress_bar  = gtk_progress_bar_new();
 	gtk_widget_set_hexpand(rw.progress_bar, TRUE);
@@ -514,15 +540,33 @@ static void on_close_clicked(GtkButton *btn, gpointer data)
 static void on_start_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
-	if (ComboBox_GetCurSel(hDeviceList) < 0) {
+	int sel = ComboBox_GetCurSel(hDeviceList);
+	if (sel < 0) {
 		rufus_gtk_update_status("No device selected");
 		return;
 	}
-	uprintf("Format started by user");
+	DWORD di = (DWORD)ComboBox_GetItemData(hDeviceList, sel);
+
+	/* Read current combo selections into globals */
+	int fs_sel   = ComboBox_GetCurSel(hFileSystem);
+	int pt_sel   = ComboBox_GetCurSel(hPartitionScheme);
+	int ts_sel   = ComboBox_GetCurSel(hTargetSystem);
+	int bt_sel   = ComboBox_GetCurSel(hBootType);
+	if (fs_sel >= 0) fs_type        = (int)ComboBox_GetItemData(hFileSystem,      fs_sel);
+	if (pt_sel >= 0) partition_type = (int)ComboBox_GetItemData(hPartitionScheme, pt_sel);
+	if (ts_sel >= 0) target_type    = (int)ComboBox_GetItemData(hTargetSystem,    ts_sel);
+	if (bt_sel >= 0) boot_type      = (int)ComboBox_GetItemData(hBootType,        bt_sel);
+
+	uprintf("Format started by user (drive=%u, fs=%d, part=%d, target=%d, boot=%d)",
+	        di, fs_type, partition_type, target_type, boot_type);
+
 	if (format_thread == NULL) {
-		format_thread = CreateThread(NULL, 0, FormatThread, NULL, 0, NULL);
-		if (format_thread == NULL)
+		EnableControls(FALSE, FALSE);
+		format_thread = CreateThread(NULL, 0, FormatThread, (void*)(uintptr_t)di, 0, NULL);
+		if (format_thread == NULL) {
 			rufus_gtk_update_status("Failed to start format thread");
+			EnableControls(TRUE, FALSE);
+		}
 	}
 }
 
@@ -571,18 +615,38 @@ static void on_select_clicked(GtkButton *btn, gpointer data)
 static void on_device_changed(GtkComboBox *combo, gpointer data)
 {
 	(void)data;
-	int sel = gtk_combo_box_get_active(combo);
+	(void)combo;
+
+	/* Read the selected drive index from the combo state */
+	int sel = ComboBox_GetCurSel(hDeviceList);
 	if (sel < 0)
 		return;
-	/* Propagate to the shared device selection logic */
-	/* GetDevices() and UpdateDriveInfo() are called by the format layer */
+	DWORD di = (DWORD)ComboBox_GetItemData(hDeviceList, sel);
+
+	/* Read partition / FS data for the selected drive */
+	char fs_name[32] = "";
+	GetDrivePartitionData(di, fs_name, sizeof(fs_name), TRUE);
+
+	/* Refresh partition scheme + target system combos */
+	populate_partition_combos();
+
+	/* Refresh FS and cluster size combos */
+	populate_fs_combo();
 }
 
 static void on_boot_changed(GtkComboBox *combo, gpointer data)
 {
 	(void)data;
 	(void)combo;
-	/* Propagate to partition/fs dropdowns */
+
+	/* Update global boot_type from the combo */
+	int sel = ComboBox_GetCurSel(hBootType);
+	if (sel >= 0)
+		boot_type = (int)ComboBox_GetItemData(hBootType, sel);
+
+	/* Partition / FS combos may need to change depending on boot type */
+	populate_partition_combos();
+	populate_fs_combo();
 }
 
 static void on_log_clicked(GtkButton *btn, gpointer data)
@@ -940,8 +1004,169 @@ static void on_device_change(void *user_data)
 }
 
 /* ======================================================================
- * main() — GTK application entry point
+ * Combo-state population helpers
  * ====================================================================== */
+
+/*
+ * populate_boot_combo — fill the boot type dropdown.
+ *
+ * On Linux we offer: Non-bootable, Disk/ISO image, FreeDOS.
+ * More entries (Syslinux, GRUB, etc.) can be added as support lands.
+ */
+static void populate_boot_combo(void)
+{
+	IGNORE_RETVAL(ComboBox_ResetContent(hBootType));
+	IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+	    ComboBox_AddString(hBootType, "Non-bootable"), BT_NON_BOOTABLE));
+	IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+	    ComboBox_AddString(hBootType, "Disk or ISO image (Please SELECT)"), BT_IMAGE));
+	IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+	    ComboBox_AddString(hBootType, "FreeDOS"), BT_FREEDOS));
+
+	/* Select "Non-bootable" as the default */
+	IGNORE_RETVAL(ComboBox_SetCurSel(hBootType, 0));
+	boot_type = BT_NON_BOOTABLE;
+}
+
+/*
+ * populate_partition_combos — fill Partition Scheme and Target System dropdowns
+ * based on the current boot_type.
+ */
+static void populate_partition_combos(void)
+{
+	IGNORE_RETVAL(ComboBox_ResetContent(hPartitionScheme));
+	IGNORE_RETVAL(ComboBox_SetItemData(hPartitionScheme,
+	    ComboBox_AddString(hPartitionScheme, "MBR"), PARTITION_STYLE_MBR));
+	IGNORE_RETVAL(ComboBox_SetItemData(hPartitionScheme,
+	    ComboBox_AddString(hPartitionScheme, "GPT"), PARTITION_STYLE_GPT));
+	IGNORE_RETVAL(ComboBox_SetCurSel(hPartitionScheme, 0));
+	partition_type = PARTITION_STYLE_MBR;
+
+	IGNORE_RETVAL(ComboBox_ResetContent(hTargetSystem));
+	IGNORE_RETVAL(ComboBox_SetItemData(hTargetSystem,
+	    ComboBox_AddString(hTargetSystem, "BIOS (or UEFI-CSM)"), TT_BIOS));
+	IGNORE_RETVAL(ComboBox_SetItemData(hTargetSystem,
+	    ComboBox_AddString(hTargetSystem, "UEFI (non-CSM)"), TT_UEFI));
+	IGNORE_RETVAL(ComboBox_SetCurSel(hTargetSystem, 0));
+	target_type = TT_BIOS;
+}
+
+/*
+ * populate_fs_combo — fill the File System dropdown.
+ *
+ * On Linux we support FAT32 and ext2/ext3/ext4.
+ * NTFS, exFAT, UDF, ReFS are shown as placeholders only when explicitly
+ * selecting an image that requires them (not yet implemented).
+ */
+static void populate_fs_combo(void)
+{
+	IGNORE_RETVAL(ComboBox_ResetContent(hFileSystem));
+	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
+	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_FAT32]), FS_FAT32));
+	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
+	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXT2]),  FS_EXT2));
+	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
+	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXT3]),  FS_EXT3));
+	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
+	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXT4]),  FS_EXT4));
+
+	/* Default to FAT32 */
+	IGNORE_RETVAL(ComboBox_SetCurSel(hFileSystem, 0));
+	fs_type = FS_FAT32;
+
+	populate_cluster_combo(FS_FAT32);
+}
+
+/*
+ * populate_cluster_combo — fill Cluster Size dropdown for the given FS type.
+ *
+ * For FAT32 we offer common cluster sizes.
+ * For ext* the cluster size is determined automatically by mkfs.ext*.
+ */
+static void populate_cluster_combo(int fs)
+{
+	IGNORE_RETVAL(ComboBox_ResetContent(hClusterSize));
+
+	if (IS_EXT(fs)) {
+		IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
+		    ComboBox_AddString(hClusterSize, "4096 bytes (Default)"), 4096));
+		IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, 0));
+		return;
+	}
+
+	/* FAT32 common cluster sizes */
+	static const struct { const char *label; DWORD size; } fat_clusters[] = {
+		{ "512 bytes",   512   },
+		{ "1024 bytes",  1024  },
+		{ "2048 bytes",  2048  },
+		{ "4096 bytes",  4096  },
+		{ "8192 bytes",  8192  },
+		{ "16384 bytes", 16384 },
+		{ "32768 bytes", 32768 },
+		{ NULL, 0 }
+	};
+	int def = 3; /* 4096 bytes default */
+	for (int i = 0; fat_clusters[i].label; i++) {
+		IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
+		    ComboBox_AddString(hClusterSize, fat_clusters[i].label),
+		    fat_clusters[i].size));
+	}
+	IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, def));
+}
+
+/* ======================================================================
+ * Combo-state registration
+ * ====================================================================== */
+
+/*
+ * combo_register_all — create and register combo states for every combo HWND.
+ *
+ * Must be called after the GTK widgets have been created (i.e. after
+ * rufus_gtk_create_window()) but before msg_dispatch is first used to
+ * send CB_* messages.
+ *
+ * The function:
+ *   1. Allocates a combo_state_t for each combo, binding it to the GTK widget.
+ *   2. Registers each state with msg_dispatch so SendMessageA routes correctly.
+ *   3. Updates the hXxx HWND globals to point at the state objects.
+ *   4. Performs initial population of all dropdowns.
+ */
+static void combo_register_all(void)
+{
+	/* Allocate states (binding to GTK widget for sync) */
+	cs_device  = combo_state_alloc(rw.device_combo);
+	cs_boot    = combo_state_alloc(rw.boot_combo);
+	cs_part    = combo_state_alloc(rw.partition_combo);
+	cs_target  = combo_state_alloc(rw.target_combo);
+	cs_fs      = combo_state_alloc(rw.filesystem_combo);
+	cs_cluster = combo_state_alloc(rw.cluster_combo);
+	cs_imgopt  = combo_state_alloc(rw.image_option_combo);
+
+	/* Register handlers */
+	msg_dispatch_register((HWND)cs_device,  combo_msg_handler);
+	msg_dispatch_register((HWND)cs_boot,    combo_msg_handler);
+	msg_dispatch_register((HWND)cs_part,    combo_msg_handler);
+	msg_dispatch_register((HWND)cs_target,  combo_msg_handler);
+	msg_dispatch_register((HWND)cs_fs,      combo_msg_handler);
+	msg_dispatch_register((HWND)cs_cluster, combo_msg_handler);
+	msg_dispatch_register((HWND)cs_imgopt,  combo_msg_handler);
+
+	/* Re-map the HWND globals to the combo state objects.
+	 * hLabel / hProgress keep their original GTK widget pointers because
+	 * they are not combo boxes. */
+	hDeviceList      = (HWND)cs_device;
+	hBootType        = (HWND)cs_boot;
+	hPartitionScheme = (HWND)cs_part;
+	hTargetSystem    = (HWND)cs_target;
+	hFileSystem      = (HWND)cs_fs;
+	hClusterSize     = (HWND)cs_cluster;
+	hImageOption     = (HWND)cs_imgopt;
+
+	/* Initial population */
+	populate_boot_combo();
+	populate_partition_combos();
+	populate_fs_combo();
+}
 
 static void on_app_activate(GtkApplication *app, gpointer data)
 {
@@ -964,22 +1189,23 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	GtkWidget *win = rufus_gtk_create_window(app);
 	(void)win;
 
-	/* Map the Windows-style HWND globals to their GTK counterparts so that
-	 * shared business logic (drive detection, formatting, etc.) can use them
-	 * via the compat layer's no-op inline functions. */
-	hMainDialog  = (HWND)rw.window;
-	hDeviceList  = (HWND)rw.device_combo;
-	hBootType    = (HWND)rw.boot_combo;
-	hPartitionScheme = (HWND)rw.partition_combo;
-	hTargetSystem    = (HWND)rw.target_combo;
-	hFileSystem      = (HWND)rw.filesystem_combo;
-	hClusterSize     = (HWND)rw.cluster_combo;
-	hLabel           = (HWND)rw.label_entry;
-	hProgress        = (HWND)rw.progress_bar;
-	hImageOption     = (HWND)rw.image_option_combo;
+	/* Map the non-combo HWND globals to their GTK widget pointers. */
+	hMainDialog = (HWND)rw.window;
+	hLabel      = (HWND)rw.label_entry;
+	hProgress   = (HWND)rw.progress_bar;
 
 	/* Register the main dialog message handler. */
 	msg_dispatch_register(hMainDialog, main_dialog_handler);
+
+	/* Create and register combo bridge states for every combo box.
+	 * This re-maps hDeviceList / hBootType / hPartitionScheme / hTargetSystem /
+	 * hFileSystem / hClusterSize / hImageOption to their combo_state_t objects
+	 * so that SendMessageA(hCombo, CB_*, …) calls work correctly, and
+	 * performs the initial population of each dropdown. */
+	combo_register_all();
+
+	/* Enumerate attached block devices and fill the device list. */
+	GetDevices(0);
 
 	/* Start the udev block-device hotplug monitor.  Events are debounced
 	 * and delivered to hMainDialog as UM_MEDIA_CHANGE via PostMessage. */

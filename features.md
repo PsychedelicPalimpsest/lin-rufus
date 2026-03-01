@@ -122,8 +122,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `IsMediaPresent()` | 🟡 | `stat()` or `ioctl` |
 | `GetDriveTypeFromIndex()` | ✅ | sysfs `/sys/block/<dev>/removable` + `device/uevent`; tests pass |
 | `GetDriveLetters()` / `GetUnusedDriveLetter()` | 🚫 | Drive letters are Windows-only; adapt callers to use mount points |
-| `MountVolume()` / `UnmountVolume()` | 🟡 | `udisks2` D-Bus API or `mount(2)` / `umount(2)` |
-| `AltMountVolume()` / `AltUnmountVolume()` | 🟡 | Same as above |
+| `MountVolume()` / `UnmountVolume()` | ✅ | `mount(2)` / `umount2(2)` with multi-fs fallback; 11 tests pass |
+| `AltMountVolume()` / `AltUnmountVolume()` | ✅ | `mkdtemp` + `mount(2)` / `umount2(2)` + `rmdir`; 11 tests pass |
 | `RemoveDriveLetters()` | 🚫 | N/A on Linux |
 | `CreatePartition()` | 🟡 | `ioctl(BLKPG_ADD_PARTITION)` or call `sfdisk` |
 | `InitializeDisk()` | 🟡 | Write fresh MBR/GPT with `libfdisk` |
@@ -210,10 +210,10 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `EnablePrivileges()` | 🔧 | Returns TRUE on Linux (root check is in `stdfn.c`); adequate for now |
-| `GetPPID()` | 🟡 | Read `/proc/PID/status` |
-| `StartProcessSearch()` / `SetProcessSearch()` | 🟡 | Used to detect open handles to the target drive; replace with `lsof` / `/proc` scan |
-| `SearchProcessAlt()` | 🟡 | Same |
+| `EnablePrivileges()` | ✅ | Returns TRUE on Linux (root check is in `stdfn.c`); 19 tests pass |
+| `GetPPID()` | ✅ | Reads `/proc/PID/status`; 19 tests pass |
+| `StartProcessSearch()` / `SetProcessSearch()` / `StopProcessSearch()` / `GetProcessSearch()` | ✅ | `/proc` scan for open handles to target device; 19 tests pass |
+| `SearchProcessAlt()` | ✅ | Scans `/proc/PID/comm`; 19 tests pass |
 | `PhEnumHandlesEx()` / `PhOpenProcess()` | 🚫 | NT internal APIs; not applicable on Linux |
 | `NtStatusError()` | 🚫 | NT status codes; not applicable |
 | `RunCommandWithProgress()` (in `stdfn.c`) | 🟡 | Spawn subprocess and read stdout; use `posix_spawn` + pipes |
@@ -291,10 +291,10 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `SetPersistencePos()` / `SetPersistenceSize()` | ✅ | Slider + label |
 | `ToggleAdvancedDeviceOptions()` / `ToggleAdvancedFormatOptions()` | ✅ | GtkExpander expand/collapse |
 | `ToggleImageOptions()` | ✅ | Show/hide image option row |
-| Device combo population | 🟡 | Calls `GetDevices()` which is a stub |
-| Boot type combo population | 🟡 | Needs to match Windows boot type enum |
-| Partition scheme / target system / FS / cluster combos | 🟡 | Values hardcoded; need to be driven by device selection logic |
-| On-START → `FormatThread` launch | ✅ | `CreateThread(NULL, 0, FormatThread, NULL, 0, NULL)` wired in `on_start_clicked` |
+| Device combo population | ✅ | `combo_bridge.c`: full CB_* message dispatch for all combo boxes; `GetDevices()` populates device list via combo_bridge; 105 tests pass |
+| Boot type combo population | ✅ | `populate_boot_combo()` adds Non-bootable/ISO Image/FreeDOS; wired in `combo_register_all()` |
+| Partition scheme / target system / FS / cluster combos | ✅ | `populate_partition_combos()`, `populate_fs_combo()`, `populate_cluster_combo()` all implemented; driven by device selection via `on_device_changed()` |
+| On-START → `FormatThread` launch | ✅ | `on_start_clicked()` reads combo selections into globals (fs_type, partition_type, target_type, boot_type) then launches FormatThread with drive index |
 | Cancel in-progress operation | ✅ | `on_close_clicked` sets `ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED)` |
 | Language menu (`ShowLanguageMenu`) | ✅ | Builds GTK menu from `locale_list`; activates via `PostMessage → main_dialog_handler` |
 | `SetAccessibleName()` | 🔧 | Maps to tooltip; should use `atk_object_set_name` for true accessibility |
@@ -313,7 +313,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `dispatch_loc_cmd()` | ✅ | Portable; in `common/localization.c` |
 | `lmprintf()` | ✅ | Portable; in `common/localization.c` |
 | `PrintStatusInfo()` | ✅ | Linux: routes through `uprintf`; in `linux/localization.c` |
-| `apply_localization()` / `reset_localization()` | 🟡 | Linux stub exists; GTK widget label application not yet wired |
+| `apply_localization()` / `reset_localization()` | ✅ | GTK widget label update via `ctrl_id_to_widget()` + `set_widget_text()`; all rw.* label fields wired in `ui_gtk.c`; 11 tests pass |
 | `get_locale_from_lcid()` / `get_locale_from_name()` | ✅ | Portable; in `common/localization.c` |
 | `toggle_default_locale()` | ✅ | Portable; in `common/localization.c` |
 | `get_token_data_file_indexed()` / `set_token_data_file()` | ✅ | Linux impl in `linux/parser.c`; 111 tests pass |
@@ -441,7 +441,7 @@ This is the most structurally significant porting gap.
 | `msg_dispatch` (PostMessage/SendMessage bridge) tests | ✅ | 61 tests: handler registry, sync/async dispatch, cross-thread SendMessage, concurrent posts, macro aliases, UM_* constants |
 | `common/device_monitor` (hotplug) tests | ✅ | 20 tests: lifecycle (start/stop/double/null), callback dispatch, debounce, thread safety, inject |
 | `common/net` (IsDownloadable, DownloadToFileOrBufferEx) tests | ✅ | 45 tests; real libcurl downloads, file+buffer modes, HTTP status, User-Agent, 404 handling, binary data |
-| `stdio.c` (ListDirectoryContent, ExtractZip) tests | ✅ | 44 tests: ListDirectoryContent (POSIX opendir/readdir, file/dir/recursive modes), ExtractZip (bled-based, stored+deflate zips) |
+| `combo_bridge` (ComboBox message dispatch) tests | ✅ | 105 tests: lifecycle, all CB_* messages (ADDSTRING/RESETCONTENT/GETCURSEL/SETCURSEL/GETCOUNT/SETITEMDATA/GETITEMDATA/GETLBTEXT/GETLBTEXTLEN), capacity growth, GTK-free unit testing |
 
 ---
 
@@ -471,4 +471,8 @@ This is the most structurally significant porting gap.
 19b. ~~**Cancel operation**~~ ✅ **DONE** — `on_close_clicked` sets `ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED)`
 19c. ~~**stdlg test-injection API**~~ ✅ **DONE** — `stdlg_set_test_response()` / `stdlg_clear_test_mode()` in `stdlg.c`; 24 tests pass (all assertions pass)
 20. ~~**Desktop integration**~~ ✅ **DONE** — `res/ie.akeo.rufus.desktop` + `res/ie.akeo.rufus.appdata.xml`; icons at 32/48/256px copied from appstore images; `Makefile.am` install-data-hook installs into hicolor theme tree
+21. ~~**ComboBox message bridge**~~ ✅ **DONE** — `src/linux/combo_bridge.c`: pure-C CB_* message handler; all 7 combo boxes (device, boot, partition, target, FS, cluster, imgopt) registered via `combo_register_all()`; HWNDs remapped to state objects; GTK sync optional; `GetDevices()` populates device combo; `on_device_changed()` / `on_boot_changed()` update all dependent combos; 105 tests pass
 
+22. ~~**Process management** (`process.c`)~~ ✅ **DONE** — `GetPPID` via `/proc/PID/status`; process search via `/proc/*/fd` device scan; `SearchProcessAlt` via `/proc/PID/comm`; `EnablePrivileges` returns TRUE; 19 tests pass
+23. ~~**Mount API** (`drive.c`)~~ ✅ **DONE** — `MountVolume`, `AltMountVolume`, `AltUnmountVolume` using `mount(2)` / `umount2(2)` with multi-fs fallback (vfat/ntfs/exfat/ext4/ext3/ext2); `mkdtemp` for temp mount points; 11 tests pass
+24. ~~**apply_localization GTK wiring**~~ ✅ **DONE** — `ctrl_id_to_widget()` maps 30+ IDC_*/IDS_* IDs to `rw.*` fields; `set_widget_text()` uses GTK_IS_BUTTON/GTK_IS_LABEL; 11 label widget fields added to `RufusWidgets`; stored in `ui_gtk.c` build functions; 11 tests pass
