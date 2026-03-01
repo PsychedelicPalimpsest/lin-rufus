@@ -420,6 +420,13 @@ typedef void* LPVOID;
 #define MB_TOPMOST           0x00040000L
 #define MB_SETFOREGROUND     0x00010000L
 
+/* Button styles used by CustomSelectionDialog */
+#define BS_PUSHBUTTON        0x00000000L
+#define BS_CHECKBOX          0x00000002L
+#define BS_AUTOCHECKBOX      0x00000003L
+#define BS_RADIOBUTTON       0x00000004L
+#define BS_AUTORADIOBUTTON   0x00000009L
+
 /* ---- LOWORD/HIWORD ---- */
 #define LOWORD(l)   ((WORD)(((DWORD_PTR)(l)) & 0xffff))
 #define HIWORD(l)   ((WORD)((((DWORD_PTR)(l)) >> 16) & 0xffff))

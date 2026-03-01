@@ -32,6 +32,9 @@
 #include "resource.h"
 #include "missing.h"
 
+/* Globals provided by globals.c — must be visible to hash_algos.c (included below) */
+extern BOOL cpu_has_sha1_accel, cpu_has_sha256_accel;
+
 /*
  * Include the portable algorithm implementations (MD5, SHA1, SHA256, SHA512),
  * the hash_init / hash_write / hash_final function-pointer tables, and HashBuffer().

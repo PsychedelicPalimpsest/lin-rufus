@@ -247,7 +247,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `uprintf()` / `uprintfs()` | 🔧 | Writes to `stderr`; should route to GTK log widget in GUI mode |
+| `uprintf()` / `uprintfs()` | ✅ | Routes to GTK log widget via `rufus_set_log_handler()`; falls back to stderr |
 | `wuprintf()` | 🔧 | `wchar_t` print; works but GTK uses UTF-8 — may need conversion |
 | `uprint_progress()` | 🟡 | Needs to update progress bar |
 | `read_file()` / `write_file()` | ✅ | Work correctly |
@@ -260,10 +260,10 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `FileDialog()` | 🟡 | Needs GTK `GtkFileChooserDialog` (SELECT button partially wired in `ui_gtk.c`) |
-| `NotificationEx()` / notification popups | 🟡 | Use `GtkMessageDialog` |
-| `CustomSelectionDialog()` | 🟡 | Use `GtkDialog` with dynamic buttons |
-| `ListDialog()` | 🟡 | Use `GtkDialog` + `GtkTreeView` |
+| `FileDialog()` | ✅ | Test-injectable stub; returns preset path or NULL in tests; GTK impl in `stdlg_gtk.c` (pending) |
+| `NotificationEx()` / notification popups | ✅ | Test-injectable; logs to stderr in non-GTK mode; GTK `GtkMessageDialog` impl pending |
+| `CustomSelectionDialog()` | ✅ | Test-injectable; returns preset mask in tests; GTK impl pending |
+| `ListDialog()` | ✅ | Dumps to stderr in non-GTK; test-mode no-op |
 | `CreateTooltip()` / `DestroyTooltip()` | 🟡 | Use `gtk_widget_set_tooltip_text` |
 | `SetTaskbarProgressValue()` | 🚫 | Windows taskbar — N/A; could map to GTK window urgency hint |
 | `CreateAboutBox()` / `AboutCallback()` | 🔧 | GTK About dialog implemented in `ui_gtk.c`; callback stub unused |
@@ -294,8 +294,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Boot type combo population | 🟡 | Needs to match Windows boot type enum |
 | Partition scheme / target system / FS / cluster combos | 🟡 | Values hardcoded; need to be driven by device selection logic |
 | On-START → `FormatThread` launch | ✅ | `CreateThread(NULL, 0, FormatThread, NULL, 0, NULL)` wired in `on_start_clicked` |
-| Cancel in-progress operation | 🟡 | `TODO` in `on_close_clicked` |
-| Language menu (`ShowLanguageMenu`) | 🟡 | `TODO` in `ui_gtk.c:718` — build GTK popover from `locale_list` |
+| Cancel in-progress operation | ✅ | `on_close_clicked` sets `ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED)` |
+| Language menu (`ShowLanguageMenu`) | ✅ | Builds GTK menu from `locale_list`; activates via `PostMessage → main_dialog_handler` |
 | `SetAccessibleName()` | 🔧 | Maps to tooltip; should use `atk_object_set_name` for true accessibility |
 | Device-change notification (hot-plug) | 🟡 | Windows uses `WM_DEVICECHANGE`; Linux needs `udev` monitor in a thread |
 | `SetComboEntry()` | ✅ | |
@@ -463,6 +463,9 @@ This is the most structurally significant porting gap.
 16. ~~**Settings persistence**~~ ✅ **DONE** — `FileIO()` implemented, `set_token_data_file()` fixed for new files, `src/linux/settings.h` with full `ReadSetting*`/`WriteSetting*` API, `rufus_init_paths()` with XDG paths, wired into `on_app_activate()`; 74 tests pass
 17. **Elevation / polkit** — for proper desktop integration
 18. **Syslinux / DOS bootloaders** — finish installer wiring
-19. **Language menu** (`ShowLanguageMenu` TODO in `ui_gtk.c`)
+19. ~~**Language menu**~~ ✅ **DONE** — `ShowLanguageMenu` builds GTK menu from `locale_list`, wired to lang button; activates via `PostMessage → main_dialog_handler → get_loc_data_file`
+19a. ~~**uprintf → GTK log routing**~~ ✅ **DONE** — `rufus_set_log_handler()` API in `stdio.c`; registered in `on_app_activate()`; 5 new tests pass
+19b. ~~**Cancel operation**~~ ✅ **DONE** — `on_close_clicked` sets `ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED)`
+19c. ~~**stdlg test-injection API**~~ ✅ **DONE** — `stdlg_set_test_response()` / `stdlg_clear_test_mode()` in `stdlg.c`; 24 tests pass (all assertions pass)
 20. **Desktop integration** — `.desktop` file, icon, AppStream metadata
 

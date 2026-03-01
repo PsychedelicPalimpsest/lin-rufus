@@ -135,6 +135,16 @@ CFLAGS_LINUX_test_stdio_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/
                                    -Wno-sign-compare -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_stdio_linux := $(STDIO_LINUX_SRC)
 
+# stdlg_linux tests: NotificationEx, FileDialog, CustomSelectionDialog, ListDialog
+# Links against stdlg.c (which provides test-mode injection) and stdfn.c only;
+# stdio.c is NOT needed here (stdlg uses stdio.h directly, not rufus stdio.c)
+STDLG_LINUX_SRC := $(SRC_DIR)/linux/stdlg.c $(SRC_DIR)/linux/stdfn.c
+CFLAGS_LINUX_test_stdlg_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                   -Wno-implicit-function-declaration -Wno-unused-function \
+                                   -Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_stdlg_linux := -lpthread
+EXTRA_SRC_LINUX_test_stdlg_linux := $(STDLG_LINUX_SRC)
+
 # iso_linux tests: ISO image scanning and extraction via system libcdio
 ISO_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
                  $(SRC_DIR)/linux/stdfn.c \

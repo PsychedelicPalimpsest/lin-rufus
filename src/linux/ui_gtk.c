@@ -36,9 +36,16 @@
 #include <msg_dispatch.h>
 #include "device_monitor.h"
 
+/* Log handler registration — implemented in linux/stdio.c */
+extern void rufus_set_log_handler(void (*fn)(const char *msg));
+
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
 extern HANDLE dialog_handle;
+
+/* Localization globals — defined in globals.c */
+extern loc_cmd *selected_locale;
+extern UINT_PTR UM_LANGUAGE_MENU_MAX;
 
 /* ---- Global widget registry ---- */
 RufusWidgets rw = { 0 };
@@ -61,10 +68,13 @@ static gboolean idle_update_progress(gpointer data)
 static void on_start_clicked(GtkButton *btn, gpointer data);
 static void on_close_clicked(GtkButton *btn, gpointer data);
 static void on_select_clicked(GtkButton *btn, gpointer data);
+static void on_lang_clicked(GtkButton *btn, gpointer data);
+static void on_lang_menu_activate(GtkMenuItem *item, gpointer data);
 static void on_device_changed(GtkComboBox *combo, gpointer data);
 static void on_boot_changed(GtkComboBox *combo, gpointer data);
 static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
+void ShowLanguageMenu(RECT rcExclude);
 static GtkWidget *build_toolbar(void);
 static GtkWidget *build_device_row(void);
 static GtkWidget *build_boot_row(void);
@@ -143,6 +153,7 @@ static GtkWidget *build_toolbar(void)
 
 	g_signal_connect(rw.log_btn,   "clicked", G_CALLBACK(on_log_clicked),   NULL);
 	g_signal_connect(rw.about_btn, "clicked", G_CALLBACK(on_about_clicked), NULL);
+	g_signal_connect(rw.lang_btn,  "clicked", G_CALLBACK(on_lang_clicked),  NULL);
 
 	gtk_box_pack_start(GTK_BOX(bar), rw.lang_btn,     FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(bar), rw.about_btn,    FALSE, FALSE, 0);
@@ -488,10 +499,14 @@ static void on_close_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
 	if (op_in_progress) {
-		/* TODO: cancel the running operation */
-		uprintf("Cancel requested by user");
+		/* Signal cancellation — the format/hash thread checks this flag
+		 * via CHECK_FOR_USER_CANCEL and will exit cleanly. */
+		ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED);
+		uprintf("Cancellation requested by user.");
+		rufus_gtk_update_status("Cancelling...");
 	} else {
 		device_monitor_stop();
+		rufus_set_log_handler(NULL);
 		gtk_main_quit();
 	}
 }
@@ -592,6 +607,20 @@ static void on_about_clicked(GtkButton *btn, gpointer data)
 	gtk_about_dialog_set_license_type(GTK_ABOUT_DIALOG(dlg), GTK_LICENSE_GPL_3_0);
 	gtk_dialog_run(GTK_DIALOG(dlg));
 	gtk_widget_destroy(dlg);
+}
+
+static void on_lang_menu_activate(GtkMenuItem *item, gpointer data)
+{
+	(void)data;
+	guint msg_id = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(item), "lang-msg-id"));
+	PostMessage(hMainDialog, (UINT)msg_id, 0, 0);
+}
+
+static void on_lang_clicked(GtkButton *btn, gpointer data)
+{
+	(void)btn; (void)data;
+	RECT rc = {0, 0, 0, 0};
+	ShowLanguageMenu(rc);
 }
 
 /* ======================================================================
@@ -719,7 +748,32 @@ void InitProgress(BOOL bOnlyFormat)
 void ShowLanguageMenu(RECT rcExclude)
 {
 	(void)rcExclude;
-	/* TODO: Build a GTK popover/menu with the available locales. */
+
+	if (list_empty(&locale_list))
+		return;
+
+	GtkWidget *menu = gtk_menu_new();
+	UINT_PTR index = 0;
+	loc_cmd *lcmd = NULL;
+	UM_LANGUAGE_MENU_MAX = UM_LANGUAGE_MENU;
+
+	list_for_each_entry(lcmd, &locale_list, loc_cmd, list) {
+		const char *label = (lcmd->txt[1] && lcmd->txt[1][0]) ? lcmd->txt[1] : lcmd->txt[0];
+		GtkWidget *item = gtk_check_menu_item_new_with_label(label ? label : "?");
+		gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item),
+		                               lcmd == selected_locale);
+		/* Store the message ID for this locale as user data */
+		g_object_set_data(G_OBJECT(item), "lang-msg-id",
+		                  GUINT_TO_POINTER((guint)(UM_LANGUAGE_MENU + index)));
+		g_signal_connect(item, "activate", G_CALLBACK(on_lang_menu_activate), NULL);
+		gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+		UM_LANGUAGE_MENU_MAX++;
+		index++;
+	}
+
+	gtk_widget_show_all(menu);
+	gtk_menu_popup_at_widget(GTK_MENU(menu), rw.lang_btn,
+	                         GDK_GRAVITY_SOUTH_WEST, GDK_GRAVITY_NORTH_WEST, NULL);
 }
 
 void SetPassesTooltip(void)
@@ -849,8 +903,23 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 
 	default:
 		/* Language menu items (UM_LANGUAGE_MENU … UM_LANGUAGE_MENU + N) */
-		if (msg >= UM_LANGUAGE_MENU)
-			uprintf("Language menu item %u selected.", msg - UM_LANGUAGE_MENU);
+		if (msg >= UM_LANGUAGE_MENU && msg < UM_LANGUAGE_MENU_MAX) {
+			UINT selected_index = (UINT)(msg - UM_LANGUAGE_MENU);
+			UINT i = 0;
+			loc_cmd *lcmd = NULL;
+			list_for_each_entry(lcmd, &locale_list, loc_cmd, list) {
+				if (i++ == selected_index) {
+					if (selected_locale != lcmd) {
+						selected_locale = lcmd;
+						get_loc_data_file(loc_filename, selected_locale);
+						apply_localization(0, hMainDialog);
+						uprintf("Language switched to %s",
+						        lcmd->txt[1] ? lcmd->txt[1] : lcmd->txt[0]);
+					}
+					break;
+				}
+			}
+		}
 		break;
 	}
 
@@ -887,6 +956,10 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	 * updates via PostMessage() / SendMessage(). */
 	msg_dispatch_init();
 	msg_dispatch_set_scheduler(msg_gtk_scheduler);
+
+	/* Route uprintf() output to the GTK log widget so all log messages
+	 * appear in the on-screen log window rather than just stderr. */
+	rufus_set_log_handler(rufus_gtk_append_log);
 
 	GtkWidget *win = rufus_gtk_create_window(app);
 	(void)win;

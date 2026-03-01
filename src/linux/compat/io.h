@@ -56,8 +56,10 @@
 #endif
 
 /* _TRUNCATE for _snprintf_s - ignored on Linux */
+#undef _TRUNCATE
 #define _TRUNCATE     ((size_t)-1)
-/* Safe snprintf mapping */
+/* Safe snprintf mapping — undef the macro from windows.h first */
+#undef _snprintf_s
 static inline int _snprintf_s(char* buf, size_t bufsz, size_t count, const char* fmt, ...) {
     (void)count;
     int r;
