@@ -46,6 +46,7 @@
 #include "system_info.h"
 #include "darkmode.h"
 #include "wue.h"
+#include "polkit.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -1827,6 +1828,14 @@ int main(int argc, char *argv[])
 {
 	GtkApplication *app;
 	int status;
+
+	/* Re-launch under pkexec if not already running as root.
+	 * rufus_try_pkexec() does not return on success; on failure (pkexec not
+	 * found, execv error) it returns and we continue without elevation — the
+	 * existing "not running as root" warning in on_app_activate() will inform
+	 * the user. */
+	if (rufus_needs_elevation())
+		rufus_try_pkexec(argc, argv);
 
 	/* G_APPLICATION_DEFAULT_FLAGS was added in GLib 2.74; use the older name for broader compat. */
 #pragma GCC diagnostic push

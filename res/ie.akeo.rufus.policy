@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+  "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+
+  <vendor>Rufus</vendor>
+  <vendor_url>https://rufus.ie</vendor_url>
+
+  <action id="ie.akeo.rufus.run">
+    <description>Run Rufus with administrative privileges</description>
+    <message>Authentication is required to run Rufus in order to write to USB devices.</message>
+    <icon_name>drive-removable-media-usb</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@RUFUS_BINDIR@/rufus</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

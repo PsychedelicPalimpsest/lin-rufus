@@ -536,6 +536,12 @@ CFLAGS_LINUX_test_xdg_dirs_linux := \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_xdg_dirs_linux := $(SRC_DIR)/linux/xdg.c
 
+# polkit_linux tests: privilege elevation helper
+CFLAGS_LINUX_test_polkit_linux := \
+	-I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_polkit_linux := $(SRC_DIR)/linux/polkit.c
+
 # system_info_linux tests: GetTPMVersion, IsSecureBootEnabled, IsSetupModeEnabled
 CFLAGS_LINUX_test_system_info_linux := \
 	-DRUFUS_TEST \

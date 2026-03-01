@@ -2,6 +2,7 @@
 #include "rufus.h"
 #include "missing.h"
 #include "version.h"
+#include "polkit.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
