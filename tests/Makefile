@@ -528,6 +528,13 @@ CFLAGS_LINUX_test_timezone_linux := \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_timezone_linux := $(SRC_DIR)/linux/timezone.c
 
+# xdg_dirs_linux tests: GetXdgUserDir — XDG user-dirs.dirs parsing
+CFLAGS_LINUX_test_xdg_dirs_linux := \
+	-DRUFUS_TEST \
+	-I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_xdg_dirs_linux := $(SRC_DIR)/linux/xdg.c
+
 # system_info_linux tests: GetTPMVersion, IsSecureBootEnabled, IsSetupModeEnabled
 CFLAGS_LINUX_test_system_info_linux := \
 	-DRUFUS_TEST \

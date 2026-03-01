@@ -23,6 +23,7 @@
  */
 #include "rufus.h"
 #include "settings.h"
+#include "xdg.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -177,8 +178,22 @@ char* FileDialog(BOOL save, char* path, const ext_t* ext, UINT* selected_ext)
             "Cancel", GTK_RESPONSE_CANCEL,
             save ? "Save" : "Open", GTK_RESPONSE_ACCEPT,
             NULL);
-        if (path && path[0])
+        if (path && path[0]) {
             gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dlg), path);
+        } else {
+            /* Default to the user's Downloads folder when no path is given */
+            char dl_dir[4096];
+            const char* home = getenv("HOME");
+            if (!GetXdgUserDir("DOWNLOAD", dl_dir, sizeof(dl_dir))) {
+                /* Fallback: $HOME/Downloads */
+                if (home && home[0])
+                    snprintf(dl_dir, sizeof(dl_dir), "%s/Downloads", home);
+                else
+                    dl_dir[0] = '\0';
+            }
+            if (dl_dir[0])
+                gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dlg), dl_dir);
+        }
 
         char *result = NULL;
         if (gtk_dialog_run(GTK_DIALOG(dlg)) == GTK_RESPONSE_ACCEPT)
