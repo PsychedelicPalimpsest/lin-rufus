@@ -40,6 +40,7 @@
 #include "settings.h"
 #include "version.h"
 #include "window_text_bridge.h"
+#include "status_history.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -157,8 +158,15 @@ void rufus_gtk_append_log(const char *msg)
 static gboolean idle_update_status(gpointer data)
 {
 	char *msg = (char *)data;
-	if (rw.status_label)
+	if (rw.status_label) {
+		status_history_push(msg);
 		gtk_label_set_text(GTK_LABEL(rw.status_label), msg);
+		/* Update tooltip with history of previous messages */
+		char tooltip[STATUS_HISTORY_SIZE * 260];
+		status_history_tooltip(tooltip, sizeof(tooltip));
+		gtk_widget_set_tooltip_text(rw.status_label,
+		                            tooltip[0] ? tooltip : NULL);
+	}
 	free(msg);
 	return G_SOURCE_REMOVE;
 }

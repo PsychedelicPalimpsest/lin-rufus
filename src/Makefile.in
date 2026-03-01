@@ -140,6 +140,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	$(am__objects_2) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-vhd.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-window_text_bridge.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-status_history.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-wue.$(OBJEXT)
 @TARGET_WINDOWS_TRUE@am__objects_3 =  \
 @TARGET_WINDOWS_TRUE@	windows/rufus-badblocks.$(OBJEXT) \
@@ -414,7 +415,7 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/wue.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/wue.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -532,6 +533,7 @@ linux/rufus-ui.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui_gtk.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-vhd.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-window_text_bridge.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-status_history.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-wue.$(OBJEXT): linux/$(am__dirstamp)
 windows/$(am__dirstamp):
 	@$(MKDIR_P) windows
@@ -816,6 +818,12 @@ linux/rufus-window_text_bridge.o: linux/window_text_bridge.c
 
 linux/rufus-window_text_bridge.obj: linux/window_text_bridge.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-window_text_bridge.obj `if test -f 'linux/window_text_bridge.c'; then $(CYGPATH_W) 'linux/window_text_bridge.c'; else $(CYGPATH_W) '$(srcdir)/linux/window_text_bridge.c'; fi`
+
+linux/rufus-status_history.o: linux/status_history.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-status_history.o `test -f 'linux/status_history.c' || echo '$(srcdir)/'`linux/status_history.c
+
+linux/rufus-status_history.obj: linux/status_history.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-status_history.obj `if test -f 'linux/status_history.c'; then $(CYGPATH_W) 'linux/status_history.c'; else $(CYGPATH_W) '$(srcdir)/linux/status_history.c'; fi`
 
 linux/rufus-wue.o: linux/wue.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-wue.o `test -f 'linux/wue.c' || echo '$(srcdir)/'`linux/wue.c
