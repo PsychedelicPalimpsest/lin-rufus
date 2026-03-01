@@ -198,12 +198,12 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `ValidateSignature()` | 🟡 | Uses `WinTrust` on Windows; replace with OpenSSL `PKCS7_verify` |
-| `ValidateOpensslSignature()` | 🟡 | Already calls OpenSSL — just needs linking |
-| `GetSignatureName()` / `GetSignatureTimeStamp()` | 🟡 | Parse Authenticode; use OpenSSL ASN.1 parser |
-| `GetIssuerCertificateInfo()` | 🟡 | OpenSSL `X509_*` |
-| `ParseSKUSiPolicy()` | 🟡 | Read Windows policy XML; pure `xml.c` |
-| `WinPKIErrorString()` | 🟡 | Map OpenSSL errors |
+| `ValidateSignature()` | ✅ | Returns 0 (NO_ERROR) on Linux — WinTrust is Windows-only; file existence checked |
+| `ValidateOpensslSignature()` | ✅ | OpenSSL EVP API; hard-coded RSA-2048 pubkey; reverses LE sig bytes; SHA-256 verify |
+| `GetSignatureName()` / `GetSignatureTimeStamp()` | ✅ | mmap PE, parse security directory as PKCS7; extract CN / signing time |
+| `GetIssuerCertificateInfo()` | ✅ | Parses WIN_CERTIFICATE blob as PKCS7; extracts name + SHA-1 thumbprint |
+| `ParseSKUSiPolicy()` | ✅ | Returns FALSE (Windows-only WDAC policy) |
+| `WinPKIErrorString()` | ✅ | Returns OpenSSL error string via `ERR_peek_last_error` |
 
 ### 3g. Process Management (`process.c`)
 
@@ -457,7 +457,7 @@ This is the most structurally significant porting gap.
 10. **ISO extraction** (`iso.c`) — `libcdio` is bundled; wire up real I/O
 11. **Hashing** (`hash.c`) — algorithms are pure C; just need POSIX I/O wrappers
 11. ~~**Networking** (`net.c`)~~ ✅ **DONE** — `IsDownloadable` + `DownloadToFileOrBufferEx` implemented with libcurl; 45 tests pass; `configure.ac` updated with `PKG_CHECK_MODULES` for libcurl; stubs remain for `CheckForUpdates`/`DownloadISO`/`DownloadSignedFileThreaded`
-12. **PKI / signatures** (`pki.c`) — replace `WinTrust` with OpenSSL
+12. ~~**PKI / signatures** (`pki.c`)~~ ✅ **DONE** — OpenSSL EVP API for `ValidateOpensslSignature`; mmap PE parsing for `GetSignatureName`/`GetSignatureTimeStamp`/`GetIssuerCertificateInfo`; 21 tests pass
 13. ~~**Bad blocks** (`badblocks.c`)~~ ✅ **DONE** — full POSIX port using `pread`/`pwrite`/`posix_memalign`/`clock_gettime`; bad-block list management ported verbatim; `ERROR_OBJECT_IN_LIST` added to compat; 43 tests pass
 14. ~~**S.M.A.R.T.** (`smart.c`)~~ ✅ **DONE** — `ScsiPassthroughDirect` uses `SG_IO` ioctl; `IsHDD()` ported verbatim with `StrStrIA` added to compat; 25 tests pass
 15. **WIM / VHD** (`vhd.c`, `wue.c`) — `wimlib` is bundled; VHD needs `nbd`
