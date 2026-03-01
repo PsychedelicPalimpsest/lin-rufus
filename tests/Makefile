@@ -185,14 +185,14 @@ ISO_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
                  $(COMMON)/parser.c \
                  $(COMMON)/localization.c
 CFLAGS_LINUX_test_iso_linux := \
+	-DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_iso_linux := -lcdio -liso9660 -ludf
-EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC)
+EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB)
 
-# hash tests: MD5/SHA1/SHA256/SHA512 via linux/hash.c (which includes common/hash_algos.c)
 # HashThread/IndividualHashThread tests additionally need:
 #   - stdio.c (uprintf), stdfn.c (safe_* helpers), ui.c (UpdateProgress stubs),
 #     stdlg.c (MyDialogBox stub), msg_dispatch.c (PostMessage compat bridge)
@@ -367,6 +367,35 @@ EXTRA_SRC_LINUX_test_wue_linux := \
 	$(SRC_DIR)/linux/wue.c \
 	$(WIM_LIB) \
 	$(XML_SRC)
+
+# image_scan_linux tests: ImageScanThread — ISO scanning + img_report population
+# Links iso.c (ExtractISO + img_report), vhd.c (IsBootableImage), image_scan.c (thread),
+# plus stdfn.c, stdio.c, ui.c, localization chain, BLED (vhd decompression), WIM, XML.
+# NOTE: WIM_LIB and XML_SRC must be defined before this block (above).
+IMAGE_SCAN_LINUX_SRC := \
+	$(SRC_DIR)/linux/image_scan.c \
+	$(SRC_DIR)/linux/iso.c \
+	$(SRC_DIR)/linux/vhd.c \
+	$(SRC_DIR)/linux/stdfn.c \
+	$(SRC_DIR)/linux/stdio.c \
+	$(SRC_DIR)/linux/ui.c \
+	$(SRC_DIR)/linux/localization.c \
+	$(COMMON)/parser.c \
+	$(COMMON)/localization.c \
+	$(BLED_LIB) \
+	$(WIM_LIB) \
+	$(XML_SRC)
+CFLAGS_LINUX_test_image_scan_linux := \
+	-D_RUFUS -DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux \
+	-I$(SRC_DIR)/bled -I$(SRC_DIR)/wimlib -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
+	-Wno-strict-aliasing
+LDFLAGS_LINUX_test_image_scan_linux := \
+	-lpthread -lz -lxml2 -lm -lcdio -liso9660 -ludf
+EXTRA_SRC_LINUX_test_image_scan_linux := $(IMAGE_SCAN_LINUX_SRC)
 
 # dos_linux tests: ExtractFreeDOS, SetDOSLocale, ExtractDOS
 DOS_LINUX_SRC := $(SRC_DIR)/linux/dos.c \

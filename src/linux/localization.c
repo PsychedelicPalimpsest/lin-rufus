@@ -31,6 +31,9 @@
 #include "resource.h"
 #include "localization.h"
 
+/* loc_dlg[] is accessed via get_loc_dlg_count() / get_loc_dlg_entry() from
+ * common/localization.c to avoid including localization_data.h directly here. */
+
 /* GTK widget registry — only available when building the full UI */
 #ifdef __linux__
 #ifndef RUFUS_TEST
@@ -116,7 +119,7 @@ void apply_localization(int dlg_id, HWND hDlg)
 #else
 	loc_cmd *lcmd;
 	int id_start = IDD_DIALOG;
-	int id_end   = IDD_DIALOG + (int)ARRAYSIZE(loc_dlg);
+	int id_end   = IDD_DIALOG + get_loc_dlg_count();
 
 	if ((dlg_id >= id_start) && (dlg_id < id_end)) {
 		id_start = dlg_id;
@@ -128,10 +131,11 @@ void apply_localization(int dlg_id, HWND hDlg)
 
 	for (dlg_id = id_start; dlg_id < id_end; dlg_id++) {
 		int idx = dlg_id - IDD_DIALOG;
-		if (list_empty(&loc_dlg[idx].list))
+		loc_dlg_list *entry = get_loc_dlg_entry(idx);
+		if (list_empty(&entry->list))
 			continue;
 
-		list_for_each_entry(lcmd, &loc_dlg[idx].list, loc_cmd, list) {
+		list_for_each_entry(lcmd, &entry->list, loc_cmd, list) {
 			if (lcmd->command != LC_TEXT)
 				continue;
 			if (lcmd->txt[1] == NULL || lcmd->txt[1][0] == '\0')

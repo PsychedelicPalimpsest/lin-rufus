@@ -98,6 +98,9 @@ static void on_boot_changed(GtkComboBox *combo, gpointer data);
 static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 void ShowLanguageMenu(RECT rcExclude);
+extern DWORD WINAPI ImageScanThread(LPVOID param); /* image_scan.c */
+extern void SetFSFromISO(void);                    /* rufus.c stubs */
+extern void SetPartitionSchemeAndTargetSystem(BOOL only_target);
 static GtkWidget *build_toolbar(void);
 static GtkWidget *build_device_row(void);
 static GtkWidget *build_boot_row(void);
@@ -608,8 +611,10 @@ static void on_select_clicked(GtkButton *btn, gpointer data)
 		image_path = strdup(filename);
 		g_free(filename);
 		uprintf("Image selected: %s", image_path);
-		/* Trigger image scan — same hook as Windows */
-		/* PostMessage(hMainDialog, UM_FORMAT_START, 0, 0); */
+		/* Launch ImageScanThread to populate img_report; it posts
+		 * UM_IMAGE_SCANNED when done so the UI can refresh. */
+		HANDLE scan_thr = CreateThread(NULL, 0, ImageScanThread, NULL, 0, NULL);
+		safe_closehandle(scan_thr);
 		rufus_gtk_update_status(image_path);
 	}
 	gtk_widget_destroy(dlg);
@@ -959,6 +964,16 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 
 	case UM_NO_UPDATE:
 		rufus_gtk_update_status("No updates available.");
+		break;
+
+	case UM_IMAGE_SCANNED:
+		/* ImageScanThread finished — img_report is now populated.
+		 * Refresh boot type, filesystem, and partition-scheme combos
+		 * to reflect the scanned image content. */
+		uprintf("Image scan complete (is_iso=%d, is_bootable=%d)",
+		        (int)img_report.is_iso, (int)img_report.is_bootable_img);
+		SetFSFromISO();
+		SetPartitionSchemeAndTargetSystem(FALSE);
 		break;
 
 	case UM_MEDIA_CHANGE:

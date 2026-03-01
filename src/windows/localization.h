@@ -172,3 +172,6 @@ loc_cmd* get_locale_from_name(char* locale_name, BOOL fallback);
 void toggle_default_locale(void);
 const char* get_name_from_id(int id);
 WORD get_language_id(loc_cmd* lcmd);
+/* Accessors for loc_dlg[] (defined in common/localization.c via localization_data.h) */
+int get_loc_dlg_count(void);
+loc_dlg_list *get_loc_dlg_entry(int i);

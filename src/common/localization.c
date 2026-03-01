@@ -407,3 +407,17 @@ const char* get_name_from_id(int id)
 	}
 	return "UNKNOWN ID";
 }
+
+/* -----------------------------------------------------------------------
+ * Accessors so linux/localization.c can use loc_dlg without including
+ * localization_data.h (which defines the array via Windows resource IDs).
+ * ----------------------------------------------------------------------- */
+int get_loc_dlg_count(void)
+{
+	return (int)ARRAYSIZE(loc_dlg);
+}
+
+loc_dlg_list *get_loc_dlg_entry(int i)
+{
+	return &loc_dlg[i];
+}

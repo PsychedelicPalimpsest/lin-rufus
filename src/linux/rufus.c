@@ -30,8 +30,11 @@ enum ArchType MachineToArch(WORD machine) {
 }
 
 void GetBootladerInfo(void) {}
-DWORD WINAPI ImageScanThread(LPVOID param) { (void)param; return 0; }
+/* ImageScanThread is in src/linux/image_scan.c */
 void ClrAlertPromptHook(void) {}
+/* UI combo-population stubs — to be implemented as part of combo population feature */
+void SetFSFromISO(void)                                    {}
+void SetPartitionSchemeAndTargetSystem(BOOL b)             { (void)b; }
 HANDLE CreatePreallocatedFile(const char* path, DWORD access, DWORD share,
     LPSECURITY_ATTRIBUTES sa, DWORD disp, DWORD flags, LONGLONG size)
     { (void)path;(void)access;(void)share;(void)sa;(void)disp;(void)flags;(void)size; return INVALID_HANDLE_VALUE; }

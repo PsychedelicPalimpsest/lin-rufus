@@ -44,10 +44,10 @@ else
 LINUX_UI_SRC = linux/ui.c
 endif
 OS_SOURCES = linux/compat/msg_dispatch.c \
-	linux/badblocks.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
+	linux/badblocks.c linux/combo_bridge.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
 	linux/dos.c linux/dos_locale.c \
 	linux/drive.c linux/format.c linux/format_ext.c linux/format_fat32.c linux/globals.c \
-	linux/hash.c linux/icon.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
+	linux/hash.c linux/icon.c linux/image_scan.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
 	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/wue.c
 endif
@@ -74,9 +74,9 @@ else
 rufus_LDFLAGS = $(AM_LDFLAGS)
 if USE_GTK
 rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev
+	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev -lssl -lcrypto
 else
 rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev
+	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev -lssl -lcrypto
 endif
 endif

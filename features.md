@@ -163,6 +163,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `ReadISOFileToBuffer()` | ✅ | Reads file from ISO into malloc'd buffer; UDF-first with ISO9660 fallback; 6 tests pass |
 | `GetGrubVersion()` / `GetGrubFs()` / `GetEfiBootInfo()` | ✅ | Pure buffer scans for version strings and filesystem modules; 11 tests pass |
 | `HasEfiImgBootLoaders()` | ✅ | Reads `img_report.efi_img_path`; 2 tests pass |
+| `ImageScanThread()` | ✅ | `src/linux/image_scan.c`: calls `ExtractISO` (scan mode) + `IsBootableImage`; posts `UM_IMAGE_SCANNED`; wired from `on_select_clicked()`; 7 tests / 14 assertions pass |
 | `iso9660_readfat()` | 🟡 | FAT-within-ISO reader; stub returns -1 (needed for syslinux patching) |
 | `DumpFatDir()` | 🟡 | Debug helper; stub returns FALSE; low priority |
 | `OpticalDiscSaveImage()` / `IsoSaveImageThread()` / `SaveImage()` | 🟡 | Optical disc read; stub no-op; low priority |
@@ -476,3 +477,4 @@ This is the most structurally significant porting gap.
 22. ~~**Process management** (`process.c`)~~ ✅ **DONE** — `GetPPID` via `/proc/PID/status`; process search via `/proc/*/fd` device scan; `SearchProcessAlt` via `/proc/PID/comm`; `EnablePrivileges` returns TRUE; 19 tests pass
 23. ~~**Mount API** (`drive.c`)~~ ✅ **DONE** — `MountVolume`, `AltMountVolume`, `AltUnmountVolume` using `mount(2)` / `umount2(2)` with multi-fs fallback (vfat/ntfs/exfat/ext4/ext3/ext2); `mkdtemp` for temp mount points; 11 tests pass
 24. ~~**apply_localization GTK wiring**~~ ✅ **DONE** — `ctrl_id_to_widget()` maps 30+ IDC_*/IDS_* IDs to `rw.*` fields; `set_widget_text()` uses GTK_IS_BUTTON/GTK_IS_LABEL; 11 label widget fields added to `RufusWidgets`; stored in `ui_gtk.c` build functions; 11 tests pass
+25. ~~**ImageScanThread**~~ ✅ **DONE** — `src/linux/image_scan.c`: scans ISO/image via `ExtractISO` + `IsBootableImage`; posts `UM_IMAGE_SCANNED` on completion; wired in `on_select_clicked()` via `CreateThread`; `UM_IMAGE_SCANNED` handler in `main_dialog_handler` calls `SetFSFromISO` + `SetPartitionSchemeAndTargetSystem`; 7 tests / 14 assertions pass
