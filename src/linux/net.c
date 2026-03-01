@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define _GNU_SOURCE  /* for timegm() */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +29,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <pthread.h>
+#include <time.h>
 #include <curl/curl.h>
 
 #include "rufus.h"
@@ -35,6 +37,7 @@
 #include "localization.h"
 #include "resource.h"
 #include "bled/bled.h"
+#include "dbx/dbx_info.h"
 
 /* Globals from globals.c / ui_gtk.c not declared in headers */
 extern loc_cmd *selected_locale;
@@ -448,23 +451,191 @@ static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 
 	safe_free(buf);
 	force_update_check = FALSE;
+	/* Also check for DBX revocation database updates */
+	CheckForDBXUpdates();
 	update_check_thread = NULL;
 	ExitThread(0);
 }
 
-/* UseLocalDbx: use a locally cached DBX (UEFI Secure Boot revocation) database.
- * Returns TRUE if a locally cached dbx_<arch>.bin file exists in app_data_dir/FILES_DIR/. */
+/*
+ * dbx_build_timestamp_url: convert a GitHub "contents" API URL to the "commits"
+ * query URL needed to fetch the timestamp of the latest commit to that file.
+ *
+ * Example:
+ *   in:  https://api.github.com/repos/microsoft/secureboot_objects/contents/PostSignedObjects/DBX/amd64/DBXUpdate.bin
+ *   out: https://api.github.com/repos/microsoft/secureboot_objects/commits?path=PostSignedObjects%2FDBX%2Famd64%2FDBXUpdate.bin&page=1&per_page=1
+ *
+ * Returns TRUE on success, FALSE if URL is invalid or output buffer is too small.
+ */
+BOOL dbx_build_timestamp_url(const char *content_url, char *out, size_t out_len)
+{
+	const char *marker = "contents/";
+	const char *p, *path_part;
+	char encoded[512];
+	size_t base_len, ei;
+	int n;
+
+	if (content_url == NULL || out == NULL || out_len == 0)
+		return FALSE;
+
+	p = strstr(content_url, marker);
+	if (p == NULL)
+		return FALSE;
+
+	base_len  = (size_t)(p - content_url);
+	path_part = p + strlen(marker);
+
+	/* URL-encode '/' as '%2F' within the file path */
+	ei = 0;
+	for (const char *s = path_part; *s && ei < sizeof(encoded) - 3; s++) {
+		if (*s == '/') {
+			encoded[ei++] = '%';
+			encoded[ei++] = '2';
+			encoded[ei++] = 'F';
+		} else {
+			encoded[ei++] = *s;
+		}
+	}
+	encoded[ei] = '\0';
+
+	n = snprintf(out, out_len, "%.*scommits?path=%s&page=1&per_page=1",
+	             (int)base_len, content_url, encoded);
+	return (n > 0 && (size_t)n < out_len);
+}
+
+/*
+ * dbx_parse_github_timestamp: extract the UTC epoch timestamp from a GitHub
+ * commits API JSON response.
+ *
+ * Looks for the first occurrence of:  "date":[ ]*"YYYY-MM-DDTHH:MM:SSZ"
+ *
+ * Returns TRUE on success and stores the epoch in *ts; FALSE on any parse error.
+ */
+BOOL dbx_parse_github_timestamp(const char *json, uint64_t *ts)
+{
+	const char *p, *c;
+	struct tm t = { 0 };
+	int r;
+	time_t epoch;
+
+	if (json == NULL || ts == NULL)
+		return FALSE;
+
+	p = strstr(json, "\"date\":");
+	if (p == NULL)
+		return FALSE;
+
+	c = p + 7; /* skip past "date": */
+	while (*c == ' ' || *c == '"')
+		c++;
+
+	r = sscanf(c, "%d-%d-%dT%d:%d:%dZ",
+	           &t.tm_year, &t.tm_mon, &t.tm_mday,
+	           &t.tm_hour, &t.tm_min, &t.tm_sec);
+	if (r != 6)
+		return FALSE;
+
+	t.tm_year -= 1900;
+	t.tm_mon  -= 1;
+
+	epoch = timegm(&t);
+	if (epoch == (time_t)-1)
+		return FALSE;
+
+	*ts = (uint64_t)epoch;
+	return TRUE;
+}
+
+/* UseLocalDbx: return TRUE when we have a locally cached DBX file that is
+ * newer than the embedded baseline in dbx_info (checked via saved timestamp). */
 BOOL UseLocalDbx(int arch)
 {
-	char path[MAX_PATH];
-	struct stat st;
+	char setting_name[48];
 
-	if (arch <= ARCH_UNKNOWN || arch >= ARCH_MAX)
+	/* dbx_info covers ARCH_X86_32..ARCH_LOONGARCH_64 (indices 0..6 → arch 1..7) */
+	if (arch <= ARCH_UNKNOWN || (size_t)(arch - 1) >= ARRAYSIZE(dbx_info))
 		return FALSE;
-	if (snprintf(path, sizeof(path), "%s/" FILES_DIR "/dbx_%s.bin",
-	             app_data_dir, efi_archname[arch]) < 0)
-		return FALSE;
-	return (stat(path, &st) == 0 && st.st_size > 0);
+
+	snprintf(setting_name, sizeof(setting_name), "DBXTimestamp_%s", efi_archname[arch]);
+	return (uint64_t)ReadSetting64(setting_name) > dbx_info[arch - 1].timestamp;
+}
+
+/*
+ * CheckForDBXUpdates: query GitHub for the latest DBX commit timestamp for
+ * each architecture.  If a newer DBX is available and the user consents,
+ * download it to app_data_dir/FILES_DIR/dbx_<arch>.bin and record the
+ * timestamp so UseLocalDbx() returns TRUE for that arch.
+ */
+void CheckForDBXUpdates(void)
+{
+	size_t i;
+	char timestamp_url[512], setting_name[48], path[MAX_PATH];
+	char *buf = NULL;
+	uint64_t timestamp;
+	BOOL already_prompted = FALSE;
+	int r;
+
+	for (i = 0; i < ARRAYSIZE(dbx_info); i++) {
+		int arch = (int)i + 1; /* dbx_info[0] → ARCH_X86_32 = 1 */
+		timestamp = 0;
+
+		/* Build the commits API URL from the contents URL */
+		if (!dbx_build_timestamp_url(dbx_info[i].url, timestamp_url, sizeof(timestamp_url)))
+			continue;
+
+		uprintf("Querying %s for DBX update timestamp", timestamp_url);
+
+		DWORD size = DownloadToFileOrBuffer(timestamp_url, NULL, (BYTE **)&buf, NULL, FALSE);
+		if (size == 0 || buf == NULL) {
+			safe_free(buf);
+			continue;
+		}
+		/* NUL-terminate the downloaded JSON */
+		char *tmp = realloc(buf, size + 1);
+		if (tmp == NULL) {
+			safe_free(buf);
+			continue;
+		}
+		buf = tmp;
+		buf[size] = '\0';
+
+		if (!dbx_parse_github_timestamp(buf, &timestamp)) {
+			safe_free(buf);
+			continue;
+		}
+		safe_free(buf);
+
+		uprintf("DBX update timestamp for %s is %" PRIu64, efi_archname[arch], timestamp);
+
+		snprintf(setting_name, sizeof(setting_name), "DBXTimestamp_%s", efi_archname[arch]);
+		uint64_t stored = (uint64_t)ReadSetting64(setting_name);
+		uint64_t baseline = dbx_info[i].timestamp;
+		uint64_t best = (stored > baseline) ? stored : baseline;
+
+		if (timestamp <= best)
+			continue; /* no update needed */
+
+		if (!already_prompted) {
+			r = Notification(MB_YESNO | MB_ICONWARNING,
+			                 lmprintf(MSG_353), lmprintf(MSG_354));
+			already_prompted = TRUE;
+			if (r != IDYES)
+				break;
+			/* Ensure the FILES_DIR directory exists under app_data_dir */
+			char files_dir[MAX_PATH];
+			snprintf(files_dir, sizeof(files_dir), "%s/" FILES_DIR, app_data_dir);
+			mkdir(files_dir, 0755);
+		}
+
+		snprintf(path, sizeof(path), "%s/" FILES_DIR "/dbx_%s.bin",
+		         app_data_dir, efi_archname[arch]);
+		if (DownloadToFileOrBuffer(dbx_info[i].url, path, NULL, NULL, FALSE) != 0) {
+			WriteSetting64(setting_name, (int64_t)timestamp);
+			uprintf("Saved DBX as '%s'", path);
+		} else {
+			uprintf("WARNING: Failed to download DBX for %s", efi_archname[arch]);
+		}
+	}
 }
 
 /* CheckForUpdates: check for a newer version of Rufus on the project server. */
