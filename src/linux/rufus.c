@@ -1,6 +1,7 @@
 /* Linux main entry point and rufus.c function stubs */
 #include "rufus.h"
 #include "missing.h"
+#include "version.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +9,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdint.h>
 
 /* ---- Function stubs ---- */
 /* EnableControls is provided by ui_gtk.c when using the GTK UI */

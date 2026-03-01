@@ -212,6 +212,14 @@ CFLAGS_LINUX_test_stdio_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/
 LDFLAGS_LINUX_test_stdio_linux := -lz $(FONTCONFIG_LIBS)
 EXTRA_SRC_LINUX_test_stdio_linux := $(STDIO_LINUX_SRC) $(BLED_LIB)
 
+# ui_linux tests: version initialization
+CFLAGS_LINUX_test_ui_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                               -Wno-unused-function -Wno-sign-compare \
+                               -Wno-implicit-function-declaration \
+                               $(FONTCONFIG_CFLAGS)
+LDFLAGS_LINUX_test_ui_linux := $(FONTCONFIG_LIBS)
+EXTRA_SRC_LINUX_test_ui_linux := $(SRC_DIR)/linux/globals.c
+
 # stdlg_linux tests: NotificationEx, FileDialog, CustomSelectionDialog, ListDialog
 # Links against stdlg.c (which provides test-mode injection) and stdfn.c only;
 # stdio.c is NOT needed here (stdlg uses stdio.h directly, not rufus stdio.c)

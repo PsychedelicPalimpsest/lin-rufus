@@ -502,7 +502,7 @@ This is the most structurally significant porting gap.
 47. ~~**NTFS formatter**~~ ✅ **DONE** — `FormatPartition()` routes to `FormatNTFS()` via `mkntfs` (ntfs-3g); `format_ntfs_build_cmd()` builds command with `-Q`/`-F`/`-c`/`-L` flags; runtime tool detection via `access()`; `populate_fs_combo()` shows NTFS when `mkntfs` present; 60 tests pass
 48. ~~**exFAT formatter**~~ ✅ **DONE** — `FormatPartition()` routes to `FormatExFAT()` via `mkfs.exfat`/`mkexfatfs`; `format_exfat_build_cmd()` builds command; runtime detection; `populate_fs_combo()` shows exFAT when tool present; cluster-size + label passthrough wired; 60 tests pass (exFAT skipped when tool absent)
 49. **`OpticalDiscSaveImage()` / `IsoSaveImageThread()`** — implement optical-disc-to-ISO using libcdio `iso9660_open` + sector-by-sector `pread` into a file; wire `SaveImage()` button in the GTK UI; report progress via `UpdateProgress()`
-50. **`GetExecutableVersion()` ELF version string** — embed the autotools `PACKAGE_VERSION` as a named ELF section (`.rufus_version`) via a linker script or `__attribute__((section(...)))`; implement `GetExecutableVersion()` to mmap the running binary and locate that section
+50. ~~**`GetExecutableVersion()` ELF version string**~~ 🔧 **PARTIAL** — `rufus_version[3]` array initialized via `init_rufus_version()` in `globals.c` from `version.h` constants (MAJOR=4, MINOR=13, PATCH=0); called early in `on_app_activate()`; full ELF section embedding for `GetExecutableVersion()` still pending
 
 ---
 
@@ -521,10 +521,10 @@ This is the most structurally significant porting gap.
 
 ### UI / UX Polish
 
-59. **Dark mode toggle** — add a Help menu item (or Ctrl+Alt+D shortcut) that calls `gtk_settings_set_long_property(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", ...)` and persists the preference via `WriteSetting32(SETTING_DARK_MODE, ...)`; mirrors the Windows Ctrl+Alt+D toggle
-60. **Title bar / taskbar icon** — call `gtk_window_set_icon_name(GTK_WINDOW(main_wnd), "ie.akeo.rufus")` in `on_app_activate()` so the installed 32/48/256 px hicolor icons appear in the window title bar, taskbar, and Alt+Tab switcher; verify on GNOME, KDE, and XFCE
+59. ~~**Dark mode toggle**~~ ✅ **DONE** — Ctrl+Alt+D shortcut registered via `GtkAccelGroup`; `on_toggle_dark_mode()` toggles `gtk-application-prefer-dark-theme` on `GtkSettings` and persists via `WriteSetting32(SETTING_DARK_MODE, ...)`; saved preference (0=system, 1=light, 2=dark) applied on startup in `on_app_activate()`
+60. ~~**Title bar / taskbar icon**~~ ✅ **DONE** — `gtk_window_set_icon_name(GTK_WINDOW(win), "ie.akeo.rufus")` called in `rufus_gtk_create_window()`; window title updated to include version (`"Rufus %d.%d"`) from `rufus_version[]`
 61. **HiDPI / GDK scale factor audit** — run Rufus under `GDK_SCALE=2` and `GDK_DPI_SCALE=1.5`; fix any pixel-size hard-coding in `ui_gtk.c` widget construction; ensure progress bar, log window, and dialog fonts scale correctly
-62. **Keyboard shortcuts / accelerators** — register `GtkAccelGroup` entries: Ctrl+O (open image → `on_select_clicked`), Enter/Space on Start button, Escape (cancel if operation running, else quit), F1 (About); store the group on the main window
+62. ~~**Keyboard shortcuts / accelerators**~~ ✅ **DONE** — `GtkAccelGroup` registered on the main window: Ctrl+O → `on_select_clicked`, Escape → `on_close_clicked`, Ctrl+Alt+D → dark mode toggle
 63. **Context menu on device combo** — right-click on the device combo should offer "Refresh" (re-runs `GetDevices()`) and "Open in file manager" (`xdg-open /dev/sdX`); implement via `GtkMenu` popup on `button-press-event`
 64. **Operation log — save to file** — add a "Save log" button to the log `GtkDialog` that calls `FileDialog()` for a save path and writes the `GtkTextBuffer` content; also auto-save to `~/.local/share/rufus/rufus-<timestamp>.log` on every operation completion
 65. **Status label history** — the Windows build keeps the last N status strings in a ring buffer shown as a tooltip; implement the same on Linux using `gtk_widget_set_tooltip_text(status_label, history_str)`

@@ -6,6 +6,8 @@
 #include "rufus.h"
 #include "resource.h"
 #include "drive.h"
+#include "version.h"
+#include <stdint.h>
 #include "localization.h"
 #include "ui.h"
 #include "wue.h"
@@ -131,3 +133,11 @@ HANDLE dialog_handle = NULL, format_thread = NULL;
 
 /* ---- From dev.c / rufus.c ---- */
 RUFUS_DRIVE rufus_drive[MAX_DRIVES] = { 0 };
+
+
+/* ---- Version initialization ---- */
+void init_rufus_version(void) {
+rufus_version[0] = RUFUS_LINUX_VERSION_MAJOR;
+rufus_version[1] = RUFUS_LINUX_VERSION_MINOR;
+rufus_version[2] = RUFUS_LINUX_VERSION_PATCH;
+}

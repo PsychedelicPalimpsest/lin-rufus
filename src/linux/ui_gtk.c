@@ -37,6 +37,8 @@
 #include <msg_dispatch.h>
 #include "device_monitor.h"
 #include "combo_bridge.h"
+#include "settings.h"
+#include "version.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -116,6 +118,7 @@ void ShowLanguageMenu(RECT rcExclude);
 extern DWORD WINAPI ImageScanThread(LPVOID param); /* image_scan.c */
 extern void SetFidoCheck(void);                    /* net.c */
 extern BOOL DownloadISO(void);                     /* net.c */
+void init_rufus_version(void);                     /* rufus.c */
 extern void SetFSFromISO(void);                    /* rufus.c stubs */
 extern void SetPartitionSchemeAndTargetSystem(BOOL only_target);
 static GtkWidget *build_toolbar(void);
@@ -516,8 +519,15 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 {
 	GtkWidget *win = gtk_application_window_new(app);
 	rw.window = win;
-	gtk_window_set_title(GTK_WINDOW(win), "Rufus");
+	{
+		extern uint16_t rufus_version[3];
+		char title[32];
+		snprintf(title, sizeof(title), "Rufus %d.%d",
+		         rufus_version[0], rufus_version[1]);
+		gtk_window_set_title(GTK_WINDOW(win), title);
+	}
 	gtk_window_set_resizable(GTK_WINDOW(win), FALSE);
+	gtk_window_set_icon_name(GTK_WINDOW(win), "ie.akeo.rufus");
 	gtk_container_set_border_width(GTK_CONTAINER(win), 8);
 
 	/* Vertical stack: all sections */
@@ -538,6 +548,20 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 
 	/* Build log dialog (hidden by default) */
 	rw.log_dialog = build_log_dialog(win);
+
+	/* Register keyboard shortcuts */
+	GtkAccelGroup *accel = gtk_accel_group_new();
+	gtk_window_add_accel_group(GTK_WINDOW(win), accel);
+	/* Ctrl+O: open/select image */
+	gtk_widget_add_accelerator(rw.select_btn, "clicked", accel,
+	                           GDK_KEY_o, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
+	/* Escape: cancel or quit */
+	gtk_widget_add_accelerator(rw.close_btn, "clicked", accel,
+	                           GDK_KEY_Escape, 0, GTK_ACCEL_VISIBLE);
+	/* Ctrl+Alt+D: toggle dark mode */
+	gtk_accel_group_connect(accel, GDK_KEY_d,
+	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_dark_mode), NULL, NULL));
 
 	gtk_widget_show_all(win);
 
@@ -730,10 +754,13 @@ static void on_fs_changed(GtkComboBox *combo, gpointer data)
 static void on_about_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
-
+	extern uint16_t rufus_version[3];
+	char version_str[16];
+	snprintf(version_str, sizeof(version_str), "%d.%d",
+	         rufus_version[0], rufus_version[1]);
 	GtkWidget *dlg = gtk_about_dialog_new();
 	gtk_about_dialog_set_program_name(GTK_ABOUT_DIALOG(dlg), "Rufus");
-	gtk_about_dialog_set_version(GTK_ABOUT_DIALOG(dlg), "4.13");
+	gtk_about_dialog_set_version(GTK_ABOUT_DIALOG(dlg), version_str);
 	gtk_about_dialog_set_comments(GTK_ABOUT_DIALOG(dlg),
 		"The Reliable USB Formatting Utility");
 	gtk_about_dialog_set_website(GTK_ABOUT_DIALOG(dlg), "https://rufus.ie");
@@ -754,6 +781,19 @@ static void on_lang_clicked(GtkButton *btn, gpointer data)
 	(void)btn; (void)data;
 	RECT rc = {0, 0, 0, 0};
 	ShowLanguageMenu(rc);
+}
+
+static void on_toggle_dark_mode(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	GtkSettings *gsettings = gtk_settings_get_default();
+	gboolean current = FALSE;
+	g_object_get(G_OBJECT(gsettings),
+	             "gtk-application-prefer-dark-theme", &current, NULL);
+	gboolean next = !current;
+	g_object_set(G_OBJECT(gsettings),
+	             "gtk-application-prefer-dark-theme", next, NULL);
+	WriteSetting32(SETTING_DARK_MODE, next ? 2 : 1);
 }
 
 /* ======================================================================
@@ -1351,6 +1391,9 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 {
 	(void)data;
 
+	/* Initialise version array from compile-time constants */
+	init_rufus_version();
+
 	/* Initialise application paths (app_dir, app_data_dir, user_dir, ini_file)
 	 * using XDG Base Directory conventions. */
 	rufus_init_paths();
@@ -1374,6 +1417,20 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 		} else {
 			uprintf("localization: embedded.loc not found — UI strings will be untranslated");
 		}
+	}
+
+	/* Apply saved dark mode preference (0=system, 1=light, 2=dark) */
+	{
+		int dark_pref = ReadSetting32(SETTING_DARK_MODE);
+		GtkSettings *gsettings = gtk_settings_get_default();
+		if (dark_pref == 2) {
+			g_object_set(G_OBJECT(gsettings),
+			             "gtk-application-prefer-dark-theme", TRUE, NULL);
+		} else if (dark_pref == 1) {
+			g_object_set(G_OBJECT(gsettings),
+			             "gtk-application-prefer-dark-theme", FALSE, NULL);
+		}
+		/* 0 = follow system default, no override needed */
 	}
 
 	/* Initialise the message dispatch system on the main thread and hook
