@@ -164,7 +164,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `GetGrubVersion()` / `GetGrubFs()` / `GetEfiBootInfo()` | ✅ | Pure buffer scans for version strings and filesystem modules; 11 tests pass |
 | `HasEfiImgBootLoaders()` | ✅ | Reads `img_report.efi_img_path`; 2 tests pass |
 | `ImageScanThread()` | ✅ | `src/linux/image_scan.c`: calls `ExtractISO` (scan mode) + `IsBootableImage`; posts `UM_IMAGE_SCANNED`; wired from `on_select_clicked()`; 7 tests / 14 assertions pass |
-| `iso9660_readfat()` | 🟡 | FAT-within-ISO reader; stub returns -1 (needed for syslinux patching) |
+| `iso9660_readfat()` | ✅ | Sector-reader callback for libfat; uses `iso9660_readfat_private` cache (16 ISO blocks); sector divisibility check; 5 tests pass |
 | `DumpFatDir()` | 🟡 | Debug helper; stub returns FALSE; low priority |
 | `OpticalDiscSaveImage()` / `IsoSaveImageThread()` / `SaveImage()` | 🟡 | Optical disc read; stub no-op; low priority |
 
@@ -190,7 +190,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `IsDownloadable()` | ✅ | URL validation: http:// and https:// only; 45 tests pass |
 | TLS / certificate verification | ✅ | `libcurl` + system CA bundle; CURLOPT_SSL_VERIFYPEER enabled by default |
 | `DownloadSignedFile()` | 🔧 | Delegates to `DownloadToFileOrBufferEx`; signature verification not yet implemented (needs `pki.c`) |
-| `DownloadSignedFileThreaded()` | 🟡 | Stub; wraps `DownloadSignedFile` in a thread |
+| `DownloadSignedFileThreaded()` | ✅ | Wraps `DownloadSignedFile` in a `CreateThread`; `malloc`'d args freed on exit; 2 new tests (55 net tests pass) |
 | `CheckForUpdates()` | ✅ | Fetches `rufus_linux.ver` via libcurl; compares versions with `rufus_is_newer_version()`; respects update interval; calls `parse_update()`/`DownloadNewVersion()`; 10 tests pass |
 | `DownloadISO()` | 🟡 | Stub; Fido script launcher — needs `process.c` |
 | `UseLocalDbx()` | 🟡 | Stub; use local DBX (revocation) database |
@@ -278,7 +278,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `SetAlertPromptHook()` / `SetAlertPromptMessages()` | 🟡 | Alert interception; GTK equivalent needed |
 | `CenterDialog()` / `ResizeMoveCtrl()` | 🚫 | GTK handles layout automatically |
 | `CreateStaticFont()` / `SetHyperLinkFont()` | 🟡 | Use Pango / CSS for hyperlink styling |
-| `DownloadNewVersion()` | 🟡 | Launch browser or download via `net.c` |
+| `DownloadNewVersion()` | ✅ | Calls `xdg-open DOWNLOAD_URL` to open browser to Rufus downloads page |
 
 ### 3k. UI Logic (`ui.c` / `ui_gtk.c`)
 

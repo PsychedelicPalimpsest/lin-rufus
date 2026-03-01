@@ -192,7 +192,13 @@ void CreateStaticFont(HDC hDC, HFONT* hFont, BOOL ul) { (void)hDC;(void)hFont;(v
 void SetHyperLinkFont(HWND h, HDC hDC, HFONT* hFont, BOOL ul) { (void)h;(void)hDC;(void)hFont;(void)ul; }
 INT_PTR CALLBACK update_subclass_callback(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return 0; }
 INT_PTR CALLBACK NewVersionCallback(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return 0; }
-void DownloadNewVersion(void)               {}
+void DownloadNewVersion(void)
+{
+	/* Open the Rufus downloads page in the default browser.
+	 * Use xdg-open so it works on any desktop environment. */
+	if (system("xdg-open " DOWNLOAD_URL " 2>/dev/null &") != 0)
+		uprintf("DownloadNewVersion: failed to open browser");
+}
 void SetTitleBarIcon(HWND hDlg)             { (void)hDlg; }
 SIZE GetTextSize(HWND hCtrl, char* txt)     { SIZE s={0,0}; (void)hCtrl;(void)txt; return s; }
 void* GetDialogTemplate(int dlg_id)         { (void)dlg_id; return NULL; }

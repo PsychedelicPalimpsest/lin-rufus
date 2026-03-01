@@ -694,7 +694,7 @@ TEST(check_for_updates_double_call_returns_false)
 }
 
 /* ================================================================
- * DownloadSignedFile / DownloadSignedFileThreaded — smoke tests
+ * DownloadSignedFile / DownloadSignedFileThreaded tests
  * ================================================================ */
 
 TEST(download_signed_file_no_crash)
@@ -703,11 +703,27 @@ TEST(download_signed_file_no_crash)
 	CHECK(r == 0 || r > 0); /* whatever it returns, must not crash */
 }
 
-TEST(download_signed_file_threaded_no_crash)
+TEST(download_signed_file_threaded_returns_handle)
 {
 	HANDLE h = DownloadSignedFileThreaded("http://127.0.0.1/x", "/tmp/x", NULL, FALSE);
-	/* May return NULL (stub) or a valid handle; just must not crash */
-	CHECK(h == NULL || h != NULL);
+	/* Must return a non-NULL thread handle (background thread was created) */
+	CHECK(h != NULL);
+	if (h != NULL) {
+		WaitForSingleObject(h, 5000); /* wait up to 5s for thread to finish */
+		CloseHandle(h);
+	}
+}
+
+TEST(download_signed_file_threaded_thread_exits)
+{
+	/* Thread should complete in a reasonable time (URL will fail → fast exit) */
+	HANDLE h = DownloadSignedFileThreaded("http://127.0.0.1:1/x", "/tmp/x_dsf", NULL, TRUE);
+	CHECK(h != NULL);
+	if (h != NULL) {
+		DWORD r = WaitForSingleObject(h, 5000);
+		CHECK(r == WAIT_OBJECT_0);
+		CloseHandle(h);
+	}
 }
 
 /* ================================================================
@@ -792,7 +808,8 @@ int main(void)
 
 	printf("\n  DownloadSignedFile / DownloadSignedFileThreaded\n");
 	RUN(download_signed_file_no_crash);
-	RUN(download_signed_file_threaded_no_crash);
+	RUN(download_signed_file_threaded_returns_handle);
+	RUN(download_signed_file_threaded_thread_exits);
 
 	printf("\n  UseLocalDbx / DownloadISO\n");
 	RUN(use_local_dbx_no_crash);

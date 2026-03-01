@@ -48,6 +48,8 @@
 	& (enable_joliet    ? ISO_EXTENSION_ALL : ~ISO_EXTENSION_JOLIET) \
 	& (enable_rockridge ? ISO_EXTENSION_ALL : ~ISO_EXTENSION_ROCK_RIDGE))
 
+#include "iso_private.h"
+
 /* ---- globals (defined here, extern in rufus.h or ui.h) ---- */
 RUFUS_IMG_REPORT img_report;
 FILE*    fd_md5sum          = NULL;
@@ -1108,10 +1110,42 @@ out:
 /* Stubs for functions not yet implemented or N/A on Linux              */
 /* ------------------------------------------------------------------ */
 
-int iso9660_readfat(intptr_t pp, void* buf, size_t sec, libfat_sector_t s)
+/*
+ * iso9660_readfat - libfat sector-reader callback.
+ *
+ * Reads sectors from a FAT image residing on an ISO-9660 filesystem.
+ * The private structure caches ISO_NB_BLOCKS contiguous ISO blocks so that
+ * sequential FAT reads avoid re-reading the ISO for every sector.
+ *
+ * Returns secsize on success, 0 on error (matches libfat contract).
+ */
+int iso9660_readfat(intptr_t pp, void *buf, size_t secsize, libfat_sector_t sec)
 {
-	(void)pp; (void)buf; (void)sec; (void)s;
-	return -1;
+	iso9660_readfat_private *p = (iso9660_readfat_private *)(void *)pp;
+
+	if (sizeof(p->buf) % secsize != 0) {
+		uprintf("iso9660_readfat: sector size %zu is not a divisor of %zu",
+		        secsize, sizeof(p->buf));
+		return 0;
+	}
+
+	libfat_sector_t slots = (libfat_sector_t)(sizeof(p->buf) / secsize);
+	if (sec < p->sec_start || sec >= p->sec_start + slots) {
+		/* Sector is outside the cache window — reload */
+		p->sec_start = (libfat_sector_t)(((sec * secsize) / ISO_BLOCKSIZE)
+		               * ISO_BLOCKSIZE / secsize);
+		ssize_t nr = iso9660_iso_seek_read(p->p_iso, p->buf,
+		             p->lsn + (lsn_t)((p->sec_start * secsize) / ISO_BLOCKSIZE),
+		             ISO_NB_BLOCKS);
+		if (nr != (ssize_t)(ISO_NB_BLOCKS * ISO_BLOCKSIZE)) {
+			uprintf("iso9660_readfat: read error at LSN %lu",
+			        (long unsigned int)(p->lsn + p->sec_start * secsize / ISO_BLOCKSIZE));
+			return 0;
+		}
+	}
+
+	memcpy(buf, &p->buf[(sec - p->sec_start) * secsize], secsize);
+	return (int)secsize;
 }
 
 BOOL DumpFatDir(const char* path, int32_t cluster)

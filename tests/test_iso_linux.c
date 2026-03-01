@@ -36,6 +36,11 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "resource.h"
 #include "localization.h"
 
+/* ---- iso private types (for iso9660_readfat tests) ---- */
+#include "../src/linux/iso_private.h"
+/* iso9660_readfat is implemented in linux/iso.c (compiled into this binary) */
+extern int iso9660_readfat(intptr_t pp, void *buf, size_t secsize, libfat_sector_t sec);
+
 /* ================================================================
  * Minimal globals required by linux/iso.c and its dependencies.
  *
@@ -555,6 +560,83 @@ TEST(has_efi_img_true)
 }
 
 /* ================================================================
+ * iso9660_readfat tests
+ *
+ * Tests the sector-reader callback used by libfat to read the FAT
+ * filesystem embedded inside an EFI .img file on an ISO-9660 disc.
+ * We use pre-filled buffers to avoid needing a real ISO image.
+ * ================================================================ */
+
+/* Helper: fill a fake private struct with a known pattern */
+static void fill_private(iso9660_readfat_private *p, uint8_t pattern)
+{
+    memset(p, 0, sizeof(*p));
+    p->p_iso     = NULL;    /* NULL => out-of-range reads will fail safely */
+    p->lsn       = 0;
+    p->sec_start = 0;
+    memset(p->buf, pattern, sizeof(p->buf));
+}
+
+/* in-range read returns correct data */
+TEST(readfat_inrange_sector_zero)
+{
+    iso9660_readfat_private priv;
+    fill_private(&priv, 0xAB);
+    uint8_t out[512] = {0};
+    int r = iso9660_readfat((intptr_t)(void *)&priv, out, 512, 0);
+    CHECK(r == 512);
+    CHECK(out[0] == 0xAB);
+    CHECK(out[511] == 0xAB);
+}
+
+/* in-range read at last slot returns correct data */
+TEST(readfat_inrange_last_slot)
+{
+    iso9660_readfat_private priv;
+    fill_private(&priv, 0xCD);
+    /* buffer holds 32768 bytes / 512 = 64 sectors; last slot = 63 */
+    uint8_t out[512] = {0};
+    int r = iso9660_readfat((intptr_t)(void *)&priv, out, 512, 63);
+    CHECK(r == 512);
+    CHECK(out[0] == 0xCD);
+}
+
+/* sector size that is not a divisor of the buffer → returns 0 */
+TEST(readfat_bad_secsize)
+{
+    iso9660_readfat_private priv;
+    fill_private(&priv, 0x12);
+    uint8_t out[300] = {0};
+    /* 300 does not divide 32768 */
+    int r = iso9660_readfat((intptr_t)(void *)&priv, out, 300, 0);
+    CHECK(r == 0);
+}
+
+/* in-range read at sector 1 returns data at byte offset 512 */
+TEST(readfat_inrange_sector_1_offset)
+{
+    iso9660_readfat_private priv;
+    fill_private(&priv, 0x00);
+    /* Write distinct sentinel at byte 512 */
+    priv.buf[512] = 0x77;
+    uint8_t out[512] = {0};
+    int r = iso9660_readfat((intptr_t)(void *)&priv, out, 512, 1);
+    CHECK(r == 512);
+    CHECK(out[0] == 0x77);
+}
+
+/* out-of-range sector → p_iso is NULL → read fails → returns 0 */
+TEST(readfat_outofrange_null_iso_fails)
+{
+    iso9660_readfat_private priv;
+    fill_private(&priv, 0x55);
+    uint8_t out[512] = {0};
+    /* Sector 64 is outside [0, 64) → tries to seek (p_iso == NULL) → 0 */
+    int r = iso9660_readfat((intptr_t)(void *)&priv, out, 512, 64);
+    CHECK(r == 0);
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 
@@ -612,6 +694,13 @@ int main(void)
     printf("\n  HasEfiImgBootLoaders\n");
     RUN(has_efi_img_false);
     RUN(has_efi_img_true);
+
+    printf("\n  iso9660_readfat\n");
+    RUN(readfat_inrange_sector_zero);
+    RUN(readfat_inrange_last_slot);
+    RUN(readfat_bad_secsize);
+    RUN(readfat_inrange_sector_1_offset);
+    RUN(readfat_outofrange_null_iso_fails);
 
     StrArrayDestroy(&modified_files);
     cleanup_test_iso();

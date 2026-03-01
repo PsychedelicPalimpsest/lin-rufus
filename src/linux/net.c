@@ -223,15 +223,35 @@ DWORD DownloadSignedFile(const char *url, const char *file, HWND hDlg, BOOL sile
 	return (n > 0) ? (DWORD)n : 0;
 }
 
-/*
- * DownloadSignedFileThreaded: like DownloadSignedFile but runs in a background
- * thread.  The thread infrastructure is not yet wired up on Linux.
- */
+/* Threaded download: run DownloadSignedFile in a background thread */
+typedef struct {
+	const char *url;
+	const char *file;
+	HWND        hDlg;
+	BOOL        silent;
+} DownloadSignedFileArgs;
+
+static DWORD WINAPI DownloadSignedFileThread(LPVOID param)
+{
+	DownloadSignedFileArgs *a = (DownloadSignedFileArgs *)param;
+	DWORD r = DownloadSignedFile(a->url, a->file, a->hDlg, a->silent);
+	free(a);
+	ExitThread(r);
+	return r;
+}
+
 HANDLE DownloadSignedFileThreaded(const char *url, const char *file,
     HWND hDlg, BOOL silent)
 {
-	(void)url; (void)file; (void)hDlg; (void)silent;
-	return NULL;
+	DownloadSignedFileArgs *a = malloc(sizeof(*a));
+	if (!a) return NULL;
+	a->url    = url;
+	a->file   = file;
+	a->hDlg   = hDlg;
+	a->silent = silent;
+	HANDLE h = CreateThread(NULL, 0, DownloadSignedFileThread, a, 0, NULL);
+	if (!h) free(a);
+	return h;
 }
 
 /* ---- Update check ---- */
