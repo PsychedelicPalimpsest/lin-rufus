@@ -43,3 +43,62 @@ BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive);
  * Returns FALSE if grub-install is not found or fails.
  */
 BOOL InstallGrub2(const char *dev_path, const char *mount_path);
+
+/*
+ * WritePBR_fs - write partition boot record for the given filesystem type.
+ *
+ * Like WritePBR() but accepts the filesystem type as an explicit parameter
+ * instead of relying on the internal static variable.  Exposed for testing.
+ */
+BOOL WritePBR_fs(HANDLE hLogicalVolume, int fs_type);
+
+/*
+ * FormatNTFS - format a partition as NTFS using mkntfs.
+ *
+ * Locates mkntfs at runtime, resolves the partition path, and calls it via
+ * RunCommandWithProgress().  Returns FALSE if mkntfs is not installed.
+ */
+BOOL FormatNTFS(DWORD DriveIndex, uint64_t PartitionOffset,
+                DWORD UnitAllocationSize, LPCSTR Label, DWORD Flags);
+
+/*
+ * FormatExFAT - format a partition as exFAT using mkfs.exfat (or mkexfatfs).
+ *
+ * Returns FALSE if neither mkfs.exfat nor mkexfatfs is installed.
+ */
+BOOL FormatExFAT(DWORD DriveIndex, uint64_t PartitionOffset,
+                 DWORD UnitAllocationSize, LPCSTR Label, DWORD Flags);
+
+/*
+ * format_ntfs_build_cmd - build a mkntfs command string (testable helper).
+ *
+ *   tool         - absolute path to mkntfs binary
+ *   part_path    - partition device/file path
+ *   cluster_size - bytes per cluster (0 = let mkntfs choose)
+ *   label        - volume label (NULL or empty = omit -L)
+ *   quick        - if TRUE, add -Q (quick format)
+ *   cmd_buf      - output buffer
+ *   cmd_buf_len  - size of cmd_buf
+ *
+ * Returns TRUE on success, FALSE on NULL argument or buffer overflow.
+ */
+BOOL format_ntfs_build_cmd(const char *tool, const char *part_path,
+                            DWORD cluster_size, const char *label, BOOL quick,
+                            BOOL force,
+                            char *cmd_buf, size_t cmd_buf_len);
+
+/*
+ * format_exfat_build_cmd - build a mkfs.exfat command string (testable helper).
+ *
+ *   tool         - absolute path to mkfs.exfat (or mkexfatfs) binary
+ *   part_path    - partition device/file path
+ *   cluster_size - bytes per cluster (0 = let tool choose)
+ *   label        - volume label (NULL or empty = omit -n)
+ *   cmd_buf      - output buffer
+ *   cmd_buf_len  - size of cmd_buf
+ *
+ * Returns TRUE on success, FALSE on NULL argument or buffer overflow.
+ */
+BOOL format_exfat_build_cmd(const char *tool, const char *part_path,
+                             DWORD cluster_size, const char *label,
+                             char *cmd_buf, size_t cmd_buf_len);

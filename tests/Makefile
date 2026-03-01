@@ -91,6 +91,7 @@ EXTRA_SRC_LINUX_test_parser := $(PARSER_SRC)
 FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                     $(SRC_DIR)/linux/format_fat32.c \
                     $(SRC_DIR)/linux/format_ext.c \
+                    $(SRC_DIR)/linux/format_ext_tools.c \
                     $(SRC_DIR)/linux/drive.c \
                     $(SRC_DIR)/ext2fs/posix_io.c
 EXT2FS_LIB := $(SRC_DIR)/ext2fs/libext2fs.a
@@ -108,11 +109,30 @@ CFLAGS_LINUX_test_format_linux := \
 LDFLAGS_LINUX_test_format_linux := -lblkid
 EXTRA_SRC_LINUX_test_format_linux := $(FORMAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB) $(BLED_LIB) format_linux_glue.c
 
+# format_ntfs_exfat_linux tests: NTFS and exFAT formatting via mkntfs/mkfs.exfat
+FORMAT_NTFS_EXFAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
+                                $(SRC_DIR)/linux/format_fat32.c \
+                                $(SRC_DIR)/linux/format_ext.c \
+                                $(SRC_DIR)/linux/format_ext_tools.c \
+                                $(SRC_DIR)/linux/drive.c \
+                                $(SRC_DIR)/ext2fs/posix_io.c
+CFLAGS_LINUX_test_format_ntfs_exfat_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_format_ntfs_exfat_linux := -lblkid
+EXTRA_SRC_LINUX_test_format_ntfs_exfat_linux := \
+	$(FORMAT_NTFS_EXFAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB) $(BLED_LIB) \
+	format_ntfs_exfat_glue.c
+
 # format_thread_linux tests: FormatThread end-to-end, ClearMBRGPT, WriteMBR, WriteDrive
 FORMAT_THREAD_LINUX_SRC := \
 	$(SRC_DIR)/linux/format.c \
 	$(SRC_DIR)/linux/format_fat32.c \
 	$(SRC_DIR)/linux/format_ext.c \
+	$(SRC_DIR)/linux/format_ext_tools.c \
 	$(SRC_DIR)/linux/drive.c \
 	$(SRC_DIR)/ext2fs/posix_io.c \
 	$(FORMAT_MS_SRC)

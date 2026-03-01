@@ -107,6 +107,7 @@ static void on_lang_clicked(GtkButton *btn, gpointer data);
 static void on_lang_menu_activate(GtkMenuItem *item, gpointer data);
 static void on_device_changed(GtkComboBox *combo, gpointer data);
 static void on_boot_changed(GtkComboBox *combo, gpointer data);
+static void on_fs_changed(GtkComboBox *combo, gpointer data);
 static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 void ShowLanguageMenu(RECT rcExclude);
@@ -300,6 +301,7 @@ static GtkWidget *build_drive_properties(void)
 	rw.filesystem_label = gtk_label_new("File system");
 	rw.filesystem_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.filesystem_combo, TRUE);
+	g_signal_connect(rw.filesystem_combo, "changed", G_CALLBACK(on_fs_changed), NULL);
 	rw.cluster_size_label = gtk_label_new("Cluster size");
 	rw.cluster_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.cluster_combo, TRUE);
@@ -698,7 +700,19 @@ static void on_boot_changed(GtkComboBox *combo, gpointer data)
 	populate_fs_combo();
 }
 
-static void on_log_clicked(GtkButton *btn, gpointer data)
+static void on_fs_changed(GtkComboBox *combo, gpointer data)
+{
+	(void)data;
+	(void)combo;
+
+	/* Update fs_type from the combo and refresh cluster size options */
+	int sel = ComboBox_GetCurSel(hFileSystem);
+	if (sel >= 0) {
+		fs_type = (int)ComboBox_GetItemData(hFileSystem, sel);
+		populate_cluster_combo(fs_type);
+	}
+}
+
 {
 	(void)btn; (void)data;
 	if (rw.log_dialog) {
@@ -1179,15 +1193,48 @@ static void populate_partition_combos(void)
 /*
  * populate_fs_combo — fill the File System dropdown.
  *
- * On Linux we support FAT32 and ext2/ext3/ext4.
- * NTFS, exFAT, UDF, ReFS are shown as placeholders only when explicitly
- * selecting an image that requires them (not yet implemented).
+ * Populates FAT32, NTFS (if mkntfs is installed), exFAT (if mkfs.exfat is
+ * installed), and ext2/ext3/ext4.  NTFS and exFAT entries are only shown
+ * when the respective external formatter is present on the system.
  */
 static void populate_fs_combo(void)
 {
 	IGNORE_RETVAL(ComboBox_ResetContent(hFileSystem));
 	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
 	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_FAT32]), FS_FAT32));
+
+	/* Add NTFS only if mkntfs is available */
+	{
+		static const char * const ntfs_candidates[] = {
+			"/sbin/mkntfs", "/usr/sbin/mkntfs", "/bin/mkntfs", "/usr/bin/mkntfs",
+			"/usr/local/sbin/mkntfs", "/usr/local/bin/mkntfs",
+			"/sbin/mkfs.ntfs", "/usr/sbin/mkfs.ntfs", NULL
+		};
+		for (int i = 0; ntfs_candidates[i]; i++) {
+			if (access(ntfs_candidates[i], X_OK) == 0) {
+				IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
+				    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_NTFS]), FS_NTFS));
+				break;
+			}
+		}
+	}
+
+	/* Add exFAT only if mkfs.exfat (exfatprogs) or mkexfatfs (exfat-utils) is available */
+	{
+		static const char * const exfat_candidates[] = {
+			"/sbin/mkfs.exfat", "/usr/sbin/mkfs.exfat", "/bin/mkfs.exfat", "/usr/bin/mkfs.exfat",
+			"/usr/local/sbin/mkfs.exfat", "/usr/local/bin/mkfs.exfat",
+			"/sbin/mkexfatfs", "/usr/sbin/mkexfatfs", NULL
+		};
+		for (int i = 0; exfat_candidates[i]; i++) {
+			if (access(exfat_candidates[i], X_OK) == 0) {
+				IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
+				    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXFAT]), FS_EXFAT));
+				break;
+			}
+		}
+	}
+
 	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
 	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXT2]),  FS_EXT2));
 	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
@@ -1205,22 +1252,22 @@ static void populate_fs_combo(void)
 /*
  * populate_cluster_combo — fill Cluster Size dropdown for the given FS type.
  *
- * For FAT32 we offer common cluster sizes.
- * For ext* the cluster size is determined automatically by mkfs.ext*.
+ * For FAT32 and NTFS we offer common cluster sizes.
+ * For ext* and exFAT the cluster size is typically chosen by the formatter.
  */
 static void populate_cluster_combo(int fs)
 {
 	IGNORE_RETVAL(ComboBox_ResetContent(hClusterSize));
 
-	if (IS_EXT(fs)) {
+	if (IS_EXT(fs) || fs == FS_EXFAT) {
 		IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
 		    ComboBox_AddString(hClusterSize, "4096 bytes (Default)"), 4096));
 		IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, 0));
 		return;
 	}
 
-	/* FAT32 common cluster sizes */
-	static const struct { const char *label; DWORD size; } fat_clusters[] = {
+	/* FAT32 and NTFS common cluster sizes */
+	static const struct { const char *label; DWORD size; } clusters[] = {
 		{ "512 bytes",   512   },
 		{ "1024 bytes",  1024  },
 		{ "2048 bytes",  2048  },
@@ -1228,13 +1275,14 @@ static void populate_cluster_combo(int fs)
 		{ "8192 bytes",  8192  },
 		{ "16384 bytes", 16384 },
 		{ "32768 bytes", 32768 },
+		{ "65536 bytes", 65536 },
 		{ NULL, 0 }
 	};
 	int def = 3; /* 4096 bytes default */
-	for (int i = 0; fat_clusters[i].label; i++) {
+	for (int i = 0; clusters[i].label; i++) {
 		IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
-		    ComboBox_AddString(hClusterSize, fat_clusters[i].label),
-		    fat_clusters[i].size));
+		    ComboBox_AddString(hClusterSize, clusters[i].label),
+		    clusters[i].size));
 	}
 	IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, def));
 }

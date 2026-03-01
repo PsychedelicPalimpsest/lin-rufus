@@ -184,6 +184,30 @@ Install it with: apt install libfontconfig1-dev  OR  dnf install fontconfig-deve
   # Define RUFUS_DATADIR as the installed package data directory
   AC_DEFINE_UNQUOTED([RUFUS_DATADIR], ["${datadir}/rufus"],
                      [Installed data directory for rufus resources])
+
+  # Optional: detect NTFS and exFAT formatting tools (informational only —
+  # the binary searches at runtime, so absence does not abort the build).
+  AC_PATH_PROG([MKNTFS], [mkntfs], [not found],
+               [/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin])
+  if test "x$MKNTFS" != "xnot found"; then
+    AC_MSG_NOTICE([mkntfs found at $MKNTFS — NTFS formatting will be available])
+  else
+    AC_MSG_NOTICE([mkntfs not found — install ntfs-3g to enable NTFS formatting])
+  fi
+
+  AC_PATH_PROG([MKFS_EXFAT], [mkfs.exfat], [not found],
+               [/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin])
+  if test "x$MKFS_EXFAT" != "xnot found"; then
+    AC_MSG_NOTICE([mkfs.exfat found at $MKFS_EXFAT — exFAT formatting will be available])
+  else
+    AC_PATH_PROG([MKEXFATFS], [mkexfatfs], [not found],
+                 [/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin])
+    if test "x$MKEXFATFS" != "xnot found"; then
+      AC_MSG_NOTICE([mkexfatfs found at $MKEXFATFS — exFAT formatting will be available])
+    else
+      AC_MSG_NOTICE([mkfs.exfat/mkexfatfs not found — install exfatprogs to enable exFAT formatting])
+    fi
+  fi
 fi
 
 AC_SUBST([VISIBILITY_CFLAGS])

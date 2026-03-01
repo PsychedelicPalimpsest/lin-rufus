@@ -478,3 +478,148 @@ This is the most structurally significant porting gap.
 23. ~~**Mount API** (`drive.c`)~~ ✅ **DONE** — `MountVolume`, `AltMountVolume`, `AltUnmountVolume` using `mount(2)` / `umount2(2)` with multi-fs fallback (vfat/ntfs/exfat/ext4/ext3/ext2); `mkdtemp` for temp mount points; 11 tests pass
 24. ~~**apply_localization GTK wiring**~~ ✅ **DONE** — `ctrl_id_to_widget()` maps 30+ IDC_*/IDS_* IDs to `rw.*` fields; `set_widget_text()` uses GTK_IS_BUTTON/GTK_IS_LABEL; 11 label widget fields added to `RufusWidgets`; stored in `ui_gtk.c` build functions; 11 tests pass
 25. ~~**ImageScanThread**~~ ✅ **DONE** — `src/linux/image_scan.c`: scans ISO/image via `ExtractISO` + `IsBootableImage`; posts `UM_IMAGE_SCANNED` on completion; wired in `on_select_clicked()` via `CreateThread`; `UM_IMAGE_SCANNED` handler in `main_dialog_handler` calls `SetFSFromISO` + `SetPartitionSchemeAndTargetSystem`; 7 tests / 14 assertions pass
+26. **GRUB4DOS `grldr` wiring** — GRUB4DOS MBR boot code is written; finish by copying `grldr` binary to target root in `FormatThread` after `ExtractISO`; add test verifying file presence on formatted image
+27. **`polkit` integration** — replace `sudo rufus` requirement with a `polkit` helper action (`ie.akeo.rufus.policy`) so privileged block-device operations are authorised via the desktop agent without a terminal; implement `pkexec`-based launch wrapper in `rufus.c`
+28. **`IsSignedBySecureBootAuthority()` / `IsBootloaderRevoked()`** — implement SBAT cert DB lookup and UEFI Secure Boot revocation checks in `pki.c` using the OpenSSL API already wired; parse SBAT entries via `GetSbatEntries()` and cross-reference against bundled allowed/revoked lists
+29. **`DownloadSignedFile()` signature verification** — complete the OpenSSL RSA-SHA256 verify step (private-key half already present in `ValidateOpensslSignature()`); call it from `DownloadSignedFile()` after download completes; add tests for good-sig, bad-sig, missing-sig paths
+30. **`UseLocalDbx()` / DBX revocation database** — parse `/sys/firmware/efi/efivars/dbx-*` (or a bundled `dbx.bin`) to detect revoked boot images; expose as `UseLocalDbx()` in `hash.c` / `pki.c`; integrate result into `IsBootloaderRevoked()`
+31. **Embedded FreeDOS / MS-DOS boot files** — convert `res/freedos/` binary files to C `uint8_t[]` arrays via `xxd -i` (or `objcopy`) and reference them through a shim `GetResource()` so `ExtractFreeDOS()` / `ExtractDOS()` work without an installed data directory
+32. **`GetResource()` → C array / on-disk shim** — replace Windows PE `FindResource`/`LoadResource`/`SizeofResource` calls with a lookup table of compiled-in arrays (`IDR_UEFI_NTFS`, `IDR_SYSLINUX_*`, etc.) so all resource consumers (`syslinux.c`, `wue.c`, `format.c`) compile and run on Linux
+33. **`setupapi.h` → libudev device enumeration** — flesh out `SetupDiGetClassDevs` / `SetupDiEnumDeviceInterfaces` / `SetupDiGetDeviceInterfaceDetail` stubs using libudev to enumerate USB storage devices; drives remaining callers in `dev.c` off the real device path
+34. **`cfgmgr32.h` / `dbt.h` → libudev** — replace `CM_Get_Device_ID` / `CM_Locate_DevNode` stubs and `DBT_DEVICEARRIVAL` / `DBT_DEVICEREMOVECOMPLETE` constants with libudev equivalents; align with the `device_monitor.c` udev monitor already in place
+35. **`shlobj.h` / `shobjidl.h` → XDG / GLib paths** — implement `SHGetFolderPath`(`CSIDL_APPDATA`, `CSIDL_DESKTOP`, etc.) and `SHGetKnownFolderPath` using `g_get_user_config_dir()`, `g_get_home_dir()`, and `XDG_*` env vars; add tests
+36. **`wincrypt.h` / `wintrust.h` → OpenSSL compat stubs** — complete the header stubs (CERT_CONTEXT, HCRYPTPROV, etc.) so every call site in `pki.c` and `hash.c` compiles on Linux without the MSVC SDK; ensure no runtime no-ops hide missing implementations
+37. **`LicenseCallback()` GTK dialog** — display `LICENSE.txt` (located via `app_dir`) in a scrollable `GtkTextView` inside a `GtkDialog`; wire to the Help → License menu item; add test verifying the file is found and readable
+38. **`UpdateCallback()` / `NewVersionCallback()` dialog** — implement a GTK "New version available" dialog with version string, changelog snippet, and a Download button that calls `DownloadNewVersion()`; triggered by `CheckForUpdates()` result via `UM_*` message
+39. **`SetAlertPromptHook()` / `SetAlertPromptMessages()` → GTK** — implement alert-prompt interception in `stdlg.c` using the existing test-injection pattern; display intercepted prompts as a `GtkMessageDialog`; needed for Windows-image customisation flow
+40. **Accessibility: `SetAccessibleName()` → `atk_object_set_name`** — replace the current tooltip-only fallback with `atk_object_set_name()` / `gtk_accessible_set_property()` (GTK4: `gtk_accessible_update_property`) on all controls; required for screen-reader support and GNOME a11y compliance
+41. **`CreateStaticFont()` / `SetHyperLinkFont()` → Pango / GTK CSS** — render hyperlink-style labels using a `GtkLabel` with `<a href="…">` Pango markup or a GTK CSS provider setting `color` and `text-decoration: underline`; wire `clicked` signal for `xdg-open`
+42. **`wuprintf()` UTF-8 conversion** — convert the `wchar_t *` argument to UTF-8 via `g_utf16_to_utf8()` (or `wcstombs` with `setlocale`) before passing to the GTK log handler; add regression test for strings containing non-ASCII characters
+43. **`WindowsErrorString()` / `StrError()` DWORD mapping** — build a small table mapping compat-layer DWORD error constants (`ERROR_ACCESS_DENIED`, `ERROR_NOT_READY`, etc.) to their `errno` equivalents so `strerror(errno_from_dword(err))` produces correct human-readable strings; add 20+ mapping tests
+44. **`MyCreateDialog()` / `MyDialogBox()` remaining dialogs** — replace stubbed `IDD_FORMAT`, `IDD_LOG`, `IDD_ABOUT` and any remaining Windows dialog-resource IDs with hand-crafted `GtkDialog` equivalents; `IDD_HASH` already done as the template
+45. **`AboutCallback()` wiring** — connect the Help → About menu item (or button) to the GTK About dialog already implemented in `ui_gtk.c`; populate version string, website URL, and icon from build-time constants
+46. **Non-GTK CLI mode** — implement a minimal command-line interface in `src/linux/rufus.c main()` activated when compiled without `USE_GTK`; accept `--device`, `--image`, `--fs`, `--partition-scheme` flags; print progress to stdout; useful for scripting and headless servers
+47. ~~**NTFS formatter**~~ ✅ **DONE** — `FormatPartition()` routes to `FormatNTFS()` via `mkntfs` (ntfs-3g); `format_ntfs_build_cmd()` builds command with `-Q`/`-F`/`-c`/`-L` flags; runtime tool detection via `access()`; `populate_fs_combo()` shows NTFS when `mkntfs` present; 60 tests pass
+48. ~~**exFAT formatter**~~ ✅ **DONE** — `FormatPartition()` routes to `FormatExFAT()` via `mkfs.exfat`/`mkexfatfs`; `format_exfat_build_cmd()` builds command; runtime detection; `populate_fs_combo()` shows exFAT when tool present; cluster-size + label passthrough wired; 60 tests pass (exFAT skipped when tool absent)
+49. **`OpticalDiscSaveImage()` / `IsoSaveImageThread()`** — implement optical-disc-to-ISO using libcdio `iso9660_open` + sector-by-sector `pread` into a file; wire `SaveImage()` button in the GTK UI; report progress via `UpdateProgress()`
+50. **`GetExecutableVersion()` ELF version string** — embed the autotools `PACKAGE_VERSION` as a named ELF section (`.rufus_version`) via a linker script or `__attribute__((section(...)))`; implement `GetExecutableVersion()` to mmap the running binary and locate that section
+
+---
+
+### Compat Layer Completion
+
+51. **`shlwapi.h` → real POSIX implementations** — implement `PathFileExistsA` (via `access(F_OK)`), `PathCombineA` (via `snprintf` with separator normalisation), and `StrStrIA` (via `strcasestr`) directly in `shlwapi.h` or a new `src/linux/compat/shlwapi.c`; these are called by `smart.c`, `vhd.c`, `stdio.c`, `iso.c`, and `hash.c` — currently every call silently no-ops or fails to link
+52. **`shellapi.h` → `xdg-open` / `g_app_info_launch_default_for_uri`** — implement `ShellExecuteA`/`ShellExecuteW` as a thin wrapper around `xdg-open` (or GIO `g_app_info_launch_default_for_uri`) so that any caller that opens URLs, files, or directories (e.g. the update and log-open paths) works on Linux without special-casing each call site
+53. **`netlistmgr.h` → GNetworkMonitor connectivity check** — implement the `INetworkListManager::GetConnectivity` stub using `g_network_monitor_get_connectivity()` (GIO) or a `getifaddrs`-based scan; used by `net.c` before download attempts to give the user a "no network" error instead of a timeout
+54. **`oleacc.h` / MSAA → ATK/AT-SPI2** — map the MSAA `IAccessible` stubs in `oleacc.h` to ATK object creation so screen readers (Orca, etc.) receive meaningful role/name/description information from Rufus controls; prerequisite for proper GNOME a11y compliance (pairs with item 40)
+55. **`uxtheme.h` / `dwmapi.h` theme-change notifications → GTK** — the Windows build hooks `WM_THEMECHANGED` and `WM_DWMCOLORIZATIONCOLORCHANGED` to toggle dark mode; map these to the GTK `notify::gtk-application-prefer-dark-theme` signal on `GtkSettings` so the Linux port reacts to the system dark-mode preference at runtime
+56. **`timezoneapi.h` → `localtime`/`tzset`** — `CreateUnattendXml()` calls `GetTimeZoneInformation()` on Windows; the Linux path already skips the timezone section, but implement a real IANA→Windows-zone mapping (using `/usr/share/zoneinfo/` or `tzdata`) so the generated `unattend.xml` includes a correct `<TimeZone>` element when running on Linux
+57. **`commctrl.h` `LVM_*` / `TVN_*` → GTK TreeView/ListStore** — the Windows UI uses `ListView` and `TreeView` controls for the hash-results and WIM-edition selection dialogs; map the remaining `LVM_INSERTITEM`, `LVM_SETITEM`, `LVM_GETITEM`, `TVN_*` messages to `GtkTreeView` + `GtkListStore` operations in `combo_bridge.c` or a new `listview_bridge.c`
+58. **`psapi.h` process memory info → `/proc`** — `GetProcessMemoryInfo` and `EnumProcessModules` stubs are no-ops; implement lightweight versions via `/proc/self/status` (`VmRSS`) and `/proc/self/maps` so any diagnostic or resource-tracking code that calls them gets real data
+
+---
+
+### UI / UX Polish
+
+59. **Dark mode toggle** — add a Help menu item (or Ctrl+Alt+D shortcut) that calls `gtk_settings_set_long_property(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", ...)` and persists the preference via `WriteSetting32(SETTING_DARK_MODE, ...)`; mirrors the Windows Ctrl+Alt+D toggle
+60. **Title bar / taskbar icon** — call `gtk_window_set_icon_name(GTK_WINDOW(main_wnd), "ie.akeo.rufus")` in `on_app_activate()` so the installed 32/48/256 px hicolor icons appear in the window title bar, taskbar, and Alt+Tab switcher; verify on GNOME, KDE, and XFCE
+61. **HiDPI / GDK scale factor audit** — run Rufus under `GDK_SCALE=2` and `GDK_DPI_SCALE=1.5`; fix any pixel-size hard-coding in `ui_gtk.c` widget construction; ensure progress bar, log window, and dialog fonts scale correctly
+62. **Keyboard shortcuts / accelerators** — register `GtkAccelGroup` entries: Ctrl+O (open image → `on_select_clicked`), Enter/Space on Start button, Escape (cancel if operation running, else quit), F1 (About); store the group on the main window
+63. **Context menu on device combo** — right-click on the device combo should offer "Refresh" (re-runs `GetDevices()`) and "Open in file manager" (`xdg-open /dev/sdX`); implement via `GtkMenu` popup on `button-press-event`
+64. **Operation log — save to file** — add a "Save log" button to the log `GtkDialog` that calls `FileDialog()` for a save path and writes the `GtkTextBuffer` content; also auto-save to `~/.local/share/rufus/rufus-<timestamp>.log` on every operation completion
+65. **Status label history** — the Windows build keeps the last N status strings in a ring buffer shown as a tooltip; implement the same on Linux using `gtk_widget_set_tooltip_text(status_label, history_str)`
+66. **`SetTitleBarIcon()` implementation** — the function is a no-op stub; implement it to call `gtk_window_set_icon_name()` so that the main dialog icon changes to reflect the current operation state (e.g. a distinct icon while writing)
+67. **System tray / notification on completion** — use `libnotify` (`notify_notification_new`) to send a desktop notification when a long-running format or download completes; fall back gracefully if `libnotify` is absent; detect at configure time
+
+---
+
+### Download & Update Pipeline
+
+68. **Download progress GTK dialog** — `DownloadToFileOrBufferEx()` receives an `hDlg` progress-window HWND that is currently ignored (the `TODO` comment on line 184 of `net.c`); wire it to update the main-window GTK progress bar (or a separate `GtkDialog`) via `g_idle_add` so the user sees download progress in real time
+69. **DBX caching and scheduled update** — implement `UseLocalDbx()` properly: download `dbx.bin` from the UEFI revocation list URL (already in the codebase) on first run and re-check weekly; cache under `~/.local/share/rufus/dbx.bin`; expire and re-download like the Windows build does
+70. **Fido script version check and auto-update** — `SetFidoCheck()` already downloads `Fido.ver`; implement the comparison logic so that if a newer Fido script is available the user is prompted to update, and `DownloadISO()` transparently pulls the latest version
+71. **First-run update-check consent dialog** — `SetUpdateCheck()` currently silently enables daily updates on first run because "the prompt dialog requires a full dialog subsystem not yet ported"; implement the `GtkMessageDialog` prompt so the user explicitly opts in or out on first launch
+72. **Resumable / cached downloads** — add `CURLOPT_RESUME_FROM_LARGE` support and a `.partial` file scheme to `DownloadToFileOrBufferEx()` so interrupted downloads (ISO, DBX, Fido) can be resumed rather than restarted
+
+---
+
+### Filesystem & Format Enhancements
+
+73. **UDF formatter** — add `FS_UDF` path to `FormatPartition()` using `mkudffs` via `RunCommandWithProgress()`; detect `mkudffs` at configure time in `configure.ac`; add UDF to `populate_fs_combo()` when target is DVD/optical
+74. **Volume-label enforcement per filesystem** — `FormatLargeFAT32()` already sets the label; implement label setting for ext2/3/4 (`e2label`), exFAT (`exfatlabel`), NTFS (`ntfslabel`), and UDF (`udflabel`) after format so the label entered in the GTK UI is always applied
+75. ~~**Cluster-size passthrough**~~ ✅ **DONE** — `format_ntfs_build_cmd()` accepts `cluster_size` and passes `-c <bytes>` to `mkntfs`; `format_exfat_build_cmd()` passes `-c <bytes>` to `mkfs.exfat`; `FormatNTFS()`/`FormatExFAT()` receive `UnitAllocationSize` from `FormatPartition()`; `populate_cluster_combo()` in `ui_gtk.c` offers standard cluster sizes for NTFS and exFAT; `on_fs_changed()` callback updates cluster combo when FS changes
+76. **Write-and-verify pass** — after writing an image or formatting, re-read every written sector and compare SHA-256 against the in-memory digest; report mismatches with sector offset; add a "Verify after write" checkbox to the Advanced format options expander
+77. **Bad-blocks pre-scan integration** — surface the `BadBlocks()` function (already ported, 43 tests) as an optional pre-format step when the "Check device for bad blocks" checkbox is ticked; wire the checkbox to `FormatThread` via a new `check_bad_blocks` global; progress should use the same `UpdateProgress()` path
+78. **Persistent storage (casper-rw) for Ubuntu/Debian Live** — when the image scan detects a casper-based live ISO and the persistence slider is non-zero (`persistence_size > 0`), create a second ext4 partition labelled `casper-rw` (or `writable` for Ubuntu ≥ 23.04) using `FormatExtFs()`; wire `TogglePersistenceControls()` to the GTK slider already present
+79. **UEFI:NTFS boot bridge** — embed or download `uefi-ntfs.img` (the Rufus-maintained UEFI:NTFS project) and write it to the ESP when the target filesystem is NTFS; allows UEFI-only machines to boot NTFS USB drives; this is already done on Windows via an embedded resource (item 32 is a prerequisite)
+80. **`CreateUnattendXml()` Windows customisation UI on Linux** — expose the Windows-image customisation options (locale, keyboard layout, account name, bypass TPM/RAM/Secure Boot checks, disable data-collection) in a GTK dialog triggered from the boot-options area; call `CreateUnattendXml()` (already ported) and apply the result in `FormatThread`
+
+---
+
+### Security & Boot Validation
+
+81. **TPM 2.0 detection** — read `/sys/class/tpm/tpm0/tpm_version_major` (or `tpm2_getcap` output) to populate a `tpm_version` global; surface the result in the image-scan report so the UI can warn when writing a Windows 11 image to a machine lacking TPM 2.0
+82. **Secure Boot status detection** — read `/sys/firmware/efi/efivars/SecureBoot-*` and `SetupMode-*` EFI variables to determine whether the running system has Secure Boot enabled; report in the image-scan tooltip alongside architecture and PE signing information
+83. **Signed bootloader selection** — when `img_report.has_efi` is TRUE and Secure Boot is active (item 82), prefer `shimx64.efi` over a direct `grubx64.efi` write; warn the user if the selected image's bootloader is revoked per the DBX (item 69)
+84. **PKCS7 full chain validation** — `GetIssuerCertificateInfo()` currently extracts the leaf CN and thumbprint; extend it to walk the full `PKCS7_get0_signers()` chain against an OpenSSL `X509_STORE` loaded with the system CA bundle (`/etc/ssl/certs/ca-certificates.crt`); add a "chain trusted" boolean to the hash dialog
+
+---
+
+### Testing Expansion
+
+85. **Loopback-device integration tests** — add a `tests/test_loopback_linux.c` suite that creates a file-backed `/dev/loop*` device, runs `InitializeDisk`, `CreatePartition`, `FormatPartition` (FAT32 + ext4), and `MountVolume` against it; designed to run as root in CI (`sudo ./run_tests.sh --integration`)
+86. **ISO hash regression suite** — add `tests/test_iso_hashes.c` that downloads (or reads from a local fixture path) a set of known ISOs (Ubuntu, Fedora, Windows PE) and verifies that `HashFile()` SHA-256 results match hard-coded expected digests; guards against silent hash-algorithm regressions
+87. **GTK UI smoke tests via AT-SPI2** — use `pyatspi2` / Dogtail (or `xvfb-run + xdotool`) in a shell-script test to launch Rufus, inject a fake device via `device_monitor_inject()`, select an ISO, and verify that the Start button becomes enabled; run under `xvfb-run` in CI
+88. **Fuzz harness for `iso.c`** — create `tests/fuzz_iso.c` using libFuzzer's `LLVMFuzzerTestOneInput` API targeting `ExtractISO()` and `ReadISOFileToBuffer()`; add a `make fuzz-iso` target that builds with `-fsanitize=fuzzer,address`
+89. **Fuzz harness for `parser.c`** — create `tests/fuzz_parser.c` targeting `get_token_data_buffer()`, `parse_update()`, and `GetSbatEntries()`; the parser handles untrusted `.loc`, `.ver`, and SBAT CSV inputs
+90. **Fuzz harness for PE parser** — create `tests/fuzz_pe.c` targeting `GetPeArch()`, `GetPeSection()`, `FindResourceRva()`, and `GetPeSignatureData()` with arbitrary binary blobs; PE files are attacker-controlled in the image-signing flow
+91. **AddressSanitizer + UBSanitizer CI pass** — add a `make check-asan` target that rebuilds all test binaries with `-fsanitize=address,undefined,leak` and runs the full test suite; pipe results through the existing `run_tests.sh` framework; block merges on ASAN errors
+92. **`test_compat_layer`** — add `tests/test_compat_layer.c` that `#include`s every header in `src/linux/compat/` and verifies that key type sizes (`sizeof(DWORD) == 4`, `sizeof(HANDLE) == sizeof(void*)`, etc.) and macro expansions (`INVALID_HANDLE_VALUE`, `MAX_PATH`, etc.) are correct; prevents silent ABI drift in the compat layer
+93. **`test_error_mapping`** — add `tests/test_error_mapping.c` covering the `WindowsErrorString()` / `StrError()` DWORD→errno table from item 43; verify ≥ 30 error code mappings produce the expected `strerror`-style string
+
+---
+
+### Build, Packaging & CI
+
+94. **GitHub Actions CI pipeline** — add `.github/workflows/ci.yml` running on every push and PR: (a) Linux build + `./run_tests.sh --linux-only`, (b) MinGW cross-build + `./run_tests.sh --wine-only`, (c) ASAN build + `make check-asan`; post test-result summary as a PR check
+95. **Coverity / cppcheck static analysis** — integrate the existing `_coverity.cmd` logic into a CI job; add a `make check-cppcheck` target using `cppcheck --enable=all --error-exitcode=1`; fix all current `cppcheck` findings before enabling the gate
+96. **Flatpak manifest** — create `packaging/flatpak/ie.akeo.rufus.yaml` with `finish-args` including `--device=block` (removable media), `--share=network`, and `--filesystem=xdg-download`; add a `make flatpak` convenience target wrapping `flatpak-builder`
+97. **AppImage build** — add a `make appimage` target using `linuxdeploy` + `linuxdeploy-plugin-gtk` to produce `Rufus-<version>-x86_64.AppImage`; include the GTK theme, hicolor icons, and locale data; test on a minimal Ubuntu container
+98. **Debian/Ubuntu package** — create `packaging/debian/` with `control`, `rules`, `changelog`, and `rufus.install`; `rules` wraps the autotools build; add `dh_install` entries for the `.desktop`, AppStream XML, and hicolor icons; target Ubuntu 22.04 LTS and Debian 12
+99. **RPM spec** — create `packaging/rpm/rufus.spec` for Fedora 39+ / openSUSE Tumbleweed; include `BuildRequires` for libcurl, libudev, libblkid, wimlib, GTK3; add `%check` section running `make check`
+100. **ARM64 cross-compile target** — add `--host=aarch64-linux-gnu` support to `configure.ac`; verify the `ioctl`-based paths (`BLKGETSIZE64`, `SG_IO`, `BLKPG_*`) compile cleanly on AArch64; add an ARM64 build job to the CI pipeline (item 94)
+101. **Reproducible builds** — pin all bundled library versions in `configure.ac` minimum checks; strip build-path prefixes via `-fmacro-prefix-map`; record `SOURCE_DATE_EPOCH` in the binary; verify that two independent builds of the same source produce bit-identical output
+
+---
+
+### Documentation & Developer Experience
+
+102. **Man page for CLI mode** — write `doc/rufus.1` documenting all flags from the CLI mode (item 46): `--device`, `--image`, `--fs`, `--partition-scheme`, `--target-sys`, `--cluster`, `--label`, `--quick`, `--verify`, `--bad-blocks`; install via `Makefile.am`
+103. **CONTRIBUTING.md for the Linux port** — document the porting conventions: compat-layer rules (no runtime no-ops allowed without a comment), test requirements (every new function needs ≥ 3 tests), how to add a new compat header, how to run the full test suite, Wine setup instructions
+104. **Architecture overview document** — write `doc/linux-architecture.md` describing the layered architecture: compat headers → Linux implementation files → common/ portable code → GTK UI; include a dependency graph of the major source files and their relationships
+105. **In-source Doxygen annotations** — add `@brief`, `@param`, `@return`, and `@note` Doxygen comments to all public functions in `src/linux/*.h` and `src/linux/compat/*.h`; add a `make docs` target running `doxygen Doxyfile`; publish generated HTML via GitHub Pages in CI
+
+---
+
+### Robustness & Diagnostics
+
+106. **Signal handler with backtrace** — install `SIGSEGV` / `SIGABRT` / `SIGBUS` handlers in `rufus.c main()` using `sigaction`; on crash, write a backtrace via `backtrace_symbols_fd` to `stderr` and to `~/.local/share/rufus/crash-<timestamp>.log`; print the log path so users can attach it to bug reports
+107. **`DumpBufferHex()` / `_printbits()` debug helpers** — implement both in `stdio.c`; `DumpBufferHex` should format output as `xxd`-style hex + ASCII; `_printbits` should render a `DWORD` as a 32-bit binary string; both should gate on a `RUFUS_TEST` or `DEBUG_VERBOSE` compile flag
+108. **`DumpFatDir()` FAT directory lister** — implement the stub in `iso.c` using the `libfat` sector-reader already wired (`libfat_readfile` / `iso9660_readfat`); list root-directory entries with name, size, attributes; useful for verifying Syslinux and FreeDOS installations in CI
+109. **Structured error context** — augment `uprintf` log lines for failed operations with a `[errno=N strerror]` suffix automatically; create a `uprintf_errno(fmt, ...)` macro that appends `": %s (%d)"` from `strerror(errno)` / `errno`; replace raw `strerror()` calls throughout the Linux source
+110. **`wuprintf()` UTF-8 path with test** — convert the `wchar_t *` argument to UTF-8 via `g_utf16_to_utf8()` before passing to `rufus_log_handler`; add `tests/test_stdio_linux.c` TEST cases for: pure ASCII round-trip, 2-byte UTF-8 (é, ü), 3-byte (中文), and a NULL guard
+
+---
+
+### Long-Term / Stretch Goals
+
+111. **Windows-image customisation dialog on Linux** — build a `GtkDialog` mirroring the Windows "Windows User Experience" customization panel: checkboxes for bypass-TPM, bypass-RAM, bypass-Secure-Boot, disable-telemetry, remove-MS-account-requirement, set locale/keyboard; wire to `CreateUnattendXml()` and inject into `FormatThread`
+112. **Ventoy-compatible multi-boot mode** — detect an existing Ventoy layout (`VTOYEFI` partition GUID) on the selected device and offer an "Update Ventoy" mode that upgrades only the Ventoy boot partition without disturbing the data partition; this is a natural complement to Rufus's existing image-write flow
+113. **ISO-hybrid write optimisation** — detect ISO 9660 El Torito boot catalog + isohybrid MBR signature; when present, write the image as a raw block copy (`dd`-style) rather than extracting files, preserving the exact boot geometry used by the ISO author
+114. **`img_report` info panel in GTK UI** — after `ImageScanThread` completes, show a collapsible info panel below the boot combo displaying: detected OS name + version, architecture, Secure Boot requirement, TPM requirement, compression type, and SHA-256; sourced from `img_report` fields already populated
+115. **Locale data auto-download** — if `embedded.loc` is absent or older than 30 days, offer to download the latest translation bundle from the Rufus update server; implement as an extension of the `CheckForUpdates()` flow with a separate `loc_version` field in `rufus_linux.ver`
+116. **Snap package** — create `packaging/snap/snapcraft.yaml` with `plugs: [removable-media, network, raw-usb, block-devices]`; build and test via `snapcraft`; publish to the `edge` channel of the Rufus Snap Store listing
+117. **`SetAutoMount()` / `GetAutoMount()` → udisks2** — implement via `udisks2` D-Bus API (`org.freedesktop.UDisks2.Manager.SetAutomount`); or simpler: create/remove a `udev` rule in `/run/udev/rules.d/` that sets `ENV{UDISKS_AUTO}="0"` for the target device during the write operation, then removes it
+118. **`VhdMountImageAndGetSize()` → kernel NBD without qemu-nbd** — the current implementation shells out to `qemu-nbd`; replace with direct `ioctl(NBD_SET_SOCK)` + `ioctl(NBD_DO_IT)` using the kernel NBD driver for environments where qemu-nbd is not installed; keep the qemu-nbd path as a fallback
+119. **Multi-device write** — add a "Write to multiple devices simultaneously" mode: enumerate all selected target devices (multi-select in a `GtkListBox`), spawn one `FormatThread` per device (each with its own progress bar row in a `GtkGrid`), and collect results; useful for IT deployment scenarios
+120. **Windows PE detection and reporting improvements** — `img_report.uses_minint` is populated but not displayed on Linux; wire the WinPE detection fields (`HAS_WINPE`, `uses_minint`, WinPE version string from `GetWimVersion`) into the GTK image-info panel (item 114) and the log output so users can confirm WinPE images are correctly identified

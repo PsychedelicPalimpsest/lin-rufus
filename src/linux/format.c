@@ -52,16 +52,24 @@ BOOL FormatPartition(DWORD DriveIndex, uint64_t PartitionOffset, DWORD UnitAlloc
 	if (IS_EXT(FSType))
 		return FormatExtFs(DriveIndex, PartitionOffset, UnitAllocationSize,
 		                   FileSystemLabel[FSType], Label, Flags);
-	/* NTFS, exFAT, UDF, ReFS not yet supported on Linux */
+	if (FSType == FS_NTFS)
+		return FormatNTFS(DriveIndex, PartitionOffset, UnitAllocationSize, Label, Flags);
+	if (FSType == FS_EXFAT)
+		return FormatExFAT(DriveIndex, PartitionOffset, UnitAllocationSize, Label, Flags);
+	/* UDF, ReFS not yet supported on Linux */
 	ErrorStatus = RUFUS_ERROR(ERROR_NOT_SUPPORTED);
 	return FALSE;
 }
 
 /* =========================================================================
- * WritePBR
+ * WritePBR_fs
+ *
+ * Write the partition boot record for the specified filesystem type.
+ * This is the implementation used by both WritePBR() (which passes the
+ * cached actual_fs_type) and tests (which supply the type directly).
  * ======================================================================= */
 
-BOOL WritePBR(HANDLE hLogicalVolume)
+BOOL WritePBR_fs(HANDLE hLogicalVolume, int fs_type)
 {
 	FAKE_FD fake_fd = { 0 };
 	FILE* fp = (FILE*)&fake_fd;
@@ -74,7 +82,7 @@ BOOL WritePBR(HANDLE hLogicalVolume)
 	sector_size = SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512;
 	set_bytes_per_sector(sector_size);
 
-	switch (actual_fs_type) {
+	switch (fs_type) {
 	case FS_FAT32:
 		/* Write boot record for both primary (sector 0) and backup (sector 6) */
 		for (int i = 0; i < 2; i++) {
@@ -93,9 +101,22 @@ BOOL WritePBR(HANDLE hLogicalVolume)
 	case FS_EXT4:
 		/* ext filesystems don't use a Windows-style partition boot record */
 		return TRUE;
+	case FS_NTFS:
+	case FS_EXFAT:
+		/* mkntfs / mkfs.exfat write their own boot sectors; no PBR step needed */
+		return TRUE;
 	default:
 		return FALSE;
 	}
+}
+
+/* =========================================================================
+ * WritePBR
+ * ======================================================================= */
+
+BOOL WritePBR(HANDLE hLogicalVolume)
+{
+	return WritePBR_fs(hLogicalVolume, actual_fs_type);
 }
 
 /* =========================================================================
