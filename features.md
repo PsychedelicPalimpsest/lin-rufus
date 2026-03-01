@@ -233,8 +233,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `SetPrivilege()` | 🚫 | Windows token privilege — no Linux equivalent |
 | `SetThreadAffinity()` | ✅ | Uses `sched_getaffinity` to get available CPUs; spreads across threads with disjoint bitmasks; `SetThreadAffinityMask` uses `pthread_setaffinity_np`; 5 tests pass |
 | `GetWindowsVersion()` | 🚫 | N/A; return zeroed struct (done) |
-| `GetExecutableVersion()` | 🟡 | Read `ELF` / PE version; low priority |
-| `IsFontAvailable()` | 🟡 | Use `pango_font_description_from_string` or `fontconfig` |
+| `GetExecutableVersion()` | 🟡 | Read `ELF` / PE version; stub returns NULL (no PE version resources in ELF); low priority |
+| `IsFontAvailable()` | ✅ | Uses fontconfig `FcFontMatch` + family name substring comparison; 3 tests pass |
 | `ToLocaleName()` | ✅ | Returns BCP-47 locale from `LANG` env var (e.g. `en_US.UTF-8` → `en-US`); falls back to `en-US` for C/POSIX; 5 tests pass |
 | `IsCurrentProcessElevated()` | ✅ | Returns `geteuid() == 0` |
 | `isSMode()` | 🚫 | Windows S Mode — always FALSE |
@@ -454,7 +454,7 @@ This is the most structurally significant porting gap.
 4. ~~**Device enumeration** (`dev.c`)~~ ✅ **DONE** — sysfs scan with sort, filtering, combo population; 138 tests pass using fake sysfs
 5. ~~**Device combo hot-plug**~~ ✅ **DONE** — `src/linux/device_monitor.c`: udev netlink monitor, 1 s debounce, `device_monitor_inject()` hook, `UM_MEDIA_CHANGE` → `GetDevices()` wired in `ui_gtk.c`; 20 tests pass
 6. ~~**Localization + parser**~~ ✅ **DONE** — `common/parser.c` + `common/localization.c` created; `linux/parser.c` + `linux/localization.c` fully implemented; portable functions stripped from `windows/`; 111 tests pass
-7. ~~**Format thread** (`format.c`)~~ 🔧 **IN PROGRESS** — `FormatPartition` ✅, `WritePBR` ✅, `FormatThread` stub (routes through OS partitioning still needed); START button wired; 118 format tests pass
+7. ~~**Format thread** (`format.c`)~~ ✅ **DONE** — Full FormatThread workflow implemented: ClearMBRGPT, CreatePartition, FormatPartition, WriteMBR, WritePBR; FAT32 + ext2/3; MBR + GPT; image write + zero-drive modes; Syslinux installation wired (BT_SYSLINUX_V4/V6 and BT_IMAGE+sl_version); 115 tests pass
 8. ~~**FAT32 formatter** (`format_fat32.c`)~~ ✅ **DONE** — 16 tests pass
 9. ~~**ext formatter** (`format_ext.c`)~~ ✅ **DONE** — 9 tests pass
 10. ~~**ISO extraction** (`iso.c`)~~ ✅ **DONE** — full POSIX implementation using libcdio; 12345 tests pass

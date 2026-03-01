@@ -58,8 +58,9 @@ EXTRA_SRC_LINUX_test_msg_dispatch := $(MSG_DISPATCH_SRC)
 
 # stdfn tests: htab + StrArray — Linux compat + windows headers + linux stdfn.c
 STDFN_SRC := $(SRC_DIR)/linux/stdfn.c
-CFLAGS_LINUX_test_stdfn  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux -Wno-implicit-function-declaration
+CFLAGS_LINUX_test_stdfn  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux -Wno-implicit-function-declaration $(shell pkg-config --cflags fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_stdfn := $(STDFN_SRC)
+LDFLAGS_LINUX_test_stdfn := $(shell pkg-config --libs fontconfig 2>/dev/null)
 
 # dev_linux tests: device enumeration via fake sysfs
 DEV_LINUX_SRC := $(SRC_DIR)/linux/dev.c $(SRC_DIR)/linux/stdfn.c

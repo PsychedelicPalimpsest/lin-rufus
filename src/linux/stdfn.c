@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sched.h>
-
+#include <fontconfig/fontconfig.h>
 
 /*
  * Hash table functions - from glibc 2.3.2 via Windows stdfn.c:
@@ -266,7 +266,30 @@ out:
 }
 uint8_t* GetResource(HMODULE m, char* n, char* t, const char* d, DWORD* l, BOOL dup) { (void)m;(void)n;(void)t;(void)d;(void)l;(void)dup; return NULL; }
 DWORD   GetResourceSize(HMODULE m, char* n, char* t, const char* d) { (void)m;(void)n;(void)t;(void)d; return 0; }
-BOOL    IsFontAvailable(const char* fn)                           { (void)fn; return FALSE; }
+BOOL    IsFontAvailable(const char* fn)
+{
+    if (!fn) return FALSE;
+    FcConfig *cfg = FcInitLoadConfigAndFonts();
+    if (!cfg) return FALSE;
+    FcPattern *pat = FcNameParse((const FcChar8 *)fn);
+    FcConfigSubstitute(cfg, pat, FcMatchPattern);
+    FcDefaultSubstitute(pat);
+    FcResult res;
+    FcPattern *match = FcFontMatch(cfg, pat, &res);
+    BOOL found = FALSE;
+    if (match) {
+        FcChar8 *family = NULL;
+        if (FcPatternGetString(match, FC_FAMILY, 0, &family) == FcResultMatch
+            && family != NULL) {
+            found = (strcasestr((const char *)family, fn) != NULL) ||
+                    (strcasestr(fn, (const char *)family) != NULL);
+        }
+        FcPatternDestroy(match);
+    }
+    FcPatternDestroy(pat);
+    FcConfigDestroy(cfg);
+    return found;
+}
 DWORD WINAPI SetLGPThread(LPVOID param)                           { (void)param; return 0; }
 BOOL    SetLGP(BOOL r, BOOL* ek, const char* p, const char* pol, DWORD v) { (void)r;(void)ek;(void)p;(void)pol;(void)v; return FALSE; }
 BOOL    SetThreadAffinity(DWORD_PTR* ta, size_t n)

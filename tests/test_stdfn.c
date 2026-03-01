@@ -464,6 +464,53 @@ TEST(to_locale_name_strips_modifier)
 }
 
 /* ===========================================================================
+ * IsFontAvailable tests (Linux only)
+ * ========================================================================= */
+
+extern BOOL IsFontAvailable(const char *fn);
+
+TEST(is_font_available_null)
+{
+    /* NULL font name → FALSE, no crash */
+    CHECK(IsFontAvailable(NULL) == FALSE);
+}
+
+TEST(is_font_available_nonexistent)
+{
+    /* This font almost certainly does not exist */
+    CHECK(IsFontAvailable("ThisFontDoesNotExist12345XYZ") == FALSE);
+}
+
+TEST(is_font_available_liberation)
+{
+    /* Liberation Sans ships with most distros */
+    CHECK(IsFontAvailable("Liberation Sans") == TRUE);
+}
+
+/* ===========================================================================
+ * GetExecutableVersion tests (Linux only)
+ * ========================================================================= */
+
+extern version_t *GetExecutableVersion(const char *path);
+
+TEST(get_exe_version_null)
+{
+    /* NULL path → returns something or NULL, no crash */
+    version_t *v = GetExecutableVersion(NULL);
+    (void)v;  /* just check no crash */
+    CHECK(1);
+}
+
+TEST(get_exe_version_self)
+{
+    /* Passing "/proc/self/exe" (the running test binary) should at least
+     * not crash; it may return NULL since the binary has no PE version info */
+    version_t *v = GetExecutableVersion("/proc/self/exe");
+    (void)v;
+    CHECK(1);
+}
+
+/* ===========================================================================
  * main
  * ========================================================================= */
 
@@ -516,6 +563,15 @@ int main(void)
     RUN(to_locale_name_underscore_to_hyphen);
     RUN(to_locale_name_c_locale);
     RUN(to_locale_name_strips_modifier);
+
+    printf("\n=== IsFontAvailable ===\n");
+    RUN(is_font_available_null);
+    RUN(is_font_available_nonexistent);
+    RUN(is_font_available_liberation);
+
+    printf("\n=== GetExecutableVersion ===\n");
+    RUN(get_exe_version_null);
+    RUN(get_exe_version_self);
 
     TEST_RESULTS();
 }

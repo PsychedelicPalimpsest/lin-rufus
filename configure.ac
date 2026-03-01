@@ -174,6 +174,14 @@ Install it with: apt install libblkid-dev  OR  dnf install util-linux-devel])])
   AM_LDFLAGS="$AM_LDFLAGS $BLKID_LIBS"
 fi
 
+# fontconfig — required for IsFontAvailable() on Linux
+if test "x$target_os" = "xlinux"; then
+  PKG_CHECK_MODULES([FONTCONFIG], [fontconfig],
+    [AC_MSG_NOTICE([fontconfig found])],
+    [AC_MSG_ERROR([fontconfig required for Linux build.
+Install it with: apt install libfontconfig1-dev  OR  dnf install fontconfig-devel])])
+fi
+
 AC_SUBST([VISIBILITY_CFLAGS])
 AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])
