@@ -13,6 +13,7 @@
 # PARTICULAR PURPOSE.
 
 @SET_MAKE@
+
 VPATH = @srcdir@
 am__is_gnu_make = { \
   if test -z '$(MAKELEVEL)'; then \
@@ -93,7 +94,8 @@ am__aclocal_m4_deps = $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(top_srcdir)/configure \
-	$(am__configure_deps)
+	$(am__configure_deps) $(am__dist_desktop_DATA_DIST) \
+	$(am__dist_metainfo_DATA_DIST)
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
@@ -127,6 +129,36 @@ am__can_run_installinfo = \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
+am__dist_desktop_DATA_DIST = res/ie.akeo.rufus.desktop
+am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
+am__vpath_adj = case $$p in \
+    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
+    *) f=$$p;; \
+  esac;
+am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
+am__install_max = 40
+am__nobase_strip_setup = \
+  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
+am__nobase_strip = \
+  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
+am__nobase_list = $(am__nobase_strip_setup); \
+  for p in $$list; do echo "$$p $$p"; done | \
+  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
+  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
+    if (++n[$$2] == $(am__install_max)) \
+      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
+    END { for (dir in files) print dir, files[dir] }'
+am__base_list = \
+  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
+  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
+am__uninstall_files_from_dir = { \
+  { test ! -d "$$dir" && test ! -f "$$dir" && test ! -r "$$dir"; } \
+  || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
+       $(am__cd) "$$dir" && echo $$files | $(am__xargs_n) 40 $(am__rm_f); }; \
+  }
+am__installdirs = "$(DESTDIR)$(desktopdir)" "$(DESTDIR)$(metainfodir)"
+am__dist_metainfo_DATA_DIST = res/ie.akeo.rufus.appdata.xml
+DATA = $(dist_desktop_DATA) $(dist_metainfo_DATA)
 RECURSIVE_CLEAN_TARGETS = mostlyclean-recursive clean-recursive	\
   distclean-recursive maintainer-clean-recursive
 am__recursive_targets = \
@@ -163,6 +195,8 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
+BLKID_CFLAGS = @BLKID_CFLAGS@
+BLKID_LIBS = @BLKID_LIBS@
 CC = @CC@
 CFLAGS = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@
@@ -260,6 +294,14 @@ SUBDIRS = src
 TARGET = rufus
 TAGVER = $(shell git log --oneline | wc -l)
 SEDCMD = s/^\([ \t]*\)Version="\([0-9]*\)\.\([0-9]*\)\.[0-9]*\.\([0-9]*\)"\(.*\)/\1Version="\2.\3.@@TAGVER@@.\4"\5/
+
+# --------------------------------------------------------------------------
+# Linux desktop integration (install targets)
+# --------------------------------------------------------------------------
+@TARGET_LINUX_TRUE@desktopdir = $(datadir)/applications
+@TARGET_LINUX_TRUE@dist_desktop_DATA = res/ie.akeo.rufus.desktop
+@TARGET_LINUX_TRUE@metainfodir = $(datadir)/metainfo
+@TARGET_LINUX_TRUE@dist_metainfo_DATA = res/ie.akeo.rufus.appdata.xml
 all: all-recursive
 
 .SUFFIXES:
@@ -296,6 +338,48 @@ $(top_srcdir)/configure:  $(am__configure_deps)
 $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	$(am__cd) $(srcdir) && $(ACLOCAL) $(ACLOCAL_AMFLAGS)
 $(am__aclocal_m4_deps):
+install-dist_desktopDATA: $(dist_desktop_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(dist_desktop_DATA)'; test -n "$(desktopdir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(desktopdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(desktopdir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(desktopdir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(desktopdir)" || exit $$?; \
+	done
+
+uninstall-dist_desktopDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_desktop_DATA)'; test -n "$(desktopdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(desktopdir)'; $(am__uninstall_files_from_dir)
+install-dist_metainfoDATA: $(dist_metainfo_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(dist_metainfo_DATA)'; test -n "$(metainfodir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(metainfodir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(metainfodir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(metainfodir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(metainfodir)" || exit $$?; \
+	done
+
+uninstall-dist_metainfoDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_metainfo_DATA)'; test -n "$(metainfodir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(metainfodir)'; $(am__uninstall_files_from_dir)
 
 # This directory's subdirectories are mostly independent; you can cd
 # into them and run 'make' without going through this Makefile.
@@ -404,9 +488,12 @@ distclean-tags:
 	-rm -f cscope.out cscope.in.out cscope.po.out cscope.files
 check-am: all-am
 check: check-recursive
-all-am: Makefile
+all-am: Makefile $(DATA)
 installdirs: installdirs-recursive
 installdirs-am:
+	for dir in "$(DESTDIR)$(desktopdir)" "$(DESTDIR)$(metainfodir)"; do \
+	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
+	done
 install: install-recursive
 install-exec: install-exec-recursive
 install-data: install-data-recursive
@@ -437,6 +524,7 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
+@TARGET_LINUX_FALSE@install-data-hook:
 clean: clean-recursive
 
 clean-am: clean-generic mostlyclean-am
@@ -458,8 +546,9 @@ info: info-recursive
 
 info-am:
 
-install-data-am:
-
+install-data-am: install-dist_desktopDATA install-dist_metainfoDATA
+	@$(NORMAL_INSTALL)
+	$(MAKE) $(AM_MAKEFLAGS) install-data-hook
 install-dvi: install-dvi-recursive
 
 install-dvi-am:
@@ -504,25 +593,43 @@ ps: ps-recursive
 
 ps-am:
 
-uninstall-am:
+uninstall-am: uninstall-dist_desktopDATA uninstall-dist_metainfoDATA
 
-.MAKE: $(am__recursive_targets) install-am install-strip
+.MAKE: $(am__recursive_targets) install-am install-data-am \
+	install-strip
 
 .PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am \
 	am--refresh check check-am clean clean-cscope clean-generic \
 	cscope cscopelist-am ctags ctags-am distclean \
 	distclean-generic distclean-tags dvi dvi-am html html-am info \
 	info-am install install-am install-data install-data-am \
-	install-dvi install-dvi-am install-exec install-exec-am \
-	install-html install-html-am install-info install-info-am \
-	install-man install-pdf install-pdf-am install-ps \
-	install-ps-am install-strip installcheck installcheck-am \
-	installdirs installdirs-am maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-generic pdf \
-	pdf-am ps ps-am tags tags-am uninstall uninstall-am
+	install-data-hook install-dist_desktopDATA \
+	install-dist_metainfoDATA install-dvi install-dvi-am \
+	install-exec install-exec-am install-html install-html-am \
+	install-info install-info-am install-man install-pdf \
+	install-pdf-am install-ps install-ps-am install-strip \
+	installcheck installcheck-am installdirs installdirs-am \
+	maintainer-clean maintainer-clean-generic mostlyclean \
+	mostlyclean-generic pdf pdf-am ps ps-am tags tags-am uninstall \
+	uninstall-am uninstall-dist_desktopDATA \
+	uninstall-dist_metainfoDATA
 
 .PRECIOUS: Makefile
 
+
+# Install application icons into the hicolor icon theme tree
+@TARGET_LINUX_TRUE@install-data-hook:
+@TARGET_LINUX_TRUE@	$(MKDIR_P) "$(DESTDIR)$(datadir)/icons/hicolor/32x32/apps"
+@TARGET_LINUX_TRUE@	$(INSTALL_DATA) "$(srcdir)/res/icons/rufus-32.png" \
+@TARGET_LINUX_TRUE@		"$(DESTDIR)$(datadir)/icons/hicolor/32x32/apps/ie.akeo.rufus.png"
+@TARGET_LINUX_TRUE@	$(MKDIR_P) "$(DESTDIR)$(datadir)/icons/hicolor/48x48/apps"
+@TARGET_LINUX_TRUE@	$(INSTALL_DATA) "$(srcdir)/res/icons/rufus-48.png" \
+@TARGET_LINUX_TRUE@		"$(DESTDIR)$(datadir)/icons/hicolor/48x48/apps/ie.akeo.rufus.png"
+@TARGET_LINUX_TRUE@	$(MKDIR_P) "$(DESTDIR)$(datadir)/icons/hicolor/256x256/apps"
+@TARGET_LINUX_TRUE@	$(INSTALL_DATA) "$(srcdir)/res/icons/rufus-256.png" \
+@TARGET_LINUX_TRUE@		"$(DESTDIR)$(datadir)/icons/hicolor/256x256/apps/ie.akeo.rufus.png"
+@TARGET_LINUX_TRUE@	@gtk-update-icon-cache -f -t "$(DESTDIR)$(datadir)/icons/hicolor" 2>/dev/null ||:
+@TARGET_LINUX_TRUE@	@update-desktop-database "$(DESTDIR)$(datadir)/applications" 2>/dev/null ||:
 
 upx: all
 	@upx --lzma --best src/$(TARGET)$(EXEEXT)

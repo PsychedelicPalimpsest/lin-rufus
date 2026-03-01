@@ -234,6 +234,72 @@ HANDLE DownloadSignedFileThreaded(const char *url, const char *file,
 	return NULL;
 }
 
+/* ---- Update check ---- */
+
+#include <time.h>
+#include "settings.h"
+
+#define DEFAULT_UPDATE_INTERVAL (24 * 3600)  /* seconds between update checks */
+
+/* Convert a 3-component version array to a uint64 for comparison */
+static __inline uint64_t ver_to_u64(uint16_t v[3])
+{
+	return ((uint64_t)v[0] << 32) | ((uint64_t)v[1] << 16) | (uint64_t)v[2];
+}
+
+/* Public helper: returns TRUE if server version is strictly newer than current. */
+BOOL rufus_is_newer_version(uint16_t server[3], uint16_t current[3])
+{
+	return (ver_to_u64(server) > ver_to_u64(current)) ? TRUE : FALSE;
+}
+
+static BOOL force_update_check = FALSE;
+static HANDLE update_check_thread = NULL;
+
+static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
+{
+	(void)param;
+	uint8_t *buf = NULL;
+	DWORD downloaded = 0;
+	char url[256];
+
+	/* Try to fetch a Linux version file from the Rufus release server.
+	 * We attempt the generic "rufus_linux.ver" path. */
+	snprintf(url, sizeof(url), "%s/rufus_linux.ver", RUFUS_URL);
+	downloaded = DownloadToFileOrBuffer(url, NULL, &buf, NULL, FALSE);
+
+	if (downloaded > 0 && buf != NULL) {
+		/* NUL-terminate (buf already has downloaded bytes) */
+		uint8_t *tmp = realloc(buf, downloaded + 1);
+		if (tmp) {
+			buf = tmp;
+			buf[downloaded] = '\0';
+		}
+		/* Record check time */
+		WriteSetting64(SETTING_LAST_UPDATE, (int64_t)time(NULL));
+		/* Parse version/URL out of the buffer */
+		parse_update((char *)buf, (size_t)downloaded + 1);
+
+		if (rufus_is_newer_version(update.version, rufus_version)) {
+			uprintf("New version %d.%d.%d available!",
+			        update.version[0], update.version[1], update.version[2]);
+			DownloadNewVersion();
+		} else {
+			uprintf("Rufus is up to date (%d.%d.%d).",
+			        rufus_version[0], rufus_version[1], rufus_version[2]);
+			PostMessage(hMainDialog, UM_NO_UPDATE, 0, 0);
+		}
+	} else {
+		/* Network failure: silently post UM_NO_UPDATE */
+		PostMessage(hMainDialog, UM_NO_UPDATE, 0, 0);
+	}
+
+	safe_free(buf);
+	force_update_check = FALSE;
+	update_check_thread = NULL;
+	ExitThread(0);
+}
+
 /* UseLocalDbx: use a locally cached DBX (UEFI Secure Boot revocation) database.
  * The DBX download and caching subsystem is not yet implemented on Linux. */
 BOOL UseLocalDbx(int arch)
@@ -242,13 +308,41 @@ BOOL UseLocalDbx(int arch)
 	return FALSE;
 }
 
-/* CheckForUpdates: check for a newer version of Rufus on the project server.
- * The update check infrastructure requires settings + version parsing that is
- * not yet wired up on Linux. */
+/* CheckForUpdates: check for a newer version of Rufus on the project server. */
 BOOL CheckForUpdates(BOOL force)
 {
-	(void)force;
-	return FALSE;
+	force_update_check = force;
+
+	/* Do not start a second check if one is already in progress */
+	if (update_check_thread != NULL)
+		return FALSE;
+
+	/* Unless forced, respect the update interval */
+	if (!force) {
+		int32_t interval = ReadSetting32(SETTING_UPDATE_INTERVAL);
+		if (interval == -1) {
+			uprintf("Update checks are disabled.");
+			return FALSE;
+		}
+		if (interval == 0) {
+			WriteSetting32(SETTING_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL);
+			interval = DEFAULT_UPDATE_INTERVAL;
+		}
+		int64_t last = ReadSetting64(SETTING_LAST_UPDATE);
+		int64_t now  = (int64_t)time(NULL);
+		if (now < last + (int64_t)interval) {
+			uprintf("Next update check in %" PRId64 " seconds.",
+			        last + (int64_t)interval - now);
+			return FALSE;
+		}
+	}
+
+	update_check_thread = CreateThread(NULL, 0, CheckForUpdatesThread, NULL, 0, NULL);
+	if (update_check_thread == NULL) {
+		uprintf("Unable to start update check thread");
+		return FALSE;
+	}
+	return TRUE;
 }
 
 /* DownloadISO: launch the Fido script to download an ISO from the internet.

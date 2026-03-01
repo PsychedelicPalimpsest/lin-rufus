@@ -5,7 +5,11 @@
 #include <stdint.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <ctype.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <linux/fs.h>
 #include <assert.h>
 
 #include "rufus.h"
@@ -203,4 +207,79 @@ BOOL GetDevices(DWORD devnum)
 
 BOOL CyclePort(int index)                            { (void)index; return FALSE; }
 int  CycleDevice(int index)                          { (void)index; return 0; }
-BOOL GetOpticalMedia(IMG_SAVE* img_save)             { (void)img_save; return FALSE; }
+
+/* ISO 9660 Primary Volume Descriptor: offset 0x8000, label at +0x28, 32 bytes */
+#define ISO_VD_OFFSET   0x8000LL
+#define ISO_LABEL_OFFSET (ISO_VD_OFFSET + 0x28)
+#define ISO_LABEL_LEN   32
+/* Skip blank/rewritable media that report <= 4096 bytes */
+#define MIN_OPTICAL_SIZE 4097LL
+
+BOOL GetOpticalMediaWithRoot(const char* dev_root, IMG_SAVE* img_save)
+{
+	static char dev_path[PATH_MAX];
+	static char label_buf[ISO_LABEL_LEN + 1];
+	DIR* d;
+	struct dirent* ent;
+	int fd;
+	int64_t disk_size = 0;
+	uint64_t blk_size = 0;
+	uint8_t iso_buf[ISO_LABEL_LEN];
+	int k;
+
+	d = opendir(dev_root);
+	if (d == NULL)
+		return FALSE;
+
+	while ((ent = readdir(d)) != NULL) {
+		/* Only consider sr* (sr0, sr1, ...) */
+		if (strncmp(ent->d_name, "sr", 2) != 0 || !isdigit((unsigned char)ent->d_name[2]))
+			continue;
+
+		snprintf(dev_path, sizeof(dev_path), "%s/%s", dev_root, ent->d_name);
+		fd = open(dev_path, O_RDONLY | O_NONBLOCK);
+		if (fd < 0)
+			continue;
+
+		/* Try ioctl first (real block device), fall back to seek for test files */
+		if (ioctl(fd, BLKGETSIZE64, &blk_size) == 0) {
+			disk_size = (int64_t)blk_size;
+		} else {
+			disk_size = lseek(fd, 0, SEEK_END);
+			lseek(fd, 0, SEEK_SET);
+		}
+
+		if (disk_size <= MIN_OPTICAL_SIZE) {
+			close(fd);
+			continue;
+		}
+
+		/* Try to read ISO 9660 volume label */
+		memset(label_buf, 0, sizeof(label_buf));
+		if (lseek(fd, ISO_LABEL_OFFSET, SEEK_SET) == ISO_LABEL_OFFSET) {
+			if (read(fd, iso_buf, ISO_LABEL_LEN) == ISO_LABEL_LEN) {
+				memcpy(label_buf, iso_buf, ISO_LABEL_LEN);
+				label_buf[ISO_LABEL_LEN] = '\0';
+				/* Strip trailing spaces */
+				for (k = ISO_LABEL_LEN - 1; k >= 0 && label_buf[k] == ' '; k--)
+					label_buf[k] = '\0';
+			}
+		}
+		close(fd);
+
+		img_save->DevicePath = dev_path;
+		img_save->DeviceSize = disk_size;
+		img_save->Label = label_buf[0] ? label_buf : NULL;
+
+		closedir(d);
+		return TRUE;
+	}
+
+	closedir(d);
+	return FALSE;
+}
+
+BOOL GetOpticalMedia(IMG_SAVE* img_save)
+{
+	return GetOpticalMediaWithRoot("/dev", img_save);
+}

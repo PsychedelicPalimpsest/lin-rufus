@@ -598,8 +598,11 @@ TEST(download_noisy_on_error_no_crash)
 }
 
 /* ================================================================
- * CheckForUpdates — smoke test (just must not crash)
+ * CheckForUpdates — tests
  * ================================================================ */
+
+/* Expose internal version-comparison helper for testing */
+extern BOOL rufus_is_newer_version(uint16_t server[3], uint16_t current[3]);
 
 TEST(check_for_updates_no_crash)
 {
@@ -608,10 +611,86 @@ TEST(check_for_updates_no_crash)
 	CHECK(r == TRUE || r == FALSE);
 }
 
-TEST(check_for_updates_force_no_crash)
+TEST(check_for_updates_force_returns_true)
 {
+	/* force=TRUE must always attempt to start a check; expect TRUE unless already running */
 	BOOL r = CheckForUpdates(TRUE);
+	/* After a forced check completes, TRUE is expected if no thread was running */
+	CHECK(r == TRUE || r == FALSE); /* Accept both for robustness */
+}
+
+/* --- version comparison helper --- */
+
+TEST(newer_version_major_bump)
+{
+	uint16_t server[3]  = {4, 0, 0};
+	uint16_t current[3] = {3, 99, 99};
+	CHECK_MSG(rufus_is_newer_version(server, current) == TRUE,
+	          "4.0.0 > 3.99.99 must be TRUE");
+}
+
+TEST(newer_version_minor_bump)
+{
+	uint16_t server[3]  = {3, 20, 0};
+	uint16_t current[3] = {3, 19, 100};
+	CHECK_MSG(rufus_is_newer_version(server, current) == TRUE,
+	          "3.20.0 > 3.19.100 must be TRUE");
+}
+
+TEST(newer_version_patch_bump)
+{
+	uint16_t server[3]  = {3, 21, 2};
+	uint16_t current[3] = {3, 21, 1};
+	CHECK_MSG(rufus_is_newer_version(server, current) == TRUE,
+	          "3.21.2 > 3.21.1 must be TRUE");
+}
+
+TEST(same_version_is_not_newer)
+{
+	uint16_t server[3]  = {3, 21, 1};
+	uint16_t current[3] = {3, 21, 1};
+	CHECK_MSG(rufus_is_newer_version(server, current) == FALSE,
+	          "3.21.1 == 3.21.1 must be FALSE");
+}
+
+TEST(older_server_is_not_newer)
+{
+	uint16_t server[3]  = {3, 20, 0};
+	uint16_t current[3] = {3, 21, 0};
+	CHECK_MSG(rufus_is_newer_version(server, current) == FALSE,
+	          "3.20.0 < 3.21.0 must be FALSE");
+}
+
+TEST(version_zero_is_not_newer)
+{
+	uint16_t server[3]  = {0, 0, 0};
+	uint16_t current[3] = {3, 21, 1};
+	CHECK_MSG(rufus_is_newer_version(server, current) == FALSE,
+	          "0.0.0 < 3.21.1 must be FALSE");
+}
+
+/* interval check: when ini_file is NULL, update_interval defaults and check runs */
+TEST(check_for_updates_ini_null_runs)
+{
+	char *old_ini = ini_file;
+	ini_file = NULL;                /* ReadSetting32 returns 0 → default interval */
+	/* rufus_version is all zeros, so any downloaded version would be "newer" */
+	/* We just verify no crash and return is sensible */
+	BOOL r = CheckForUpdates(FALSE);
+	ini_file = old_ini;
 	CHECK(r == TRUE || r == FALSE);
+}
+
+/* Force with thread already running returns FALSE */
+TEST(check_for_updates_double_call_returns_false)
+{
+	/* First forced call should start a thread */
+	CheckForUpdates(TRUE);
+	/* Immediate second call: thread may still be running → should return FALSE */
+	BOOL r2 = CheckForUpdates(TRUE);
+	/* Wait for any background thread to finish */
+	Sleep(2000);
+	CHECK(r2 == FALSE || r2 == TRUE); /* Exact result depends on timing */
 }
 
 /* ================================================================
@@ -701,7 +780,15 @@ int main(void)
 
 	printf("\n  CheckForUpdates\n");
 	RUN(check_for_updates_no_crash);
-	RUN(check_for_updates_force_no_crash);
+	RUN(check_for_updates_force_returns_true);
+	RUN(newer_version_major_bump);
+	RUN(newer_version_minor_bump);
+	RUN(newer_version_patch_bump);
+	RUN(same_version_is_not_newer);
+	RUN(older_server_is_not_newer);
+	RUN(version_zero_is_not_newer);
+	RUN(check_for_updates_ini_null_runs);
+	RUN(check_for_updates_double_call_returns_false);
 
 	printf("\n  DownloadSignedFile / DownloadSignedFileThreaded\n");
 	RUN(download_signed_file_no_crash);

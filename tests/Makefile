@@ -236,14 +236,15 @@ EXTRA_SRC_WIN_test_hash := hash_win_glue.c
 # net.c itself needs stdfn.c for safe_strlen/safe_free, and stdio.c for uprintf.
 NET_LINUX_SRC := $(SRC_DIR)/linux/net.c \
                  $(SRC_DIR)/linux/stdfn.c \
-                 $(SRC_DIR)/linux/stdio.c
+                 $(SRC_DIR)/linux/stdio.c \
+                 net_linux_glue.c
 CFLAGS_LINUX_test_net_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) \
 	-Wno-unused-function -Wno-sign-compare \
 	-Wno-implicit-function-declaration -Wno-unused-parameter \
 	-Wno-missing-field-initializers
-LDFLAGS_LINUX_test_net_linux := -lcurl
+LDFLAGS_LINUX_test_net_linux := -lcurl -lpthread
 EXTRA_SRC_LINUX_test_net_linux := $(NET_LINUX_SRC)
 
 # settings_linux tests: FileIO, ReadSetting*/WriteSetting*, XDG path init.

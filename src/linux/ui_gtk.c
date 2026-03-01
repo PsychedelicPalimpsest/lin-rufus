@@ -39,6 +39,8 @@
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
+/* Status bar handler registration — implemented in linux/localization.c */
+extern void rufus_set_status_handler(void (*fn)(const char *msg));
 
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
@@ -1210,6 +1212,8 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	/* Route uprintf() output to the GTK log widget so all log messages
 	 * appear in the on-screen log window rather than just stderr. */
 	rufus_set_log_handler(rufus_gtk_append_log);
+	/* Route PrintStatusInfo() to the GTK status label. */
+	rufus_set_status_handler(rufus_gtk_update_status);
 
 	GtkWidget *win = rufus_gtk_create_window(app);
 	(void)win;

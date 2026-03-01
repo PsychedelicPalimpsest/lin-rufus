@@ -160,11 +160,26 @@ void reset_localization(int dlg_id)
 
 /*
  * Display a localized status/info message.
- * On Linux we just log via uprintf for now.
+ * Routes the formatted text to the registered status handler (e.g. the GTK
+ * status label).  When debug is TRUE also logs to uprintf (the log view).
+ * The duration parameter is accepted but not yet used for auto-clear.
  */
+
+/* -----------------------------------------------------------------------
+ * Status handler callback — set by rufus_set_status_handler().
+ * The GTK UI registers rufus_gtk_update_status() here so that every
+ * PrintStatusInfo call updates the status bar widget.
+ * --------------------------------------------------------------------- */
+static void (*status_handler_fn)(const char *msg) = NULL;
+
+void rufus_set_status_handler(void (*fn)(const char *msg))
+{
+	status_handler_fn = fn;
+}
+
 void PrintStatusInfo(BOOL info, BOOL debug, unsigned int duration, int msg_id, ...)
 {
-	char buf[256];
+	char buf[512];
 	char *format = NULL;
 	va_list args;
 
@@ -173,7 +188,10 @@ void PrintStatusInfo(BOOL info, BOOL debug, unsigned int duration, int msg_id, .
 	if (msg_id < 0)
 		return;
 
-	if ((msg_id >= MSG_000) && (msg_id < MSG_MAX) && (msg_table != NULL))
+	if ((msg_id < MSG_000) || (msg_id >= MSG_MAX))
+		return;
+
+	if (msg_table != NULL)
 		format = msg_table[msg_id - MSG_000];
 	if (format == NULL)
 		return;
@@ -183,6 +201,11 @@ void PrintStatusInfo(BOOL info, BOOL debug, unsigned int duration, int msg_id, .
 	va_end(args);
 	buf[sizeof(buf) - 1] = '\0';
 
+	/* Route to the UI status label (no-op if no handler is registered) */
+	if (status_handler_fn)
+		status_handler_fn(buf);
+
+	/* Also log to the log view when debug mode is requested */
 	if (debug)
 		uprintf("%s", buf);
 }

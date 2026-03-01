@@ -67,3 +67,5 @@ embedded.loc
 stamp-h1
 /.vs/rufus
 .env
+tests/test_*_linux
+tests/test_*_windows

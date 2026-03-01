@@ -266,6 +266,215 @@ TEST(reset_localization_does_not_crash)
 }
 
 /* ================================================================== */
+/* PrintStatusInfo — status handler callback                           */
+/* ================================================================== */
+
+/* Forward declarations for the handler registration API */
+extern void rufus_set_status_handler(void (*fn)(const char *msg));
+extern void PrintStatusInfo(BOOL info, BOOL debug, unsigned int duration,
+                            int msg_id, ...);
+
+/* Capture variables used across tests */
+static int    g_status_calls  = 0;
+static char   g_status_buf[512];
+
+static void test_status_handler(const char *msg)
+{
+    g_status_calls++;
+    if (msg)
+        snprintf(g_status_buf, sizeof(g_status_buf), "%s", msg);
+    else
+        g_status_buf[0] = '\0';
+}
+
+static void reset_status_capture(void)
+{
+    g_status_calls = 0;
+    g_status_buf[0] = '\0';
+}
+
+/*
+ * Helper: register a single MSG_000 entry so that PrintStatusInfo
+ * has a real format string to work with.
+ * We point msg_table at default_msg_table and override index 0.
+ */
+static void setup_msg_000(void)
+{
+    init_localization();
+    /* Register a group so msg_table is live */
+    loc_cmd *grp = calloc(1, sizeof(loc_cmd));
+    grp->command = LC_GROUP;
+    grp->ctrl_id = IDD_DIALOG;
+    grp->txt[0]  = strdup("IDD_DIALOG");
+    list_init(&grp->list);
+    dispatch_loc_cmd(grp);
+
+    /* Point msg_table at the default table and override entry 0 */
+    extern char *default_msg_table[];
+    extern char **msg_table;
+    msg_table = default_msg_table;
+    default_msg_table[0] = "TestMessage-%d";
+}
+
+/* 1. Handler is called once when PrintStatusInfo fires for a valid msg */
+TEST(print_status_handler_called)
+{
+    setup_msg_000();
+    reset_status_capture();
+    rufus_set_status_handler(test_status_handler);
+
+    PrintStatusInfo(FALSE, FALSE, 0, MSG_000, 42);
+
+    rufus_set_status_handler(NULL);
+    exit_localization();
+
+    CHECK_MSG(g_status_calls == 1, "handler must be called exactly once");
+}
+
+/* 2. Message text is forwarded to handler */
+TEST(print_status_handler_receives_text)
+{
+    setup_msg_000();
+    reset_status_capture();
+    rufus_set_status_handler(test_status_handler);
+
+    PrintStatusInfo(FALSE, FALSE, 0, MSG_000, 7);
+
+    rufus_set_status_handler(NULL);
+    exit_localization();
+
+    CHECK_MSG(g_status_calls >= 1, "handler must be called");
+    CHECK_MSG(strstr(g_status_buf, "7") != NULL,
+              "handler should receive formatted text containing '7'");
+}
+
+/* 3. NULL handler does not crash */
+TEST(print_status_null_handler_no_crash)
+{
+    setup_msg_000();
+    rufus_set_status_handler(NULL);
+    /* Must not crash */
+    PrintStatusInfo(FALSE, FALSE, 0, MSG_000, 0);
+    exit_localization();
+    CHECK(1);
+}
+
+/* 4. Handler not called for out-of-range msg_id */
+TEST(print_status_out_of_range_msg_id)
+{
+    init_localization();
+    reset_status_capture();
+    rufus_set_status_handler(test_status_handler);
+
+    PrintStatusInfo(FALSE, FALSE, 0, MSG_MAX + 1, 0);
+
+    rufus_set_status_handler(NULL);
+    exit_localization();
+
+    CHECK_MSG(g_status_calls == 0, "handler must NOT be called for invalid msg_id");
+}
+
+/* 5. Negative msg_id does not crash and does not call handler */
+TEST(print_status_negative_msg_id)
+{
+    init_localization();
+    reset_status_capture();
+    rufus_set_status_handler(test_status_handler);
+
+    PrintStatusInfo(FALSE, FALSE, 0, -1, 0);
+
+    rufus_set_status_handler(NULL);
+    exit_localization();
+
+    CHECK_MSG(g_status_calls == 0, "handler must NOT be called for msg_id < 0");
+}
+
+/* 6. info=TRUE still routes to handler */
+TEST(print_status_info_true_calls_handler)
+{
+    setup_msg_000();
+    reset_status_capture();
+    rufus_set_status_handler(test_status_handler);
+
+    PrintStatusInfo(TRUE, FALSE, 0, MSG_000, 99);
+
+    rufus_set_status_handler(NULL);
+    exit_localization();
+
+    CHECK_MSG(g_status_calls >= 1, "info=TRUE must still invoke the handler");
+}
+
+/* 7. duration parameter is ignored — no crash, handler still called */
+TEST(print_status_duration_ignored)
+{
+    setup_msg_000();
+    reset_status_capture();
+    rufus_set_status_handler(test_status_handler);
+
+    PrintStatusInfo(FALSE, FALSE, 5000 /* ms */, MSG_000, 1);
+
+    rufus_set_status_handler(NULL);
+    exit_localization();
+
+    CHECK_MSG(g_status_calls >= 1, "duration must not prevent handler call");
+}
+
+/* Helper for test 8 */
+static int g_other_calls = 0;
+static void capture_other(const char *m) { (void)m; g_other_calls++; }
+
+/* 8. Handler registration replaces previous handler */
+TEST(print_status_handler_replaced)
+{
+    setup_msg_000();
+    reset_status_capture();
+    g_other_calls = 0;
+
+    rufus_set_status_handler(capture_other);
+    rufus_set_status_handler(test_status_handler); /* replace */
+
+    PrintStatusInfo(FALSE, FALSE, 0, MSG_000, 0);
+
+    rufus_set_status_handler(NULL);
+    exit_localization();
+
+    CHECK_MSG(g_status_calls == 1, "new handler must be called once");
+    CHECK_MSG(g_other_calls == 0,  "replaced handler must NOT be called");
+}
+
+/* 9. Multiple calls accumulate in the handler */
+TEST(print_status_multiple_calls)
+{
+    setup_msg_000();
+    reset_status_capture();
+    rufus_set_status_handler(test_status_handler);
+
+    PrintStatusInfo(FALSE, FALSE, 0, MSG_000, 1);
+    PrintStatusInfo(FALSE, FALSE, 0, MSG_000, 2);
+    PrintStatusInfo(FALSE, FALSE, 0, MSG_000, 3);
+
+    rufus_set_status_handler(NULL);
+    exit_localization();
+
+    CHECK_MSG(g_status_calls == 3, "handler must be called once per PrintStatusInfo");
+}
+
+/* 10. PrintStatus convenience macro routes through PrintStatusInfo */
+TEST(print_status_macro_calls_handler)
+{
+    setup_msg_000();
+    reset_status_capture();
+    rufus_set_status_handler(test_status_handler);
+
+    PrintStatus(0, MSG_000, 0);
+
+    rufus_set_status_handler(NULL);
+    exit_localization();
+
+    CHECK_MSG(g_status_calls >= 1, "PrintStatus macro must invoke handler");
+}
+
+/* ================================================================== */
 /* main                                                                 */
 /* ================================================================== */
 int main(void)
@@ -285,6 +494,17 @@ int main(void)
     RUN(apply_loc_ids_label_does_not_crash);
 
     RUN(reset_localization_does_not_crash);
+
+    RUN(print_status_handler_called);
+    RUN(print_status_handler_receives_text);
+    RUN(print_status_null_handler_no_crash);
+    RUN(print_status_out_of_range_msg_id);
+    RUN(print_status_negative_msg_id);
+    RUN(print_status_info_true_calls_handler);
+    RUN(print_status_duration_ignored);
+    RUN(print_status_handler_replaced);
+    RUN(print_status_multiple_calls);
+    RUN(print_status_macro_calls_handler);
 
     TEST_RESULTS();
 }

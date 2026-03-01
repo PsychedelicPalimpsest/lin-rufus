@@ -18,6 +18,8 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include <stdarg.h>
 #include <assert.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -29,6 +31,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 /* Declare GetDevicesWithRoot without pulling in dev.h (which has a non-extern GUID
  * that causes multiple-definition errors when included in more than one TU). */
 extern BOOL GetDevicesWithRoot(DWORD devnum, const char* sysfs_root, const char* dev_root);
+extern BOOL GetOpticalMediaWithRoot(const char* dev_root, IMG_SAVE* img_save);
 extern void ClearDrives(void);
 #include "resource.h"
 
@@ -1144,6 +1147,181 @@ static void test_clear_drives_idempotent(void)
 	CHECK(count_drives() == 0);
 }
 
+/* ===== GetOpticalMedia tests ===== */
+
+/* Helper: create a fake disc image file at dev_root/name */
+static void make_fake_disc(const char* dev_root, const char* name, int64_t size, const char* label)
+{
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/%s", dev_root, name);
+	int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	assert(fd >= 0);
+	/* Seek to last byte to establish file size */
+	lseek(fd, size - 1, SEEK_SET);
+	write(fd, "\0", 1);
+	/* Write ISO label at 0x8028 if provided */
+	if (label != NULL && (int64_t)(0x8028 + 32) <= size) {
+		char lbuf[32];
+		memset(lbuf, ' ', 32);
+		size_t llen = strlen(label);
+		if (llen > 32) llen = 32;
+		memcpy(lbuf, label, llen);
+		lseek(fd, 0x8028LL, SEEK_SET);
+		write(fd, lbuf, 32);
+	}
+	close(fd);
+}
+
+/* 41. No optical drives: returns FALSE */
+static void test_optical_no_sr_devices(void)
+{
+	char dev[64];
+	snprintf(dev, sizeof(dev), "/tmp/rufus_opt_XXXXXX");
+	assert(mkdtemp(dev) != NULL);
+
+	IMG_SAVE img = {0};
+	BOOL r = GetOpticalMediaWithRoot(dev, &img);
+	CHECK(r == FALSE);
+
+	rmdir(dev);
+}
+
+/* 42. Non-existent dev root: returns FALSE */
+static void test_optical_nonexistent_root(void)
+{
+	IMG_SAVE img = {0};
+	BOOL r = GetOpticalMediaWithRoot("/tmp/rufus_no_such_dir_XXXXXX", &img);
+	CHECK(r == FALSE);
+}
+
+/* 43. sr0 too small (≤ 4096 bytes): returns FALSE */
+static void test_optical_sr_too_small(void)
+{
+	char dev[64];
+	snprintf(dev, sizeof(dev), "/tmp/rufus_opt_XXXXXX");
+	assert(mkdtemp(dev) != NULL);
+
+	make_fake_disc(dev, "sr0", 4096, NULL);
+
+	IMG_SAVE img = {0};
+	BOOL r = GetOpticalMediaWithRoot(dev, &img);
+	CHECK(r == FALSE);
+
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/sr0", dev);
+	unlink(path);
+	rmdir(dev);
+}
+
+/* 44. sr0 valid size, no ISO label: returns TRUE, no label */
+static void test_optical_sr_valid_no_label(void)
+{
+	char dev[64];
+	snprintf(dev, sizeof(dev), "/tmp/rufus_opt_XXXXXX");
+	assert(mkdtemp(dev) != NULL);
+
+	/* 700 MB disc, no label content */
+	make_fake_disc(dev, "sr0", 700 * 1024 * 1024LL, NULL);
+
+	IMG_SAVE img = {0};
+	BOOL r = GetOpticalMediaWithRoot(dev, &img);
+	CHECK(r == TRUE);
+	CHECK(img.DeviceSize == 700 * 1024 * 1024LL);
+	/* Label should be NULL (all zeros → stripped to empty → NULL) */
+	CHECK(img.Label == NULL);
+
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/sr0", dev);
+	unlink(path);
+	rmdir(dev);
+}
+
+/* 45. sr0 valid disc with ISO 9660 label: returns TRUE, label set */
+static void test_optical_sr_with_label(void)
+{
+	char dev[64];
+	snprintf(dev, sizeof(dev), "/tmp/rufus_opt_XXXXXX");
+	assert(mkdtemp(dev) != NULL);
+
+	make_fake_disc(dev, "sr0", 700 * 1024 * 1024LL, "MY_DISC");
+
+	IMG_SAVE img = {0};
+	BOOL r = GetOpticalMediaWithRoot(dev, &img);
+	CHECK(r == TRUE);
+	CHECK(img.Label != NULL);
+	CHECK(strcmp(img.Label, "MY_DISC") == 0);
+
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/sr0", dev);
+	unlink(path);
+	rmdir(dev);
+}
+
+/* 46. DevicePath is set on success */
+static void test_optical_device_path_set(void)
+{
+	char dev[64];
+	snprintf(dev, sizeof(dev), "/tmp/rufus_opt_XXXXXX");
+	assert(mkdtemp(dev) != NULL);
+
+	make_fake_disc(dev, "sr0", 700 * 1024 * 1024LL, NULL);
+
+	IMG_SAVE img = {0};
+	BOOL r = GetOpticalMediaWithRoot(dev, &img);
+	CHECK(r == TRUE);
+	CHECK(img.DevicePath != NULL);
+	/* Path should contain "sr0" */
+	CHECK(strstr(img.DevicePath, "sr0") != NULL);
+
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/sr0", dev);
+	unlink(path);
+	rmdir(dev);
+}
+
+/* 47. Skips too-small sr0, finds valid sr1 */
+static void test_optical_skips_small_picks_next(void)
+{
+	char dev[64];
+	snprintf(dev, sizeof(dev), "/tmp/rufus_opt_XXXXXX");
+	assert(mkdtemp(dev) != NULL);
+
+	make_fake_disc(dev, "sr0", 512, NULL);           /* too small */
+	make_fake_disc(dev, "sr1", 700 * 1024 * 1024LL, "DISC2");
+
+	IMG_SAVE img = {0};
+	BOOL r = GetOpticalMediaWithRoot(dev, &img);
+	CHECK(r == TRUE);
+	CHECK(img.Label != NULL);
+	CHECK(strcmp(img.Label, "DISC2") == 0);
+
+	char path0[PATH_MAX], path1[PATH_MAX];
+	snprintf(path0, sizeof(path0), "%s/sr0", dev);
+	snprintf(path1, sizeof(path1), "%s/sr1", dev);
+	unlink(path0); unlink(path1);
+	rmdir(dev);
+}
+
+/* 48. Non-sr entries in dev_root are ignored */
+static void test_optical_non_sr_ignored(void)
+{
+	char dev[64];
+	snprintf(dev, sizeof(dev), "/tmp/rufus_opt_XXXXXX");
+	assert(mkdtemp(dev) != NULL);
+
+	/* sda would be a USB drive, not optical */
+	make_fake_disc(dev, "sda", 700 * 1024 * 1024LL, "USB");
+
+	IMG_SAVE img = {0};
+	BOOL r = GetOpticalMediaWithRoot(dev, &img);
+	CHECK(r == FALSE);
+
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/sda", dev);
+	unlink(path);
+	rmdir(dev);
+}
+
 /* ===== main ===== */
 int main(void)
 {
@@ -1189,6 +1367,16 @@ int main(void)
 	test_drive_indices_are_contiguous();
 	test_enable_hdds_includes_both_types();
 	test_clear_drives_idempotent();
+
+	printf("\n  GetOpticalMedia\n");
+	test_optical_no_sr_devices();
+	test_optical_nonexistent_root();
+	test_optical_sr_too_small();
+	test_optical_sr_valid_no_label();
+	test_optical_sr_with_label();
+	test_optical_device_path_set();
+	test_optical_skips_small_picks_next();
+	test_optical_non_sr_ignored();
 
 	printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

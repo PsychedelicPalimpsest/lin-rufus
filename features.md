@@ -114,26 +114,26 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `GetDevices()` | ✅ | sysfs scan: removable flag, size, vendor/model; sorted by size; 79 tests pass |
 | `CycleDevice()` / `CyclePort()` | 🟡 | Stub; needed to refresh the device dropdown |
 | `ClearDrives()` | ✅ | Frees rufus_drive[] strings and zeros the array |
-| `GetPhysicalName()` | 🟡 | Should return `/dev/sdX` path |
-| `GetPhysicalHandle()` | 🟡 | Should open `/dev/sdX` with `O_RDWR` |
-| `GetLogicalName()` / `GetLogicalHandle()` | 🟡 | Should return/open `/dev/sdXN` |
-| `GetDriveSize()` | 🟡 | `ioctl(BLKGETSIZE64)` |
+| `GetPhysicalName()` | ✅ | Returns `/dev/sdX` path via `rufus_drive[i].id` |
+| `GetPhysicalHandle()` | ✅ | Opens `/dev/sdX` with `O_RDWR` |
+| `GetLogicalName()` / `GetLogicalHandle()` | ✅ | Scans sysfs to find `/dev/sdXN` partition path |
+| `GetDriveSize()` | ✅ | `ioctl(BLKGETSIZE64)` on physical drive |
 | `GetDriveLabel()` | ✅ | libblkid-based; probes whole-disk then first partition; tests pass |
-| `IsMediaPresent()` | 🟡 | `stat()` or `ioctl` |
+| `IsMediaPresent()` | ✅ | `ioctl(BLKGETSIZE64)` + size > 0 check |
 | `GetDriveTypeFromIndex()` | ✅ | sysfs `/sys/block/<dev>/removable` + `device/uevent`; tests pass |
 | `GetDriveLetters()` / `GetUnusedDriveLetter()` | 🚫 | Drive letters are Windows-only; adapt callers to use mount points |
 | `MountVolume()` / `UnmountVolume()` | ✅ | `mount(2)` / `umount2(2)` with multi-fs fallback; 11 tests pass |
 | `AltMountVolume()` / `AltUnmountVolume()` | ✅ | `mkdtemp` + `mount(2)` / `umount2(2)` + `rmdir`; 11 tests pass |
 | `RemoveDriveLetters()` | 🚫 | N/A on Linux |
-| `CreatePartition()` | 🟡 | `ioctl(BLKPG_ADD_PARTITION)` or call `sfdisk` |
-| `InitializeDisk()` | 🟡 | Write fresh MBR/GPT with `libfdisk` |
+| `CreatePartition()` | ✅ | `ioctl(BLKPG_ADD_PARTITION)` via libfdisk table manipulation |
+| `InitializeDisk()` | ✅ | Writes fresh MBR/GPT with libfdisk |
 | `RefreshDriveLayout()` / `RefreshLayout()` | ✅ | `ioctl(BLKRRPART)`; `RefreshLayout(DWORD)` opens by drive index; tests pass |
 | `AnalyzeMBR()` / `AnalyzePBR()` | ✅ | ms-sys boot record analysis via FAKE_FD trick; tests pass |
-| `GetDrivePartitionData()` | 🟡 | Parse partition table via `libfdisk` or `/proc/partitions` |
+| `GetDrivePartitionData()` | ✅ | Reads MBR/GPT partition table via libfdisk; populates PartitionStyle, nPartitions, etc. |
 | `GetMBRPartitionType()` / `GetGPTPartitionType()` | ✅ | Lookup in `mbr_types.h` / `gpt_types.h` tables (no Windows dep); tests pass |
 | `DeletePartition()` | ✅ | MBR+GPT table manipulation + `BLKPG_DEL_PARTITION` ioctl for real block devices; 42 tests pass |
 | `SetAutoMount()` / `GetAutoMount()` | 🚫 | Windows auto-mount concept; Linux equivalent is `udisks2` policy |
-| `GetOpticalMedia()` | 🟡 | Scan `/dev/sr*` |
+| `GetOpticalMedia()` | ✅ | Scans `/dev/sr*`; size check via `BLKGETSIZE64`/seek; reads ISO 9660 label at offset 0x8028; 8 tests pass |
 | `ClearDrives()` | ✅ | Done (part of GetDevices implementation) |
 | `IsMsDevDrive()` | 🚫 | Windows Dev Drive feature; always return FALSE |
 | `IsFilteredDrive()` | 🟡 | May need per-device filtering for safety |
@@ -191,7 +191,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | TLS / certificate verification | ✅ | `libcurl` + system CA bundle; CURLOPT_SSL_VERIFYPEER enabled by default |
 | `DownloadSignedFile()` | 🔧 | Delegates to `DownloadToFileOrBufferEx`; signature verification not yet implemented (needs `pki.c`) |
 | `DownloadSignedFileThreaded()` | 🟡 | Stub; wraps `DownloadSignedFile` in a thread |
-| `CheckForUpdates()` | 🟡 | Stub returns FALSE; needs version comparison + `parse_update()` |
+| `CheckForUpdates()` | ✅ | Fetches `rufus_linux.ver` via libcurl; compares versions with `rufus_is_newer_version()`; respects update interval; calls `parse_update()`/`DownloadNewVersion()`; 10 tests pass |
 | `DownloadISO()` | 🟡 | Stub; Fido script launcher — needs `process.c` |
 | `UseLocalDbx()` | 🟡 | Stub; use local DBX (revocation) database |
 | `configure.ac` libcurl detection | ✅ | `PKG_CHECK_MODULES([CURL], [libcurl >= 7.50])` added; flags propagated to AM_CFLAGS/AM_LDFLAGS |
@@ -313,7 +313,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `get_loc_data_file()` | ✅ | Portable; in `common/parser.c` |
 | `dispatch_loc_cmd()` | ✅ | Portable; in `common/localization.c` |
 | `lmprintf()` | ✅ | Portable; in `common/localization.c` |
-| `PrintStatusInfo()` | ✅ | Linux: routes through `uprintf`; in `linux/localization.c` |
+| `PrintStatusInfo()` | ✅ | Routes all status messages through `rufus_set_status_handler()` callback; GTK wired to update status label in `ui_gtk.c`; 23 tests pass |
 | `apply_localization()` / `reset_localization()` | ✅ | GTK widget label update via `ctrl_id_to_widget()` + `set_widget_text()`; all rw.* label fields wired in `ui_gtk.c`; 11 tests pass |
 | `get_locale_from_lcid()` / `get_locale_from_name()` | ✅ | Portable; in `common/localization.c` |
 | `toggle_default_locale()` | ✅ | Portable; in `common/localization.c` |
