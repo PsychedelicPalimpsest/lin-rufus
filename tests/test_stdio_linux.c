@@ -317,6 +317,254 @@ TEST(windows_error_string_without_setlasterror)
 }
 
 /* ===========================================================================
+ * windows_dword_to_errno mapping — verify each DWORD maps to the correct
+ * errno-based string by calling _StrError with a non-FACILITY_STORAGE IS_ERROR
+ * code (0x80000000 | ERROR_X) which routes through windows_dword_to_errno.
+ *
+ * SCODE_CODE(0x80000000|N) == N, SCODE_FACILITY == 0 (not FACILITY_STORAGE=3).
+ * =========================================================================*/
+
+/* Helper: build a non-FACILITY_STORAGE IS_ERROR code from a plain DWORD */
+#define NON_STORAGE_ERR(code) ((DWORD)(0x80000000u | (DWORD)(code)))
+
+TEST(dword_map_file_not_found_gives_enoent_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_FILE_NOT_FOUND));
+    CHECK_MSG(s != NULL, "ERROR_FILE_NOT_FOUND must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ENOENT)) == 0, "ERROR_FILE_NOT_FOUND must map to ENOENT string");
+}
+
+TEST(dword_map_path_not_found_gives_enoent_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_PATH_NOT_FOUND));
+    CHECK_MSG(s != NULL, "ERROR_PATH_NOT_FOUND must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ENOENT)) == 0, "ERROR_PATH_NOT_FOUND must map to ENOENT string");
+}
+
+TEST(dword_map_too_many_open_files_gives_emfile_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_TOO_MANY_OPEN_FILES));
+    CHECK_MSG(s != NULL, "ERROR_TOO_MANY_OPEN_FILES must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(EMFILE)) == 0, "ERROR_TOO_MANY_OPEN_FILES must map to EMFILE string");
+}
+
+TEST(dword_map_access_denied_gives_eacces_string)
+{
+    /* Non-FACILITY_STORAGE access denied maps through windows_dword_to_errno */
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_ACCESS_DENIED));
+    CHECK_MSG(s != NULL, "ERROR_ACCESS_DENIED (non-storage) must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(EACCES)) == 0, "ERROR_ACCESS_DENIED must map to EACCES string");
+}
+
+TEST(dword_map_invalid_handle_gives_ebadf_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_INVALID_HANDLE));
+    CHECK_MSG(s != NULL, "ERROR_INVALID_HANDLE must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(EBADF)) == 0, "ERROR_INVALID_HANDLE must map to EBADF string");
+}
+
+TEST(dword_map_not_enough_memory_gives_enomem_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_NOT_ENOUGH_MEMORY));
+    CHECK_MSG(s != NULL, "ERROR_NOT_ENOUGH_MEMORY must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ENOMEM)) == 0, "ERROR_NOT_ENOUGH_MEMORY must map to ENOMEM string");
+}
+
+TEST(dword_map_outofmemory_gives_enomem_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_OUTOFMEMORY));
+    CHECK_MSG(s != NULL, "ERROR_OUTOFMEMORY must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ENOMEM)) == 0, "ERROR_OUTOFMEMORY must map to ENOMEM string");
+}
+
+TEST(dword_map_write_protect_gives_erofs_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_WRITE_PROTECT));
+    CHECK_MSG(s != NULL, "ERROR_WRITE_PROTECT (non-storage) must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(EROFS)) == 0, "ERROR_WRITE_PROTECT must map to EROFS string");
+}
+
+TEST(dword_map_no_more_files_gives_enoent_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_NO_MORE_FILES));
+    CHECK_MSG(s != NULL, "ERROR_NO_MORE_FILES must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ENOENT)) == 0, "ERROR_NO_MORE_FILES must map to ENOENT string");
+}
+
+TEST(dword_map_write_fault_gives_eio_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_WRITE_FAULT));
+    CHECK_MSG(s != NULL, "ERROR_WRITE_FAULT must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(EIO)) == 0, "ERROR_WRITE_FAULT must map to EIO string");
+}
+
+TEST(dword_map_read_fault_gives_eio_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_READ_FAULT));
+    CHECK_MSG(s != NULL, "ERROR_READ_FAULT must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(EIO)) == 0, "ERROR_READ_FAULT must map to EIO string");
+}
+
+TEST(dword_map_not_supported_gives_enotsup_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_NOT_SUPPORTED));
+    CHECK_MSG(s != NULL, "ERROR_NOT_SUPPORTED must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ENOTSUP)) == 0, "ERROR_NOT_SUPPORTED must map to ENOTSUP string");
+}
+
+TEST(dword_map_file_exists_gives_eexist_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_FILE_EXISTS));
+    CHECK_MSG(s != NULL, "ERROR_FILE_EXISTS must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(EEXIST)) == 0, "ERROR_FILE_EXISTS must map to EEXIST string");
+}
+
+TEST(dword_map_invalid_parameter_gives_einval_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_INVALID_PARAMETER));
+    CHECK_MSG(s != NULL, "ERROR_INVALID_PARAMETER must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(EINVAL)) == 0, "ERROR_INVALID_PARAMETER must map to EINVAL string");
+}
+
+TEST(dword_map_insufficient_buffer_gives_enobufs_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_INSUFFICIENT_BUFFER));
+    CHECK_MSG(s != NULL, "ERROR_INSUFFICIENT_BUFFER must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ENOBUFS)) == 0, "ERROR_INSUFFICIENT_BUFFER must map to ENOBUFS string");
+}
+
+TEST(dword_map_not_ready_gives_enodev_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_NOT_READY));
+    CHECK_MSG(s != NULL, "ERROR_NOT_READY (non-storage) must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ENODEV)) == 0, "ERROR_NOT_READY must map to ENODEV string");
+}
+
+TEST(dword_map_device_in_use_gives_ebusy_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_DEVICE_IN_USE));
+    CHECK_MSG(s != NULL, "ERROR_DEVICE_IN_USE (non-storage) must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(EBUSY)) == 0, "ERROR_DEVICE_IN_USE must map to EBUSY string");
+}
+
+TEST(dword_map_open_failed_gives_enoent_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_OPEN_FAILED));
+    CHECK_MSG(s != NULL, "ERROR_OPEN_FAILED must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ENOENT)) == 0, "ERROR_OPEN_FAILED must map to ENOENT string");
+}
+
+TEST(dword_map_cancelled_gives_ecanceled_string)
+{
+    const char* s = _StrError(NON_STORAGE_ERR(ERROR_CANCELLED));
+    CHECK_MSG(s != NULL, "ERROR_CANCELLED (non-storage) must map to non-NULL string");
+    CHECK_MSG(strcmp(s, strerror(ECANCELED)) == 0, "ERROR_CANCELLED must map to ECANCELED string");
+}
+
+/* FACILITY_STORAGE cases — verify each returns a non-empty string */
+TEST(storage_err_gen_failure_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_GEN_FAILURE));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(GEN_FAILURE) must return non-empty");
+}
+
+TEST(storage_err_incompatible_fs_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_INCOMPATIBLE_FS));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(INCOMPATIBLE_FS) must return non-empty");
+}
+
+TEST(storage_err_device_in_use_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_DEVICE_IN_USE));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(DEVICE_IN_USE) must return non-empty");
+}
+
+TEST(storage_err_cant_quick_format_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_CANT_QUICK_FORMAT));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(CANT_QUICK_FORMAT) must return non-empty");
+}
+
+TEST(storage_err_label_too_long_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_LABEL_TOO_LONG));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(LABEL_TOO_LONG) must return non-empty");
+}
+
+TEST(storage_err_invalid_cluster_size_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_INVALID_CLUSTER_SIZE));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(INVALID_CLUSTER_SIZE) must return non-empty");
+}
+
+TEST(storage_err_no_media_in_drive_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_NO_MEDIA_IN_DRIVE));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(NO_MEDIA_IN_DRIVE) must return non-empty");
+}
+
+TEST(storage_err_not_enough_memory_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_NOT_ENOUGH_MEMORY));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(NOT_ENOUGH_MEMORY) must return non-empty");
+}
+
+TEST(storage_err_cancelled_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_CANCELLED));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(CANCELLED) must return non-empty");
+}
+
+TEST(storage_err_cant_start_thread_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_CANT_START_THREAD));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(CANT_START_THREAD) must return non-empty");
+}
+
+TEST(storage_err_iso_scan_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_ISO_SCAN));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(ISO_SCAN) must return non-empty");
+}
+
+TEST(storage_err_iso_extract_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_ISO_EXTRACT));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(ISO_EXTRACT) must return non-empty");
+}
+
+TEST(storage_err_bad_signature_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_BAD_SIGNATURE));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(BAD_SIGNATURE) must return non-empty");
+}
+
+TEST(storage_err_cant_download_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_CANT_DOWNLOAD));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(CANT_DOWNLOAD) must return non-empty");
+}
+
+TEST(storage_err_partition_failure_non_empty)
+{
+    const char* s = _StrError(RUFUS_ERROR(ERROR_PARTITION_FAILURE));
+    CHECK_MSG(s != NULL && s[0] != '\0', "RUFUS_ERROR(PARTITION_FAILURE) must return non-empty");
+}
+
+TEST(storage_errors_give_distinct_strings)
+{
+    const char* s1 = _StrError(RUFUS_ERROR(ERROR_ACCESS_DENIED));
+    const char* s2 = _StrError(RUFUS_ERROR(ERROR_WRITE_PROTECT));
+    const char* s3 = _StrError(RUFUS_ERROR(ERROR_DEVICE_IN_USE));
+    const char* s4 = _StrError(RUFUS_ERROR(ERROR_CANCELLED));
+    CHECK_MSG(s1 && s2 && s3 && s4, "all storage errors must return non-NULL");
+    CHECK_MSG(strcmp(s1, s2) != 0, "ACCESS_DENIED != WRITE_PROTECT");
+    CHECK_MSG(strcmp(s2, s3) != 0, "WRITE_PROTECT != DEVICE_IN_USE");
+    CHECK_MSG(strcmp(s3, s4) != 0, "DEVICE_IN_USE != CANCELLED");
+}
+
+/* ===========================================================================
  * 14–18. Log handler routing
  * uprintf() should call a registered handler instead of writing to stderr.
  * =========================================================================*/
@@ -817,6 +1065,45 @@ int main(void)
     RUN(strerror_non_storage_code_returns_non_null);
     RUN(setlasterror_affects_windows_error_string);
     RUN(windows_error_string_without_setlasterror);
+
+    printf("\n  windows_dword_to_errno — per-constant mapping\n");
+    RUN(dword_map_file_not_found_gives_enoent_string);
+    RUN(dword_map_path_not_found_gives_enoent_string);
+    RUN(dword_map_too_many_open_files_gives_emfile_string);
+    RUN(dword_map_access_denied_gives_eacces_string);
+    RUN(dword_map_invalid_handle_gives_ebadf_string);
+    RUN(dword_map_not_enough_memory_gives_enomem_string);
+    RUN(dword_map_outofmemory_gives_enomem_string);
+    RUN(dword_map_write_protect_gives_erofs_string);
+    RUN(dword_map_no_more_files_gives_enoent_string);
+    RUN(dword_map_write_fault_gives_eio_string);
+    RUN(dword_map_read_fault_gives_eio_string);
+    RUN(dword_map_not_supported_gives_enotsup_string);
+    RUN(dword_map_file_exists_gives_eexist_string);
+    RUN(dword_map_invalid_parameter_gives_einval_string);
+    RUN(dword_map_insufficient_buffer_gives_enobufs_string);
+    RUN(dword_map_not_ready_gives_enodev_string);
+    RUN(dword_map_device_in_use_gives_ebusy_string);
+    RUN(dword_map_open_failed_gives_enoent_string);
+    RUN(dword_map_cancelled_gives_ecanceled_string);
+
+    printf("\n  _StrError FACILITY_STORAGE cases\n");
+    RUN(storage_err_gen_failure_non_empty);
+    RUN(storage_err_incompatible_fs_non_empty);
+    RUN(storage_err_device_in_use_non_empty);
+    RUN(storage_err_cant_quick_format_non_empty);
+    RUN(storage_err_label_too_long_non_empty);
+    RUN(storage_err_invalid_cluster_size_non_empty);
+    RUN(storage_err_no_media_in_drive_non_empty);
+    RUN(storage_err_not_enough_memory_non_empty);
+    RUN(storage_err_cancelled_non_empty);
+    RUN(storage_err_cant_start_thread_non_empty);
+    RUN(storage_err_iso_scan_non_empty);
+    RUN(storage_err_iso_extract_non_empty);
+    RUN(storage_err_bad_signature_non_empty);
+    RUN(storage_err_cant_download_non_empty);
+    RUN(storage_err_partition_failure_non_empty);
+    RUN(storage_errors_give_distinct_strings);
     RUN(uprintf_calls_registered_handler);
     RUN(uprintf_formats_multiple_args);
     RUN(uprintf_no_crash_without_handler);
