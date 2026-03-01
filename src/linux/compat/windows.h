@@ -601,6 +601,9 @@ static __inline int strncat_s(char* dest, size_t destsz, const char* src, size_t
     return 0;
 }
 #endif
+#ifndef StrStrIA
+#define StrStrIA(haystack, needle) strcasestr((haystack), (needle))
+#endif
 #ifndef _strdup
 #define _strdup strdup
 #endif

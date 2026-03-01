@@ -356,10 +356,11 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `Identify()` | 🟡 | Issue ATA IDENTIFY via `ioctl(HDIO_GET_IDENTITY)` or `SG_IO` |
-| `SmartGetVersion()` | 🟡 | Issue ATA SMART READ DATA via `SG_IO` |
-| `IsHDD()` | 🟡 | Determine if device is an HDD from IDENTIFY data |
-| `SptStrerr()` | 🟡 | Translate SCSI/ATA error to string |
+| `Identify()` | ✅ | ATA IDENTIFY via `SG_IO`; debug-only (`RUFUS_TEST`) |
+| `SmartGetVersion()` | ✅ | Stub returns FALSE (dead code on Windows too; `#if 0`) |
+| `IsHDD()` | ✅ | Ported verbatim; uses `StrStrIA` added to compat layer |
+| `SptStrerr()` | ✅ | Ported verbatim |
+| `ScsiPassthroughDirect()` | ✅ | Linux uses `SG_IO` ioctl instead of `IOCTL_SCSI_PASS_THROUGH_DIRECT` |
 
 ### 3p. Bad Blocks (`badblocks.c`)
 
@@ -458,7 +459,7 @@ This is the most structurally significant porting gap.
 11. ~~**Networking** (`net.c`)~~ ✅ **DONE** — `IsDownloadable` + `DownloadToFileOrBufferEx` implemented with libcurl; 45 tests pass; `configure.ac` updated with `PKG_CHECK_MODULES` for libcurl; stubs remain for `CheckForUpdates`/`DownloadISO`/`DownloadSignedFileThreaded`
 12. **PKI / signatures** (`pki.c`) — replace `WinTrust` with OpenSSL
 13. ~~**Bad blocks** (`badblocks.c`)~~ ✅ **DONE** — full POSIX port using `pread`/`pwrite`/`posix_memalign`/`clock_gettime`; bad-block list management ported verbatim; `ERROR_OBJECT_IN_LIST` added to compat; 43 tests pass
-14. **S.M.A.R.T.** (`smart.c`) — `SG_IO` ioctl
+14. ~~**S.M.A.R.T.** (`smart.c`)~~ ✅ **DONE** — `ScsiPassthroughDirect` uses `SG_IO` ioctl; `IsHDD()` ported verbatim with `StrStrIA` added to compat; 25 tests pass
 15. **WIM / VHD** (`vhd.c`, `wue.c`) — `wimlib` is bundled; VHD needs `nbd`
 16. ~~**Settings persistence**~~ ✅ **DONE** — `FileIO()` implemented, `set_token_data_file()` fixed for new files, `src/linux/settings.h` with full `ReadSetting*`/`WriteSetting*` API, `rufus_init_paths()` with XDG paths, wired into `on_app_activate()`; 74 tests pass
 17. **Elevation / polkit** — for proper desktop integration

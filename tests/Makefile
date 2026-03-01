@@ -238,6 +238,15 @@ CFLAGS_LINUX_test_badblocks_linux := \
 LDFLAGS_LINUX_test_badblocks_linux := -lrt
 EXTRA_SRC_LINUX_test_badblocks_linux := $(BADBLOCKS_LINUX_SRC)
 
+# smart_linux tests: SMART HDD/UFD detection via SG_IO
+CFLAGS_LINUX_test_smart_linux := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_smart_linux :=
+EXTRA_SRC_LINUX_test_smart_linux := $(SRC_DIR)/linux/smart.c
+
 .PHONY: all linux windows run-linux run-wine clean
 
 all: linux windows
