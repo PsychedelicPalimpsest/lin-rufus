@@ -176,7 +176,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `DetectSHA1Acceleration()` / `DetectSHA256Acceleration()` | ✅ | x86 CPUID check is platform-neutral; works on Linux |
 | `HashFile()` / `HashBuffer()` | ✅ | Implemented in `src/linux/hash.c` with POSIX `open`/`read` |
 | `HashThread()` / `IndividualHashThread()` | ✅ | Implemented with pthread via compat layer; 78 tests passing |
-| `PE256Buffer()` / `efi_image_parse()` | 🟡 | PE parsing is pure C; remove Windows I/O |
+| `PE256Buffer()` / `efi_image_parse()` | ✅ | Pure C PE parsing ported from `src/windows/hash.c`; helper structs (`image_region`, `efi_image_regions`) and `efi_image_region_add`/`cmp_pe_section` added to `src/linux/hash.c`; 9 tests pass |
 | `IsFileInDB()` / `IsBufferInDB()` | ✅ | Hash database lookup implemented in `src/linux/hash.c` |
 | `IsSignedBySecureBootAuthority()` / `IsBootloaderRevoked()` | 🟡 | Needs cert DB + SBAT parsing; uses `pki.c` |
 | `UpdateMD5Sum()` | ✅ | Reads md5sum.txt, recomputes MD5 for each `modified_files` entry, patches hex in-place, writes back; bootloader rename (`GetResource`/IDR_MD5_BOOT) is Windows-only and intentionally omitted; 4 tests pass |

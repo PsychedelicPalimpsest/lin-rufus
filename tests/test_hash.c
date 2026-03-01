@@ -366,6 +366,57 @@ extern BOOL   validate_md5sum;
 extern uint64_t md5sum_totalbytes;
 extern StrArray modified_files;
 
+/* Forward declarations for PE256Buffer / efi_image_parse (defined in hash.c) */
+struct image_region { const uint8_t *data; uint32_t size; };
+struct efi_image_regions { int max; int num; struct image_region reg[]; };
+extern BOOL efi_image_parse(uint8_t *efi, size_t len, struct efi_image_regions **regp);
+extern BOOL PE256Buffer(uint8_t *buf, uint32_t len, uint8_t *hash);
+
+/* Build a minimal 1024-byte PE32+ image suitable for PE256Buffer testing */
+static uint8_t *make_pe64(size_t *out_len)
+{
+	const size_t total = 1024;
+	const DWORD hdr_size = 512;    /* SizeOfHeaders, file-aligned */
+	const DWORD file_align = 512;
+	const size_t nt_off = 64;      /* e_lfanew */
+
+	uint8_t *buf = calloc(total, 1);
+	if (!buf) return NULL;
+
+	IMAGE_DOS_HEADER *dos = (void *)buf;
+	dos->e_magic = IMAGE_DOS_SIGNATURE;
+	dos->e_lfanew = (LONG)nt_off;
+
+	IMAGE_NT_HEADERS64 *nt = (void *)(buf + nt_off);
+	nt->Signature = IMAGE_NT_SIGNATURE;
+	nt->FileHeader.Machine = 0x8664;
+	nt->FileHeader.NumberOfSections = 1;
+	nt->FileHeader.SizeOfOptionalHeader = (WORD)sizeof(IMAGE_OPTIONAL_HEADER64);
+
+	IMAGE_OPTIONAL_HEADER64 *opt = &nt->OptionalHeader;
+	opt->Magic = IMAGE_NT_OPTIONAL_HDR64_MAGIC;
+	opt->FileAlignment = file_align;
+	opt->SectionAlignment = 0x1000;
+	opt->SizeOfHeaders = hdr_size;
+	opt->SizeOfImage = (DWORD)total;
+	opt->NumberOfRvaAndSizes = IMAGE_NUMBEROF_DIRECTORY_ENTRIES;
+	/* DataDirectory zeroed → security entry size=0, so no auth trailer */
+
+	/* Section header follows the optional header */
+	size_t sec_hdr_off = nt_off + 4 + sizeof(IMAGE_FILE_HEADER) + sizeof(IMAGE_OPTIONAL_HEADER64);
+	IMAGE_SECTION_HEADER *sec = (void *)(buf + sec_hdr_off);
+	memcpy(sec->Name, ".text\0\0\0", 8);
+	sec->SizeOfRawData = 512;
+	sec->PointerToRawData = 512;
+	sec->VirtualAddress = 0x1000;
+	sec->Misc.VirtualSize = 512;
+	/* fill section data with a known pattern for determinism */
+	memset(buf + 512, 0xAA, 512);
+
+	*out_len = total;
+	return buf;
+}
+
 /* Helper: create a temp file and fill it with 'content' bytes */
 static char ht_tmp[256];
 
@@ -731,6 +782,106 @@ TEST(update_md5sum_no_crash_missing_file)
 	CHECK(1);  /* just check no crash/abort */
 }
 
+/* ====================================================================
+ * PE256Buffer / efi_image_parse tests
+ * ==================================================================== */
+
+TEST(pe256_null_buf)
+{
+	uint8_t hash[32] = {0};
+	BOOL r = PE256Buffer(NULL, 1024, hash);
+	CHECK(r == FALSE);
+}
+
+TEST(pe256_too_small)
+{
+	uint8_t data[128] = {0};
+	uint8_t hash[32] = {0};
+	BOOL r = PE256Buffer(data, sizeof(data), hash);
+	CHECK(r == FALSE);  /* < 1 KB */
+}
+
+TEST(pe256_invalid_pe)
+{
+	uint8_t data[1024];
+	memset(data, 0x55, sizeof(data));
+	uint8_t hash[32] = {0};
+	BOOL r = PE256Buffer(data, sizeof(data), hash);
+	CHECK(r == FALSE);  /* no MZ/PE signature */
+}
+
+TEST(pe256_valid_pe64)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	uint8_t hash[32] = {0};
+	BOOL r = PE256Buffer(pe, (uint32_t)len, hash);
+	CHECK(r == TRUE);
+	/* hash must be non-zero */
+	int all_zero = 1;
+	for (int i = 0; i < 32; i++) if (hash[i]) { all_zero = 0; break; }
+	CHECK(!all_zero);
+	free(pe);
+}
+
+TEST(pe256_deterministic)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	uint8_t h1[32] = {0}, h2[32] = {0};
+	BOOL r1 = PE256Buffer(pe, (uint32_t)len, h1);
+	BOOL r2 = PE256Buffer(pe, (uint32_t)len, h2);
+	CHECK(r1 == TRUE && r2 == TRUE);
+	CHECK(memcmp(h1, h2, 32) == 0);
+	free(pe);
+}
+
+TEST(efi_parse_null)
+{
+	struct efi_image_regions *regs = NULL;
+	BOOL r = efi_image_parse(NULL, 0, &regs);
+	CHECK(r == FALSE);
+}
+
+TEST(efi_parse_too_short)
+{
+	uint8_t data[64] = {0};
+	struct efi_image_regions *regs = NULL;
+	BOOL r = efi_image_parse(data, sizeof(data), &regs);
+	CHECK(r == FALSE);  /* len < 0x80 */
+}
+
+TEST(efi_parse_bad_magic)
+{
+	uint8_t data[256];
+	memset(data, 0, sizeof(data));
+	/* DOS header with valid e_lfanew but bad PE magic */
+	IMAGE_DOS_HEADER *dos = (void *)data;
+	dos->e_magic = IMAGE_DOS_SIGNATURE;
+	dos->e_lfanew = 64;
+	/* NT magic NOT set → OptionalHeader.Magic == 0 → should fail */
+	struct efi_image_regions *regs = NULL;
+	BOOL r = efi_image_parse(data, sizeof(data), &regs);
+	CHECK(r == FALSE);
+	free(regs);
+}
+
+TEST(efi_parse_valid_pe64)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	struct efi_image_regions *regs = NULL;
+	BOOL r = efi_image_parse(pe, len, &regs);
+	CHECK(r == TRUE);
+	CHECK(regs != NULL);
+	CHECK(regs->num > 0);
+	free(regs);
+	free(pe);
+}
+
 #endif /* __linux__ */
 
 int main(void)
@@ -798,6 +949,17 @@ int main(void)
 	RUN(update_md5sum_updates_hash);
 	RUN(update_md5sum_skips_unlisted_file);
 	RUN(update_md5sum_no_crash_missing_file);
+
+	printf("\n  PE256Buffer / efi_image_parse (Linux only)\n");
+	RUN(pe256_null_buf);
+	RUN(pe256_too_small);
+	RUN(pe256_invalid_pe);
+	RUN(pe256_valid_pe64);
+	RUN(pe256_deterministic);
+	RUN(efi_parse_null);
+	RUN(efi_parse_too_short);
+	RUN(efi_parse_bad_magic);
+	RUN(efi_parse_valid_pe64);
 #endif
 
 	TEST_RESULTS();
