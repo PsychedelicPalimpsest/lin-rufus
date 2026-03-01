@@ -64,6 +64,67 @@ CFLAGS_LINUX_test_dev_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/li
                                  -Wno-implicit-function-declaration -Wno-unused-function
 EXTRA_SRC_LINUX_test_dev_linux := $(DEV_LINUX_SRC)
 
+# device_monitor tests: lifecycle, callback dispatch, debounce
+DEVICE_MONITOR_SRC := $(SRC_DIR)/linux/device_monitor.c
+CFLAGS_LINUX_test_device_monitor  := -I$(SRC_DIR)/common
+LDFLAGS_LINUX_test_device_monitor := -lpthread -ludev
+EXTRA_SRC_LINUX_test_device_monitor := $(DEVICE_MONITOR_SRC)
+
+# parser tests: common parser + linux-specific file I/O parser
+PARSER_SRC := $(COMMON)/parser.c $(SRC_DIR)/linux/parser.c \
+              $(COMMON)/localization.c $(SRC_DIR)/linux/stdfn.c
+CFLAGS_LINUX_test_parser  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                              -Wno-unused-function -Wno-sign-compare \
+                              -Wno-implicit-function-declaration
+EXTRA_SRC_LINUX_test_parser := $(PARSER_SRC)
+
+# drive_linux tests: Linux drive access (GetPhysicalName, partition parsing, etc.)
+# (full entry below overrides this — kept here for clarity on variable names)
+
+# format_linux tests: FAT32 and ext2/ext3 formatting via POSIX image files
+FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
+                    $(SRC_DIR)/linux/format_fat32.c \
+                    $(SRC_DIR)/linux/format_ext.c \
+                    $(SRC_DIR)/linux/drive.c \
+                    $(SRC_DIR)/ext2fs/posix_io.c
+EXT2FS_LIB := $(SRC_DIR)/ext2fs/libext2fs.a
+FORMAT_MS_SRC := $(SRC_DIR)/ms-sys/file.c \
+                 $(SRC_DIR)/ms-sys/br.c \
+                 $(SRC_DIR)/ms-sys/fat32.c \
+                 $(SRC_DIR)/ms-sys/partition_info.c
+CFLAGS_LINUX_test_format_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_format_linux :=
+EXTRA_SRC_LINUX_test_format_linux := $(FORMAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB)
+
+# drive_linux tests: block device ops, partition parsing, GPT/MBR creation
+DRIVE_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
+                   $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
+                   $(SRC_DIR)/linux/ui.c
+CFLAGS_LINUX_test_drive_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                   -Wno-implicit-function-declaration -Wno-unused-function \
+                                   -Wno-sign-compare -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_drive_linux := $(DRIVE_LINUX_SRC)
+
+# stdio_linux tests: RunCommandWithProgress, SizeToHumanReadable, WindowsErrorString
+STDIO_LINUX_SRC := $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/stdfn.c
+CFLAGS_LINUX_test_stdio_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                   -Wno-implicit-function-declaration -Wno-unused-function \
+                                   -Wno-sign-compare -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_stdio_linux := $(STDIO_LINUX_SRC)
+
+# hash tests: MD5/SHA1/SHA256/SHA512 via linux/hash.c (which includes common/hash_algos.c)
+HASH_SRC := $(SRC_DIR)/linux/hash.c
+CFLAGS_LINUX_test_hash := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                          -I$(SRC_DIR)/common \
+                          -Wno-unused-function -Wno-sign-compare \
+                          -Wno-implicit-function-declaration -Wno-unused-parameter \
+                          -march=native
+EXTRA_SRC_LINUX_test_hash := $(HASH_SRC)
+
 .PHONY: all linux windows run-linux run-wine clean
 
 all: linux windows

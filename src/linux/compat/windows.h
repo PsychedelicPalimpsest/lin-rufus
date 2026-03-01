@@ -213,6 +213,15 @@ typedef void* LPVOID;
 #define FILE_CURRENT          1
 #define FILE_END              2
 
+/* ---- Drive type constants (GetDriveType / GetDriveTypeFromIndex) ---- */
+#define DRIVE_UNKNOWN       0
+#define DRIVE_NO_ROOT_DIR   1
+#define DRIVE_REMOVABLE     2
+#define DRIVE_FIXED         3
+#define DRIVE_REMOTE        4
+#define DRIVE_CDROM         5
+#define DRIVE_RAMDISK       6
+
 #define FILE_ATTRIBUTE_READONLY     0x00000001
 #define FILE_ATTRIBUTE_HIDDEN       0x00000002
 #define FILE_ATTRIBUTE_SYSTEM       0x00000004
@@ -368,11 +377,13 @@ typedef void* LPVOID;
 /* ---- Common GDI/Control IDs ---- */
 #define IDOK      1
 #define IDCANCEL  2
-#define IDYES     6
-#define IDNO      7
+#define IDABORT   3
 #define IDRETRY   4
 #define IDIGNORE  5
+#define IDYES     6
+#define IDNO      7
 #define IDCLOSE   8
+#define IDHELP    9
 
 #define MB_OK                0x00000000L
 #define MB_OKCANCEL          0x00000001L
@@ -417,6 +428,21 @@ typedef GUID FMTID;
 #define REFIID  const IID*
 #define REFCLSID const CLSID*
 #define IsEqualGUID(a,b) (memcmp((a),(b),sizeof(GUID))==0)
+
+/* ---- CoCreateGuid: generate a random GUID via /dev/urandom ---- */
+#include <fcntl.h>
+static inline HRESULT CoCreateGuid(GUID* guid) {
+    if (!guid) return E_INVALIDARG;
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) return E_FAIL;
+    ssize_t r = read(fd, guid, sizeof(*guid));
+    close(fd);
+    if (r != (ssize_t)sizeof(*guid)) return E_FAIL;
+    /* Variant bits: RFC 4122 variant 1, version 4 (random) */
+    guid->Data3 = (guid->Data3 & 0x0FFF) | 0x4000;
+    guid->Data4[0] = (guid->Data4[0] & 0x3F) | 0x80;
+    return S_OK;
+}
 
 /* ---- RECT / POINT / SIZE ---- */
 typedef struct tagPOINT { LONG x, y; } POINT, *PPOINT, *LPPOINT;
@@ -517,6 +543,15 @@ typedef struct _LIST_ENTRY { struct _LIST_ENTRY *Flink, *Blink; } LIST_ENTRY, *P
 #ifndef sprintf_s
 #define sprintf_s(buf,sz,...) snprintf(buf,sz,__VA_ARGS__)
 #endif
+#ifndef _TRUNCATE
+#define _TRUNCATE ((size_t)-1)
+#endif
+#ifndef _snprintf_s
+#define _snprintf_s(buf,sz,count,...) snprintf(buf, (count)==_TRUNCATE?(sz):(count)<(sz)?(count):(sz), __VA_ARGS__)
+#endif
+#ifndef _vsnprintf_s
+#define _vsnprintf_s(buf,sz,count,fmt,args) vsnprintf(buf, (count)==_TRUNCATE?(sz):(count)<(sz)?(count):(sz), fmt, args)
+#endif
 #ifndef strcpy_s
 #define strcpy_s(d,n,s) (strncpy(d,s,n),(d)[(n)-1]='\0',0)
 #endif
@@ -525,6 +560,18 @@ typedef struct _LIST_ENTRY { struct _LIST_ENTRY *Flink, *Blink; } LIST_ENTRY, *P
 #endif
 #ifndef strcat_s
 #define strcat_s(d,n,s) strncat(d,s,(n)-strlen(d)-1)
+#endif
+#ifndef strncat_s
+/* strncat_s(dest, destsz, src, count): append at most count chars.
+ * If count == _TRUNCATE, append as much as fits in destsz. */
+static __inline int strncat_s(char* dest, size_t destsz, const char* src, size_t count)
+{
+    size_t dlen = strlen(dest);
+    size_t avail = (destsz > dlen + 1) ? (destsz - dlen - 1) : 0;
+    size_t n = (count == (size_t)(-1) /*_TRUNCATE*/) ? avail : (count < avail ? count : avail);
+    strncat(dest, src, n);
+    return 0;
+}
 #endif
 #ifndef _strdup
 #define _strdup strdup
@@ -713,6 +760,9 @@ typedef void* FARPROC;
 #define ERROR_SEVERITY_INFORMATIONAL 0x40000000
 #define ERROR_SEVERITY_WARNING   0x80000000
 #define ERROR_SEVERITY_ERROR     0xC0000000
+#ifndef APPLICATION_ERROR_MASK
+#define APPLICATION_ERROR_MASK   0x20000000
+#endif
 
 /* Facility codes */
 #define FACILITY_NULL        0
@@ -746,6 +796,20 @@ typedef void* FARPROC;
 #define FACILITY_CONFIGURATION  33
 #define FACILITY_STATE_MANAGEMENT 34
 #define FACILITY_METADIRECTORY 35
+
+/* HRESULT / SCODE helpers */
+#ifndef SCODE_CODE
+#define SCODE_CODE(sc)       ((DWORD)(sc) & 0xFFFF)
+#endif
+#ifndef SCODE_SEVERITY
+#define SCODE_SEVERITY(sc)   (((DWORD)(sc) >> 31) & 0x1)
+#endif
+#ifndef IS_ERROR
+#define IS_ERROR(scode)      (((DWORD)(scode) >> 31) == 1)
+#endif
+#ifndef HRESULT_SEVERITY
+#define HRESULT_SEVERITY(hr) (((DWORD)(hr) >> 31) & 0x1)
+#endif
 
 /* ---- Additional error codes ---- */
 #define ERROR_TOO_MANY_OPEN_FILES    4L

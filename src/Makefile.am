@@ -27,7 +27,8 @@ windows/%_rc.o: windows/%.rc ../res/loc/embedded.loc
 	$(AM_V_WINDRES) $(AM_RCFLAGS) -i $< -o $@
 endif
 
-COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c
+COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c \
+	common/localization.c common/parser.c
 
 if TARGET_WINDOWS
 OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
@@ -42,7 +43,9 @@ LINUX_UI_SRC = linux/ui_gtk.c
 else
 LINUX_UI_SRC = linux/ui.c
 endif
-OS_SOURCES = linux/badblocks.c linux/darkmode.c linux/dev.c linux/dos.c linux/dos_locale.c \
+OS_SOURCES = linux/compat/msg_dispatch.c \
+	linux/badblocks.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
+	linux/dos.c linux/dos_locale.c \
 	linux/drive.c linux/format.c linux/format_ext.c linux/format_fat32.c linux/globals.c \
 	linux/hash.c linux/icon.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
@@ -71,9 +74,9 @@ else
 rufus_LDFLAGS = $(AM_LDFLAGS)
 if USE_GTK
 rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS)
+	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev
 else
 rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a
+	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev
 endif
 endif

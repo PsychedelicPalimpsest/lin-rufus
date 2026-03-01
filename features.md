@@ -143,13 +143,13 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `FormatThread()` (main format worker) | 🟡 | 2 060-line Windows impl; needs pthread + Linux syscalls throughout |
-| `FormatPartition()` | 🟡 | Call `mkfs.*` or format libs directly |
-| `WritePBR()` (partition boot record) | 🟡 | Write boot sector bytes via `pwrite(2)` |
-| `FormatLargeFAT32()` | 🟡 | Windows impl is self-contained; port format loop, remove Win32 I/O |
-| `FormatExtFs()` | 🟡 | Uses bundled `ext2fs` lib (already compiles); just needs real block device handle |
-| `error_message()` / `ext2fs_print_progress()` | 🟡 | Trivial wrappers once ext2fs is wired |
-| `GetExtFsLabel()` | 🟡 | `ext2fs_get_label()` |
+| `FormatThread()` (main format worker) | 🟡 | Stub; real implementation pending FormatPartition/WritePBR integration |
+| `FormatPartition()` | ✅ | Routes FAT32 → `FormatLargeFAT32`, ext2/3/4 → `FormatExtFs`; 6 tests pass |
+| `WritePBR()` (partition boot record) | ✅ | FAT32: ms-sys `write_fat_32_br` + primary/backup sectors; ext: no-op TRUE; 3 tests pass |
+| `FormatLargeFAT32()` | ✅ | Full POSIX implementation; 16 tests pass |
+| `FormatExtFs()` | ✅ | Uses bundled `ext2fs` lib; 9 tests pass |
+| `error_message()` / `ext2fs_print_progress()` | ✅ | Implemented and working |
+| `GetExtFsLabel()` | ✅ | `ext2fs_get_label()` working |
 | Quick format vs. full zero-wipe | ❌ | Write-zero loop via `pwrite` for full format |
 | Progress reporting from format thread | 🟡 | Route through `UpdateProgress()` → GTK idle |
 
@@ -291,7 +291,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Device combo population | 🟡 | Calls `GetDevices()` which is a stub |
 | Boot type combo population | 🟡 | Needs to match Windows boot type enum |
 | Partition scheme / target system / FS / cluster combos | 🟡 | Values hardcoded; need to be driven by device selection logic |
-| On-START → `FormatThread` launch | 🟡 | Format thread not wired (`format_thread` unused) |
+| On-START → `FormatThread` launch | ✅ | `CreateThread(NULL, 0, FormatThread, NULL, 0, NULL)` wired in `on_start_clicked` |
 | Cancel in-progress operation | 🟡 | `TODO` in `on_close_clicked` |
 | Language menu (`ShowLanguageMenu`) | 🟡 | `TODO` in `ui_gtk.c:718` — build GTK popover from `locale_list` |
 | `SetAccessibleName()` | 🔧 | Maps to tooltip; should use `atk_object_set_name` for true accessibility |
@@ -305,24 +305,23 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `get_supported_locales()` | 🟡 | Parse `.loc` file list; `parser.c` is stubbed |
-| `get_loc_data_file()` | 🟡 | Load locale data from embedded or on-disk `.loc` file |
-| `dispatch_loc_cmd()` | 🟡 | Apply locale string to GTK widget by ID |
-| `lmprintf()` | 🟡 | Look up message in current locale table; trivial once tables are populated |
-| `PrintStatusInfo()` | 🟡 | Route through `uprintf` + GTK status label |
-| `apply_localization()` / `reset_localization()` | 🟡 | Set widget labels for a dialog |
-| `get_locale_from_lcid()` / `get_locale_from_name()` | 🟡 | Look up in `locale_list` |
-| `toggle_default_locale()` | 🟡 | Switch between user locale and English |
-| `get_token_data_file_indexed()` / `set_token_data_file()` | 🟡 | INI-style token parser; mostly portable |
-| `get_token_data_buffer()` | 🟡 | Same |
-| `insert_section_data()` / `replace_in_token_data()` | 🟡 | String manipulation; portable |
-| `replace_char()` / `filter_chars()` / `remove_substr()` | 🟡 | Portable string utils |
-| `parse_update()` | 🟡 | Parse update JSON / INI |
-| `get_data_from_asn1()` | 🟡 | ASN.1 parser for certificates; use OpenSSL |
-| `sanitize_label()` | 🟡 | Sanitize volume label characters |
-| `GetSbatEntries()` / `GetThumbprintEntries()` | 🟡 | Parse SBAT level / thumbprint text |
-| `GetPeArch()` / `GetPeSection()` / `RvaToPhysical()` / `FindResourceRva()` / `GetPeSignatureData()` | 🟡 | PE binary parsing; pure C, no Windows deps |
-| `GetPeSignatureData()` | 🟡 | Used for Secure Boot signature extraction |
+| `get_supported_locales()` | ✅ | Portable; in `common/parser.c` |
+| `get_loc_data_file()` | ✅ | Portable; in `common/parser.c` |
+| `dispatch_loc_cmd()` | ✅ | Portable; in `common/localization.c` |
+| `lmprintf()` | ✅ | Portable; in `common/localization.c` |
+| `PrintStatusInfo()` | ✅ | Linux: routes through `uprintf`; in `linux/localization.c` |
+| `apply_localization()` / `reset_localization()` | 🟡 | Linux stub exists; GTK widget label application not yet wired |
+| `get_locale_from_lcid()` / `get_locale_from_name()` | ✅ | Portable; in `common/localization.c` |
+| `toggle_default_locale()` | ✅ | Portable; in `common/localization.c` |
+| `get_token_data_file_indexed()` / `set_token_data_file()` | ✅ | Linux impl in `linux/parser.c`; 111 tests pass |
+| `get_token_data_buffer()` | ✅ | Linux impl in `linux/parser.c` |
+| `insert_section_data()` / `replace_in_token_data()` | ✅ | Linux impl in `linux/parser.c` |
+| `replace_char()` / `filter_chars()` / `remove_substr()` | ✅ | Portable; in `common/parser.c` |
+| `parse_update()` | ✅ | Linux impl in `linux/parser.c` |
+| `get_data_from_asn1()` | ✅ | Portable; in `common/parser.c` |
+| `sanitize_label()` | ✅ | Portable; in `common/parser.c` |
+| `GetSbatEntries()` / `GetThumbprintEntries()` | ✅ | Portable; in `common/parser.c` |
+| `GetPeArch()` / `GetPeSection()` / `RvaToPhysical()` / `FindResourceRva()` / `GetPeSignatureData()` | 🟡 | Linux stubs in `linux/parser.c`; PE struct compat not yet in compat layer |
 
 ### 3m. DOS / Syslinux / Bootloader (`dos.c`, `dos_locale.c`, `syslinux.c`)
 
@@ -387,7 +386,7 @@ This is the most structurally significant porting gap.
 |------|--------|-------|
 | Windows `HANDLE`-based threads (`CreateThread` / `WaitForSingleObject`) | ✅ | pthread bridge complete — `CreateThread`, `WaitForSingleObject`, `WaitForMultipleObjects`, `TerminateThread`, `GetExitCodeThread` all implemented |
 | `PostMessage` / `SendMessage` for cross-thread UI updates | ✅ | `msg_dispatch.c` bridge: handler registry, async `g_idle_add` scheduler, cross-thread blocking SendMessage via condvar; `hMainDialog` handler handles all `UM_*` messages; 61 tests pass |
-| `WM_DEVICECHANGE` device-arrival events | 🟡 | Replace with `udev_monitor` thread that calls `GetDevices()` and posts a GTK refresh |
+| `WM_DEVICECHANGE` device-arrival events | ✅ | `device_monitor.c`: udev netlink monitor thread (libudev); debounce 1 s; `device_monitor_inject()` for manual refresh/testing; posts `UM_MEDIA_CHANGE` → `GetDevices()` on GTK main thread; 20 tests pass |
 | Windows timer (`SetTimer` / `KillTimer`) | 🟡 | Replace with `g_timeout_add` |
 | `CRITICAL_SECTION` / `Mutex` | ✅ | `CRITICAL_SECTION` (recursive pthread mutex) and `CreateMutex`/`ReleaseMutex` implemented in compat layer |
 | `op_in_progress` flag | 🔧 | Defined in `globals.c`; needs atomic set/clear around thread lifetime |
@@ -433,11 +432,11 @@ This is the most structurally significant porting gap.
 | Threading compat layer tests | ✅ | 51 tests covering threads, events, mutexes, CRITICAL_SECTION |
 | `common/xml` (ezxml) tests | ❌ | No tests yet; XML parsing used by localization and WIM |
 | `stdfn.c` (htab, StrArray) tests | ✅ | 299 tests; htab_create/hash/destroy, StrArray, NULL guards |
-| `parser.c` token functions tests | ❌ | |
+| `parser.c` / `localization.c` tests | ✅ | 111 tests covering replace_char, filter_chars, remove_substr, sanitize_label, ASN.1, GetSbatEntries, GetThumbprintEntries, open_loc_file, token CRUD, insert_section_data, replace_in_token_data |
 | PE parsing functions tests | ❌ | `GetPeArch`, `GetPeSection` etc. are portable C |
 | `msg_dispatch` (PostMessage/SendMessage bridge) tests | ✅ | 61 tests: handler registry, sync/async dispatch, cross-thread SendMessage, concurrent posts, macro aliases, UM_* constants |
-| Format logic tests (unit) | ❌ | Requires mock block device abstraction |
-| Device enumeration tests (`test_dev_linux`) | ✅ | 79 tests: fake sysfs, removable/HDD/size/sort/name/index/cleanup |
+| `common/device_monitor` (hotplug) tests | ✅ | 20 tests: lifecycle (start/stop/double/null), callback dispatch, debounce, thread safety, inject |
+| Device enumeration tests (`test_dev_linux`) | ✅ | 138 tests: fake sysfs, removable/HDD/size/sort/name/index/cleanup |
 
 ---
 
@@ -446,14 +445,14 @@ This is the most structurally significant porting gap.
 1. ~~**Threading bridge**~~ ✅ **DONE** — `CreateThread` → `pthread`, events, mutexes, `CRITICAL_SECTION` all implemented with 51 passing tests
 2. ~~**`PostMessage`/`SendMessage` → GTK dispatch**~~ ✅ **DONE** — `msg_dispatch.c` bridge with 61 passing tests; GTK `g_idle_add` scheduler and main dialog handler registered in `ui_gtk.c`
 3. ~~**`stdfn.c` htab**~~ ✅ **DONE** — full hash table + StrArray ported; 299 tests pass
-4. ~~**Device enumeration** (`dev.c`)~~ ✅ **DONE** — sysfs scan with sort, filtering, combo population; 79 tests pass using fake sysfs
-5. **Device combo hot-plug** — wire `WM_DEVICECHANGE` to udev monitor; call `GetDevices()` on hot-plug events
-6. **Localization + parser** — get locale loading working so all strings are correct
-6. **Format thread** (`format.c`) — the core write operation; start with FAT32 quick-format
-7. **FAT32 formatter** (`format_fat32.c`) — self-contained; relatively mechanical port
-8. **ext formatter** (`format_ext.c`) — `ext2fs` lib is already bundled and compiles
-9. **ISO extraction** (`iso.c`) — `libcdio` is bundled; wire up real I/O
-10. **Hashing** (`hash.c`) — algorithms are pure C; just need POSIX I/O wrappers
+4. ~~**Device enumeration** (`dev.c`)~~ ✅ **DONE** — sysfs scan with sort, filtering, combo population; 138 tests pass using fake sysfs
+5. ~~**Device combo hot-plug**~~ ✅ **DONE** — `src/linux/device_monitor.c`: udev netlink monitor, 1 s debounce, `device_monitor_inject()` hook, `UM_MEDIA_CHANGE` → `GetDevices()` wired in `ui_gtk.c`; 20 tests pass
+6. ~~**Localization + parser**~~ ✅ **DONE** — `common/parser.c` + `common/localization.c` created; `linux/parser.c` + `linux/localization.c` fully implemented; portable functions stripped from `windows/`; 111 tests pass
+7. ~~**Format thread** (`format.c`)~~ 🔧 **IN PROGRESS** — `FormatPartition` ✅, `WritePBR` ✅, `FormatThread` stub (routes through OS partitioning still needed); START button wired; 118 format tests pass
+8. ~~**FAT32 formatter** (`format_fat32.c`)~~ ✅ **DONE** — 16 tests pass
+9. ~~**ext formatter** (`format_ext.c`)~~ ✅ **DONE** — 9 tests pass
+10. **ISO extraction** (`iso.c`) — `libcdio` is bundled; wire up real I/O
+11. **Hashing** (`hash.c`) — algorithms are pure C; just need POSIX I/O wrappers
 11. **Networking** (`net.c`) — replace `WinInet` with `libcurl`
 12. **PKI / signatures** (`pki.c`) — replace `WinTrust` with OpenSSL
 13. **Bad blocks** (`badblocks.c`) — straightforward block I/O loop

@@ -2,21 +2,149 @@
 #include "rufus.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
 
 
-/* Hash tables */
-BOOL htab_create(uint32_t nel, htab_table* htab) {
-    (void)nel;
-    if (!htab) return FALSE;
-    memset(htab, 0, sizeof(*htab));
-    return TRUE;
+/*
+ * Hash table functions - from glibc 2.3.2 via Windows stdfn.c:
+ * [Aho,Sethi,Ullman] Compilers: Principles, Techniques and Tools, 1986
+ * [Knuth]            The Art of Computer Programming, part 3 (6.4)
+ */
+
+/*
+ * Test primality.  Only odd numbers are ever passed (nel |= 1 in htab_create).
+ */
+static uint32_t isprime(uint32_t number)
+{
+	uint32_t divider = 3;
+	while ((divider * divider < number) && (number % divider != 0))
+		divider += 2;
+	return (number % divider != 0);
 }
-void htab_destroy(htab_table* htab) {
-    if (!htab) return;
-    free(htab->table);
-    memset(htab, 0, sizeof(*htab));
+
+/*
+ * Allocate the hash table.  We round nel up to the next prime so that
+ * the double-hash step visits every slot before repeating.
+ */
+BOOL htab_create(uint32_t nel, htab_table* htab)
+{
+	if (htab == NULL)
+		return FALSE;
+	if_assert_fails(htab->table == NULL) {
+		uprintf("WARNING: htab_create() was called with a non empty table");
+		return FALSE;
+	}
+
+	/* Round up to next odd prime */
+	nel |= 1;
+	while (!isprime(nel))
+		nel += 2;
+
+	htab->size = nel;
+	htab->filled = 0;
+
+	htab->table = (htab_entry*)calloc(htab->size + 1, sizeof(htab_entry));
+	if (htab->table == NULL) {
+		uprintf("Could not allocate space for hash table");
+		return FALSE;
+	}
+
+	return TRUE;
 }
-uint32_t htab_hash(char* str, htab_table* htab) { (void)str;(void)htab; return 0; }
+
+/* Free all resources owned by htab. */
+void htab_destroy(htab_table* htab)
+{
+	size_t i;
+
+	if ((htab == NULL) || (htab->table == NULL))
+		return;
+
+	for (i = 0; i < htab->size + 1; i++) {
+		if (htab->table[i].used)
+			safe_free(htab->table[i].str);
+	}
+	htab->filled = 0;
+	htab->size = 0;
+	safe_free(htab->table);
+	htab->table = NULL;
+}
+
+/*
+ * Double-hashing open-address lookup / insert.
+ *
+ * Returns the slot index for str (inserting a new entry if not present),
+ * or 0 on error.  Index 0 is never used as a valid slot; it signals failure.
+ *
+ * The caller may attach arbitrary data to the returned slot:
+ *   htab.table[idx].data = my_pointer;
+ */
+uint32_t htab_hash(char* str, htab_table* htab)
+{
+	uint32_t hval, hval2;
+	uint32_t idx;
+	uint32_t r = 0;
+	int c;
+	char* sz = str;
+
+	if ((htab == NULL) || (htab->table == NULL) || (str == NULL))
+		return 0;
+
+	/* sdbm hash — empirically better than djb2 for this workload */
+	while ((c = *sz++) != 0)
+		r = c + (r << 6) + (r << 16) - r;
+	if (r == 0)
+		++r;
+
+	hval = r % htab->size;
+	if (hval == 0)
+		++hval;
+
+	idx = hval;
+
+	if (htab->table[idx].used) {
+		if ((htab->table[idx].used == hval) &&
+		    (safe_strcmp(str, htab->table[idx].str) == 0))
+			return idx;   /* Found existing entry */
+
+		/* Second hash for double-hashing probe sequence */
+		hval2 = 1 + hval % (htab->size - 2);
+
+		do {
+			if (idx <= hval2)
+				idx = ((uint32_t)htab->size) + idx - hval2;
+			else
+				idx -= hval2;
+
+			if (idx == hval)
+				break;  /* Wrapped all the way round — full */
+
+			if ((htab->table[idx].used == hval) &&
+			    (safe_strcmp(str, htab->table[idx].str) == 0))
+				return idx;
+		} while (htab->table[idx].used);
+	}
+
+	/* Not found — insert at idx */
+	if_assert_fails(htab->filled < htab->size) {
+		uprintf("Hash table is full (%d entries)", htab->size);
+		return 0;
+	}
+
+	safe_free(htab->table[idx].str);
+	htab->table[idx].used = hval;
+	htab->table[idx].str = (char*)malloc(safe_strlen(str) + 1);
+	if (htab->table[idx].str == NULL) {
+		uprintf("Could not duplicate string for hash table");
+		return 0;
+	}
+	memcpy(htab->table[idx].str, str, safe_strlen(str) + 1);
+	++htab->filled;
+
+	return idx;
+}
 
 /* String arrays */
 void StrArrayCreate(StrArray* arr, uint32_t initial_size) {
@@ -56,10 +184,84 @@ void StrArrayDestroy(StrArray* arr) {
 /* Misc stubs */
 BOOL    isSMode(void)                                             { return FALSE; }
 void    GetWindowsVersion(windows_version_t* wv)                  { if(wv) memset(wv,0,sizeof(*wv)); }
-version_t* GetExecutableVersion(const char* path)                 { (void)path; return NULL; }BOOL    FileIO(enum file_io_type io_type, char* path, char** buf, DWORD* size) { (void)io_type;(void)path;(void)buf;(void)size; return FALSE; }
+version_t* GetExecutableVersion(const char* path)                 { (void)path; return NULL; }
+
+/*
+ * FileIO — read, write, or append a whole file using standard POSIX I/O.
+ *
+ * FILE_IO_READ:   open path, allocate *buf (caller must free), fill *size.
+ * FILE_IO_WRITE:  create/overwrite path with *size bytes from *buf.
+ * FILE_IO_APPEND: append *size bytes from *buf to path (create if needed).
+ *
+ * Returns TRUE on success, FALSE on any error.
+ */
+BOOL FileIO(enum file_io_type io_type, char* path, char** buf, DWORD* size)
+{
+	FILE* f = NULL;
+	BOOL ret = FALSE;
+
+	if (path == NULL || buf == NULL || size == NULL)
+		return FALSE;
+
+	switch (io_type) {
+	case FILE_IO_READ: {
+		f = fopen(path, "rb");
+		if (f == NULL) {
+			*buf = NULL;
+			goto out;
+		}
+		/* Determine file size */
+		if (fseek(f, 0, SEEK_END) != 0)
+			goto out;
+		long fsz = ftell(f);
+		if (fsz < 0)
+			goto out;
+		rewind(f);
+		*size = (DWORD)fsz;
+		*buf = (char*)malloc((size_t)fsz + 1);   /* +1 for safety NUL */
+		if (*buf == NULL)
+			goto out;
+		(*buf)[fsz] = '\0';
+		if (fsz > 0 && fread(*buf, 1, (size_t)fsz, f) != (size_t)fsz) {
+			free(*buf);
+			*buf = NULL;
+			goto out;
+		}
+		ret = TRUE;
+		break;
+	}
+
+	case FILE_IO_WRITE: {
+		f = fopen(path, "wb");
+		if (f == NULL)
+			goto out;
+		if (*size > 0 && fwrite(*buf, 1, (size_t)*size, f) != (size_t)*size)
+			goto out;
+		ret = TRUE;
+		break;
+	}
+
+	case FILE_IO_APPEND: {
+		f = fopen(path, "ab");
+		if (f == NULL)
+			goto out;
+		if (*size > 0 && fwrite(*buf, 1, (size_t)*size, f) != (size_t)*size)
+			goto out;
+		ret = TRUE;
+		break;
+	}
+
+	default:
+		goto out;
+	}
+
+out:
+	if (f != NULL)
+		fclose(f);
+	return ret;
+}
 uint8_t* GetResource(HMODULE m, char* n, char* t, const char* d, DWORD* l, BOOL dup) { (void)m;(void)n;(void)t;(void)d;(void)l;(void)dup; return NULL; }
 DWORD   GetResourceSize(HMODULE m, char* n, char* t, const char* d) { (void)m;(void)n;(void)t;(void)d; return 0; }
-DWORD   RunCommandWithProgress(const char* cmd, const char* dir, BOOL log, int msg, const char* pat) { (void)cmd;(void)dir;(void)log;(void)msg;(void)pat; return 0; }
 BOOL    IsFontAvailable(const char* fn)                           { (void)fn; return FALSE; }
 DWORD WINAPI SetLGPThread(LPVOID param)                           { (void)param; return 0; }
 BOOL    SetLGP(BOOL r, BOOL* ek, const char* p, const char* pol, DWORD v) { (void)r;(void)ek;(void)p;(void)pol;(void)v; return FALSE; }

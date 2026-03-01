@@ -36,6 +36,16 @@ static int _fail = 0;
     } \
 } while (0)
 
+/* Assert with custom message */
+#define CHECK_MSG(expr, msg) do { \
+    if (expr) { \
+        _pass++; \
+    } else { \
+        _fail++; \
+        fprintf(stderr, "  FAIL %s:%d: %s\n", __FILE__, __LINE__, msg); \
+    } \
+} while (0)
+
 /* Assert that two C strings are equal */
 #define CHECK_STR_EQ(a, b) do { \
     const char *_a = (a), *_b = (b); \
@@ -66,10 +76,22 @@ static int _fail = 0;
     name(); \
 } while (0)
 
+/* Alias used by some test files */
+#define RUN_TEST(name) RUN(name)
+
+/* Expose pass/fail counters under the names some tests use */
+#define g_passed _pass
+#define g_failed _fail
+
 /* Print summary and return exit code (0 = all passed, 1 = any failed) */
 #define TEST_RESULTS() do { \
     printf("\n%d passed, %d failed\n", _pass, _fail); \
     return _fail ? 1 : 0; \
+} while (0)
+
+/* Print-only variant: does NOT return (caller decides exit code) */
+#define PRINT_RESULTS() do { \
+    printf("\n%d passed, %d failed\n", _pass, _fail); \
 } while (0)
 
 #endif /* TEST_FRAMEWORK_H */

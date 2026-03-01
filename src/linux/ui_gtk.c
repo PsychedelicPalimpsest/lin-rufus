@@ -30,7 +30,11 @@
 #include "resource.h"
 #include "localization.h"
 #include "missing.h"
+#include "drive.h"
+#include "format.h"
 #include <windowsx.h>
+#include <msg_dispatch.h>
+#include "device_monitor.h"
 
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
@@ -487,6 +491,7 @@ static void on_close_clicked(GtkButton *btn, gpointer data)
 		/* TODO: cancel the running operation */
 		uprintf("Cancel requested by user");
 	} else {
+		device_monitor_stop();
 		gtk_main_quit();
 	}
 }
@@ -499,11 +504,10 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 		return;
 	}
 	uprintf("Format started by user");
-	/* The actual format logic runs in a separate thread via FormatThread().
-	 * format_thread is declared in globals.c and used by the format layer. */
 	if (format_thread == NULL) {
-		/* format_thread = CreateThread(…); — wired up in format.c */
-		rufus_gtk_update_status("Format not yet wired on Linux");
+		format_thread = CreateThread(NULL, 0, FormatThread, NULL, 0, NULL);
+		if (format_thread == NULL)
+			rufus_gtk_update_status("Failed to start format thread");
 	}
 }
 
@@ -758,12 +762,127 @@ void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f
 }
 
 /* ======================================================================
+ * Message dispatch — GTK integration
+ *
+ * msg_gtk_scheduler() is installed as the MsgPostScheduler so that every
+ * call to PostMessage() and cross-thread SendMessage() is dispatched safely
+ * through the GLib main loop.
+ * ====================================================================== */
+
+typedef struct { void (*fn)(void *); void *data; } GtkSchedItem;
+
+static gboolean gtk_sched_idle(gpointer ud)
+{
+	GtkSchedItem *item = (GtkSchedItem *)ud;
+	item->fn(item->data);
+	free(item);
+	return G_SOURCE_REMOVE;
+}
+
+static void msg_gtk_scheduler(void (*fn)(void *), void *data)
+{
+	GtkSchedItem *item = malloc(sizeof(*item));
+	if (!item) { fn(data); return; }  /* fallback if OOM */
+	item->fn   = fn;
+	item->data = data;
+	g_idle_add(gtk_sched_idle, item);
+}
+
+/* -----------------------------------------------------------------------
+ * Main dialog message handler
+ *
+ * Handles UM_* messages sent/posted by worker threads (format, hash, net,
+ * etc.) to hMainDialog.  Runs on the GTK main thread — safe to touch
+ * any widget here.
+ * --------------------------------------------------------------------- */
+static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
+{
+	(void)hwnd; (void)l;
+
+	switch (msg) {
+	case UM_FORMAT_COMPLETED:
+		/* w = TRUE on success, FALSE on failure */
+		EnableControls((BOOL)w, TRUE);
+		if (w)
+			rufus_gtk_update_status("Format completed successfully.");
+		else
+			rufus_gtk_update_status("Format failed.");
+		uprintf("*** Format completed (success=%d) ***", (int)w);
+		break;
+
+	case UM_ENABLE_CONTROLS:
+		EnableControls(TRUE, TRUE);
+		break;
+
+	case UM_PROGRESS_INIT:
+		InitProgress(TRUE);
+		break;
+
+	case UM_PROGRESS_EXIT:
+		/* Nothing extra needed on Linux — progress bar stays visible. */
+		break;
+
+	case UM_TIMER_START:
+		/* On Windows this starts an elapsed-time timer. On Linux we rely
+		 * on progress callbacks from the format thread. */
+		break;
+
+	case UM_SELECT_ISO:
+		/* The Fido download thread finished; show a file-chooser so the
+		 * user can select the downloaded ISO.  Re-use the SELECT handler. */
+		on_select_clicked(NULL, NULL);
+		break;
+
+	case UM_NO_UPDATE:
+		rufus_gtk_update_status("No updates available.");
+		break;
+
+	case UM_MEDIA_CHANGE:
+		/* Block-device hotplug event — refresh the device list.
+		 * Guard against triggering a refresh while a format is in progress. */
+		if (!op_in_progress) {
+			uprintf("Device change detected, refreshing device list.");
+			GetDevices((DWORD)ComboBox_GetCurItemData(hDeviceList));
+			EnableControls(TRUE, FALSE);
+		}
+		break;
+
+	default:
+		/* Language menu items (UM_LANGUAGE_MENU … UM_LANGUAGE_MENU + N) */
+		if (msg >= UM_LANGUAGE_MENU)
+			uprintf("Language menu item %u selected.", msg - UM_LANGUAGE_MENU);
+		break;
+	}
+
+	return 0;
+}
+
+/* ======================================================================
+ * Device hotplug — udev → GTK main thread bridge
+ * ====================================================================== */
+
+/* Called by the device_monitor background thread when a block device is
+ * added or removed.  Posts UM_MEDIA_CHANGE to the main dialog so that the
+ * device list is refreshed on the GTK main thread. */
+static void on_device_change(void *user_data)
+{
+	(void)user_data;
+	PostMessage(hMainDialog, UM_MEDIA_CHANGE, 0, 0);
+}
+
+/* ======================================================================
  * main() — GTK application entry point
  * ====================================================================== */
 
 static void on_app_activate(GtkApplication *app, gpointer data)
 {
 	(void)data;
+
+	/* Initialise the message dispatch system on the main thread and hook
+	 * it up to the GTK scheduler so worker threads can safely drive UI
+	 * updates via PostMessage() / SendMessage(). */
+	msg_dispatch_init();
+	msg_dispatch_set_scheduler(msg_gtk_scheduler);
 
 	GtkWidget *win = rufus_gtk_create_window(app);
 	(void)win;
@@ -781,6 +900,13 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	hLabel           = (HWND)rw.label_entry;
 	hProgress        = (HWND)rw.progress_bar;
 	hImageOption     = (HWND)rw.image_option_combo;
+
+	/* Register the main dialog message handler. */
+	msg_dispatch_register(hMainDialog, main_dialog_handler);
+
+	/* Start the udev block-device hotplug monitor.  Events are debounced
+	 * and delivered to hMainDialog as UM_MEDIA_CHANGE via PostMessage. */
+	device_monitor_start(on_device_change, NULL);
 
 	rufus_gtk_update_status("Ready.");
 	uprintf("*** Rufus GTK UI started ***");

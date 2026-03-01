@@ -69,8 +69,8 @@ size_t ubuffer_pos = 0;
 /* ---- From iso.c ---- */
 RUFUS_IMG_REPORT img_report = { 0 };
 
-/* ---- From drive.c ---- */
-RUFUS_DRIVE_INFO SelectedDrive = { 0 };
+/* ---- SelectedDrive is defined in drive.c (Windows) or linux/drive.c (Linux) ---- */
+/* Do NOT define SelectedDrive here — it is owned by drive.c */
 
 /* ---- From stdfn.c ---- */
 windows_version_t WindowsVersion = { 0 };
@@ -104,10 +104,10 @@ BOOL enable_extra_hashes = FALSE, validate_md5sum = FALSE;
 BOOL cpu_has_sha1_accel = FALSE, cpu_has_sha256_accel = FALSE;
 uint64_t md5sum_totalbytes = 0;
 
-/* ---- Hash function table (from stdfn.c/hash.c) ---- */
-hash_init_t* hash_init[HASH_MAX] = { 0 };
-hash_write_t* hash_write[HASH_MAX] = { 0 };
-hash_final_t* hash_final[HASH_MAX] = { 0 };
+/* hash_init / hash_write / hash_final are defined in linux/hash.c
+ * (populated when hash_algos.c is included there).
+ * modified_files is used by UpdateMD5Sum in hash.c. */
+StrArray modified_files = { 0 };
 
 /* ---- From net.c ---- */
 /* DownloadStatus already defined above */

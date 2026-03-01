@@ -164,6 +164,7 @@ void reset_localization(int dlg_id);
 void free_dialog_list(void);
 char* lmprintf(uint32_t msg_id, ...);
 BOOL get_supported_locales(const char* filename);
+FILE* open_loc_file(const char* filename);
 BOOL get_loc_data_file(const char* filename, loc_cmd* lcmd);
 void free_locale_list(void);
 loc_cmd* get_locale_from_lcid(int lcid, BOOL fallback);
