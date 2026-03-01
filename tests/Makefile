@@ -255,6 +255,40 @@ CFLAGS_LINUX_test_pki_linux := \
 LDFLAGS_LINUX_test_pki_linux := -lssl -lcrypto
 EXTRA_SRC_LINUX_test_pki_linux := $(SRC_DIR)/linux/pki.c
 
+# vhd_linux tests: IsBootableImage, GetWimVersion, VhdMountImageAndGetSize
+# Links against vhd.c (Linux impl), libbled.a (compression), libwim.a (WIM)
+BLED_LIB := $(SRC_DIR)/bled/libbled.a
+WIM_LIB  := $(SRC_DIR)/wimlib/libwim.a
+XML_SRC  := $(COMMON)/xml.c
+CFLAGS_LINUX_test_vhd_linux := \
+	-D_RUFUS \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/bled -I$(SRC_DIR)/wimlib -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
+	-Wno-strict-aliasing
+LDFLAGS_LINUX_test_vhd_linux := -lz -lpthread -lxml2 -lm -lcdio -liso9660 -ludf
+EXTRA_SRC_LINUX_test_vhd_linux := \
+	$(SRC_DIR)/linux/vhd.c \
+	$(BLED_LIB) \
+	$(WIM_LIB) \
+	$(XML_SRC)
+
+# wue_linux tests: CreateUnattendXml, PopulateWindowsVersion
+# Links against wue.c (Linux impl), libwim.a (WIM), xml.c (ezxml)
+CFLAGS_LINUX_test_wue_linux := \
+	-D_RUFUS \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/wimlib -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
+	-Wno-strict-aliasing
+LDFLAGS_LINUX_test_wue_linux := -lz -lpthread -lxml2 -lm -lcdio -liso9660 -ludf
+EXTRA_SRC_LINUX_test_wue_linux := \
+	$(SRC_DIR)/linux/wue.c \
+	$(WIM_LIB) \
+	$(XML_SRC)
+
 .PHONY: all linux windows run-linux run-wine clean
 
 all: linux windows

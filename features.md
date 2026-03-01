@@ -340,17 +340,17 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `IsBootableImage()` | 🟡 | Check image header / magic bytes |
-| `GetWimVersion()` | 🟡 | Read WIM XML metadata; use bundled `wimlib` |
-| `WimExtractFile()` / `WimSplitFile()` / `WimApplyImage()` | 🟡 | All use bundled `wimlib`; need Linux file I/O |
-| `VhdMountImageAndGetSize()` | 🟡 | Mount VHD via Linux `nbd` kernel module or `qemu-nbd` |
-| `VhdUnmountImage()` | 🟡 | Unmount nbd device |
-| `CreateUnattendXml()` | 🟡 | Generate `autounattend.xml`; pure string work |
-| `SetupWinPE()` | 🟡 | Copy WinPE helpers to drive |
-| `PopulateWindowsVersion()` | 🟡 | Parse Windows version from WIM XML |
-| `CopySKUSiPolicy()` | 🟡 | Copy policy file to drive |
-| `SetWinToGoIndex()` / `SetupWinToGo()` | 🟡 | Windows To Go setup |
-| `ApplyWindowsCustomization()` | 🟡 | Apply unattend / registry tweaks post-write |
+| `IsBootableImage()` | ✅ | POSIX open/read/fstat + bled decompression |
+| `GetWimVersion()` | ✅ | wimlib (cross-platform) |
+| `WimExtractFile()` / `WimSplitFile()` / `WimApplyImage()` | ✅ | wimlib with Linux path separators |
+| `VhdMountImageAndGetSize()` | ✅ | qemu-nbd + BLKGETSIZE64 ioctl |
+| `VhdUnmountImage()` | ✅ | qemu-nbd --disconnect |
+| `CreateUnattendXml()` | ✅ | POSIX + timezone section skipped on Linux |
+| `SetupWinPE()` | 🚫 | Windows-only; stub returns FALSE |
+| `PopulateWindowsVersion()` | ✅ | wimlib + ezxml (cross-platform) |
+| `CopySKUSiPolicy()` | 🚫 | Windows-only WDAC policy; stub returns FALSE |
+| `SetWinToGoIndex()` / `SetupWinToGo()` | 🚫 | Windows-only; stubs return -1/FALSE |
+| `ApplyWindowsCustomization()` | 🚫 | Windows-only; stub returns FALSE |
 
 ### 3o. S.M.A.R.T. (`smart.c`)
 
