@@ -229,7 +229,7 @@ CFLAGS_LINUX_test_hash := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                           -Wno-implicit-function-declaration -Wno-unused-parameter \
                           -Wno-missing-field-initializers \
                           -march=native
-LDFLAGS_LINUX_test_hash := -lpthread
+LDFLAGS_LINUX_test_hash := -lpthread $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_hash := $(HASH_SRC) $(HASH_LINUX_EXTRA)
 
 CFLAGS_WIN_test_hash := -I$(SRC_DIR)/windows -I$(SRC_DIR)/common \

@@ -629,6 +629,65 @@ TEST(hashthread_is_file_in_db_miss)
 }
 
 /* ====================================================================
+ * Hash dialog — hash_str content after successful HashThread run
+ *
+ * After HashThread completes, hash_str[] must contain valid hex strings
+ * ready to display in a dialog.  UM_HASH_COMPLETED is posted to hMainDialog
+ * (which is NULL in tests, so PostMessage is a silent no-op) to trigger
+ * the GTK dialog on the main thread.
+ * ==================================================================== */
+
+/* Hash dialog: MD5/SHA1/SHA256 non-empty after success */
+TEST(hash_dialog_strings_non_empty_after_run)
+{
+	if (make_ht_file("abc", 3) < 0) { CHECK(0); return; }
+	image_path = ht_tmp;
+	ErrorStatus = 0;
+	memset(hash_str, 0, sizeof(hash_str));
+	enable_extra_hashes = FALSE;
+	img_report.image_size = 3;
+
+	int r = run_hash_thread();
+	CHECK_MSG(r == 0, "hash thread should succeed");
+
+	/* These strings must be non-empty and look like hex */
+	CHECK_MSG(hash_str[HASH_MD5][0] != '\0',    "MD5 must be populated");
+	CHECK_MSG(hash_str[HASH_SHA1][0] != '\0',   "SHA1 must be populated");
+	CHECK_MSG(hash_str[HASH_SHA256][0] != '\0', "SHA256 must be populated");
+	/* Without extra hashes, SHA512 must be empty */
+	CHECK_MSG(hash_str[HASH_SHA512][0] == '\0', "SHA512 must be empty without enable_extra_hashes");
+
+	unlink(ht_tmp);
+}
+
+/* Hash dialog: SHA512 populated when enable_extra_hashes is set */
+TEST(hash_dialog_sha512_populated_when_extra_enabled)
+{
+	if (make_ht_file("abc", 3) < 0) { CHECK(0); return; }
+	image_path = ht_tmp;
+	ErrorStatus = 0;
+	memset(hash_str, 0, sizeof(hash_str));
+	enable_extra_hashes = TRUE;
+	img_report.image_size = 3;
+
+	int r = run_hash_thread();
+	CHECK_MSG(r == 0, "hash thread should succeed");
+	CHECK_MSG(hash_str[HASH_SHA512][0] != '\0', "SHA512 must be populated with enable_extra_hashes");
+
+	enable_extra_hashes = FALSE;  /* reset */
+	unlink(ht_tmp);
+}
+
+/* Hash dialog: UM_HASH_COMPLETED constant is defined and distinct from UM_FORMAT_COMPLETED */
+TEST(hash_dialog_um_hash_completed_constant)
+{
+	CHECK_MSG(UM_HASH_COMPLETED != UM_FORMAT_COMPLETED,
+	          "UM_HASH_COMPLETED must differ from UM_FORMAT_COMPLETED");
+	CHECK_MSG(UM_HASH_COMPLETED != 0,
+	          "UM_HASH_COMPLETED must be non-zero");
+}
+
+/* ====================================================================
  * UpdateMD5Sum tests
  *
  * UpdateMD5Sum(dest_dir, md5sum_name):
@@ -943,6 +1002,11 @@ int main(void)
 	RUN(hashthread_fox_message);
 	RUN(hashthread_is_buffer_in_db_miss);
 	RUN(hashthread_is_file_in_db_miss);
+
+	printf("\n  Hash dialog (Linux only)\n");
+	RUN(hash_dialog_strings_non_empty_after_run);
+	RUN(hash_dialog_sha512_populated_when_extra_enabled);
+	RUN(hash_dialog_um_hash_completed_constant);
 
 	printf("\n  UpdateMD5Sum (Linux only)\n");
 	RUN(update_md5sum_noop_when_disabled);

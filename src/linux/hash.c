@@ -568,6 +568,6 @@ out:
 
 	PostMessage(hMainDialog, UM_FORMAT_COMPLETED, (WPARAM)FALSE, 0);
 	if (r == 0)
-		MyDialogBox(NULL, IDD_HASH, hMainDialog, HashCallback);
+		PostMessage(hMainDialog, UM_HASH_COMPLETED, 0, 0);
 	ExitThread(r);
 }

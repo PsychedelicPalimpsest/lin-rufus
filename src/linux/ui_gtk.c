@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <libgen.h>
 #include <pthread.h>
 
 /* Pull in shared Rufus headers through the compat layer */
@@ -72,6 +73,9 @@ typedef struct { int op; float pct; } ProgressData;
 
 /* FileSystemLabel[] is defined in linux/format.c */
 extern const char* FileSystemLabel[FS_MAX];
+extern char hash_str[HASH_MAX][150];
+extern BOOL enable_extra_hashes;
+extern char *image_path;
 
 /* Forward declaration for combo registration helper */
 static void combo_register_all(void);
@@ -995,6 +999,62 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		SetFSFromISO();
 		SetPartitionSchemeAndTargetSystem(FALSE);
 		break;
+
+	case UM_HASH_COMPLETED: {
+		/* HashThread finished — show a dialog with MD5/SHA1/SHA256/(SHA512) results */
+		const char *hash_labels[] = { "MD5", "SHA-1", "SHA-256", "SHA-512" };
+		GtkWidget *dlg, *content_area, *grid, *label;
+		char title[256];
+		int row = 0;
+		int i;
+
+		/* Build window title from image filename */
+		if (image_path && image_path[0]) {
+			/* basename may modify its argument, so pass a copy */
+			char path_copy[512];
+			strncpy(path_copy, image_path, sizeof(path_copy) - 1);
+			path_copy[sizeof(path_copy) - 1] = '\0';
+			snprintf(title, sizeof(title), "Checksums — %s", basename(path_copy));
+		} else {
+			snprintf(title, sizeof(title), "Checksums");
+		}
+
+		dlg = gtk_dialog_new_with_buttons(
+			title, GTK_WINDOW(rw.window),
+			GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+			"_OK", GTK_RESPONSE_OK, NULL);
+
+		content_area = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
+		gtk_container_set_border_width(GTK_CONTAINER(content_area), 12);
+
+		grid = gtk_grid_new();
+		gtk_grid_set_column_spacing(GTK_GRID(grid), 12);
+		gtk_grid_set_row_spacing(GTK_GRID(grid), 4);
+		gtk_container_add(GTK_CONTAINER(content_area), grid);
+
+		for (i = 0; i < HASH_MAX; i++) {
+			if (hash_str[i][0] == '\0')
+				continue;
+			/* Label column */
+			label = gtk_label_new(hash_labels[i]);
+			gtk_widget_set_halign(label, GTK_ALIGN_END);
+			gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
+			/* Value column — monospace */
+			label = gtk_label_new(hash_str[i]);
+			gtk_widget_set_halign(label, GTK_ALIGN_START);
+			gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+			PangoFontDescription *font = pango_font_description_from_string("Monospace");
+			gtk_widget_override_font(label, font);
+			pango_font_description_free(font);
+			gtk_grid_attach(GTK_GRID(grid), label, 1, row, 1, 1);
+			row++;
+		}
+
+		gtk_widget_show_all(dlg);
+		gtk_dialog_run(GTK_DIALOG(dlg));
+		gtk_widget_destroy(dlg);
+		break;
+	}
 
 	case UM_MEDIA_CHANGE:
 		/* Block-device hotplug event — refresh the device list.

@@ -175,7 +175,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | MD5 / SHA-1 / SHA-256 / SHA-512 implementations | ✅ | All implemented in `src/windows/hash.c` in pure C — portable, just need to compile for Linux |
 | `DetectSHA1Acceleration()` / `DetectSHA256Acceleration()` | ✅ | x86 CPUID check is platform-neutral; works on Linux |
 | `HashFile()` / `HashBuffer()` | ✅ | Implemented in `src/linux/hash.c` with POSIX `open`/`read` |
-| `HashThread()` / `IndividualHashThread()` | ✅ | Implemented with pthread via compat layer; 78 tests passing |
+| `HashThread()` / `IndividualHashThread()` | ✅ | Implemented with pthread via compat layer; 107 tests passing (3 new hash dialog tests) |
 | `PE256Buffer()` / `efi_image_parse()` | ✅ | Pure C PE parsing ported from `src/windows/hash.c`; helper structs (`image_region`, `efi_image_regions`) and `efi_image_region_add`/`cmp_pe_section` added to `src/linux/hash.c`; 9 tests pass |
 | `IsFileInDB()` / `IsBufferInDB()` | ✅ | Hash database lookup implemented in `src/linux/hash.c` |
 | `IsSignedBySecureBootAuthority()` / `IsBootloaderRevoked()` | 🟡 | Needs cert DB + SBAT parsing; uses `pki.c` |
@@ -273,7 +273,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `UpdateCallback()` / `NewVersionCallback()` | 🟡 | Update dialog; low priority |
 | `SetFidoCheck()` / `SetUpdateCheck()` | ✅ | `SetUpdateCheck` implemented: settings commcheck roundtrip; first-run sets 86400s interval; disabled if interval<0; wired into `on_app_activate` GTK startup; 4 tests pass |
 | `FlashTaskbar()` | 🚫 | N/A on Linux |
-| `MyCreateDialog()` / `MyDialogBox()` | 🟡 | Windows dialog resource system; replace with GTK `GtkDialog` builders |
+| `MyCreateDialog()` / `MyDialogBox()` | 🔧 | Windows dialog resource system; `IDD_HASH` replaced with `UM_HASH_COMPLETED` → GTK dialog; others still stub |
 | `GetDialogTemplate()` | 🚫 | Windows `.rc` resource — not applicable on Linux |
 | `SetAlertPromptHook()` / `SetAlertPromptMessages()` | 🟡 | Alert interception; GTK equivalent needed |
 | `CenterDialog()` / `ResizeMoveCtrl()` | 🚫 | GTK handles layout automatically |
@@ -458,7 +458,7 @@ This is the most structurally significant porting gap.
 8. ~~**FAT32 formatter** (`format_fat32.c`)~~ ✅ **DONE** — 16 tests pass
 9. ~~**ext formatter** (`format_ext.c`)~~ ✅ **DONE** — 9 tests pass
 10. ~~**ISO extraction** (`iso.c`)~~ ✅ **DONE** — full POSIX implementation using libcdio; 12345 tests pass
-11. ~~**Hashing** (`hash.c`)~~ ✅ **DONE** — all hash algorithms + HashThread/IndividualHashThread; 78 tests pass
+11. ~~**Hashing** (`hash.c`)~~ ✅ **DONE** — all hash algorithms + HashThread/IndividualHashThread; hash results dialog via `UM_HASH_COMPLETED` → GTK GtkGrid dialog; 107 tests pass
 11. ~~**Networking** (`net.c`)~~ ✅ **DONE** — `IsDownloadable` + `DownloadToFileOrBufferEx` implemented with libcurl; 45 tests pass; `configure.ac` updated with `PKG_CHECK_MODULES` for libcurl; stubs remain for `CheckForUpdates`/`DownloadISO`/`DownloadSignedFileThreaded`
 12. ~~**PKI / signatures** (`pki.c`)~~ ✅ **DONE** — OpenSSL EVP API for `ValidateOpensslSignature`; mmap PE parsing for `GetSignatureName`/`GetSignatureTimeStamp`/`GetIssuerCertificateInfo`; 21 tests pass
 13. ~~**Bad blocks** (`badblocks.c`)~~ ✅ **DONE** — full POSIX port using `pread`/`pwrite`/`posix_memalign`/`clock_gettime`; bad-block list management ported verbatim; `ERROR_OBJECT_IN_LIST` added to compat; 43 tests pass
