@@ -878,6 +878,10 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 {
 	(void)data;
 
+	/* Initialise application paths (app_dir, app_data_dir, user_dir, ini_file)
+	 * using XDG Base Directory conventions. */
+	rufus_init_paths();
+
 	/* Initialise the message dispatch system on the main thread and hook
 	 * it up to the GTK scheduler so worker threads can safely drive UI
 	 * updates via PostMessage() / SendMessage(). */

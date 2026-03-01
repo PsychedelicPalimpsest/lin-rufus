@@ -145,12 +145,12 @@ char* set_token_data_file(const char* token, const char* data, const char* filen
 		return NULL;
 
 	snprintf(tmpname, sizeof(tmpname), "%s~", filename);
-
+	/*
+	 * Open the source file for reading.  If it does not yet exist (new INI
+	 * file) we treat it as empty - fd_in stays NULL and we fall through to
+	 * the "token not found: append it" path below.
+	 */
 	fd_in = fopen(filename, "r");
-	if (fd_in == NULL) {
-		uprintf("Could not open file '%s'\n", filename);
-		goto out;
-	}
 
 	fd_out = fopen(tmpname, "w");
 	if (fd_out == NULL) {
@@ -158,7 +158,7 @@ char* set_token_data_file(const char* token, const char* data, const char* filen
 		goto out;
 	}
 
-	while (fgets(buf, sizeof(buf), fd_in) != NULL) {
+	while (fd_in != NULL && fgets(buf, sizeof(buf), fd_in) != NULL) {
 		i = strspn(buf, space);
 
 		/* Preserve comment/section lines as-is */

@@ -223,7 +223,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 |----------|--------|-------|
 | `htab_create()` / `htab_destroy()` / `htab_hash()` | ✅ | Full implementation ported from Windows stdfn.c; 299 tests pass |
 | `StrArray*` functions | ✅ | Implemented and work |
-| `FileIO()` | 🟡 | Read/write whole file; trivial with POSIX `fopen` |
+| `FileIO()` | ✅ | Implemented with POSIX `fopen`/`fread`/`fwrite`; READ/WRITE/APPEND modes; 10 tests |
 | `GetResource()` / `GetResourceSize()` | 🚫 | Windows PE resource API; resources are compiled into the binary — embed as C arrays or load from disk |
 | `SetLGP()` / `SetLGPThread()` | 🚫 | Windows Group Policy — no Linux equivalent |
 | `MountRegistryHive()` / `UnmountRegistryHive()` | 🚫 | Windows Registry — no Linux equivalent |
@@ -399,9 +399,9 @@ This is the most structurally significant porting gap.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Windows `rufus.ini` file read/write | 🟡 | `parser.c` stubs need implementing; use `get_token_data_file_indexed` once ported |
-| Registry settings (`HKCU\Software\Rufus\`) | 🚫 | Replace with `~/.config/rufus/rufus.ini` or GLib `GKeyFile` |
-| `app_dir` / `app_data_dir` / `user_dir` paths | 🟡 | Should be set to `XDG_CONFIG_HOME`, `XDG_DATA_HOME` etc. in `globals.c` |
+| Windows `rufus.ini` file read/write | ✅ | `FileIO()` implemented (POSIX), `set_token_data_file` fixed for new files |
+| Registry settings (`HKCU\Software\Rufus\`) | ✅ | Replaced with `~/.config/rufus/rufus.ini`; `src/linux/settings.h` provides `ReadSetting*`/`WriteSetting*` |
+| `app_dir` / `app_data_dir` / `user_dir` paths | ✅ | Set by `rufus_init_paths()` in `rufus.c`; uses `XDG_CONFIG_HOME`/`XDG_DATA_HOME`; called from `on_app_activate()` |
 
 ---
 
@@ -460,8 +460,9 @@ This is the most structurally significant porting gap.
 13. **Bad blocks** (`badblocks.c`) — straightforward block I/O loop
 14. **S.M.A.R.T.** (`smart.c`) — `SG_IO` ioctl
 15. **WIM / VHD** (`vhd.c`, `wue.c`) — `wimlib` is bundled; VHD needs `nbd`
-16. **Settings persistence** — `~/.config/rufus/rufus.ini`
+16. ~~**Settings persistence**~~ ✅ **DONE** — `FileIO()` implemented, `set_token_data_file()` fixed for new files, `src/linux/settings.h` with full `ReadSetting*`/`WriteSetting*` API, `rufus_init_paths()` with XDG paths, wired into `on_app_activate()`; 74 tests pass
 17. **Elevation / polkit** — for proper desktop integration
 18. **Syslinux / DOS bootloaders** — finish installer wiring
 19. **Language menu** (`ShowLanguageMenu` TODO in `ui_gtk.c`)
 20. **Desktop integration** — `.desktop` file, icon, AppStream metadata
+

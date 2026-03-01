@@ -165,6 +165,23 @@ CFLAGS_LINUX_test_net_linux := \
 LDFLAGS_LINUX_test_net_linux := -lcurl
 EXTRA_SRC_LINUX_test_net_linux := $(NET_LINUX_SRC)
 
+# settings_linux tests: FileIO, ReadSetting*/WriteSetting*, XDG path init.
+SETTINGS_LINUX_SRC := \
+	$(SRC_DIR)/linux/stdfn.c \
+	$(SRC_DIR)/linux/parser.c \
+	$(COMMON)/parser.c \
+	$(COMMON)/localization.c \
+	$(SRC_DIR)/linux/stdio.c \
+	$(SRC_DIR)/linux/ui.c \
+	settings_linux_glue.c
+CFLAGS_LINUX_test_settings_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_settings_linux := $(SETTINGS_LINUX_SRC)
+
 .PHONY: all linux windows run-linux run-wine clean
 
 all: linux windows

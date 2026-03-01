@@ -111,3 +111,6 @@ static inline void gtk_combo_set_active_by_data(GtkWidget *combo, gint data)
 GtkWidget *rufus_gtk_create_window(GtkApplication *app);
 void       rufus_gtk_update_status(const char *msg);
 void       rufus_gtk_append_log(const char *msg);
+
+/* Linux-specific initialization (defined in rufus.c) */
+void rufus_init_paths(void);
