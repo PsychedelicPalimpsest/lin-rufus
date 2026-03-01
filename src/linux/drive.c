@@ -430,13 +430,15 @@ BOOL RefreshDriveLayout(HANDLE hDrive)
 BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
                      BOOL bMBRIsBootable, uint8_t extra_partitions)
 {
-    (void)FileSystem; (void)extra_partitions;
+    (void)FileSystem;
     if (!hDrive || hDrive == INVALID_HANDLE_VALUE) return FALSE;
     int fd = (int)(intptr_t)hDrive;
 
     uint64_t disk_size   = (uint64_t)SelectedDrive.DiskSize;
     uint32_t sector_size = SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512;
     uint64_t total_sects = disk_size / sector_size;
+    BOOL has_persistence = (extra_partitions & XP_PERSISTENCE) && (persistence_size > 0);
+    uint32_t pers_sects  = has_persistence ? (uint32_t)(persistence_size / sector_size) : 0;
 
     if (PartitionStyle == PARTITION_STYLE_MBR) {
         uint8_t mbr[512] = { 0 };
@@ -445,6 +447,10 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         uint32_t lba_start = 2048;
         uint32_t lba_size  = (uint32_t)(total_sects > lba_start + 1
                                         ? total_sects - lba_start : 1);
+        /* Shrink main partition to make room for persistence partition */
+        if (has_persistence && lba_size > pers_sects)
+            lba_size -= pers_sects;
+
         uint8_t *e = mbr + 446;
         e[0] = bMBRIsBootable ? 0x80 : 0x00;
         e[1] = 0xFE; e[2] = 0xFF; e[3] = 0xFF;
@@ -458,6 +464,24 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         e[13] = (lba_size >>  8)  & 0xFF;
         e[14] = (lba_size >> 16)  & 0xFF;
         e[15] = (lba_size >> 24)  & 0xFF;
+
+        /* Persistence partition (entry 1) immediately after main */
+        if (has_persistence) {
+            uint32_t p1_start = lba_start + lba_size;
+            uint8_t *e1 = mbr + 446 + 16;
+            e1[0] = 0x00;
+            e1[1] = 0xFE; e1[2] = 0xFF; e1[3] = 0xFF;
+            e1[4] = 0x83; /* Linux native */
+            e1[5] = 0xFE; e1[6] = 0xFF; e1[7] = 0xFF;
+            e1[8]  = (p1_start)        & 0xFF;
+            e1[9]  = (p1_start >>  8)  & 0xFF;
+            e1[10] = (p1_start >> 16)  & 0xFF;
+            e1[11] = (p1_start >> 24)  & 0xFF;
+            e1[12] = (pers_sects)      & 0xFF;
+            e1[13] = (pers_sects >>  8) & 0xFF;
+            e1[14] = (pers_sects >> 16) & 0xFF;
+            e1[15] = (pers_sects >> 24) & 0xFF;
+        }
 
         return (pwrite(fd, mbr, 512, 0) == 512) ? TRUE : FALSE;
 
@@ -499,11 +523,39 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
             part_guid[8] = 0x80;
         }
 
+        /* Shrink main partition end to make room for persistence partition */
+        uint64_t main_last = last_usable;
+        if (has_persistence && last_usable > first_usable + pers_sects)
+            main_last = last_usable - pers_sects;
+
         uint8_t *pe = entries;
         memcpy(pe + 0,  bd_type,   16);
         memcpy(pe + 16, part_guid, 16);
         for (int i = 0; i < 8; i++) pe[32 + i] = (first_usable >> (8*i)) & 0xFF;
-        for (int i = 0; i < 8; i++) pe[40 + i] = (last_usable  >> (8*i)) & 0xFF;
+        for (int i = 0; i < 8; i++) pe[40 + i] = (main_last    >> (8*i)) & 0xFF;
+
+        /* Build persistence partition entry 1 */
+        if (has_persistence) {
+            static const uint8_t linux_type[16] = {
+                0xAF,0x3D,0xC6,0x0F, 0x83,0x84, 0x72,0x47,
+                0x8E,0x79, 0x3D,0x69,0xD8,0x47,0x7D,0xE4
+            };
+            uint8_t p1_guid[16] = { 0 };
+            {
+                struct timespec ts2;
+                clock_gettime(CLOCK_REALTIME, &ts2);
+                uint64_t t2 = (uint64_t)ts2.tv_sec * 1000000000ULL + ts2.tv_nsec + 1;
+                memcpy(p1_guid, &t2, 8);
+                p1_guid[8] = 0x81;
+            }
+            uint64_t p1_first = main_last + 1;
+            uint64_t p1_last  = p1_first + pers_sects - 1;
+            uint8_t *pe1 = entries + 128;
+            memcpy(pe1 + 0,  linux_type, 16);
+            memcpy(pe1 + 16, p1_guid,    16);
+            for (int i = 0; i < 8; i++) pe1[32 + i] = (p1_first >> (8*i)) & 0xFF;
+            for (int i = 0; i < 8; i++) pe1[40 + i] = (p1_last  >> (8*i)) & 0xFF;
+        }
 
         uint32_t entries_crc = crc32_ieee(entries, entries_sz);
 

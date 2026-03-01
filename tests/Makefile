@@ -142,6 +142,7 @@ FORMAT_THREAD_LINUX_SRC := \
 	$(SRC_DIR)/linux/format_ext.c \
 	$(SRC_DIR)/linux/format_ext_tools.c \
 	$(SRC_DIR)/linux/drive.c \
+	$(SRC_DIR)/linux/window_text_bridge.c \
 	$(SRC_DIR)/ext2fs/posix_io.c \
 	$(FORMAT_MS_SRC)
 CFLAGS_LINUX_test_format_thread_linux := \
@@ -383,6 +384,17 @@ LDFLAGS_LINUX_test_badblocks_integration_linux := -lpthread -lblkid
 EXTRA_SRC_LINUX_test_badblocks_integration_linux := \
 	$(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) \
 	badblocks_integration_glue.c
+
+# persistence_linux tests: casper/persistence partition support
+# Uses the same source set as format_thread_linux.
+CFLAGS_LINUX_test_persistence_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_persistence_linux := -lpthread -lblkid
+EXTRA_SRC_LINUX_test_persistence_linux := \
+	$(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB)
 
 # process_linux tests: GetPPID, StartProcessSearch, SetProcessSearch,
 #                      GetProcessSearch, SearchProcessAlt (Linux /proc-based)

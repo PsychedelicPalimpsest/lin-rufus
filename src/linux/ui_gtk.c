@@ -120,6 +120,7 @@ static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 static void on_toggle_dark_mode(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
+static void on_persistence_changed(GtkWidget *w, gpointer data);
 extern DWORD WINAPI HashThread(void *param);  /* hash.c */
 void ShowLanguageMenu(RECT rcExclude);
 extern DWORD WINAPI ImageScanThread(LPVOID param); /* image_scan.c */
@@ -477,6 +478,12 @@ static GtkWidget *build_persistence_row(void)
 
 	rw.persistence_row = vbox;
 	gtk_widget_set_no_show_all(vbox, TRUE); /* hidden until needed */
+
+	g_signal_connect(rw.persistence_scale, "value-changed",
+	                 G_CALLBACK(on_persistence_changed), NULL);
+	g_signal_connect(rw.persistence_units, "changed",
+	                 G_CALLBACK(on_persistence_changed), NULL);
+
 	return vbox;
 }
 
@@ -814,6 +821,19 @@ static void on_fs_changed(GtkComboBox *combo, gpointer data)
 		fs_type = (int)ComboBox_GetItemData(hFileSystem, sel);
 		populate_cluster_combo(fs_type);
 	}
+}
+
+static void on_persistence_changed(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	if (!rw.persistence_scale || !rw.persistence_units) return;
+	gdouble val = gtk_range_get_value(GTK_RANGE(rw.persistence_scale));
+	int unit = gtk_combo_box_get_active(GTK_COMBO_BOX(rw.persistence_units));
+	/* unit 0 = MB, unit 1 = GB */
+	uint64_t mult = (unit == 1) ? (1024ULL * 1024 * 1024) : (1024ULL * 1024);
+	persistence_size = (uint64_t)val * mult;
+	persistence_unit_selection = unit;
+	SetPersistenceSize();
 }
 
 static void on_log_clicked(GtkButton *btn, gpointer data)
@@ -1223,6 +1243,7 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		        (int)img_report.is_iso, (int)img_report.is_bootable_img);
 		SetFSFromISO();
 		SetPartitionSchemeAndTargetSystem(FALSE);
+		TogglePersistenceControls(HAS_PERSISTENCE(img_report));
 		break;
 
 	case UM_HASH_COMPLETED: {

@@ -21,6 +21,7 @@
 #include "format.h"
 #include "format_linux.h"
 #include "badblocks.h"
+#include "settings.h"
 #include "ms-sys/inc/file.h"
 #include "ms-sys/inc/br.h"
 #include "ms-sys/inc/fat32.h"
@@ -662,8 +663,12 @@ DWORD WINAPI FormatThread(void* param)
 	PrintStatusInfo(FALSE, FALSE, 0, MSG_228);
 	BOOL mbr_is_bootable = (partition_type == PARTITION_STYLE_MBR) &&
 	                       (target_type == TT_UEFI ? FALSE : TRUE);
+	uint8_t extra_partitions = 0;
+	if (boot_type == BT_IMAGE && !write_as_image &&
+	    HAS_PERSISTENCE(img_report) && persistence_size > 0)
+		extra_partitions |= XP_PERSISTENCE;
 	if (!CreatePartition(hPhysicalDrive, partition_type, fs_type,
-	                     mbr_is_bootable, 0)) {
+	                     mbr_is_bootable, extra_partitions)) {
 		ErrorStatus = RUFUS_ERROR(ERROR_PARTITION_FAILURE);
 		goto out;
 	}
@@ -681,10 +686,25 @@ DWORD WINAPI FormatThread(void* param)
 
 	if (SelectedDrive.nPartitions == 0 && partition_type == PARTITION_STYLE_MBR) {
 		/* Fallback: manually set the partition offset to LBA 2048 */
-		SelectedDrive.Partition[0].Offset = 2048ULL * 512;
-		SelectedDrive.Partition[0].Size   = SelectedDrive.DiskSize - SelectedDrive.Partition[0].Offset;
+		uint32_t sec = SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512;
+		uint32_t pers_sects = (extra_partitions & XP_PERSISTENCE) ?
+		                      (uint32_t)(persistence_size / sec) : 0;
+		uint64_t total_sects = (uint64_t)SelectedDrive.DiskSize / sec;
+		uint32_t main_sects = (uint32_t)(total_sects - 2048 - pers_sects);
+		SelectedDrive.Partition[0].Offset = 2048ULL * sec;
+		SelectedDrive.Partition[0].Size   = (uint64_t)main_sects * sec;
 		SelectedDrive.nPartitions = 1;
+		if (extra_partitions & XP_PERSISTENCE) {
+			SelectedDrive.Partition[1].Offset = SelectedDrive.Partition[0].Offset +
+			                                    SelectedDrive.Partition[0].Size;
+			SelectedDrive.Partition[1].Size   = persistence_size;
+			SelectedDrive.nPartitions = 2;
+		}
 	}
+
+	/* If persistence partition was created, record its index */
+	if ((extra_partitions & XP_PERSISTENCE) && SelectedDrive.nPartitions >= 2)
+		partition_index[PI_CASPER] = 1;
 	uint64_t part_offset = SelectedDrive.Partition[partition_index[PI_MAIN]].Offset;
 
 	CHECK_FOR_USER_CANCEL;
@@ -777,6 +797,20 @@ DWORD WINAPI FormatThread(void* param)
 		}
 	}
 	CHECK_FOR_USER_CANCEL;
+
+	/* Format persistence partition if one was created */
+	if (extra_partitions & XP_PERSISTENCE) {
+		uint64_t pers_offset = SelectedDrive.Partition[partition_index[PI_CASPER]].Offset;
+		int ext_version = ReadSetting32(SETTING_USE_EXT_VERSION);
+		if (ext_version < 2 || ext_version > 4) ext_version = 3;
+		int pers_fs = FS_EXT2 + (ext_version - 2);
+		const char *pers_label = img_report.uses_casper ? "casper-rw" : "persistence";
+		DWORD pers_flags = FP_FORCE;
+		if (!img_report.uses_casper)
+			pers_flags |= FP_CREATE_PERSISTENCE_CONF;
+		if (!FormatPartition(DriveIndex, pers_offset, 0, pers_fs, pers_label, pers_flags))
+			uprintf("WARNING: Persistence partition format failed: %s", WindowsErrorString());
+	}
 
 	/* Install Syslinux bootloader when applicable */
 	if ( (boot_type == BT_SYSLINUX_V4) || (boot_type == BT_SYSLINUX_V6) ||

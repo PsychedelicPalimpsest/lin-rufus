@@ -9,6 +9,8 @@
 #include "../src/windows/rufus.h"
 #include "../src/windows/badblocks.h"
 
+DWORD _win_last_error = 0;
+
 char *GuidToString(const GUID *guid, BOOL bDecorated)
 {
     (void)guid; (void)bDecorated; return NULL;

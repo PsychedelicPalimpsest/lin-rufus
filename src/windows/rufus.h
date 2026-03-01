@@ -754,6 +754,7 @@ extern uint8_t image_options, *pe256ssp;
 extern uint16_t rufus_version[3], embedded_sl_version[2];
 extern uint32_t pe256ssp_size;
 extern uint64_t persistence_size;
+extern int persistence_unit_selection;
 extern int64_t iso_blocking_status;
 extern size_t ubuffer_pos;
 extern const int nb_steps[FS_MAX];
