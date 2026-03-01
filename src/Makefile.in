@@ -120,6 +120,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-drive.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-format.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-format_ext.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-format_ext_tools.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-format_fat32.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-globals.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-hash.$(OBJEXT) \
@@ -141,7 +142,12 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-vhd.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-window_text_bridge.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-status_history.$(OBJEXT) \
-@TARGET_WINDOWS_FALSE@	linux/rufus-wue.$(OBJEXT)
+@TARGET_WINDOWS_FALSE@	linux/rufus-device_combo.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-wue.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-notify.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-system_info.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-timezone.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-xdg.$(OBJEXT)
 @TARGET_WINDOWS_TRUE@am__objects_3 =  \
 @TARGET_WINDOWS_TRUE@	windows/rufus-badblocks.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-darkmode.$(OBJEXT) \
@@ -319,6 +325,8 @@ INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LDFLAGS = @LDFLAGS@
+LIBNOTIFY_CFLAGS = @LIBNOTIFY_CFLAGS@
+LIBNOTIFY_LIBS = @LIBNOTIFY_LIBS@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LTLIBOBJS = @LTLIBOBJS@
@@ -412,10 +420,10 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@OS_SOURCES = linux/compat/msg_dispatch.c \
 @TARGET_WINDOWS_FALSE@	linux/badblocks.c linux/combo_bridge.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
 @TARGET_WINDOWS_FALSE@	linux/dos.c linux/dos_locale.c linux/freedos_data.c \
-@TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_fat32.c linux/globals.c \
+@TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/wue.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -512,6 +520,7 @@ linux/rufus-freedos_data.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-drive.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-format.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-format_ext.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-format_ext_tools.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-format_fat32.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-globals.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-hash.$(OBJEXT): linux/$(am__dirstamp)
@@ -534,7 +543,12 @@ linux/rufus-ui_gtk.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-vhd.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-window_text_bridge.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-status_history.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-device_combo.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-wue.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-notify.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-system_info.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-timezone.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-xdg.$(OBJEXT): linux/$(am__dirstamp)
 windows/$(am__dirstamp):
 	@$(MKDIR_P) windows
 	@: >>windows/$(am__dirstamp)
@@ -693,6 +707,12 @@ linux/rufus-format_ext.o: linux/format_ext.c
 linux/rufus-format_ext.obj: linux/format_ext.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-format_ext.obj `if test -f 'linux/format_ext.c'; then $(CYGPATH_W) 'linux/format_ext.c'; else $(CYGPATH_W) '$(srcdir)/linux/format_ext.c'; fi`
 
+linux/rufus-format_ext_tools.o: linux/format_ext_tools.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-format_ext_tools.o `test -f 'linux/format_ext_tools.c' || echo '$(srcdir)/'`linux/format_ext_tools.c
+
+linux/rufus-format_ext_tools.obj: linux/format_ext_tools.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-format_ext_tools.obj `if test -f 'linux/format_ext_tools.c'; then $(CYGPATH_W) 'linux/format_ext_tools.c'; else $(CYGPATH_W) '$(srcdir)/linux/format_ext_tools.c'; fi`
+
 linux/rufus-format_fat32.o: linux/format_fat32.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-format_fat32.o `test -f 'linux/format_fat32.c' || echo '$(srcdir)/'`linux/format_fat32.c
 
@@ -825,11 +845,41 @@ linux/rufus-status_history.o: linux/status_history.c
 linux/rufus-status_history.obj: linux/status_history.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-status_history.obj `if test -f 'linux/status_history.c'; then $(CYGPATH_W) 'linux/status_history.c'; else $(CYGPATH_W) '$(srcdir)/linux/status_history.c'; fi`
 
+linux/rufus-device_combo.o: linux/device_combo.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-device_combo.o `test -f 'linux/device_combo.c' || echo '$(srcdir)/'`linux/device_combo.c
+
+linux/rufus-device_combo.obj: linux/device_combo.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-device_combo.obj `if test -f 'linux/device_combo.c'; then $(CYGPATH_W) 'linux/device_combo.c'; else $(CYGPATH_W) '$(srcdir)/linux/device_combo.c'; fi`
+
 linux/rufus-wue.o: linux/wue.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-wue.o `test -f 'linux/wue.c' || echo '$(srcdir)/'`linux/wue.c
 
 linux/rufus-wue.obj: linux/wue.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-wue.obj `if test -f 'linux/wue.c'; then $(CYGPATH_W) 'linux/wue.c'; else $(CYGPATH_W) '$(srcdir)/linux/wue.c'; fi`
+
+linux/rufus-notify.o: linux/notify.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-notify.o `test -f 'linux/notify.c' || echo '$(srcdir)/'`linux/notify.c
+
+linux/rufus-notify.obj: linux/notify.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-notify.obj `if test -f 'linux/notify.c'; then $(CYGPATH_W) 'linux/notify.c'; else $(CYGPATH_W) '$(srcdir)/linux/notify.c'; fi`
+
+linux/rufus-system_info.o: linux/system_info.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-system_info.o `test -f 'linux/system_info.c' || echo '$(srcdir)/'`linux/system_info.c
+
+linux/rufus-system_info.obj: linux/system_info.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-system_info.obj `if test -f 'linux/system_info.c'; then $(CYGPATH_W) 'linux/system_info.c'; else $(CYGPATH_W) '$(srcdir)/linux/system_info.c'; fi`
+
+linux/rufus-timezone.o: linux/timezone.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-timezone.o `test -f 'linux/timezone.c' || echo '$(srcdir)/'`linux/timezone.c
+
+linux/rufus-timezone.obj: linux/timezone.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-timezone.obj `if test -f 'linux/timezone.c'; then $(CYGPATH_W) 'linux/timezone.c'; else $(CYGPATH_W) '$(srcdir)/linux/timezone.c'; fi`
+
+linux/rufus-xdg.o: linux/xdg.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-xdg.o `test -f 'linux/xdg.c' || echo '$(srcdir)/'`linux/xdg.c
+
+linux/rufus-xdg.obj: linux/xdg.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-xdg.obj `if test -f 'linux/xdg.c'; then $(CYGPATH_W) 'linux/xdg.c'; else $(CYGPATH_W) '$(srcdir)/linux/xdg.c'; fi`
 
 windows/rufus-badblocks.o: windows/badblocks.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-badblocks.o `test -f 'windows/badblocks.c' || echo '$(srcdir)/'`windows/badblocks.c

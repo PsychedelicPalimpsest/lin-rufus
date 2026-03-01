@@ -618,6 +618,11 @@ SUFFIX
 AM_LDFLAGS
 AM_CFLAGS
 VISIBILITY_CFLAGS
+LIBNOTIFY_LIBS
+LIBNOTIFY_CFLAGS
+MKEXFATFS
+MKFS_EXFAT
+MKNTFS
 FONTCONFIG_LIBS
 FONTCONFIG_CFLAGS
 BLKID_LIBS
@@ -748,7 +753,9 @@ CURL_LIBS
 BLKID_CFLAGS
 BLKID_LIBS
 FONTCONFIG_CFLAGS
-FONTCONFIG_LIBS'
+FONTCONFIG_LIBS
+LIBNOTIFY_CFLAGS
+LIBNOTIFY_LIBS'
 
 
 # Initialize some variables set by options.
@@ -1410,6 +1417,10 @@ Some influential environment variables:
               C compiler flags for FONTCONFIG, overriding pkg-config
   FONTCONFIG_LIBS
               linker flags for FONTCONFIG, overriding pkg-config
+  LIBNOTIFY_CFLAGS
+              C compiler flags for LIBNOTIFY, overriding pkg-config
+  LIBNOTIFY_LIBS
+              linker flags for LIBNOTIFY, overriding pkg-config
 
 Use these variables to override the choices made by 'configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -5741,6 +5752,252 @@ fi
 
 printf "%s\n" "#define RUFUS_DATADIR \"${datadir}/rufus\"" >>confdefs.h
 
+
+  # Optional: detect NTFS and exFAT formatting tools (informational only —
+  # the binary searches at runtime, so absence does not abort the build).
+  # Extract the first word of "mkntfs", so it can be a program name with args.
+set dummy mkntfs; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_path_MKNTFS+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) case $MKNTFS in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_MKNTFS="$MKNTFS" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+as_dummy="/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+for as_dir in $as_dummy
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_path_MKNTFS="$as_dir$ac_word$ac_exec_ext"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_MKNTFS" && ac_cv_path_MKNTFS="not found"
+  ;;
+esac ;;
+esac
+fi
+MKNTFS=$ac_cv_path_MKNTFS
+if test -n "$MKNTFS"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $MKNTFS" >&5
+printf "%s\n" "$MKNTFS" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+  if test "x$MKNTFS" != "xnot found"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkntfs found at $MKNTFS — NTFS formatting will be available" >&5
+printf "%s\n" "$as_me: mkntfs found at $MKNTFS — NTFS formatting will be available" >&6;}
+  else
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkntfs not found — install ntfs-3g to enable NTFS formatting" >&5
+printf "%s\n" "$as_me: mkntfs not found — install ntfs-3g to enable NTFS formatting" >&6;}
+  fi
+
+  # Extract the first word of "mkfs.exfat", so it can be a program name with args.
+set dummy mkfs.exfat; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_path_MKFS_EXFAT+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) case $MKFS_EXFAT in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_MKFS_EXFAT="$MKFS_EXFAT" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+as_dummy="/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+for as_dir in $as_dummy
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_path_MKFS_EXFAT="$as_dir$ac_word$ac_exec_ext"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_MKFS_EXFAT" && ac_cv_path_MKFS_EXFAT="not found"
+  ;;
+esac ;;
+esac
+fi
+MKFS_EXFAT=$ac_cv_path_MKFS_EXFAT
+if test -n "$MKFS_EXFAT"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $MKFS_EXFAT" >&5
+printf "%s\n" "$MKFS_EXFAT" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+  if test "x$MKFS_EXFAT" != "xnot found"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkfs.exfat found at $MKFS_EXFAT — exFAT formatting will be available" >&5
+printf "%s\n" "$as_me: mkfs.exfat found at $MKFS_EXFAT — exFAT formatting will be available" >&6;}
+  else
+    # Extract the first word of "mkexfatfs", so it can be a program name with args.
+set dummy mkexfatfs; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_path_MKEXFATFS+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) case $MKEXFATFS in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_MKEXFATFS="$MKEXFATFS" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+as_dummy="/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+for as_dir in $as_dummy
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_path_MKEXFATFS="$as_dir$ac_word$ac_exec_ext"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_MKEXFATFS" && ac_cv_path_MKEXFATFS="not found"
+  ;;
+esac ;;
+esac
+fi
+MKEXFATFS=$ac_cv_path_MKEXFATFS
+if test -n "$MKEXFATFS"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $MKEXFATFS" >&5
+printf "%s\n" "$MKEXFATFS" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+    if test "x$MKEXFATFS" != "xnot found"; then
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkexfatfs found at $MKEXFATFS — exFAT formatting will be available" >&5
+printf "%s\n" "$as_me: mkexfatfs found at $MKEXFATFS — exFAT formatting will be available" >&6;}
+    else
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: mkfs.exfat/mkexfatfs not found — install exfatprogs to enable exFAT formatting" >&5
+printf "%s\n" "$as_me: mkfs.exfat/mkexfatfs not found — install exfatprogs to enable exFAT formatting" >&6;}
+    fi
+  fi
+
+  # libnotify — optional; used for desktop notifications on format/hash/download completion.
+  # Falls back to notify-send(1) subprocess when the library is absent.
+
+pkg_failed=no
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for libnotify >= 0.7" >&5
+printf %s "checking for libnotify >= 0.7... " >&6; }
+
+if test -n "$LIBNOTIFY_CFLAGS"; then
+    pkg_cv_LIBNOTIFY_CFLAGS="$LIBNOTIFY_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libnotify >= 0.7\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libnotify >= 0.7") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_LIBNOTIFY_CFLAGS=`$PKG_CONFIG --cflags "libnotify >= 0.7" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$LIBNOTIFY_LIBS"; then
+    pkg_cv_LIBNOTIFY_LIBS="$LIBNOTIFY_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libnotify >= 0.7\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libnotify >= 0.7") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_LIBNOTIFY_LIBS=`$PKG_CONFIG --libs "libnotify >= 0.7" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+                LIBNOTIFY_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "libnotify >= 0.7" 2>&1`
+        else
+                LIBNOTIFY_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "libnotify >= 0.7" 2>&1`
+        fi
+        # Put the nasty error message in config.log where it belongs
+        echo "$LIBNOTIFY_PKG_ERRORS" >&5
+
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: libnotify not found — desktop notifications via notify-send fallback" >&5
+printf "%s\n" "$as_me: libnotify not found — desktop notifications via notify-send fallback" >&6;}
+elif test $pkg_failed = untried; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: libnotify not found — desktop notifications via notify-send fallback" >&5
+printf "%s\n" "$as_me: libnotify not found — desktop notifications via notify-send fallback" >&6;}
+else
+        LIBNOTIFY_CFLAGS=$pkg_cv_LIBNOTIFY_CFLAGS
+        LIBNOTIFY_LIBS=$pkg_cv_LIBNOTIFY_LIBS
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: libnotify found — desktop notifications via library" >&5
+printf "%s\n" "$as_me: libnotify found — desktop notifications via library" >&6;}
+     AM_CFLAGS="$AM_CFLAGS $LIBNOTIFY_CFLAGS -DUSE_LIBNOTIFY"
+     AM_LDFLAGS="$AM_LDFLAGS $LIBNOTIFY_LIBS"
+fi
 fi
 
 

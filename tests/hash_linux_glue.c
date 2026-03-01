@@ -50,6 +50,7 @@ thumbprint_list_t *sb_active_certs  = NULL;
 thumbprint_list_t *sb_revoked_certs = NULL;
 BOOL expert_mode        = FALSE;
 char app_data_dir[MAX_PATH] = "/tmp";
+char app_dir[MAX_PATH]  = "/tmp";
 BOOL usb_debug          = FALSE;
 BOOL right_to_left_mode = FALSE;
 

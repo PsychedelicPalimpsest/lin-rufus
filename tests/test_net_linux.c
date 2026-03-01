@@ -1100,13 +1100,6 @@ TEST(set_fido_check_no_crash)
 }
 
 /* ================================================================
- * GetShortName helper (internal, tested via download log output)
- * ================================================================ */
-
-/* We can't call GetShortName directly as it's static, but we can
- * verify URL parsing through download behavior. */
-
-/* ================================================================
  * is_network_available — connectivity pre-check
  * ================================================================ */
 

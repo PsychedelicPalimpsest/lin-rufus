@@ -483,7 +483,9 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
             e1[15] = (pers_sects >> 24) & 0xFF;
         }
 
-        return (pwrite(fd, mbr, 512, 0) == 512) ? TRUE : FALSE;
+        BOOL mbr_ok = (pwrite(fd, mbr, 512, 0) == 512);
+        if (mbr_ok) fdatasync(fd);
+        return mbr_ok ? TRUE : FALSE;
 
     } else if (PartitionStyle == PARTITION_STYLE_GPT) {
         uint8_t  mbr[512]   = { 0 };
@@ -589,6 +591,7 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
               pwrite(fd, hdr,     512,         512)   == 512         &&
               pwrite(fd, entries, entries_sz,  1024)  == (ssize_t)entries_sz)
              ? TRUE : FALSE;
+        if (ok) fdatasync(fd);
 
         free(entries);
         return ok;

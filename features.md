@@ -64,6 +64,41 @@ make -C tests run-wine
 Toolchain overrides: `CC=clang ./run_tests.sh --linux-only`,
 `CC_WIN=i686-w64-mingw32-gcc ./run_tests.sh --wine-only`.
 
+**Tests that require root (loopback, raw block device access):**
+
+Some tests need real `/dev/loop*` block devices and must run as root.  They
+skip gracefully via `SKIP_NOT_ROOT()` when run as a normal user.  The
+recommended way to run them is in a short-lived privileged container so that
+the host system stays clean:
+
+```
+./run_tests.sh --container   # builds rufus-test-env image (cached), then runs
+                             # works with both docker and podman
+                             # mirrors the GitHub CI environment exactly
+```
+
+The container image is defined in `tests/Dockerfile` (Ubuntu 22.04 + all build
+and test dependencies pre-baked via `tests/install-deps.sh`).  After the first
+build, repeated runs skip the apt-install layer and start immediately.
+
+To run them directly (if you are already root or in a CI environment that
+provides `/dev/loop*`):
+
+```
+./run_tests.sh --root-only   # run only root-requiring tests
+make -C tests run-root       # same, via make
+```
+
+The container approach is unified with the GitHub CI:
+
+* `tests/install-deps.sh` — single source of truth for all apt packages;
+  called by both `tests/Dockerfile` and `.github/workflows/linux.yml`.
+* The `Container-Root-Tests` CI job runs `docker build -t rufus-test-env tests/`
+  then `./run_tests.sh --container`, exercising the same code path as local runs.
+
+The `CONTAINER_RUNTIME` environment variable selects `docker` or `podman`
+(default: auto-detected, docker preferred).
+
 ---
 
 ## 1. Build & Infrastructure
@@ -74,7 +109,7 @@ Toolchain overrides: `CC=clang ./run_tests.sh --linux-only`,
 | MinGW cross-compile (`--with-os=windows`) | ✅ | Produces `rufus.exe` |
 | Linux build script (`build-rufus-linux.sh`) | ✅ | |
 | Windows cross-build script (`build-rufus-mingw.sh`) | ✅ | |
-| Test system (`tests/`, `run_tests.sh`) | ✅ | Runs native + Wine |
+| Test system (`tests/`, `run_tests.sh`) | ✅ | Runs native + Wine + privileged container (root tests) |
 | GCC 15 compound-literal regression fix in `cregex_compile.c` | ✅ | Static node lifetimes replaced with local vars |
 | GTK3 UI backend (`-DUSE_GTK`) | ✅ | Window builds and launches |
 | Non-GTK console fallback (`src/linux/rufus.c main()`) | 🔧 | Prints error and exits; no real CLI yet |
@@ -588,7 +623,7 @@ This is the most structurally significant porting gap.
 
 ### Build, Packaging & CI
 
-94. ~~**GitHub Actions CI pipeline**~~ ✅ **DONE** — `.github/workflows/linux.yml` runs on every push/PR: installs build deps (GTK3, curl, OpenSSL, libudev, blkid, fontconfig, libxml2, libcdio, mingw-w64), `./configure --with-os=linux`, `make -j$(nproc)`, then `./run_tests.sh --linux-only`; uploads test binaries as artifacts on failure; triggers on the same path-ignore rules as the existing MinGW workflow; runs on ubuntu-22.04
+94. ~~**GitHub Actions CI pipeline**~~ ✅ **DONE** — `.github/workflows/linux.yml` runs on every push/PR: installs build deps via `tests/install-deps.sh` (single source of truth shared with `tests/Dockerfile`), `./configure --with-os=linux`, `make -j$(nproc)`, then `./run_tests.sh --linux-only`; uploads test binaries as artifacts on failure; triggers on the same path-ignore rules as the existing MinGW workflow; runs on ubuntu-22.04; separate `Container-Root-Tests` job builds `rufus-test-env` image (`docker build tests/`) then runs `./run_tests.sh --container` to exercise root-requiring tests (loopback) in a `--privileged` Docker container using the same Dockerfile as local development
 95. **Coverity / cppcheck static analysis** — integrate the existing `_coverity.cmd` logic into a CI job; add a `make check-cppcheck` target using `cppcheck --enable=all --error-exitcode=1`; fix all current `cppcheck` findings before enabling the gate
 96. **Flatpak manifest** — create `packaging/flatpak/ie.akeo.rufus.yaml` with `finish-args` including `--device=block` (removable media), `--share=network`, and `--filesystem=xdg-download`; add a `make flatpak` convenience target wrapping `flatpak-builder`
 97. **AppImage build** — add a `make appimage` target using `linuxdeploy` + `linuxdeploy-plugin-gtk` to produce `Rufus-<version>-x86_64.AppImage`; include the GTK theme, hicolor icons, and locale data; test on a minimal Ubuntu container
@@ -615,6 +650,8 @@ This is the most structurally significant porting gap.
 108. **`DumpFatDir()` FAT directory lister** — implement the stub in `iso.c` using the `libfat` sector-reader already wired (`libfat_readfile` / `iso9660_readfat`); list root-directory entries with name, size, attributes; useful for verifying Syslinux and FreeDOS installations in CI
 109. **Structured error context** — augment `uprintf` log lines for failed operations with a `[errno=N strerror]` suffix automatically; create a `uprintf_errno(fmt, ...)` macro that appends `": %s (%d)"` from `strerror(errno)` / `errno`; replace raw `strerror()` calls throughout the Linux source
 110. ~~**`wuprintf()` UTF-8 path with test**~~ ✅ **DONE** — see item 42 above
+
+121. Use docker to allow for non root root style testing
 
 ---
 

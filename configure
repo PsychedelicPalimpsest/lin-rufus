@@ -618,6 +618,8 @@ SUFFIX
 AM_LDFLAGS
 AM_CFLAGS
 VISIBILITY_CFLAGS
+LIBNOTIFY_LIBS
+LIBNOTIFY_CFLAGS
 MKEXFATFS
 MKFS_EXFAT
 MKNTFS
@@ -751,7 +753,9 @@ CURL_LIBS
 BLKID_CFLAGS
 BLKID_LIBS
 FONTCONFIG_CFLAGS
-FONTCONFIG_LIBS'
+FONTCONFIG_LIBS
+LIBNOTIFY_CFLAGS
+LIBNOTIFY_LIBS'
 
 
 # Initialize some variables set by options.
@@ -1413,6 +1417,10 @@ Some influential environment variables:
               C compiler flags for FONTCONFIG, overriding pkg-config
   FONTCONFIG_LIBS
               linker flags for FONTCONFIG, overriding pkg-config
+  LIBNOTIFY_CFLAGS
+              C compiler flags for LIBNOTIFY, overriding pkg-config
+  LIBNOTIFY_LIBS
+              linker flags for LIBNOTIFY, overriding pkg-config
 
 Use these variables to override the choices made by 'configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -5911,6 +5919,85 @@ printf "%s\n" "$as_me: mkexfatfs found at $MKEXFATFS — exFAT formatting will b
 printf "%s\n" "$as_me: mkfs.exfat/mkexfatfs not found — install exfatprogs to enable exFAT formatting" >&6;}
     fi
   fi
+
+  # libnotify — optional; used for desktop notifications on format/hash/download completion.
+  # Falls back to notify-send(1) subprocess when the library is absent.
+
+pkg_failed=no
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for libnotify >= 0.7" >&5
+printf %s "checking for libnotify >= 0.7... " >&6; }
+
+if test -n "$LIBNOTIFY_CFLAGS"; then
+    pkg_cv_LIBNOTIFY_CFLAGS="$LIBNOTIFY_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libnotify >= 0.7\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libnotify >= 0.7") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_LIBNOTIFY_CFLAGS=`$PKG_CONFIG --cflags "libnotify >= 0.7" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$LIBNOTIFY_LIBS"; then
+    pkg_cv_LIBNOTIFY_LIBS="$LIBNOTIFY_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libnotify >= 0.7\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libnotify >= 0.7") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_LIBNOTIFY_LIBS=`$PKG_CONFIG --libs "libnotify >= 0.7" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+                LIBNOTIFY_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "libnotify >= 0.7" 2>&1`
+        else
+                LIBNOTIFY_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "libnotify >= 0.7" 2>&1`
+        fi
+        # Put the nasty error message in config.log where it belongs
+        echo "$LIBNOTIFY_PKG_ERRORS" >&5
+
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: libnotify not found — desktop notifications via notify-send fallback" >&5
+printf "%s\n" "$as_me: libnotify not found — desktop notifications via notify-send fallback" >&6;}
+elif test $pkg_failed = untried; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: libnotify not found — desktop notifications via notify-send fallback" >&5
+printf "%s\n" "$as_me: libnotify not found — desktop notifications via notify-send fallback" >&6;}
+else
+        LIBNOTIFY_CFLAGS=$pkg_cv_LIBNOTIFY_CFLAGS
+        LIBNOTIFY_LIBS=$pkg_cv_LIBNOTIFY_LIBS
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: libnotify found — desktop notifications via library" >&5
+printf "%s\n" "$as_me: libnotify found — desktop notifications via library" >&6;}
+     AM_CFLAGS="$AM_CFLAGS $LIBNOTIFY_CFLAGS -DUSE_LIBNOTIFY"
+     AM_LDFLAGS="$AM_LDFLAGS $LIBNOTIFY_LIBS"
+fi
 fi
 
 

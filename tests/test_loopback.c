@@ -260,7 +260,7 @@ BOOL ExtractISO(const char *src, const char *dst, BOOL scan_only) {
  * Loopback context and helpers
  * ================================================================ */
 
-#define LOOP_IMG_SIZE   ((uint64_t)128 * 1024 * 1024)   /* 128 MiB */
+#define LOOP_IMG_SIZE   ((uint64_t)512 * 1024 * 1024)   /* 512 MiB — FAT32 needs ≥65536 clusters */
 #define LOOP_DEV_MAX    64
 
 typedef struct {

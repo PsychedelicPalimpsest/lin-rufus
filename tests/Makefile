@@ -292,6 +292,11 @@ CFLAGS_LINUX_test_hash := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 LDFLAGS_LINUX_test_hash := -lpthread -lssl -lcrypto $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_hash := $(HASH_SRC) $(HASH_LINUX_EXTRA)
 
+# iso_hashes: fixture-based ISO hash regression tests (item 86)
+CFLAGS_LINUX_test_iso_hashes := $(CFLAGS_LINUX_test_hash)
+LDFLAGS_LINUX_test_iso_hashes := $(LDFLAGS_LINUX_test_hash)
+EXTRA_SRC_LINUX_test_iso_hashes := $(HASH_SRC) $(HASH_LINUX_EXTRA)
+
 CFLAGS_WIN_test_hash := -I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
                         -Wno-unused-function -Wno-sign-compare \
                         -Wno-implicit-function-declaration -Wno-unused-parameter \
@@ -677,7 +682,13 @@ LDFLAGS_LINUX_test_syslinux_linux := -lblkid
 EXTRA_SRC_LINUX_test_syslinux_linux := \
 	$(SYSLINUX_LINUX_SRC) $(LIBFAT_LIB) $(LIBINSTALLER_LIB) $(BLED_LIB) syslinux_linux_glue.c
 
-.PHONY: all linux windows run-linux run-wine clean
+# Tests that require root / a privileged container (e.g. /dev/loop* access).
+# Run via:  make run-root          (must already be root)
+#           ./run_tests.sh --root-only   (same)
+#           ./run_tests.sh --container   (auto-launches privileged Docker/Podman)
+ROOT_BINS := test_loopback_linux
+
+.PHONY: all linux windows run-linux run-wine run-root clean
 
 all: linux windows
 
@@ -717,6 +728,78 @@ run-wine: windows
 	done; \
 	[ $$failed -eq 0 ] || { echo "$$failed test binary/binaries FAILED under Wine"; exit 1; }
 
+# Root-requiring tests (loopback device access, etc.)
+# Must run as root or inside a privileged container.
+# See: ./run_tests.sh --container
+run-root: $(ROOT_BINS)
+	@failed=0; \
+	for bin in $(ROOT_BINS); do \
+	  printf '\n=== %s (root) ===\n' "$$bin"; \
+	  ./$$bin || failed=$$((failed + 1)); \
+	done; \
+	[ $$failed -eq 0 ] || { echo "$$failed root test binary/binaries FAILED"; exit 1; }
+
+# ---- AddressSanitizer + UBSan target (item 91) ----
+# Rebuilds all Linux test binaries with -fsanitize=address,undefined,leak
+# and runs the full Linux test suite under ASAN.  Requires GCC ≥ 4.8 / Clang ≥ 3.1
+# with libasan + libubsan installed.  On Debian/Ubuntu: apt install gcc libasan6.
+#
+#   make check-asan
+#
+ASAN_FLAGS   := -fsanitize=address,undefined,leak -fno-omit-frame-pointer
+ASAN_BINS    := $(LINUX_BINS:%=%_asan)
+
+# _asan_test_name strips the _linux_asan suffix to look up per-test CFLAGS/LDFLAGS.
+_asan_test_name = $(patsubst %_linux_asan,%,$(notdir $@))
+
+%_linux_asan: %.c $(CREGEX_SRC)
+	$(CC) $(CFLAGS_LINUX) $(CFLAGS_LINUX_$(_asan_test_name)) $(ASAN_FLAGS) \
+	    -o $@ $< $(CREGEX_SRC) \
+	    $(EXTRA_SRC_LINUX_$(_asan_test_name)) $(LDFLAGS_LINUX_$(_asan_test_name)) \
+	    $(FONTCONFIG_LIBS)
+
+check-asan: $(ASAN_BINS)
+	@echo "=== Running tests under AddressSanitizer + UBSan ==="
+	@failed=0; \
+	for bin in $(ASAN_BINS); do \
+	  printf '\n=== %s (ASAN) ===\n' "$$bin"; \
+	  ASAN_OPTIONS=halt_on_error=1:detect_leaks=1 \
+	  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+	    ./$$bin || failed=$$((failed + 1)); \
+	done; \
+	[ $$failed -eq 0 ] && echo "All ASAN tests passed." \
+	  || { echo "$$failed ASAN test binary/binaries FAILED"; exit 1; }
+
+# ---- cppcheck static analysis target (item 95) ----
+# Requires:  sudo apt install cppcheck
+# Runs cppcheck over the Linux-specific sources with all checks enabled.
+# Suppressions kept minimal — add entries when cppcheck reports false positives.
+#
+#   make check-cppcheck
+#
+CPPCHECK_SRCS := \
+	$(SRC_DIR)/linux \
+	$(SRC_DIR)/common
+
+CPPCHECK_FLAGS := \
+	--enable=all \
+	--error-exitcode=1 \
+	--suppress=missingIncludeSystem \
+	--suppress=unmatchedSuppression \
+	--inline-suppr \
+	-I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/linux/compat \
+	-I$(SRC_DIR)/windows \
+	-I$(SRC_DIR)/common \
+	-I$(SRC_DIR) \
+	-D__linux__ \
+	-DRUFUS_TEST
+
+check-cppcheck:
+	@command -v cppcheck >/dev/null 2>&1 || { echo "cppcheck not found; install with: sudo apt install cppcheck"; exit 1; }
+	cppcheck $(CPPCHECK_FLAGS) $(CPPCHECK_SRCS)
+	@echo "cppcheck: no issues found."
+
 clean:
-	rm -f $(LINUX_BINS) $(WIN_BINS)
+	rm -f $(LINUX_BINS) $(WIN_BINS) $(ASAN_BINS)
 

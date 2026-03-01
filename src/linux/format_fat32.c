@@ -386,6 +386,7 @@ BOOL FormatLargeFAT32(DWORD DriveIndex, uint64_t PartitionOffset,
 	r = TRUE;
 
 out:
+	fdatasync((int)(intptr_t)hLogicalVolume);
 	safe_closehandle(hLogicalVolume);
 	safe_free(pFAT32BootSect);
 	safe_free(pFAT32FsInfo);
