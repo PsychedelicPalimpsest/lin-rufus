@@ -684,6 +684,259 @@ TEST(wuprintf_non_ascii_no_crash)
 
 
 
+/* ===========================================================================
+ * _printbits — binary string representation of arbitrary-size integers
+ * =========================================================================*/
+
+extern char* _printbits(size_t const size, void const* const ptr, int leading_zeroes);
+
+/* Single-byte value 0x01 without leading zeros → "0b1" */
+TEST(printbits_byte_one_no_lz)
+{
+    uint8_t v = 0x01;
+    char *s = _printbits(sizeof(v), &v, 0);
+    CHECK_MSG(s != NULL, "_printbits returned NULL");
+    if (s == NULL) return;
+    CHECK_MSG(strcmp(s, "0b1") == 0, "_printbits(0x01, no_lz) should return \"0b1\"");
+}
+
+/* Single-byte value 0x01 with leading zeros → "0b00000001" */
+TEST(printbits_byte_one_lz)
+{
+    uint8_t v = 0x01;
+    char *s = _printbits(sizeof(v), &v, 1);
+    CHECK_MSG(s != NULL, "_printbits returned NULL");
+    if (s == NULL) return;
+    CHECK_MSG(strcmp(s, "0b00000001") == 0,
+              "_printbits(0x01, lz) should return \"0b00000001\"");
+}
+
+/* Single-byte value 0xFF → "0b11111111" */
+TEST(printbits_byte_all_ones)
+{
+    uint8_t v = 0xFF;
+    char *s = _printbits(sizeof(v), &v, 0);
+    CHECK_MSG(s != NULL, "_printbits returned NULL");
+    if (s == NULL) return;
+    CHECK_MSG(strcmp(s, "0b11111111") == 0,
+              "_printbits(0xFF) should return \"0b11111111\"");
+}
+
+/* Single-byte value 0x00 without leading zeros → "0b" (no bits set = empty) */
+TEST(printbits_byte_zero_no_lz)
+{
+    uint8_t v = 0x00;
+    char *s = _printbits(sizeof(v), &v, 0);
+    CHECK_MSG(s != NULL, "_printbits returned NULL");
+    if (s == NULL) return;
+    /* When no bits are set and no leading zeros requested, result is "0b" */
+    CHECK_MSG(strcmp(s, "0b") == 0,
+              "_printbits(0x00, no_lz) should return \"0b\" (no bits set)");
+}
+
+/* Single-byte value 0x00 with leading zeros → "0b00000000" */
+TEST(printbits_byte_zero_lz)
+{
+    uint8_t v = 0x00;
+    char *s = _printbits(sizeof(v), &v, 1);
+    CHECK_MSG(s != NULL, "_printbits returned NULL");
+    if (s == NULL) return;
+    CHECK_MSG(strcmp(s, "0b00000000") == 0,
+              "_printbits(0x00, lz) should return \"0b00000000\"");
+}
+
+/* 16-bit value 0xA5A5 → check prefix and length */
+TEST(printbits_word_a5a5)
+{
+    uint16_t v = 0xA5A5;
+    char *s = _printbits(sizeof(v), &v, 1);
+    CHECK_MSG(s != NULL, "_printbits returned NULL");
+    if (s == NULL) return;
+    /* Should start with "0b" and have 16 bits */
+    CHECK_MSG(strncmp(s, "0b", 2) == 0, "result should start with 0b");
+    CHECK_MSG(strlen(s) == 18, "16-bit with lz should give 18 chars (0b + 16 bits)");
+}
+
+/* printbits macro with simple uint8_t value */
+TEST(printbits_macro_smoke)
+{
+    uint8_t v = 0b10101010;
+    char *s = _printbits(sizeof(v), &v, 0);
+    CHECK_MSG(s != NULL, "_printbits returned NULL");
+    if (s == NULL) return;
+    CHECK_MSG(strcmp(s, "0b10101010") == 0,
+              "printbits(0b10101010) should give \"0b10101010\"");
+}
+
+/* ===========================================================================
+ * DumpBufferHex — xxd-style hex dump via uprintf
+ * =========================================================================*/
+
+extern void DumpBufferHex(void* buf, size_t size);
+
+/* Capture log output for DumpBufferHex tests */
+static char dump_buf[8192];
+static int  dump_call_count;
+
+static void dump_log_handler(const char *msg)
+{
+    /* Accumulate all log messages */
+    size_t cur = strlen(dump_buf);
+    size_t add = strlen(msg);
+    if (cur + add + 2 < sizeof(dump_buf)) {
+        memcpy(dump_buf + cur, msg, add);
+        dump_buf[cur + add]     = '\n';
+        dump_buf[cur + add + 1] = '\0';
+    }
+    dump_call_count++;
+}
+
+/* DumpBufferHex with a 16-byte buffer — should produce output containing hex */
+TEST(dump_buffer_hex_16_bytes)
+{
+    uint8_t data[16];
+    for (int i = 0; i < 16; i++) data[i] = (uint8_t)i;
+
+    rufus_set_log_handler(dump_log_handler);
+    dump_buf[0] = '\0'; dump_call_count = 0;
+    DumpBufferHex(data, sizeof(data));
+    rufus_set_log_handler(NULL);
+
+    /* Should have printed something */
+    CHECK_MSG(dump_call_count > 0, "DumpBufferHex should call log handler");
+    /* Output should contain "00" (first byte) and "0f" (last byte) in hex */
+    CHECK_MSG(strstr(dump_buf, "00") != NULL, "hex dump should contain 00");
+    CHECK_MSG(strstr(dump_buf, "0f") != NULL, "hex dump should contain 0f");
+    /* Output should contain the offset "00000000" */
+    CHECK_MSG(strstr(dump_buf, "00000000") != NULL, "hex dump should contain offset 00000000");
+}
+
+/* DumpBufferHex with a 32-byte buffer — should produce two lines */
+TEST(dump_buffer_hex_32_bytes)
+{
+    uint8_t data[32];
+    for (int i = 0; i < 32; i++) data[i] = (uint8_t)(0xA0 + i);
+
+    rufus_set_log_handler(dump_log_handler);
+    dump_buf[0] = '\0'; dump_call_count = 0;
+    DumpBufferHex(data, sizeof(data));
+    rufus_set_log_handler(NULL);
+
+    /* a0..af on first line, b0..bf on second line */
+    CHECK_MSG(strstr(dump_buf, "a0") != NULL, "hex dump should contain a0");
+    CHECK_MSG(strstr(dump_buf, "00000010") != NULL,
+              "second line should have offset 00000010");
+}
+
+/* DumpBufferHex with a buffer that has printable ASCII — ASCII section present */
+TEST(dump_buffer_hex_ascii_chars)
+{
+    const char *msg = "Hello, World!!";  /* 14 bytes, all printable */
+    rufus_set_log_handler(dump_log_handler);
+    dump_buf[0] = '\0'; dump_call_count = 0;
+    DumpBufferHex((void*)msg, strlen(msg));
+    rufus_set_log_handler(NULL);
+
+    /* 'H' should appear in the ASCII section */
+    CHECK_MSG(strstr(dump_buf, "H") != NULL, "ASCII 'H' should appear in hex dump");
+}
+
+/* DumpBufferHex NULL buffer — must not crash */
+TEST(dump_buffer_hex_null_buf)
+{
+    rufus_set_log_handler(dump_log_handler);
+    dump_buf[0] = '\0'; dump_call_count = 0;
+    DumpBufferHex(NULL, 16);
+    rufus_set_log_handler(NULL);
+    /* Just verifying no crash — any output (or none) is acceptable */
+    CHECK(1);
+}
+
+/* DumpBufferHex size=0 — must not crash */
+TEST(dump_buffer_hex_zero_size)
+{
+    uint8_t data[4] = { 1, 2, 3, 4 };
+    rufus_set_log_handler(dump_log_handler);
+    dump_buf[0] = '\0'; dump_call_count = 0;
+    DumpBufferHex(data, 0);
+    rufus_set_log_handler(NULL);
+    CHECK(1);
+}
+
+/* ===========================================================================
+ * wuprintf — comprehensive UTF-8 encoding tests
+ * =========================================================================*/
+
+/* Two-byte UTF-8: U+00E9 = é → must be encoded as 0xC3 0xA9 */
+TEST(wuprintf_two_byte_utf8_roundtrip)
+{
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    log_call_count = 0;
+    wuprintf(L"\u00e9");  /* U+00E9 é */
+    rufus_set_log_handler(NULL);
+
+    CHECK_MSG(log_call_count == 1, "handler called exactly once");
+    /* UTF-8 encoding of U+00E9 = 0xC3 0xA9 */
+    BOOL found = (strstr(captured_log, "\xc3\xa9") != NULL);
+    CHECK_MSG(found, "U+00E9 (é) must be encoded as UTF-8 bytes C3 A9");
+}
+
+/* Two-byte UTF-8: U+00FC = ü → must be encoded as 0xC3 0xBC */
+TEST(wuprintf_two_byte_utf8_umlaut)
+{
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    log_call_count = 0;
+    wuprintf(L"\u00fc");  /* U+00FC ü */
+    rufus_set_log_handler(NULL);
+
+    CHECK_MSG(log_call_count == 1, "handler called exactly once");
+    BOOL found = (strstr(captured_log, "\xc3\xbc") != NULL);
+    CHECK_MSG(found, "U+00FC (ü) must be encoded as UTF-8 bytes C3 BC");
+}
+
+/* Three-byte UTF-8: U+4E2D = 中 → must be encoded as 0xE4 0xB8 0xAD */
+TEST(wuprintf_three_byte_utf8_cjk)
+{
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    log_call_count = 0;
+    wuprintf(L"\u4e2d\u6587");  /* 中文 */
+    rufus_set_log_handler(NULL);
+
+    CHECK_MSG(log_call_count == 1, "handler called exactly once");
+    /* UTF-8 for 中 = E4 B8 AD */
+    BOOL found = (strstr(captured_log, "\xe4\xb8\xad") != NULL);
+    CHECK_MSG(found, "U+4E2D (中) must be encoded as UTF-8 bytes E4 B8 AD");
+}
+
+/* wuprintf with mixed ASCII and multi-byte characters */
+TEST(wuprintf_mixed_ascii_and_utf8)
+{
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    log_call_count = 0;
+    wuprintf(L"caf\u00e9 %d", 42);  /* "café 42" */
+    rufus_set_log_handler(NULL);
+
+    CHECK_MSG(log_call_count == 1, "handler called exactly once");
+    CHECK_MSG(strstr(captured_log, "caf") != NULL, "ASCII prefix 'caf' preserved");
+    CHECK_MSG(strstr(captured_log, "\xc3\xa9") != NULL, "U+00E9 correctly encoded");
+    CHECK_MSG(strstr(captured_log, "42") != NULL, "integer arg formatted");
+}
+
+/* wuprintf NULL format — must not crash */
+TEST(wuprintf_null_format_no_crash)
+{
+    rufus_set_log_handler(test_log_handler);
+    captured_log[0] = '\0';
+    log_call_count = 0;
+    wuprintf(NULL);  /* NULL format — implementation must guard against this */
+    rufus_set_log_handler(NULL);
+    CHECK(1);  /* just verifying no crash */
+}
+
 /* Helper: create a temp directory, populate with files and a subdir */
 static char list_dir_tmp[256] = "";
 static char list_dir_sub[512] = "";
@@ -1110,11 +1363,34 @@ int main(void)
     RUN(uprintf_handler_receives_no_newline);
     RUN(uprintf_set_and_clear_handler);
 
+    printf("\n  _printbits — binary string representation\n");
+    RUN(printbits_byte_one_no_lz);
+    RUN(printbits_byte_one_lz);
+    RUN(printbits_byte_all_ones);
+    RUN(printbits_byte_zero_no_lz);
+    RUN(printbits_byte_zero_lz);
+    RUN(printbits_word_a5a5);
+    RUN(printbits_macro_smoke);
+
+    printf("\n  DumpBufferHex — xxd-style hex dump\n");
+    RUN(dump_buffer_hex_16_bytes);
+    RUN(dump_buffer_hex_32_bytes);
+    RUN(dump_buffer_hex_ascii_chars);
+    RUN(dump_buffer_hex_null_buf);
+    RUN(dump_buffer_hex_zero_size);
+
     printf("\n  wuprintf — wchar_t to UTF-8 routing\n");
     RUN(wuprintf_routes_to_handler);
     RUN(wuprintf_ascii_roundtrip);
     RUN(wuprintf_no_crash_without_handler);
     RUN(wuprintf_non_ascii_no_crash);
+
+    printf("\n  wuprintf — UTF-8 encoding correctness\n");
+    RUN(wuprintf_two_byte_utf8_roundtrip);
+    RUN(wuprintf_two_byte_utf8_umlaut);
+    RUN(wuprintf_three_byte_utf8_cjk);
+    RUN(wuprintf_mixed_ascii_and_utf8);
+    RUN(wuprintf_null_format_no_crash);
 
     RUN(list_dir_files_only);
     RUN(list_dir_dirs_only);

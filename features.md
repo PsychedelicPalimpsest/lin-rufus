@@ -251,11 +251,11 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Function | Status | Notes |
 |----------|--------|-------|
 | `uprintf()` / `uprintfs()` | ✅ | Routes to GTK log widget via `rufus_set_log_handler()`; falls back to stderr |
-| `wuprintf()` | 🔧 | `wchar_t` print; works but GTK uses UTF-8 — may need conversion |
+| `wuprintf()` | ✅ | UCS-4→UTF-8 inline encoder; NULL guard; 5 new UTF-8 tests pass |
 | `uprint_progress()` | ✅ | Calls `_UpdateProgressWithInfo(OP_FORMAT, ...)` when max > 0 |
 | `read_file()` / `write_file()` | ✅ | Work correctly |
-| `DumpBufferHex()` | 🟡 | Debug helper; low priority |
-| `_printbits()` | 🟡 | Debug helper; low priority |
+| `DumpBufferHex()` | ✅ | xxd-style hex+ASCII dump via uprintf; 5 tests pass |
+| `_printbits()` | ✅ | 32-bit binary string renderer; 7 tests pass |
 | `WindowsErrorString()` / `StrError()` | 🔧 | Maps to `strerror()`; works, but DWORD error codes from compat layer may not match `errno` values |
 | `ExtractZip()` | ✅ | See stdfn above (bled-based implementation) |
 
@@ -495,7 +495,7 @@ This is the most structurally significant porting gap.
 39. **`SetAlertPromptHook()` / `SetAlertPromptMessages()` → GTK** — implement alert-prompt interception in `stdlg.c` using the existing test-injection pattern; display intercepted prompts as a `GtkMessageDialog`; needed for Windows-image customisation flow
 40. **Accessibility: `SetAccessibleName()` → `atk_object_set_name`** — replace the current tooltip-only fallback with `atk_object_set_name()` / `gtk_accessible_set_property()` (GTK4: `gtk_accessible_update_property`) on all controls; required for screen-reader support and GNOME a11y compliance
 41. **`CreateStaticFont()` / `SetHyperLinkFont()` → Pango / GTK CSS** — render hyperlink-style labels using a `GtkLabel` with `<a href="…">` Pango markup or a GTK CSS provider setting `color` and `text-decoration: underline`; wire `clicked` signal for `xdg-open`
-42. ~~**`wuprintf()` UTF-8 conversion**~~ ✅ **DONE** — `wuprintf()` in `stdio.c` converts `wchar_t*` via `wcstombs` (UTF-32→UTF-8 on Linux) then routes through `log_handler_fn`; `wuprintf_ascii_roundtrip` + `wuprintf_non_ascii_no_crash` tests pass
+42. ~~**`wuprintf()` UTF-8 conversion**~~ ✅ **DONE** — `wuprintf()` in `stdio.c` uses an inline UCS-4→UTF-8 encoder (replaces locale-dependent `wcstombs`); handles NULL format guard; 5 new tests: ASCII round-trip, 2-byte UTF-8 (é,ü), 3-byte UTF-8 (中文), surrogate/NULL guard; 170 stdio tests pass
 43. ~~**`WindowsErrorString()` / `StrError()` DWORD mapping**~~ ✅ **DONE** — `windows_dword_to_errno` in `stdio.c` maps 20 DWORD constants to POSIX errno; `_StrError` covers all FACILITY_STORAGE cases; 36 new tests (19 per-constant mapping tests + 15 FACILITY_STORAGE tests + 2 extras); 135 stdio tests pass total
 44. **`MyCreateDialog()` / `MyDialogBox()` remaining dialogs** — replace stubbed `IDD_FORMAT`, `IDD_LOG`, `IDD_ABOUT` and any remaining Windows dialog-resource IDs with hand-crafted `GtkDialog` equivalents; `IDD_HASH` already done as the template
 45. ~~**`AboutCallback()` wiring**~~ ✅ **DONE** — `on_about_clicked()` in `ui_gtk.c` creates a `GtkAboutDialog` with version string, website URL, GPL-3.0 license; wired to `rw.about_btn` "clicked" signal
@@ -511,7 +511,7 @@ This is the most structurally significant porting gap.
 
 51. ~~**`shlwapi.h` → real POSIX implementations**~~ ✅ **DONE** — `PathFileExistsA` via `access(F_OK)`; `PathFileExistsW` via `wcstombs` + `PathFileExistsA`; `PathCombineA` via `snprintf` with separator normalisation and backslash→slash normalisation; `StrStrIA` / `StrCmpIA` / `StrCmpNIA` macros; all as static inlines in `src/linux/compat/shlwapi.h`; 11 tests in new `test_compat_linux.c` pass
 52. ~~**`shellapi.h` → `xdg-open`**~~ ✅ **DONE** — `ShellExecuteA` / `ShellExecuteW` implemented as static inlines in `src/linux/compat/shellapi.h`; `ShellExecuteA` forks `xdg-open "<file>"` via `system()`; `ShellExecuteW` converts path via `wcstombs` then delegates to `ShellExecuteA`; returns fake HINSTANCE > 32 on success (≤ 32 on error) matching Windows convention; SW_* constants guarded with `#ifndef`; 4 tests in `test_compat_linux.c` pass
-53. **`netlistmgr.h` → GNetworkMonitor connectivity check** — implement the `INetworkListManager::GetConnectivity` stub using `g_network_monitor_get_connectivity()` (GIO) or a `getifaddrs`-based scan; used by `net.c` before download attempts to give the user a "no network" error instead of a timeout
+53. ~~**`netlistmgr.h` → GNetworkMonitor connectivity check**~~ ✅ **DONE** — `is_network_available()` in `net.c` uses `getifaddrs` to check for any non-loopback IFF_UP interface with IPv4/IPv6; wired into `DownloadToFileOrBufferEx` as early return (sets `DownloadStatus=503`); RUFUS_TEST injection via `set_test_no_network()`; 6 new tests: `network_available_returns_bool`, `network_available_forced_false`, `network_available_restore_true`, `download_skips_when_no_network`, `download_no_network_sets_status_503`, `download_no_network_multiple_calls`; 99 net tests pass
 54. **`oleacc.h` / MSAA → ATK/AT-SPI2** — map the MSAA `IAccessible` stubs in `oleacc.h` to ATK object creation so screen readers (Orca, etc.) receive meaningful role/name/description information from Rufus controls; prerequisite for proper GNOME a11y compliance (pairs with item 40)
 55. **`uxtheme.h` / `dwmapi.h` theme-change notifications → GTK** — the Windows build hooks `WM_THEMECHANGED` and `WM_DWMCOLORIZATIONCOLORCHANGED` to toggle dark mode; map these to the GTK `notify::gtk-application-prefer-dark-theme` signal on `GtkSettings` so the Linux port reacts to the system dark-mode preference at runtime
 56. **`timezoneapi.h` → `localtime`/`tzset`** — `CreateUnattendXml()` calls `GetTimeZoneInformation()` on Windows; the Linux path already skips the timezone section, but implement a real IANA→Windows-zone mapping (using `/usr/share/zoneinfo/` or `tzdata`) so the generated `unattend.xml` includes a correct `<TimeZone>` element when running on Linux
@@ -605,10 +605,10 @@ This is the most structurally significant porting gap.
 ### Robustness & Diagnostics
 
 106. **Signal handler with backtrace** — install `SIGSEGV` / `SIGABRT` / `SIGBUS` handlers in `rufus.c main()` using `sigaction`; on crash, write a backtrace via `backtrace_symbols_fd` to `stderr` and to `~/.local/share/rufus/crash-<timestamp>.log`; print the log path so users can attach it to bug reports
-107. **`DumpBufferHex()` / `_printbits()` debug helpers** — implement both in `stdio.c`; `DumpBufferHex` should format output as `xxd`-style hex + ASCII; `_printbits` should render a `DWORD` as a 32-bit binary string; both should gate on a `RUFUS_TEST` or `DEBUG_VERBOSE` compile flag
+107. ~~**`DumpBufferHex()` / `_printbits()` debug helpers**~~ ✅ **DONE** — both implemented in `stdio.c`; `DumpBufferHex` formats xxd-style hex+ASCII output via `uprintf` (16 bytes/line); `_printbits` renders a DWORD as a little-endian binary string with optional leading-zero suppression; ported from Windows implementation; 7 `_printbits` tests + 5 `DumpBufferHex` tests pass; 170 stdio tests pass total
 108. **`DumpFatDir()` FAT directory lister** — implement the stub in `iso.c` using the `libfat` sector-reader already wired (`libfat_readfile` / `iso9660_readfat`); list root-directory entries with name, size, attributes; useful for verifying Syslinux and FreeDOS installations in CI
 109. **Structured error context** — augment `uprintf` log lines for failed operations with a `[errno=N strerror]` suffix automatically; create a `uprintf_errno(fmt, ...)` macro that appends `": %s (%d)"` from `strerror(errno)` / `errno`; replace raw `strerror()` calls throughout the Linux source
-110. **`wuprintf()` UTF-8 path with test** — convert the `wchar_t *` argument to UTF-8 via `g_utf16_to_utf8()` before passing to `rufus_log_handler`; add `tests/test_stdio_linux.c` TEST cases for: pure ASCII round-trip, 2-byte UTF-8 (é, ü), 3-byte (中文), and a NULL guard
+110. ~~**`wuprintf()` UTF-8 path with test**~~ ✅ **DONE** — see item 42 above
 
 ---
 

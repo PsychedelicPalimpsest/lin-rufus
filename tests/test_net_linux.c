@@ -1107,6 +1107,84 @@ TEST(set_fido_check_no_crash)
  * verify URL parsing through download behavior. */
 
 /* ================================================================
+ * is_network_available — connectivity pre-check
+ * ================================================================ */
+
+/* Functions from net.c that we test */
+extern BOOL is_network_available(void);
+extern void set_test_no_network(int no_network);
+
+/* is_network_available returns a valid BOOL (smoke test — reflects real machine state) */
+TEST(network_available_returns_bool)
+{
+	BOOL r = is_network_available();
+	CHECK(r == TRUE || r == FALSE);
+}
+
+/* With test injection, can force FALSE (simulates disconnected machine) */
+TEST(network_available_forced_false)
+{
+	set_test_no_network(1);
+	BOOL r = is_network_available();
+	set_test_no_network(0);
+	CHECK(r == FALSE);
+}
+
+/* Restore to normal state: returns TRUE when force is cleared */
+TEST(network_available_restore_true)
+{
+	set_test_no_network(1);
+	is_network_available();   /* consume the forced-false state */
+	set_test_no_network(0);
+	/* Just verify the override is cleared — can't assert TRUE without real network */
+	BOOL r = is_network_available();
+	CHECK(r == TRUE || r == FALSE);  /* just no crash */
+}
+
+/* DownloadToFileOrBufferEx returns 0 immediately when no network (silent) */
+TEST(download_skips_when_no_network)
+{
+	set_test_no_network(1);
+	uint8_t *buf = NULL;
+	uint64_t r = DownloadToFileOrBufferEx("https://example.com/file.txt",
+	                                      NULL, NULL, &buf, NULL, TRUE);
+	set_test_no_network(0);
+	free(buf);
+
+	CHECK_MSG(r == 0, "download should return 0 when no network");
+	CHECK_MSG(DownloadStatus == 503,
+	          "DownloadStatus should be 503 (service unavailable) when no network");
+}
+
+/* DownloadToFileOrBufferEx sets DownloadStatus=503 on no-network (not-silent) */
+TEST(download_no_network_sets_status_503)
+{
+	set_test_no_network(1);
+	uint8_t *buf = NULL;
+	DownloadToFileOrBufferEx("https://example.com/other.txt",
+	                         NULL, NULL, &buf, NULL, FALSE);
+	set_test_no_network(0);
+	free(buf);
+
+	CHECK_MSG(DownloadStatus == 503, "DownloadStatus should be 503 when no network");
+}
+
+/* Multiple calls with no-network don't crash or corrupt state */
+TEST(download_no_network_multiple_calls)
+{
+	set_test_no_network(1);
+	for (int i = 0; i < 5; i++) {
+		uint8_t *buf = NULL;
+		uint64_t r = DownloadToFileOrBufferEx("https://example.com/x", NULL, NULL,
+		                                      &buf, NULL, TRUE);
+		CHECK(r == 0);
+		free(buf);
+	}
+	set_test_no_network(0);
+	CHECK(1);
+}
+
+/* ================================================================
  * Main
  * ================================================================ */
 
@@ -1202,6 +1280,14 @@ int main(void)
 	RUN(download_iso_no_crash);
 	RUN(download_iso_returns_false_when_no_fido_url);
 	RUN(set_fido_check_no_crash);
+
+	printf("\n  is_network_available — connectivity pre-check\n");
+	RUN(network_available_returns_bool);
+	RUN(network_available_forced_false);
+	RUN(network_available_restore_true);
+	RUN(download_skips_when_no_network);
+	RUN(download_no_network_sets_status_503);
+	RUN(download_no_network_multiple_calls);
 
 	/* Teardown */
 	stop_http_server();

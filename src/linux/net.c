@@ -30,6 +30,9 @@
 #include <errno.h>
 #include <pthread.h>
 #include <time.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <sys/socket.h>
 #include <curl/curl.h>
 
 #include "rufus.h"
@@ -156,6 +159,59 @@ static const char *net_short_name(const char *url)
 	return name;
 }
 
+/* ---- is_network_available — connectivity pre-check ---- */
+
+/*
+ * Test-injection support: when RUFUS_TEST is defined, tests can call
+ * set_test_no_network(1) to force is_network_available() to return FALSE,
+ * simulating a disconnected machine without real interface manipulation.
+ */
+#ifdef RUFUS_TEST
+static volatile int _test_force_no_network = 0;
+void set_test_no_network(int no_network) { _test_force_no_network = no_network; }
+#endif
+
+/*
+ * is_network_available — return TRUE if at least one non-loopback network
+ * interface is UP and has an IPv4 or IPv6 address.
+ *
+ * This provides a fast pre-check before libcurl download attempts so Rufus
+ * can give a "no network" error immediately instead of waiting for a timeout.
+ */
+BOOL is_network_available(void)
+{
+	struct ifaddrs *ifap = NULL, *ifa;
+	BOOL found = FALSE;
+
+#ifdef RUFUS_TEST
+	if (_test_force_no_network)
+		return FALSE;
+#endif
+
+	if (getifaddrs(&ifap) != 0)
+		return FALSE;
+
+	for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+		if (ifa->ifa_addr == NULL)
+			continue;
+		/* Skip loopback interfaces */
+		if (ifa->ifa_flags & IFF_LOOPBACK)
+			continue;
+		/* Interface must be UP */
+		if (!(ifa->ifa_flags & IFF_UP))
+			continue;
+		/* Must have an IPv4 or IPv6 address */
+		int family = ifa->ifa_addr->sa_family;
+		if (family == AF_INET || family == AF_INET6) {
+			found = TRUE;
+			break;
+		}
+	}
+
+	freeifaddrs(ifap);
+	return found;
+}
+
 /* ---- IsDownloadable ---- */
 
 /*
@@ -205,6 +261,16 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 
 	if (url == NULL || (file == NULL && buf == NULL))
 		return 0;
+
+	/* Pre-check: refuse to attempt downloads when no network interface is UP.
+	 * This avoids waiting for a TCP/TLS timeout when the machine is offline. */
+	if (!is_network_available()) {
+		if (!silent)
+			uprintf("No network connection available — skipping download of '%s'",
+			        net_short_name(url));
+		DownloadStatus = 503;
+		return 0;
+	}
 
 	if (!silent)
 		uprintf("Downloading %s", net_short_name(url));

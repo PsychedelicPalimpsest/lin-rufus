@@ -56,15 +56,39 @@ void uprintf(const char *format, ...) {
 void wuprintf(const wchar_t* format, ...) {
     wchar_t wbuf[4096];
     char utf8[4096 * 4];
+    size_t out = 0;
+
+    if (format == NULL)
+        return;
+
     va_list ap;
     va_start(ap, format);
     vswprintf(wbuf, sizeof(wbuf) / sizeof(wbuf[0]), format, ap);
     va_end(ap);
-    /* Convert wchar_t (UTF-32 on Linux) to UTF-8 */
-    size_t n = wcstombs(utf8, wbuf, sizeof(utf8) - 1);
-    if (n == (size_t)-1)
-        n = 0;
-    utf8[n] = '\0';
+
+    /* Convert wchar_t (UCS-4 on Linux) to UTF-8 without locale dependency.
+     * Each wchar_t is a Unicode code point; encode directly to UTF-8. */
+    for (const wchar_t *p = wbuf; *p && out + 4 < sizeof(utf8); p++) {
+        uint32_t cp = (uint32_t)*p;
+        if (cp < 0x80) {
+            utf8[out++] = (char)cp;
+        } else if (cp < 0x800) {
+            utf8[out++] = (char)(0xC0 | (cp >> 6));
+            utf8[out++] = (char)(0x80 | (cp & 0x3F));
+        } else if (cp < 0x10000) {
+            utf8[out++] = (char)(0xE0 | (cp >> 12));
+            utf8[out++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+            utf8[out++] = (char)(0x80 | (cp & 0x3F));
+        } else if (cp < 0x110000) {
+            utf8[out++] = (char)(0xF0 | (cp >> 18));
+            utf8[out++] = (char)(0x80 | ((cp >> 12) & 0x3F));
+            utf8[out++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+            utf8[out++] = (char)(0x80 | (cp & 0x3F));
+        }
+        /* skip surrogates and out-of-range code points silently */
+    }
+    utf8[out] = '\0';
+
     /* Route through the same log handler as uprintf */
     if (log_handler_fn) {
         log_handler_fn(utf8);
@@ -103,12 +127,76 @@ uint32_t write_file(const char* path, const uint8_t* buf, const uint32_t size) {
     return w;
 }
 
-char* _printbits(size_t const size, void const* const ptr, int lz) {
-    (void)size;(void)ptr;(void)lz;
-    return NULL;
+/* Return a static string of the binary representation of an integer value.
+ * size:    byte count of the value pointed to by ptr
+ * ptr:     pointer to the value (little-endian)
+ * lz:      if non-zero, pad with leading zeros to full bit width
+ *
+ * Returns pointer to an internal static buffer; not re-entrant. */
+char* _printbits(size_t const size, void const* const ptr, int lz)
+{
+    /* sizeof(uintmax_t) so we have enough space for whatever is thrown at us */
+    static char str[sizeof(uintmax_t) * 8 + 3];
+    size_t i;
+    const uint8_t *b = (const uint8_t *)ptr;
+    uintmax_t mask, lzmask = 0, val = 0;
+
+    if (ptr == NULL || size == 0)
+        return NULL;
+
+    /* Reconstruct the integer from little-endian bytes */
+    for (i = 0; i < size && i < sizeof(uintmax_t); i++)
+        val |= ((uintmax_t)b[i]) << (8 * i);
+
+    str[0] = '0';
+    str[1] = 'b';
+    if (lz)
+        lzmask = (uintmax_t)1 << (size * 8 - 1);
+    for (i = 2, mask = (uintmax_t)1 << (sizeof(uintmax_t) * 8 - 1); mask != 0; mask >>= 1) {
+        if ((i > 2) || (lzmask & mask))
+            str[i++] = (val & mask) ? '1' : '0';
+        else if (val & mask)
+            str[i++] = '1';
+    }
+    str[i] = '\0';
+    return str;
 }
 
-void DumpBufferHex(void* buf, size_t size) { (void)buf;(void)size; }
+/* Display an hex dump of buffer `buf` (size bytes) via uprintf.
+ * Output matches the format: "  XXXXXXXX  XX XX ... XX  .ASCII.......\n" */
+void DumpBufferHex(void* buf, size_t size)
+{
+    unsigned char *buffer = (unsigned char *)buf;
+    size_t i, j, k;
+    char line[80];
+
+    if (buffer == NULL || size == 0)
+        return;
+
+    for (i = 0; i < size; i += 16) {
+        if (i != 0)
+            uprintf("%s\n", line);
+        line[0] = '\0';
+        sprintf(line + strlen(line), "  %08x  ", (unsigned int)i);
+        for (j = 0, k = 0; k < 16; j++, k++) {
+            if (i + j < size)
+                sprintf(line + strlen(line), "%02x", buffer[i + j]);
+            else
+                sprintf(line + strlen(line), "  ");
+            sprintf(line + strlen(line), " ");
+        }
+        sprintf(line + strlen(line), " ");
+        for (j = 0, k = 0; k < 16; j++, k++) {
+            if (i + j < size) {
+                if (buffer[i + j] < 32 || buffer[i + j] > 126)
+                    sprintf(line + strlen(line), ".");
+                else
+                    sprintf(line + strlen(line), "%c", buffer[i + j]);
+            }
+        }
+    }
+    uprintf("%s\n", line);
+}
 
 /* Map Windows DWORD error codes (non-FACILITY_STORAGE) to POSIX errno */
 static int windows_dword_to_errno(DWORD code)
