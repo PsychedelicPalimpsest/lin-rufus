@@ -22,10 +22,12 @@
  * stdlg_clear_test_mode() explicitly.
  */
 #include "rufus.h"
+#include "settings.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 /* =========================================================================
  * Test-injection state
@@ -187,7 +189,30 @@ void DestroyAllTooltips(void)               {}
 BOOL SetTaskbarProgressValue(ULONGLONG done, ULONGLONG total) { (void)done;(void)total; return FALSE; }
 INT_PTR CALLBACK UpdateCallback(HWND h, UINT m, WPARAM w, LPARAM l)  { (void)h;(void)m;(void)w;(void)l; return 0; }
 void SetFidoCheck(void)                     {}
-BOOL SetUpdateCheck(void)                   { return FALSE; }
+
+BOOL SetUpdateCheck(void)
+{
+	uint64_t commcheck = (uint64_t)time(NULL);
+
+	/* Test that settings storage is available */
+	WriteSetting64(SETTING_COMM_CHECK, commcheck);
+	if (ReadSetting64(SETTING_COMM_CHECK) != commcheck)
+		return FALSE;
+
+	/* If interval is 0 (first run) or -1 (explicitly disabled), set a
+	 * sensible default (daily) on first run, leave disabled alone. */
+	int32_t interval = (int32_t)ReadSetting32(SETTING_UPDATE_INTERVAL);
+	if (interval == 0) {
+		/* First run: enable daily updates without prompting the user
+		 * (the prompt dialog requires a full dialog subsystem not yet ported) */
+		WriteSetting32(SETTING_UPDATE_INTERVAL, 86400);
+	} else if (interval < 0) {
+		/* Updates explicitly disabled by the user */
+		return FALSE;
+	}
+
+	return TRUE;
+}
 void CreateStaticFont(HDC hDC, HFONT* hFont, BOOL ul) { (void)hDC;(void)hFont;(void)ul; }
 void SetHyperLinkFont(HWND h, HDC hDC, HFONT* hFont, BOOL ul) { (void)h;(void)hDC;(void)hFont;(void)ul; }
 INT_PTR CALLBACK update_subclass_callback(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return 0; }
