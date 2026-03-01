@@ -299,7 +299,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Cancel in-progress operation | ✅ | `on_close_clicked` sets `ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED)` |
 | Language menu (`ShowLanguageMenu`) | ✅ | Builds GTK menu from `locale_list`; activates via `PostMessage → main_dialog_handler` |
 | `SetAccessibleName()` | 🔧 | Maps to tooltip; should use `atk_object_set_name` for true accessibility |
-| Device-change notification (hot-plug) | 🟡 | Windows uses `WM_DEVICECHANGE`; Linux needs `udev` monitor in a thread |
+| Device-change notification (hot-plug) | ✅ | `device_monitor.c`: udev netlink monitor thread; 1 s debounce; posts `UM_MEDIA_CHANGE` → `GetDevices()`; wired in `ui_gtk.c`; 20 tests pass |
 | `SetComboEntry()` | ✅ | |
 | DPI scaling / `AdjustForLowDPI()` | ✅ | GTK handles natively |
 | Window positioning / `CenterDialog()` | 🚫 | GTK manages automatically |
@@ -413,8 +413,8 @@ This is the most structurally significant porting gap.
 | Item | Status | Notes |
 |------|--------|-------|
 | `IsCurrentProcessElevated()` | ✅ | `geteuid() == 0` |
-| Root-required operations (device open, raw write) | 🟡 | Either run entire app as root, or use `pkexec` / `polkit` for individual operations |
-| `polkit` integration | ❌ | Preferred for desktop integration; not yet started |
+| Root-required operations (device open, raw write) | 🔧 | Non-root startup shows MSG_288/MSG_289 GTK warning dialog; users must run `sudo rufus` or `pkexec rufus`; `polkit` wrapper not yet implemented |
+| `polkit` integration | 🟡 | Preferred for desktop integration; not yet started |
 
 ---
 

@@ -1258,6 +1258,16 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	hLabel      = (HWND)rw.label_entry;
 	hProgress   = (HWND)rw.progress_bar;
 
+	/* Check for root privileges: Rufus requires them to write to block devices.
+	 * Warn the user — but still let the app run so they can browse options.
+	 * On most distributions users will run via 'sudo rufus' or 'pkexec rufus'. */
+	if (!IsCurrentProcessElevated()) {
+		uprintf("WARNING: Rufus is not running as root — device writes will fail.");
+		Notification(MB_OK | MB_ICONWARNING,
+		             lmprintf(MSG_288),
+		             lmprintf(MSG_289));
+	}
+
 	/* Register the main dialog message handler. */
 	msg_dispatch_register(hMainDialog, main_dialog_handler);
 
