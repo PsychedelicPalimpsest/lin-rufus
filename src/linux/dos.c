@@ -18,9 +18,12 @@
 
 #include "rufus.h"
 #include "dos.h"
+#include "missing.h"
+#include "resource.h"
 
 extern char app_dir[MAX_PATH];
 extern int boot_type;
+extern uint8_t* GetResource(HMODULE m, char* n, char* t, const char* d, DWORD* l, BOOL dup);
 
 /* Files to extract.  Index < 2 go to path, index >= 2 go to path/LOCALE/ */
 static const char* const fd_files[] = {
@@ -100,6 +103,25 @@ static char* get_freedos_source_dir(void)
 }
 
 /*
+ * write_resource_to_file — write buf[0..len-1] to path.  Returns TRUE on success.
+ */
+static BOOL write_resource_to_file(const char *path, const uint8_t *buf, DWORD len)
+{
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (fd < 0) {
+        uprintf("ExtractFreeDOS: cannot create '%s': %s", path, strerror(errno));
+        return FALSE;
+    }
+    ssize_t written = write(fd, buf, (size_t)len);
+    close(fd);
+    if (written < 0 || (DWORD)written != len) {
+        uprintf("ExtractFreeDOS: write error on '%s': %s", path, strerror(errno));
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*
  * copy_file — copy src to dst.  Returns TRUE on success.
  */
 static BOOL copy_file(const char *src, const char *dst)
@@ -157,43 +179,64 @@ BOOL ExtractFreeDOS(const char* path)
         return FALSE;
     }
 
-    char* src_dir = get_freedos_source_dir();
-    if (src_dir == NULL) {
-        uprintf("ExtractFreeDOS: could not find FreeDOS resource directory "
-                "(checked %sres/freedos/ and %s../res/freedos/)", app_dir, app_dir);
-        return FALSE;
-    }
-
     /* Create LOCALE/ subdirectory */
     char locale_path[MAX_PATH];
     snprintf(locale_path, sizeof(locale_path), "%sLOCALE", path);
     if (mkdir(locale_path, 0755) != 0 && errno != EEXIST) {
         uprintf("ExtractFreeDOS: cannot create LOCALE dir '%s': %s",
                 locale_path, strerror(errno));
-        free(src_dir);
         return FALSE;
     }
 
-    /* Copy each file */
-    for (int i = 0; i < FD_NFILES; i++) {
-        char src[MAX_PATH], dst[MAX_PATH];
-        snprintf(src, sizeof(src), "%s%s", src_dir, fd_files[i]);
+    char* src_dir = NULL;  /* lazily resolved when disk fallback is needed */
 
+    /* Extract each file: try embedded resource first, fall back to disk. */
+    for (int i = 0; i < FD_NFILES; i++) {
+        char dst[MAX_PATH];
         if (i < FD_ROOT_FILES)
             snprintf(dst, sizeof(dst), "%s%s", path, fd_files[i]);
         else
             snprintf(dst, sizeof(dst), "%sLOCALE/%s", path, fd_files[i]);
 
-        if (!copy_file(src, dst)) {
-            /* Non-fatal for optional locale files; fatal for root files */
-            if (i < FD_ROOT_FILES) {
-                free(src_dir);
-                return FALSE;
+        /* Try embedded resource (IDR_FD_COMMAND_COM == 300, sequential) */
+        DWORD res_size = 0;
+        uint8_t *res_data = GetResource(NULL,
+                MAKEINTRESOURCEA(IDR_FD_COMMAND_COM + i),
+                _RT_RCDATA, fd_files[i], &res_size, FALSE);
+
+        if (res_data != NULL) {
+            if (!write_resource_to_file(dst, res_data, res_size)) {
+                if (i < FD_ROOT_FILES) {
+                    free(src_dir);
+                    return FALSE;
+                }
+                uprintf("Warning: could not write embedded '%s' (optional)", fd_files[i]);
+            } else {
+                uprintf("Extracted '%s' from embedded resource", fd_files[i]);
             }
-            uprintf("Warning: could not copy '%s' (optional)", fd_files[i]);
         } else {
-            uprintf("Extracted '%s' (%s bytes)", fd_files[i],
-                    (i < FD_ROOT_FILES) ? "root" : "locale");
+            /* Fall back to disk */
+            if (src_dir == NULL) {
+                src_dir = get_freedos_source_dir();
+                if (src_dir == NULL) {
+                    uprintf("ExtractFreeDOS: no embedded data and no on-disk resource "
+                            "directory found (checked %sres/freedos/)", app_dir);
+                    if (i < FD_ROOT_FILES)
+                        return FALSE;
+                    continue;
+                }
+            }
+            char src[MAX_PATH];
+            snprintf(src, sizeof(src), "%s%s", src_dir, fd_files[i]);
+            if (!copy_file(src, dst)) {
+                if (i < FD_ROOT_FILES) {
+                    free(src_dir);
+                    return FALSE;
+                }
+                uprintf("Warning: could not copy '%s' (optional)", fd_files[i]);
+            } else {
+                uprintf("Extracted '%s' from disk", fd_files[i]);
+            }
         }
 
         if ((i == 3) || (i == 9) || (i == 15) || (i == FD_NFILES - 1))

@@ -451,8 +451,8 @@ CFLAGS_LINUX_test_dos_linux := \
 	-I$(SRC_DIR) -I$(COMMON) \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_dos_linux :=
-EXTRA_SRC_LINUX_test_dos_linux := $(DOS_LINUX_SRC) dos_linux_glue.c
+LDFLAGS_LINUX_test_dos_linux := $(shell pkg-config --libs fontconfig 2>/dev/null)
+EXTRA_SRC_LINUX_test_dos_linux := $(DOS_LINUX_SRC) $(SRC_DIR)/linux/freedos_data.c dos_linux_glue.c
 
 # syslinux_linux tests: GetSyslinuxVersion, libfat_readfile, InstallSyslinux
 LIBFAT_LIB       := $(SRC_DIR)/syslinux/libfat/libfat.a

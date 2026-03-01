@@ -338,6 +338,143 @@ TEST(set_dos_locale_null_returns_false)
 }
 
 /* ================================================================
+ * Embedded resource tests (item 31)
+ * ================================================================ */
+
+#include "resource.h"
+/* GetResource is provided by stdfn.c */
+extern uint8_t* GetResource(void *m, char *n, char *t, const char *d, DWORD *l, BOOL dup);
+extern DWORD    GetResourceSize(void *m, char *n, char *t, const char *d);
+
+TEST(getresource_command_com_not_null)
+{
+    DWORD size = 0;
+    uint8_t *data = GetResource(NULL, MAKEINTRESOURCEA(IDR_FD_COMMAND_COM),
+                                MAKEINTRESOURCEA(10), "COMMAND.COM", &size, FALSE);
+    CHECK(data != NULL);
+}
+
+TEST(getresource_command_com_size_correct)
+{
+    DWORD size = 0;
+    uint8_t *data = GetResource(NULL, MAKEINTRESOURCEA(IDR_FD_COMMAND_COM),
+                                MAKEINTRESOURCEA(10), "COMMAND.COM", &size, FALSE);
+    CHECK(data != NULL);
+    CHECK_INT_EQ(87772, (int)size);
+}
+
+TEST(getresource_kernel_sys_not_null)
+{
+    DWORD size = 0;
+    uint8_t *data = GetResource(NULL, MAKEINTRESOURCEA(IDR_FD_KERNEL_SYS),
+                                MAKEINTRESOURCEA(10), "KERNEL.SYS", &size, FALSE);
+    CHECK(data != NULL);
+    CHECK_INT_EQ(46256, (int)size);
+}
+
+TEST(getresource_unknown_id_returns_null)
+{
+    DWORD size = 0;
+    /* ID 9999 is not a FreeDOS resource */
+    uint8_t *data = GetResource(NULL, MAKEINTRESOURCEA(9999),
+                                MAKEINTRESOURCEA(10), "unknown", &size, FALSE);
+    CHECK(data == NULL);
+}
+
+TEST(getresource_dup_allocates_copy)
+{
+    DWORD size1 = 0, size2 = 0;
+    uint8_t *orig = GetResource(NULL, MAKEINTRESOURCEA(IDR_FD_COMMAND_COM),
+                                MAKEINTRESOURCEA(10), "COMMAND.COM", &size1, FALSE);
+    uint8_t *copy = GetResource(NULL, MAKEINTRESOURCEA(IDR_FD_COMMAND_COM),
+                                MAKEINTRESOURCEA(10), "COMMAND.COM", &size2, TRUE);
+    CHECK(orig != NULL);
+    CHECK(copy != NULL);
+    CHECK(orig != copy);         /* dup must return a different pointer */
+    CHECK_INT_EQ((int)size1, (int)size2);
+    CHECK(memcmp(orig, copy, size1) == 0);
+    free(copy);
+}
+
+TEST(getresource_ega_cpx_not_null)
+{
+    DWORD size = 0;
+    uint8_t *data = GetResource(NULL, MAKEINTRESOURCEA(IDR_FD_EGA1_CPX),
+                                MAKEINTRESOURCEA(10), "EGA.CPX", &size, FALSE);
+    CHECK(data != NULL);
+    CHECK(size > 0);
+}
+
+TEST(extract_freedos_embedded_no_disk)
+{
+    /* ExtractFreeDOS must succeed using embedded data even when app_dir
+     * points to a directory that has no res/freedos/ underneath it. */
+    char saved_app_dir[MAX_PATH];
+    strncpy(saved_app_dir, app_dir, sizeof(saved_app_dir) - 1);
+    saved_app_dir[sizeof(saved_app_dir) - 1] = '\0';
+
+    strncpy(app_dir, "/nonexistent_rufus_test/", sizeof(app_dir) - 1);
+
+    char *target = make_tmpdir();
+    if (!target) {
+        strncpy(app_dir, saved_app_dir, sizeof(app_dir) - 1);
+        CHECK(target != NULL);
+        return;
+    }
+
+    char target_with_sep[MAX_PATH];
+    snprintf(target_with_sep, sizeof(target_with_sep), "%s/", target);
+
+    BOOL result = ExtractFreeDOS(target_with_sep);
+
+    /* Verify COMMAND.COM was written from embedded data */
+    char cmd_path[MAX_PATH];
+    snprintf(cmd_path, sizeof(cmd_path), "%s/COMMAND.COM", target);
+    int cmd_ok = file_exists_nonempty(cmd_path);
+
+    rm_rf(target);
+    free(target);
+
+    strncpy(app_dir, saved_app_dir, sizeof(app_dir) - 1);
+
+    CHECK_INT_EQ(TRUE, result);
+    CHECK_INT_EQ(1, cmd_ok);
+}
+
+TEST(extract_freedos_embedded_content_correct_size)
+{
+    /* Embedded COMMAND.COM should be exactly 87772 bytes */
+    char saved_app_dir[MAX_PATH];
+    strncpy(saved_app_dir, app_dir, sizeof(saved_app_dir) - 1);
+    saved_app_dir[sizeof(saved_app_dir) - 1] = '\0';
+
+    strncpy(app_dir, "/nonexistent_rufus_test/", sizeof(app_dir) - 1);
+
+    char *target = make_tmpdir();
+    if (!target) {
+        strncpy(app_dir, saved_app_dir, sizeof(app_dir) - 1);
+        CHECK(target != NULL);
+        return;
+    }
+
+    char target_with_sep[MAX_PATH];
+    snprintf(target_with_sep, sizeof(target_with_sep), "%s/", target);
+    ExtractFreeDOS(target_with_sep);
+
+    char cmd_path[MAX_PATH];
+    snprintf(cmd_path, sizeof(cmd_path), "%s/COMMAND.COM", target);
+    struct stat st;
+    long sz = (stat(cmd_path, &st) == 0) ? (long)st.st_size : -1;
+
+    rm_rf(target);
+    free(target);
+
+    strncpy(app_dir, saved_app_dir, sizeof(app_dir) - 1);
+
+    CHECK_INT_EQ(87772, (int)sz);
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 
@@ -361,6 +498,15 @@ int main(void)
     RUN(extract_dos_unknown_boot_type_returns_false);
     RUN(set_dos_locale_creates_autoexec);
     RUN(set_dos_locale_null_returns_false);
+
+    RUN(getresource_command_com_not_null);
+    RUN(getresource_command_com_size_correct);
+    RUN(getresource_kernel_sys_not_null);
+    RUN(getresource_unknown_id_returns_null);
+    RUN(getresource_dup_allocates_copy);
+    RUN(getresource_ega_cpx_not_null);
+    RUN(extract_freedos_embedded_no_disk);
+    RUN(extract_freedos_embedded_content_correct_size);
 
     TEST_RESULTS();
 }

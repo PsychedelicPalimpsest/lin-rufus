@@ -226,7 +226,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `htab_create()` / `htab_destroy()` / `htab_hash()` | ✅ | Full implementation ported from Windows stdfn.c; 299 tests pass |
 | `StrArray*` functions | ✅ | Implemented and work |
 | `FileIO()` | ✅ | Implemented with POSIX `fopen`/`fread`/`fwrite`; READ/WRITE/APPEND modes; 10 tests |
-| `GetResource()` / `GetResourceSize()` | 🚫 | Windows PE resource API; resources are compiled into the binary — embed as C arrays or load from disk |
+| `GetResource()` / `GetResourceSize()` | ✅ | Implemented for `IDR_FD_*` resource IDs via `freedos_data.c` lookup table; integer IDs via `MAKEINTRESOURCEA`; returns `NULL` for unknown IDs |
 | `SetLGP()` / `SetLGPThread()` | 🚫 | Windows Group Policy — no Linux equivalent |
 | `MountRegistryHive()` / `UnmountRegistryHive()` | 🚫 | Windows Registry — no Linux equivalent |
 | `TakeOwnership()` | 🚫 | Windows ACL — no Linux equivalent; use `chown` if ever needed |
@@ -422,9 +422,9 @@ This is the most structurally significant porting gap.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| `GetResource()` — Windows PE resources | 🚫 | PE resource section not available on ELF Linux binary |
+| `GetResource()` — Windows PE resources | ✅ | Implemented for `IDR_FD_*` (300–326) via `freedos_data.c` embedded arrays; `MAKEINTRESOURCEA` integer IDs supported |
 | Embedded locale data (`res/loc/embedded.loc`) | ✅ | `find_loc_file()` searches `app_dir/res/loc/embedded.loc`, `app_dir/embedded.loc`, `RUFUS_DATADIR/embedded.loc`; loaded in `on_app_activate()`; 7 new tests in `test_parser` (get_supported_locales + get_loc_data_file) pass |
-| Embedded FreeDOS / MS-DOS boot files | 🟡 | Same — embed as binary arrays or install to `$datadir` |
+| Embedded FreeDOS / MS-DOS boot files | ✅ | 27 FreeDOS files embedded as `const uint8_t[]` arrays in `freedos_data.c`; `ExtractFreeDOS()` uses `GetResource()` first, falls back to disk |
 | Application icon (`.desktop` / `.png`) | ✅ | `res/ie.akeo.rufus.desktop` + `res/ie.akeo.rufus.appdata.xml`; icons at 32/48/256px; install targets in `Makefile.am` |
 
 ---
@@ -483,7 +483,7 @@ This is the most structurally significant porting gap.
 28. **`IsSignedBySecureBootAuthority()` / `IsBootloaderRevoked()`** — implement SBAT cert DB lookup and UEFI Secure Boot revocation checks in `pki.c` using the OpenSSL API already wired; parse SBAT entries via `GetSbatEntries()` and cross-reference against bundled allowed/revoked lists
 29. ~~**`DownloadSignedFile()` signature verification**~~ ✅ **DONE** — Implemented RSA-SHA256 verify in `DownloadSignedFile()` (linux/net.c): downloads content to buffer, downloads `url+".sig"` to buffer, calls `ValidateOpensslSignature()`, sets `DownloadStatus=403` on bad sig, writes file + sets `DownloadStatus=200` on success; test build uses a test RSA-2048 key stub in `net_linux_glue.c` (identical algorithm, test key pair); 6 new tests: null URL, missing .sig, short .sig, wrong .sig content, valid sig writes file, status codes verified; all 74 net tests pass
 30. **`UseLocalDbx()` / DBX revocation database** — parse `/sys/firmware/efi/efivars/dbx-*` (or a bundled `dbx.bin`) to detect revoked boot images; expose as `UseLocalDbx()` in `hash.c` / `pki.c`; integrate result into `IsBootloaderRevoked()`
-31. **Embedded FreeDOS / MS-DOS boot files** — convert `res/freedos/` binary files to C `uint8_t[]` arrays via `xxd -i` (or `objcopy`) and reference them through a shim `GetResource()` so `ExtractFreeDOS()` / `ExtractDOS()` work without an installed data directory
+31. ~~**Embedded FreeDOS / MS-DOS boot files**~~ ✅ **DONE** — Generated `src/linux/freedos_data.c` with 27 FreeDOS files as `const uint8_t[]` arrays (391KB embedded data) and `src/linux/freedos_data.h` with lookup table `fd_resources[]` mapping `IDR_FD_*` IDs; implemented real `GetResource()` / `GetResourceSize()` in `stdfn.c` using the lookup table (integer resource IDs via `MAKEINTRESOURCEA`); updated `dos.c` to try `GetResource()` first for each file, fall back to disk copy; updated `src/Makefile.am` + `tests/Makefile` (also fixed missing `-lfontconfig` for DOS test build); 8 new tests: `getresource_*` (not-null, size-correct, unknown-returns-null, dup-allocates-copy, EGA), `extract_freedos_embedded_no_disk`, `extract_freedos_embedded_content_correct_size`; all 39 DOS tests pass, full suite clean
 32. **`GetResource()` → C array / on-disk shim** — replace Windows PE `FindResource`/`LoadResource`/`SizeofResource` calls with a lookup table of compiled-in arrays (`IDR_UEFI_NTFS`, `IDR_SYSLINUX_*`, etc.) so all resource consumers (`syslinux.c`, `wue.c`, `format.c`) compile and run on Linux
 33. **`setupapi.h` → libudev device enumeration** — flesh out `SetupDiGetClassDevs` / `SetupDiEnumDeviceInterfaces` / `SetupDiGetDeviceInterfaceDetail` stubs using libudev to enumerate USB storage devices; drives remaining callers in `dev.c` off the real device path
 34. **`cfgmgr32.h` / `dbt.h` → libudev** — replace `CM_Get_Device_ID` / `CM_Locate_DevNode` stubs and `DBT_DEVICEARRIVAL` / `DBT_DEVICEREMOVECOMPLETE` constants with libudev equivalents; align with the `device_monitor.c` udev monitor already in place

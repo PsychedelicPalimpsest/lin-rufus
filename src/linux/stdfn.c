@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <sched.h>
 #include <fontconfig/fontconfig.h>
+#include "freedos_data.h"
 
 /*
  * Hash table functions - from glibc 2.3.2 via Windows stdfn.c:
@@ -264,8 +265,38 @@ out:
 		fclose(f);
 	return ret;
 }
-uint8_t* GetResource(HMODULE m, char* n, char* t, const char* d, DWORD* l, BOOL dup) { (void)m;(void)n;(void)t;(void)d;(void)l;(void)dup; return NULL; }
-DWORD   GetResourceSize(HMODULE m, char* n, char* t, const char* d) { (void)m;(void)n;(void)t;(void)d; return 0; }
+uint8_t* GetResource(HMODULE m, char* n, char* t, const char* d, DWORD* l, BOOL dup)
+{
+    (void)m; (void)t; (void)d;
+    uintptr_t id = (uintptr_t)(void*)n;
+    if (id < 0x10000) {
+        for (int i = 0; i < FD_RESOURCES_COUNT; i++) {
+            if (fd_resources[i].id == (int)id) {
+                if (l) *l = fd_resources[i].size;
+                if (dup) {
+                    uint8_t *copy = malloc(fd_resources[i].size);
+                    if (copy) memcpy(copy, fd_resources[i].data, fd_resources[i].size);
+                    return copy;
+                }
+                return (uint8_t*)fd_resources[i].data;
+            }
+        }
+    }
+    if (l) *l = 0;
+    return NULL;
+}
+DWORD GetResourceSize(HMODULE m, char* n, char* t, const char* d)
+{
+    (void)m; (void)t; (void)d;
+    uintptr_t id = (uintptr_t)(void*)n;
+    if (id < 0x10000) {
+        for (int i = 0; i < FD_RESOURCES_COUNT; i++) {
+            if (fd_resources[i].id == (int)id)
+                return fd_resources[i].size;
+        }
+    }
+    return 0;
+}
 BOOL    IsFontAvailable(const char* fn)
 {
     if (!fn) return FALSE;
