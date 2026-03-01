@@ -116,6 +116,9 @@ static void on_boot_changed(GtkComboBox *combo, gpointer data);
 static void on_fs_changed(GtkComboBox *combo, gpointer data);
 static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
+static void on_toggle_dark_mode(GtkWidget *w, gpointer data);
+static void on_hash_clicked(GtkButton *btn, gpointer data);
+extern DWORD WINAPI HashThread(void *param);  /* hash.c */
 void ShowLanguageMenu(RECT rcExclude);
 extern DWORD WINAPI ImageScanThread(LPVOID param); /* image_scan.c */
 extern void SetFidoCheck(void);                    /* net.c */
@@ -209,6 +212,7 @@ static GtkWidget *build_toolbar(void)
 	g_signal_connect(rw.log_btn,   "clicked", G_CALLBACK(on_log_clicked),   NULL);
 	g_signal_connect(rw.about_btn, "clicked", G_CALLBACK(on_about_clicked), NULL);
 	g_signal_connect(rw.lang_btn,  "clicked", G_CALLBACK(on_lang_clicked),  NULL);
+	g_signal_connect(rw.hash_btn,  "clicked", G_CALLBACK(on_hash_clicked),  NULL);
 
 	gtk_box_pack_start(GTK_BOX(bar), rw.lang_btn,     FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(bar), rw.about_btn,    FALSE, FALSE, 0);
@@ -752,6 +756,7 @@ static void on_fs_changed(GtkComboBox *combo, gpointer data)
 	}
 }
 
+static void on_log_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
 	if (rw.log_dialog) {
@@ -783,6 +788,20 @@ static void on_lang_menu_activate(GtkMenuItem *item, gpointer data)
 	(void)data;
 	guint msg_id = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(item), "lang-msg-id"));
 	PostMessage(hMainDialog, (UINT)msg_id, 0, 0);
+}
+
+static void on_hash_clicked(GtkButton *btn, gpointer data)
+{
+	(void)btn; (void)data;
+	extern char *image_path;
+	if (format_thread != NULL || image_path == NULL || image_path[0] == '\0')
+		return;
+	ErrorStatus = 0;
+	format_thread = CreateThread(NULL, 0, HashThread, NULL, 0, NULL);
+	if (format_thread == NULL) {
+		uprintf("on_hash_clicked: unable to start HashThread");
+		ErrorStatus = RUFUS_ERROR(ERROR_CANT_START_THREAD);
+	}
 }
 
 static void on_lang_clicked(GtkButton *btn, gpointer data)

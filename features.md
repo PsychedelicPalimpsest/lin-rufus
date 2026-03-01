@@ -459,7 +459,7 @@ This is the most structurally significant porting gap.
 8. ~~**FAT32 formatter** (`format_fat32.c`)~~ ✅ **DONE** — 16 tests pass
 9. ~~**ext formatter** (`format_ext.c`)~~ ✅ **DONE** — 9 tests pass
 10. ~~**ISO extraction** (`iso.c`)~~ ✅ **DONE** — full POSIX implementation using libcdio; 12345 tests pass
-11. ~~**Hashing** (`hash.c`)~~ ✅ **DONE** — all hash algorithms + HashThread/IndividualHashThread; hash results dialog via `UM_HASH_COMPLETED` → GTK GtkGrid dialog; 107 tests pass
+11. ~~**Hashing** (`hash.c`)~~ ✅ **DONE** — all hash algorithms + HashThread/IndividualHashThread; hash results dialog via `UM_HASH_COMPLETED` → GTK GtkGrid dialog; 107 tests pass; hash button (`rw.hash_btn`) wired to `on_hash_clicked` → `CreateThread(HashThread)`; `on_log_clicked` missing header fixed; `on_toggle_dark_mode` forward declaration added
 11. ~~**Networking** (`net.c`)~~ ✅ **DONE** — `IsDownloadable` + `DownloadToFileOrBufferEx` implemented with libcurl; 45 tests pass; `configure.ac` updated with `PKG_CHECK_MODULES` for libcurl; stubs remain for `CheckForUpdates`/`DownloadISO`/`DownloadSignedFileThreaded`
 12. ~~**PKI / signatures** (`pki.c`)~~ ✅ **DONE** — OpenSSL EVP API for `ValidateOpensslSignature`; mmap PE parsing for `GetSignatureName`/`GetSignatureTimeStamp`/`GetIssuerCertificateInfo`; 21 tests pass
 13. ~~**Bad blocks** (`badblocks.c`)~~ ✅ **DONE** — full POSIX port using `pread`/`pwrite`/`posix_memalign`/`clock_gettime`; bad-block list management ported verbatim; `ERROR_OBJECT_IN_LIST` added to compat; 43 tests pass
@@ -529,7 +529,7 @@ This is the most structurally significant porting gap.
 63. **Context menu on device combo** — right-click on the device combo should offer "Refresh" (re-runs `GetDevices()`) and "Open in file manager" (`xdg-open /dev/sdX`); implement via `GtkMenu` popup on `button-press-event`
 64. ~~**Operation log — save to file**~~ ✅ **DONE** — log `GtkDialog` has "Save" button (`GTK_RESPONSE_ACCEPT`) in `on_log_response()`; opens `GtkFileChooserDialog`, writes `GtkTextBuffer` content to selected file; "Clear" button clears buffer; "Close" hides dialog
 65. ~~**Status label history**~~ ✅ **DONE** — `src/linux/status_history.c/.h`: ring buffer (capacity=5) of last N status strings; `idle_update_status()` in `ui_gtk.c` pushes each message then calls `gtk_widget_set_tooltip_text(status_label, tooltip)` with all previous messages (newest first, newline-separated); 15 tests, 24 assertions pass
-66. **`SetTitleBarIcon()` implementation** — the function is a no-op stub; implement it to call `gtk_window_set_icon_name()` so that the main dialog icon changes to reflect the current operation state (e.g. a distinct icon while writing)
+66. ~~**`SetTitleBarIcon()` implementation**~~ ✅ **DONE** — `stdlg.c`: calls `gtk_window_set_icon_name(GTK_WINDOW(hDlg), "ie.akeo.rufus")` when `hDlg` is a GtkWindow; `#ifdef USE_GTK` guarded; no-op in non-GTK builds
 67. **System tray / notification on completion** — use `libnotify` (`notify_notification_new`) to send a desktop notification when a long-running format or download completes; fall back gracefully if `libnotify` is absent; detect at configure time
 
 ---

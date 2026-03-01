@@ -536,7 +536,15 @@ void DownloadNewVersion(void)
 	if (system("xdg-open " DOWNLOAD_URL " 2>/dev/null &") != 0)
 		uprintf("DownloadNewVersion: failed to open browser");
 }
-void SetTitleBarIcon(HWND hDlg)             { (void)hDlg; }
+void SetTitleBarIcon(HWND hDlg)
+{
+#ifdef USE_GTK
+    if (hDlg && GTK_IS_WINDOW((GtkWidget *)hDlg))
+        gtk_window_set_icon_name(GTK_WINDOW((GtkWidget *)hDlg), "ie.akeo.rufus");
+#else
+    (void)hDlg;
+#endif
+}
 SIZE GetTextSize(HWND hCtrl, char* txt)     { SIZE s={0,0}; (void)hCtrl;(void)txt; return s; }
 void* GetDialogTemplate(int dlg_id)         { (void)dlg_id; return NULL; }
 HWND MyCreateDialog(HINSTANCE hi, int dlg_id, HWND parent, DLGPROC fn) { (void)hi;(void)dlg_id;(void)parent;(void)fn; return NULL; }
