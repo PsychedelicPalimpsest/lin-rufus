@@ -38,6 +38,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "format.h"
 #include "format_linux.h"
 #include "resource.h"
+#include "../res/grub/grub_version.h"
 
 /* ================================================================
  * Required globals
@@ -518,6 +519,72 @@ TEST(write_mbr_grub2_writes_nonzero_code)
 	unlink(path); free(path);
 }
 
+TEST(write_mbr_grub4dos_writes_nonzero_code)
+{
+	/* BT_GRUB4DOS → grub4dos boot code */
+	char* path = create_temp_image(IMG_4MB);
+	CHECK(path != NULL);
+
+	reset_globals();
+	boot_type   = BT_GRUB4DOS;
+	target_type = TT_BIOS;
+	SelectedDrive.SectorSize = 512;
+
+	BOOL r = do_write_mbr(path);
+	CHECK(r == TRUE);
+
+	uint8_t b0;
+	CHECK(read_at(path, 0, &b0, 1) == 0);
+	CHECK(b0 != 0x00);
+
+	uint8_t sig[2];
+	CHECK(read_at(path, 510, sig, 2) == 0);
+	CHECK(sig[0] == 0x55 && sig[1] == 0xAA);
+
+	unlink(path); free(path);
+}
+
+TEST(write_mbr_image_with_grub4dos_writes_grub4dos_code)
+{
+	/*
+	 * BT_IMAGE + img_report.has_grub4dos=TRUE → same boot code as BT_GRUB4DOS.
+	 * Verify byte 0 and signature; compare against the standalone BT_GRUB4DOS case.
+	 */
+	char* path_img    = create_temp_image(IMG_4MB);
+	char* path_direct = create_temp_image(IMG_4MB);
+	CHECK(path_img != NULL && path_direct != NULL);
+
+	/* BT_IMAGE with has_grub4dos */
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	target_type            = TT_BIOS;
+	img_report.has_grub4dos = TRUE;
+	SelectedDrive.SectorSize = 512;
+	BOOL r1 = do_write_mbr(path_img);
+	CHECK(r1 == TRUE);
+
+	/* BT_GRUB4DOS directly */
+	reset_globals();
+	boot_type   = BT_GRUB4DOS;
+	target_type = TT_BIOS;
+	SelectedDrive.SectorSize = 512;
+	BOOL r2 = do_write_mbr(path_direct);
+	CHECK(r2 == TRUE);
+
+	/* Both should produce the same boot code (bytes 0..445) */
+	uint8_t mbr_img[446], mbr_direct[446];
+	int fd1 = open(path_img, O_RDONLY);
+	int fd2 = open(path_direct, O_RDONLY);
+	CHECK(fd1 >= 0 && fd2 >= 0);
+	CHECK(pread(fd1, mbr_img,    sizeof(mbr_img),    0) == (ssize_t)sizeof(mbr_img));
+	CHECK(pread(fd2, mbr_direct, sizeof(mbr_direct), 0) == (ssize_t)sizeof(mbr_direct));
+	close(fd1); close(fd2);
+	CHECK(memcmp(mbr_img, mbr_direct, sizeof(mbr_img)) == 0);
+
+	unlink(path_img);    free(path_img);
+	unlink(path_direct); free(path_direct);
+}
+
 TEST(write_mbr_win7_default)
 {
 	/* Default case (use_rufus_mbr=TRUE) → rufus MBR */
@@ -596,6 +663,101 @@ TEST(install_grub2_nonexistent_dev_fails)
 	/* grub-install should fail for a nonexistent device */
 	BOOL r = InstallGrub2("/dev/this_does_not_exist_xyz", "/tmp");
 	CHECK(r == FALSE);
+}
+
+/* ================================================================
+ * InstallGrub4DOS tests
+ * ================================================================ */
+
+extern BOOL InstallGrub4DOS(const char *mount_dir);
+
+TEST(install_grub4dos_null_mount_returns_false)
+{
+	/* NULL mount dir must return FALSE without crashing */
+	BOOL r = InstallGrub4DOS(NULL);
+	CHECK(r == FALSE);
+}
+
+TEST(install_grub4dos_no_cache_returns_false)
+{
+	/*
+	 * With app_data_dir empty (""), the expected grldr path does not exist.
+	 * InstallGrub4DOS should log a warning and return FALSE.
+	 */
+	app_data_dir[0] = '\0';
+	char tmp_dir[] = "/tmp/rufus_ig4_XXXXXX";
+	char *mount = mkdtemp(tmp_dir);
+	CHECK(mount != NULL);
+
+	BOOL r = InstallGrub4DOS(mount);
+	CHECK(r == FALSE);
+
+	rmdir(mount);
+}
+
+TEST(install_grub4dos_copies_file_to_mount_path)
+{
+	/*
+	 * Happy path: create a fake grldr in the expected cache location under
+	 * a temp app_data_dir, then verify InstallGrub4DOS copies it to the
+	 * mount dir.
+	 */
+	/* Build a temp app_data_dir */
+	char base[] = "/tmp/rufus_ig4_base_XXXXXX";
+	char *bdir = mkdtemp(base);
+	CHECK(bdir != NULL);
+	strncpy(app_data_dir, bdir, sizeof(app_data_dir) - 1);
+	app_data_dir[sizeof(app_data_dir) - 1] = '\0';
+
+	/* Create the cache sub-directory tree: <app_data_dir>/Rufus/grub4dos-0.4.6a/ */
+	char cache_dir[512];
+	snprintf(cache_dir, sizeof(cache_dir), "%s/Rufus/grub4dos-" GRUB4DOS_VERSION, app_data_dir);
+	/* mkdir -p equivalent */
+	{
+		char *p = cache_dir + 1;
+		while (*p) {
+			if (*p == '/') { *p = '\0'; mkdir(cache_dir, 0755); *p = '/'; }
+			p++;
+		}
+		mkdir(cache_dir, 0755);
+	}
+
+	/* Create a fake grldr file */
+	char grldr_src[600];
+	snprintf(grldr_src, sizeof(grldr_src), "%s/grldr", cache_dir);
+	FILE *f = fopen(grldr_src, "wb");
+	CHECK(f != NULL);
+	fprintf(f, "FAKE_GRLDR");
+	fclose(f);
+
+	/* Create a temp mount dir */
+	char mount_template[] = "/tmp/rufus_ig4_mnt_XXXXXX";
+	char *mount = mkdtemp(mount_template);
+	CHECK(mount != NULL);
+
+	BOOL r = InstallGrub4DOS(mount);
+	CHECK(r == TRUE);
+
+	/* Verify grldr was copied */
+	char grldr_dst[512];
+	snprintf(grldr_dst, sizeof(grldr_dst), "%s/grldr", mount);
+	struct stat st;
+	CHECK(stat(grldr_dst, &st) == 0);
+	CHECK(st.st_size > 0);
+
+	/* Cleanup */
+	unlink(grldr_dst);
+	rmdir(mount);
+	unlink(grldr_src);
+	rmdir(cache_dir);
+	{
+		/* remove Rufus subdir */
+		char rufus_dir[256];
+		snprintf(rufus_dir, sizeof(rufus_dir), "%s/Rufus", app_data_dir);
+		rmdir(rufus_dir);
+	}
+	rmdir(app_data_dir);
+	app_data_dir[0] = '\0';
 }
 
 /* ================================================================
@@ -1093,6 +1255,94 @@ TEST(format_thread_posts_format_completed)
 }
 
 /* ================================================================
+ * FormatThread + GRUB4DOS integration tests
+ * ================================================================ */
+
+TEST(format_thread_grub4dos_standalone_writes_grub4dos_mbr)
+{
+	/*
+	 * BT_GRUB4DOS standalone: FormatThread must write Grub4DOS MBR boot code.
+	 * The partition mount for grldr installation will fail (not a block device
+	 * in tests) but that is non-fatal; format itself must succeed.
+	 */
+	char* path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type      = BT_GRUB4DOS;
+	partition_type = PARTITION_STYLE_MBR;
+	fs_type        = FS_FAT32;
+	target_type    = TT_BIOS;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	/* Verify Grub4DOS MBR boot code was written: byte 0 non-zero + 0x55AA */
+	uint8_t b0;
+	CHECK(read_at(path, 0, &b0, 1) == 0);
+	CHECK(b0 != 0x00);
+
+	uint8_t sig[2];
+	CHECK(read_at(path, 510, sig, 2) == 0);
+	CHECK(sig[0] == 0x55 && sig[1] == 0xAA);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_image_grub4dos_writes_grub4dos_mbr)
+{
+	/*
+	 * BT_IMAGE + img_report.has_grub4dos: FormatThread must choose Grub4DOS
+	 * MBR code.  We skip ISO extraction (is_iso=0) so no ExtractISO stub needed.
+	 * Verify the MBR boot code is the same as the standalone BT_GRUB4DOS case.
+	 */
+	char* path_img    = create_temp_image(IMG_512MB);
+	char* path_direct = create_temp_image(IMG_512MB);
+	CHECK(path_img != NULL && path_direct != NULL);
+
+	/* BT_IMAGE + has_grub4dos (skip ISO extraction) */
+	setup_drive(path_img, IMG_512MB);
+	reset_globals();
+	boot_type               = BT_IMAGE;
+	partition_type          = PARTITION_STYLE_MBR;
+	fs_type                 = FS_FAT32;
+	target_type             = TT_BIOS;
+	img_report.has_grub4dos = TRUE;
+	img_report.is_iso       = 0;  /* don't try to extract ISO in this test */
+
+	DWORD rc1 = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc1 == 0);
+	teardown_drive();
+
+	/* BT_GRUB4DOS directly */
+	setup_drive(path_direct, IMG_512MB);
+	reset_globals();
+	boot_type      = BT_GRUB4DOS;
+	partition_type = PARTITION_STYLE_MBR;
+	fs_type        = FS_FAT32;
+	target_type    = TT_BIOS;
+
+	DWORD rc2 = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc2 == 0);
+	teardown_drive();
+
+	/* Compare MBR boot code (bytes 0..445) */
+	uint8_t mbr_img[446], mbr_direct[446];
+	int fd1 = open(path_img, O_RDONLY);
+	int fd2 = open(path_direct, O_RDONLY);
+	CHECK(fd1 >= 0 && fd2 >= 0);
+	CHECK(pread(fd1, mbr_img,    sizeof(mbr_img),    0) == (ssize_t)sizeof(mbr_img));
+	CHECK(pread(fd2, mbr_direct, sizeof(mbr_direct), 0) == (ssize_t)sizeof(mbr_direct));
+	close(fd1); close(fd2);
+	CHECK(memcmp(mbr_img, mbr_direct, sizeof(mbr_img)) == 0);
+
+	unlink(path_img);    free(path_img);
+	unlink(path_direct); free(path_direct);
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 int main(void)
@@ -1108,6 +1358,8 @@ int main(void)
 	RUN(write_mbr_non_bootable_writes_zero_code);
 	RUN(write_mbr_syslinux_writes_nonzero_code);
 	RUN(write_mbr_grub2_writes_nonzero_code);
+	RUN(write_mbr_grub4dos_writes_nonzero_code);
+	RUN(write_mbr_image_with_grub4dos_writes_grub4dos_code);
 	RUN(write_mbr_win7_default);
 	RUN(write_mbr_preserves_partition_table);
 
@@ -1115,6 +1367,11 @@ int main(void)
 	RUN(install_grub2_null_dev_returns_false);
 	RUN(install_grub2_null_mount_returns_false);
 	RUN(install_grub2_nonexistent_dev_fails);
+
+	printf("\n=== InstallGrub4DOS tests ===\n");
+	RUN(install_grub4dos_null_mount_returns_false);
+	RUN(install_grub4dos_no_cache_returns_false);
+	RUN(install_grub4dos_copies_file_to_mount_path);
 
 	printf("\n=== WriteDrive tests ===\n");
 	RUN(write_drive_bad_handle_fails);
@@ -1136,6 +1393,10 @@ int main(void)
 	RUN(format_thread_write_as_image_copies_content);
 	RUN(format_thread_zero_drive_zeroes_everything);
 	RUN(format_thread_posts_format_completed);
+
+	printf("\n=== FormatThread GRUB4DOS integration tests ===\n");
+	RUN(format_thread_grub4dos_standalone_writes_grub4dos_mbr);
+	RUN(format_thread_image_grub4dos_writes_grub4dos_mbr);
 
 	TEST_RESULTS();
 }

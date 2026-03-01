@@ -34,6 +34,19 @@ char *get_token_data_file_indexed(const char *token, const char *filename,
 }
 
 /*
+ * RunCommandWithProgress stub — format_ext_tools.c (FormatNTFS/FormatExFAT)
+ * calls this for external formatters.  In the format-thread tests we don't
+ * need real NTFS/exFAT output, so just return failure so the test can
+ * observe that the function was reachable.
+ */
+DWORD RunCommandWithProgress(const char *cmd, const char *dir,
+                              BOOL log, int msg, const char *pattern)
+{
+    (void)cmd; (void)dir; (void)log; (void)msg; (void)pattern;
+    return 1; /* simulate "tool not found / failed" */
+}
+
+/*
  * InstallSyslinux stub — always returns FALSE so that tests can verify the
  * FormatThread wiring (it should set ErrorStatus to ERROR_INSTALL_FAILURE)
  * without requiring real syslinux/libfat infrastructure.

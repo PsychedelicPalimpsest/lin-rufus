@@ -21,6 +21,7 @@
 #include "ms-sys/inc/br.h"
 #include "ms-sys/inc/fat32.h"
 #include "ms-sys/inc/partition_info.h"
+#include "../../res/grub/grub_version.h"
 
 extern const char* FileSystemLabel[FS_MAX];
 extern BOOL force_large_fat32, enable_ntfs_compression, lock_drive, zero_drive, fast_zeroing;
@@ -360,6 +361,82 @@ out:
 }
 
 /* =========================================================================
+ * InstallGrub4DOS — copy grldr to the mounted partition root
+ *
+ * Looks for the Grub4DOS loader file at:
+ *   <app_data_dir>/<FILES_DIR>/grub4dos-<GRUB4DOS_VERSION>/grldr
+ * and copies it to <mount_dir>/grldr.
+ *
+ * Returns TRUE on success, FALSE if the source file is not found or the
+ * copy fails (non-fatal: caller should log a warning and continue).
+ * ======================================================================= */
+BOOL InstallGrub4DOS(const char *mount_dir)
+{
+	if (!mount_dir) return FALSE;
+
+	char src[MAX_PATH];
+	char dst[MAX_PATH];
+
+	/* Build source path: app_data_dir/Rufus/grub4dos-VERSION/grldr */
+	if (snprintf(src, sizeof(src), "%s/" FILES_DIR "/grub4dos-%s/grldr",
+	             app_data_dir, GRUB4DOS_VERSION) >= (int)sizeof(src)) {
+		uprintf("InstallGrub4DOS: path too long");
+		return FALSE;
+	}
+
+	/* Build destination path: mount_dir/grldr */
+	if (snprintf(dst, sizeof(dst), "%s/grldr", mount_dir) >= (int)sizeof(dst)) {
+		uprintf("InstallGrub4DOS: dest path too long");
+		return FALSE;
+	}
+
+	/* Open source */
+	int src_fd = open(src, O_RDONLY | O_CLOEXEC);
+	if (src_fd < 0) {
+		uprintf("InstallGrub4DOS: '%s' not found — download Grub4DOS first", src);
+		return FALSE;
+	}
+
+	/* Get size */
+	struct stat st;
+	if (fstat(src_fd, &st) != 0 || st.st_size == 0) {
+		close(src_fd);
+		uprintf("InstallGrub4DOS: '%s' is empty or unreadable", src);
+		return FALSE;
+	}
+
+	/* Open/create destination */
+	int dst_fd = open(dst, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+	if (dst_fd < 0) {
+		close(src_fd);
+		uprintf("InstallGrub4DOS: could not create '%s': %s", dst, strerror(errno));
+		return FALSE;
+	}
+
+	/* Copy */
+	char buf[65536];
+	BOOL ok = TRUE;
+	ssize_t n;
+	while ((n = read(src_fd, buf, sizeof(buf))) > 0) {
+		if (write(dst_fd, buf, (size_t)n) != n) {
+			uprintf("InstallGrub4DOS: write to '%s' failed: %s", dst, strerror(errno));
+			ok = FALSE;
+			break;
+		}
+	}
+
+	close(src_fd);
+	close(dst_fd);
+
+	if (ok)
+		uprintf("Installing: %s/grldr (Grub4DOS loader)", mount_dir);
+	else
+		unlink(dst);
+
+	return ok;
+}
+
+/* =========================================================================
  * InstallGrub2 — install GRUB2 boot files to the device/partition
  *
  * Calls grub-install (or grub2-install) with i386-pc target.  mount_path is
@@ -578,7 +655,35 @@ DWORD WINAPI FormatThread(void* param)
 					free(dev_path);
 				}
 			}
+
+			/* For Grub4DOS images, grldr should have been extracted from the ISO.
+			 * If not (e.g. the ISO only had grldr.mbr), try a fresh install from cache. */
+			if (!IS_ERROR(ErrorStatus) && img_report.has_grub4dos) {
+				char grldr_check[MAX_PATH];
+				snprintf(grldr_check, sizeof(grldr_check), "%s/grldr", mount_path);
+				struct stat st_check;
+				if (stat(grldr_check, &st_check) != 0) {
+					if (!InstallGrub4DOS(mount_path))
+						uprintf("Grub4DOS grldr not found in ISO and not in cache; BIOS boot may not work");
+				}
+			}
+
 			free(mount_path);
+		}
+	}
+	CHECK_FOR_USER_CANCEL;
+
+	/* For standalone BT_GRUB4DOS, mount the partition and install grldr */
+	if (boot_type == BT_GRUB4DOS) {
+		UpdateProgress(OP_FILE_COPY, 0.0f);
+		char *mount_dir = AltMountVolume(DriveIndex, part_offset, FALSE);
+		if (mount_dir != NULL) {
+			if (!InstallGrub4DOS(mount_dir))
+				uprintf("WARNING: Grub4DOS grldr not installed; BIOS boot will not work");
+			AltUnmountVolume(mount_dir, FALSE);
+			free(mount_dir);
+		} else {
+			uprintf("WARNING: Could not mount partition for Grub4DOS grldr installation");
 		}
 	}
 	CHECK_FOR_USER_CANCEL;

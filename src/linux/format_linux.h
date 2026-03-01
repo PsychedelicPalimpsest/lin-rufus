@@ -35,6 +35,18 @@ BOOL format_linux_write_mbr(HANDLE hDrive);
 BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive);
 
 /*
+ * InstallGrub4DOS - copy the Grub4DOS loader (grldr) to the mounted partition.
+ *
+ * Looks for grldr in the local Rufus data directory:
+ *   <app_data_dir>/Rufus/grub4dos-<GRUB4DOS_VERSION>/grldr
+ * and copies it to <mount_dir>/grldr.
+ *
+ * Returns TRUE on success, FALSE if the file is not in the cache or the
+ * copy fails (non-fatal — caller should log a warning).
+ */
+BOOL InstallGrub4DOS(const char *mount_dir);
+
+/*
  * InstallGrub2 - install GRUB2 bootloader to the device.
  *
  * Calls grub-install (i386-pc target) with --boot-directory=<mount_path>/boot.
