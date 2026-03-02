@@ -1040,6 +1040,261 @@ TEST(sb_issigned_no_active_certs)
 	free(pe);
 }
 
+/* ---- IsRevokedBySvn tests (Linux only) ---- */
+
+/*
+ * Build a minimal PE64 with a .rsrc section containing a single named SVN entry.
+ *
+ * Layout (all offsets within the .rsrc section blob):
+ *   [0]   IMAGE_RESOURCE_DIRECTORY (root)      — 1 named entry
+ *   [16]  IMAGE_RESOURCE_DIRECTORY_ENTRY       — root entry (named, is-directory)
+ *   [24]  IMAGE_RESOURCE_DIRECTORY (type dir)  — 1 id entry
+ *   [40]  IMAGE_RESOURCE_DIRECTORY_ENTRY       — type entry (id 1, is-directory)
+ *   [48]  IMAGE_RESOURCE_DIRECTORY (lang dir)  — 1 id entry
+ *   [64]  IMAGE_RESOURCE_DIRECTORY_ENTRY       — lang entry (id 0, data leaf)
+ *   [72]  IMAGE_RESOURCE_DATA_ENTRY            — points to svn_ver
+ *   [88]  uint32_t svn_ver                     — the SVN version value
+ *   [92]  WORD name_len; uint16_t name_chars[] — product name string
+ *
+ * The PE wraps this blob as a 512-byte raw .rsrc section at file offset 512,
+ * with RVA 0x1000, and fills in DataDirectory[2] accordingly.
+ */
+
+/* Sizes of PE resource structures */
+#define RSRC_DIR_SZ   sizeof(IMAGE_RESOURCE_DIRECTORY)
+#define RSRC_ENT_SZ   sizeof(IMAGE_RESOURCE_DIRECTORY_ENTRY)
+#define RSRC_DATA_SZ  sizeof(IMAGE_RESOURCE_DATA_ENTRY)
+
+static uint8_t *make_pe_with_svn(uint32_t svn_version,
+                                 const char *product,   /* ASCII, uppercase */
+                                 size_t *out_len)
+{
+	const size_t pe_size   = 1024;
+	const size_t rsrc_rva  = 0x1000;
+	const size_t rsrc_foff = 512;    /* .rsrc raw data at file offset 512 */
+	const DWORD  nt_off    = 64;
+
+	/* Convert ASCII product name to uint16_t (PE UTF-16LE) */
+	size_t name_chars = strlen(product);
+	/* rsrc blob offsets */
+	size_t root_off  = 0;
+	size_t rent_off  = root_off  + RSRC_DIR_SZ;
+	size_t tdir_off  = rent_off  + RSRC_ENT_SZ;
+	size_t tent_off  = tdir_off  + RSRC_DIR_SZ;
+	size_t ldir_off  = tent_off  + RSRC_ENT_SZ;
+	size_t lent_off  = ldir_off  + RSRC_DIR_SZ;
+	size_t data_off  = lent_off  + RSRC_ENT_SZ;
+	size_t ver_off   = data_off  + RSRC_DATA_SZ;
+	size_t nlen_off  = ver_off   + 4;            /* WORD name length */
+	size_t nstr_off  = nlen_off  + 2;            /* uint16_t chars */
+
+	uint8_t *buf = calloc(pe_size, 1);
+	if (!buf) return NULL;
+
+	/* --- DOS header --- */
+	IMAGE_DOS_HEADER *dos = (void *)buf;
+	dos->e_magic  = IMAGE_DOS_SIGNATURE;
+	dos->e_lfanew = (LONG)nt_off;
+
+	/* --- NT headers (PE64) --- */
+	IMAGE_NT_HEADERS64 *nt = (void *)(buf + nt_off);
+	nt->Signature = IMAGE_NT_SIGNATURE;
+	nt->FileHeader.Machine             = IMAGE_FILE_MACHINE_AMD64;
+	nt->FileHeader.NumberOfSections    = 1;
+	nt->FileHeader.SizeOfOptionalHeader = (WORD)sizeof(IMAGE_OPTIONAL_HEADER64);
+
+	IMAGE_OPTIONAL_HEADER64 *opt = &nt->OptionalHeader;
+	opt->Magic            = IMAGE_NT_OPTIONAL_HDR64_MAGIC;
+	opt->FileAlignment    = 512;
+	opt->SectionAlignment = 0x1000;
+	opt->SizeOfHeaders    = 512;
+	opt->SizeOfImage      = (DWORD)pe_size;
+	opt->NumberOfRvaAndSizes = IMAGE_NUMBEROF_DIRECTORY_ENTRIES;
+	/* DataDirectory[2] = IMAGE_DIRECTORY_ENTRY_RESOURCE */
+	opt->DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE].VirtualAddress = (DWORD)rsrc_rva;
+	opt->DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE].Size           = 512;
+
+	/* --- Section header --- */
+	size_t sec_hdr_off = nt_off + 4 + sizeof(IMAGE_FILE_HEADER) + sizeof(IMAGE_OPTIONAL_HEADER64);
+	IMAGE_SECTION_HEADER *sec = (void *)(buf + sec_hdr_off);
+	memcpy(sec->Name, ".rsrc\0\0\0", 8);
+	sec->VirtualAddress   = (DWORD)rsrc_rva;
+	sec->Misc.VirtualSize = 512;
+	sec->SizeOfRawData    = 512;
+	sec->PointerToRawData = (DWORD)rsrc_foff;
+
+	/* --- Build the .rsrc blob --- */
+	uint8_t *rsrc = buf + rsrc_foff;
+
+	/* Root directory: 1 named entry */
+	IMAGE_RESOURCE_DIRECTORY *rdir = (void *)(rsrc + root_off);
+	rdir->NumberOfNamedEntries = 1;
+
+	/* Root directory entry: named, points to type-dir */
+	IMAGE_RESOURCE_DIRECTORY_ENTRY *rent = (void *)(rsrc + rent_off);
+	rent->NameIsString  = 1;
+	rent->NameOffset    = (DWORD)nlen_off;   /* offset within .rsrc of name */
+	rent->DataIsDirectory = 1;
+	rent->OffsetToDirectory = (DWORD)tdir_off;
+
+	/* Type directory: 1 id entry */
+	IMAGE_RESOURCE_DIRECTORY *tdir = (void *)(rsrc + tdir_off);
+	tdir->NumberOfIdEntries = 1;
+
+	/* Type entry: id=1, points to lang-dir */
+	IMAGE_RESOURCE_DIRECTORY_ENTRY *tent = (void *)(rsrc + tent_off);
+	tent->NameIsString   = 0;
+	tent->Id             = 1;
+	tent->DataIsDirectory = 1;
+	tent->OffsetToDirectory = (DWORD)ldir_off;
+
+	/* Language directory: 1 id entry */
+	IMAGE_RESOURCE_DIRECTORY *ldir = (void *)(rsrc + ldir_off);
+	ldir->NumberOfIdEntries = 1;
+
+	/* Language entry: id=0, points to data entry */
+	IMAGE_RESOURCE_DIRECTORY_ENTRY *lent = (void *)(rsrc + lent_off);
+	lent->NameIsString   = 0;
+	lent->Id             = 0;
+	lent->DataIsDirectory = 0;
+	lent->OffsetToData   = (DWORD)data_off;
+
+	/* Data entry: RVA = rsrc_rva + ver_off, size = 4 */
+	IMAGE_RESOURCE_DATA_ENTRY *dent = (void *)(rsrc + data_off);
+	dent->OffsetToData = (DWORD)(rsrc_rva + ver_off);
+	dent->Size         = 4;
+
+	/* SVN version */
+	uint32_t *ver_ptr = (uint32_t *)(rsrc + ver_off);
+	*ver_ptr = svn_version;
+
+	/* Name string: WORD length + uint16_t chars (no null terminator in PE) */
+	uint16_t *nlen_ptr = (uint16_t *)(rsrc + nlen_off);
+	*nlen_ptr = (uint16_t)name_chars;
+	uint16_t *nstr_ptr = (uint16_t *)(rsrc + nstr_off);
+	for (size_t i = 0; i < name_chars; i++)
+		nstr_ptr[i] = (uint16_t)(uint8_t)product[i];
+
+	*out_len = pe_size;
+	return buf;
+}
+
+/* sbat_entries must end with a NULL product sentinel */
+static sbat_entry_t test_sbat[3];
+
+static void setup_sbat(const char *product, uint32_t min_ver)
+{
+	test_sbat[0].product = (char *)product;
+	test_sbat[0].version = min_ver;
+	test_sbat[1].product = NULL;
+	test_sbat[1].version = 0;
+	sbat_entries = test_sbat;
+}
+
+static void teardown_sbat(void)
+{
+	sbat_entries = NULL;
+}
+
+/* SVN version below minimum → IsRevokedBySvn returns TRUE */
+TEST(svn_check_revoked)
+{
+	setup_sbat("WINDOWS", 5);
+	size_t len = 0;
+	uint8_t *pe = make_pe_with_svn(3, "WINDOWS", &len);  /* 3 < 5 */
+	CHECK(pe != NULL);
+	extern BOOL IsRevokedBySvn(uint8_t *buf, uint32_t len);
+	BOOL r = IsRevokedBySvn(pe, (uint32_t)len);
+	CHECK(r == TRUE);
+	free(pe);
+	teardown_sbat();
+}
+
+/* SVN version at minimum → not revoked */
+TEST(svn_check_at_minimum)
+{
+	setup_sbat("GRUB", 5);
+	size_t len = 0;
+	uint8_t *pe = make_pe_with_svn(5, "GRUB", &len);  /* 5 == 5 */
+	CHECK(pe != NULL);
+	extern BOOL IsRevokedBySvn(uint8_t *buf, uint32_t len);
+	BOOL r = IsRevokedBySvn(pe, (uint32_t)len);
+	CHECK(r == FALSE);
+	free(pe);
+	teardown_sbat();
+}
+
+/* SVN version above minimum → not revoked */
+TEST(svn_check_above_minimum)
+{
+	setup_sbat("SHIM", 2);
+	size_t len = 0;
+	uint8_t *pe = make_pe_with_svn(10, "SHIM", &len);  /* 10 > 2 */
+	CHECK(pe != NULL);
+	extern BOOL IsRevokedBySvn(uint8_t *buf, uint32_t len);
+	BOOL r = IsRevokedBySvn(pe, (uint32_t)len);
+	CHECK(r == FALSE);
+	free(pe);
+	teardown_sbat();
+}
+
+/* SBAT entry for different product — no resource match → not revoked */
+TEST(svn_check_no_matching_product)
+{
+	setup_sbat("OTHER", 5);
+	size_t len = 0;
+	uint8_t *pe = make_pe_with_svn(1, "WINDOWS", &len);  /* resource named WINDOWS */
+	CHECK(pe != NULL);
+	extern BOOL IsRevokedBySvn(uint8_t *buf, uint32_t len);
+	BOOL r = IsRevokedBySvn(pe, (uint32_t)len);
+	CHECK(r == FALSE);  /* OTHER not found in PE resources */
+	free(pe);
+	teardown_sbat();
+}
+
+/* Lowercase product names in sbat_entries are skipped per spec */
+TEST(svn_check_lowercase_skipped)
+{
+	setup_sbat("windows", 5);  /* lowercase — should be skipped */
+	size_t len = 0;
+	/* PE has resource "WINDOWS" with version 1 (would be revoked if checked) */
+	uint8_t *pe = make_pe_with_svn(1, "WINDOWS", &len);
+	CHECK(pe != NULL);
+	extern BOOL IsRevokedBySvn(uint8_t *buf, uint32_t len);
+	BOOL r = IsRevokedBySvn(pe, (uint32_t)len);
+	CHECK(r == FALSE);  /* lowercase skipped */
+	free(pe);
+	teardown_sbat();
+}
+
+/* NULL sbat_entries → always FALSE */
+TEST(svn_check_null_sbat)
+{
+	sbat_entries = NULL;
+	size_t len = 0;
+	uint8_t *pe = make_pe_with_svn(1, "WINDOWS", &len);
+	CHECK(pe != NULL);
+	extern BOOL IsRevokedBySvn(uint8_t *buf, uint32_t len);
+	BOOL r = IsRevokedBySvn(pe, (uint32_t)len);
+	CHECK(r == FALSE);
+	free(pe);
+}
+
+/* PE with no .rsrc section (empty resource directory) → not revoked */
+TEST(svn_check_no_rsrc_section)
+{
+	setup_sbat("WINDOWS", 5);
+	size_t len = 0;
+	/* make_pe64 builds a PE without a resource section */
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	extern BOOL IsRevokedBySvn(uint8_t *buf, uint32_t len);
+	BOOL r = IsRevokedBySvn(pe, (uint32_t)len);
+	CHECK(r == FALSE);
+	free(pe);
+	teardown_sbat();
+}
+
 #endif /* __linux__ */
 
 int main(void)
@@ -1135,6 +1390,15 @@ int main(void)
 	RUN(sb_revoked_random_bytes);
 	RUN(sb_revoked_unsigned_pe);
 	RUN(sb_revoked_idempotent);
+
+	printf("\n  IsRevokedBySvn (Linux only)\n");
+	RUN(svn_check_revoked);
+	RUN(svn_check_at_minimum);
+	RUN(svn_check_above_minimum);
+	RUN(svn_check_no_matching_product);
+	RUN(svn_check_lowercase_skipped);
+	RUN(svn_check_null_sbat);
+	RUN(svn_check_no_rsrc_section);
 #endif
 
 	TEST_RESULTS();

@@ -40,7 +40,7 @@ BOOL right_to_left_mode = FALSE;
 extern uint16_t  GetPeArch(uint8_t* buf);
 extern uint8_t*  GetPeSection(uint8_t* buf, const char* name, uint32_t* len);
 extern uint8_t*  RvaToPhysical(uint8_t* buf, uint32_t rva);
-extern uint32_t  FindResourceRva(const wchar_t* name, uint8_t* root, uint8_t* dir, uint32_t* len);
+extern uint32_t  FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* dir, uint32_t* len);
 extern uint8_t*  GetPeSignatureData(uint8_t* buf);
 
 /* -------------------------------------------------------------------------
@@ -433,7 +433,8 @@ TEST(get_pe_sig_zero_length_cert)
  * FindResourceRva tests
  * ====================================================================== */
 
-/* Minimal resource directory builder: one named entry pointing to data. */
+/* Minimal resource directory builder: one named entry pointing to data.
+ * The PE resource format always uses 2-byte UTF-16LE for name strings. */
 typedef struct {
     IMAGE_RESOURCE_DIRECTORY     root_dir;
     IMAGE_RESOURCE_DIRECTORY_ENTRY root_entry;
@@ -441,18 +442,23 @@ typedef struct {
     IMAGE_RESOURCE_DIRECTORY     leaf_dir;
     IMAGE_RESOURCE_DIRECTORY_ENTRY leaf_entry;
     IMAGE_RESOURCE_DATA_ENTRY    data_entry;
-    /* inline name string: "HELLO" in UTF-16 */
-    WORD  name_len;
-    WCHAR name_str[6];  /* "HELLO\0" */
+    /* inline name string: "HELLO" in UTF-16LE (2 bytes per code unit) */
+    WORD     name_len;
+    uint16_t name_str[6];  /* "HELLO\0" */
     /* padding so offsets are valid */
 } ResourceBlock;
+
+/* Helper: create a null-terminated uint16_t literal from ASCII */
+#define U16LIT(s) ((const uint16_t[]){ s })
+#define U16C(c)   ((uint16_t)(c))
 
 TEST(find_resource_rva_null_args)
 {
     uint8_t buf[256] = {0};
+    static const uint16_t u16x[] = { 'X', 0 };
     CHECK_INT_EQ(0, (int)FindResourceRva(NULL, buf, buf, NULL));
-    CHECK_INT_EQ(0, (int)FindResourceRva(L"X", NULL, buf, NULL));
-    CHECK_INT_EQ(0, (int)FindResourceRva(L"X", buf, NULL, NULL));
+    CHECK_INT_EQ(0, (int)FindResourceRva(u16x, NULL, buf, NULL));
+    CHECK_INT_EQ(0, (int)FindResourceRva(u16x, buf, NULL, NULL));
 }
 
 TEST(find_resource_rva_empty_directory)
@@ -460,18 +466,21 @@ TEST(find_resource_rva_empty_directory)
     /* A root directory with 0 named + 0 id entries */
     uint8_t buf[sizeof(IMAGE_RESOURCE_DIRECTORY)] = {0};
     uint32_t len = 0;
-    CHECK_INT_EQ(0, (int)FindResourceRva(L"MISSING", buf, buf, &len));
+    static const uint16_t u16missing[] = { 'M','I','S','S','I','N','G', 0 };
+    CHECK_INT_EQ(0, (int)FindResourceRva(u16missing, buf, buf, &len));
 }
 
 TEST(find_resource_rva_name_not_found)
 {
-    /* One named entry "FOO" but we search for "BAR" */
+    /* One named entry "FOO" but we search for "BAR".
+     * Name data uses PE-native 2-byte UTF-16LE layout:
+     *   WORD length; uint16_t chars[]. */
     size_t total = sizeof(IMAGE_RESOURCE_DIRECTORY)
                  + sizeof(IMAGE_RESOURCE_DIRECTORY_ENTRY)
                  + sizeof(IMAGE_RESOURCE_DIRECTORY)
                  + sizeof(IMAGE_RESOURCE_DIRECTORY_ENTRY)
                  + sizeof(IMAGE_RESOURCE_DATA_ENTRY)
-                 + sizeof(WORD) + 3 * sizeof(WCHAR);
+                 + sizeof(WORD) + 3 * sizeof(uint16_t);
     uint8_t* root = (uint8_t*)calloc(1, total);
     CHECK(root != NULL);
 
@@ -489,16 +498,17 @@ TEST(find_resource_rva_name_not_found)
     rentry->OffsetToData = 0; /* not a directory */
     rentry->DataIsDirectory = 0;
 
-    /* name "FOO" */
+    /* name "FOO" in PE UTF-16LE format (2 bytes per char) */
     WORD* name_len_ptr = (WORD*)(root + name_off);
     *name_len_ptr = 3;
-    WCHAR* name_str_ptr = (WCHAR*)(root + name_off + sizeof(WORD));
-    name_str_ptr[0] = L'F';
-    name_str_ptr[1] = L'O';
-    name_str_ptr[2] = L'O';
+    uint16_t* name_str_ptr = (uint16_t*)(root + name_off + sizeof(WORD));
+    name_str_ptr[0] = 'F';
+    name_str_ptr[1] = 'O';
+    name_str_ptr[2] = 'O';
 
+    static const uint16_t u16bar[] = { 'B', 'A', 'R', 0 };
     uint32_t len = 0;
-    uint32_t rva = FindResourceRva(L"BAR", root, root, &len);
+    uint32_t rva = FindResourceRva(u16bar, root, root, &len);
     CHECK_INT_EQ(0, (int)rva);
     free(root);
 }

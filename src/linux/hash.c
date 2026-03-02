@@ -286,12 +286,109 @@ static BOOL IsRevokedBySbat(uint8_t* buf, uint32_t len)
 }
 
 /* ---- Secure Boot helper: check if PE SVN resource is below minimum ---- */
-/* On Linux, wchar_t is 4 bytes (UTF-32) while PE resource names are UTF-16 (2 bytes).
- * FindResourceRva uses sizeof(wchar_t) in comparisons and cannot correctly scan PE
- * resource directories on Linux.  Skip the SVN check rather than risk false positives. */
-static BOOL IsRevokedBySvn(uint8_t* buf, uint32_t len)
+
+/*
+ * Convert a NUL-terminated UTF-8 string to a NUL-terminated UTF-16LE array
+ * stored in 'dst' (allocated by caller, max_units includes the NUL).
+ * Only handles BMP characters (U+0000..U+FFFF) — sufficient for product names.
+ * Returns the number of UTF-16 code units written (excluding NUL), or -1 on error.
+ */
+static int utf8_to_utf16le(const char *src, uint16_t *dst, size_t max_units)
 {
-	(void)buf; (void)len;
+	size_t out = 0;
+	const uint8_t *s = (const uint8_t *)src;
+	while (*s && out < max_units - 1) {
+		uint32_t c;
+		if      (s[0] < 0x80)                            { c  = s[0];              s += 1; }
+		else if ((s[0] & 0xE0) == 0xC0 && (s[1] & 0xC0) == 0x80) { c  = ((s[0] & 0x1F) << 6) | (s[1] & 0x3F); s += 2; }
+		else if ((s[0] & 0xF0) == 0xE0 && (s[1] & 0xC0) == 0x80 && (s[2] & 0xC0) == 0x80) {
+			c = ((s[0] & 0x0F) << 12) | ((s[1] & 0x3F) << 6) | (s[2] & 0x3F);
+			s += 3;
+		} else {
+			return -1;  /* unsupported or invalid encoding */
+		}
+		if (c > 0xFFFF)
+			return -1;  /* surrogate pairs not handled */
+		dst[out++] = (uint16_t)c;
+	}
+	dst[out] = 0;
+	return (int)out;
+}
+
+/*
+ * Non-static when RUFUS_TEST is defined so tests can call it directly.
+ */
+#ifdef RUFUS_TEST
+BOOL IsRevokedBySvn(uint8_t* buf, uint32_t len)
+#else
+static BOOL IsRevokedBySvn(uint8_t* buf, uint32_t len)
+#endif
+{
+	uint32_t i, rsrc_rva, rsrc_len;
+	uint16_t rsrc_name[64];
+	uint8_t *root;
+	uint32_t *svn_ver;
+	IMAGE_DOS_HEADER *dos_header;
+	IMAGE_NT_HEADERS32 *pe_header;
+	IMAGE_NT_HEADERS64 *pe64_header;
+	IMAGE_DATA_DIRECTORY img_data_dir;
+
+	if (sbat_entries == NULL)
+		return FALSE;
+	if (buf == NULL || len < 0x100)
+		return FALSE;
+
+	dos_header = (IMAGE_DOS_HEADER *)buf;
+	pe_header  = (IMAGE_NT_HEADERS32 *)&buf[dos_header->e_lfanew];
+
+	for (i = 0; sbat_entries[i].product != NULL; i++) {
+		size_t j;
+		/* SVN entries are expected to be uppercase */
+		for (j = 0; sbat_entries[i].product[j] != '\0'; j++) {
+			if (!isupper((unsigned char)sbat_entries[i].product[j]))
+				break;
+		}
+		if (sbat_entries[i].product[j] != '\0')
+			continue;  /* not all uppercase — skip */
+
+		/* Convert product name to UTF-16LE for PE resource lookup */
+		if (utf8_to_utf16le(sbat_entries[i].product, rsrc_name, sizeof(rsrc_name) / sizeof(rsrc_name[0])) < 0)
+			continue;
+
+		if (pe_header->FileHeader.Machine == IMAGE_FILE_MACHINE_I386 ||
+		    pe_header->FileHeader.Machine == IMAGE_FILE_MACHINE_ARM) {
+			img_data_dir = pe_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE];
+		} else {
+			pe64_header = (IMAGE_NT_HEADERS64 *)pe_header;
+			img_data_dir = pe64_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE];
+		}
+
+		if (img_data_dir.VirtualAddress == 0 || img_data_dir.Size == 0)
+			continue;
+
+		root = RvaToPhysical(buf, img_data_dir.VirtualAddress);
+		if (root == NULL)
+			continue;
+
+		rsrc_rva = FindResourceRva(rsrc_name, root, root, &rsrc_len);
+		if (rsrc_rva == 0)
+			continue;
+
+		if (rsrc_len == sizeof(uint32_t)) {
+			svn_ver = (uint32_t *)RvaToPhysical(buf, rsrc_rva);
+			if (svn_ver != NULL) {
+				uuprintf("  SVN version: %d.%d", *svn_ver >> 16, *svn_ver & 0xffff);
+				if (*svn_ver < sbat_entries[i].version) {
+					uprintf("  SVN version %d.%d is lower than required minimum SVN version %d.%d!",
+						*svn_ver >> 16, *svn_ver & 0xffff,
+						sbat_entries[i].version >> 16, sbat_entries[i].version & 0xffff);
+					return TRUE;
+				}
+			}
+		} else {
+			uprintf("  Warning: Unexpected Secure Version Number size");
+		}
+	}
 	return FALSE;
 }
 

@@ -1045,15 +1045,21 @@ uint8_t* RvaToPhysical(uint8_t* buf, uint32_t rva)
 
 /* Recursively search a PE resource directory for a named entry.
  * root must point to the start of the .rsrc section data.
- * Returns the RVA of the data, or 0 if not found. */
+ * Returns the RVA of the data, or 0 if not found.
+ *
+ * name is a UTF-16LE string (uint16_t per code unit) matching the PE resource
+ * format.  This avoids sizeof(wchar_t) portability issues (4 bytes on Linux
+ * vs. 2 bytes on Windows). */
 static BOOL FoundResourceRva_flag = FALSE;
-uint32_t FindResourceRva(const wchar_t* name, uint8_t* root, uint8_t* dir, uint32_t* len)
+uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* dir, uint32_t* len)
 {
 	uint32_t i, rva;
 	IMAGE_RESOURCE_DIRECTORY* _dir = (IMAGE_RESOURCE_DIRECTORY*)dir;
 	IMAGE_RESOURCE_DIRECTORY_ENTRY* dir_entry = (IMAGE_RESOURCE_DIRECTORY_ENTRY*)&_dir[1];
-	IMAGE_RESOURCE_DIR_STRING_U* dir_string;
 	IMAGE_RESOURCE_DATA_ENTRY* data_entry;
+	const uint16_t* pe_str;
+	size_t nlen, k;
+	BOOL match;
 
 	if (root == NULL || dir == NULL || name == NULL)
 		return 0;
@@ -1064,9 +1070,21 @@ uint32_t FindResourceRva(const wchar_t* name, uint8_t* root, uint8_t* dir, uint3
 
 	for (i = 0; i < (uint32_t)_dir->NumberOfNamedEntries + _dir->NumberOfIdEntries; i++) {
 		if (!FoundResourceRva_flag && i < _dir->NumberOfNamedEntries) {
-			dir_string = (IMAGE_RESOURCE_DIR_STRING_U*)(root + dir_entry[i].NameOffset);
-			if (dir_string->Length != (WORD)wcslen(name) ||
-			    memcmp(name, dir_string->NameString, wcslen(name) * sizeof(wchar_t)) != 0)
+			/* The PE resource name is stored as: WORD Length; uint16_t NameString[].
+			 * We access it as a raw byte pointer to avoid wchar_t size issues
+			 * (sizeof(wchar_t) is 4 on Linux but PE always uses 2-byte UTF-16). */
+			const uint8_t* name_blob = root + dir_entry[i].NameOffset;
+			WORD pe_len = *(const WORD*)name_blob;
+			pe_str = (const uint16_t*)(name_blob + sizeof(WORD));
+			/* Count length of the caller's name */
+			for (nlen = 0; name[nlen]; nlen++);
+			if (pe_len != (WORD)nlen)
+				continue;
+			match = TRUE;
+			for (k = 0; k < nlen && match; k++)
+				if (pe_str[k] != name[k])
+					match = FALSE;
+			if (!match)
 				continue;
 			FoundResourceRva_flag = TRUE;
 		}
