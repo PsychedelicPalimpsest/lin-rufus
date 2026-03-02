@@ -73,6 +73,35 @@ void stdlg_clear_test_mode(void)
 }
 
 /* =========================================================================
+ * Alert hook — enables non-interactive headless operation (item 131)
+ * =========================================================================
+ *
+ * When set, the hook is called by NotificationEx() instead of showing any
+ * UI.  It receives the full 'type' flags (MB_OK, MB_YESNO, MB_ICONQUESTION,
+ * etc.) and returns TRUE to accept / FALSE to reject.  The hook takes
+ * priority over the test-injection mechanism so that CLI --no-prompt mode
+ * always wins.
+ *
+ * Mapping:
+ *   MB_OK            — always returns IDOK (hook return value ignored)
+ *   MB_YESNO / MB_YESNOCANCEL — TRUE → IDYES, FALSE → IDNO
+ *   MB_OKCANCEL      — TRUE → IDOK, FALSE → IDCANCEL
+ */
+static BOOL (*_alert_hook)(int type) = NULL;
+
+/** alert_set_hook - install an alert hook.  Pass NULL to clear. */
+void alert_set_hook(BOOL (*hook)(int type))
+{
+    _alert_hook = hook;
+}
+
+/** alert_clear_hook - remove any previously installed alert hook. */
+void alert_clear_hook(void)
+{
+    _alert_hook = NULL;
+}
+
+/* =========================================================================
  * Notification dialog
  * =========================================================================*/
 
@@ -91,6 +120,17 @@ int NotificationEx(int type, const char* dont_display_setting,
         va_end(ap);
     } else {
         msg[0] = '\0';
+    }
+
+    /* Alert hook — takes priority for non-interactive/headless operation */
+    if (_alert_hook != NULL) {
+        int buttons = type & 0x0F;
+        BOOL accept = _alert_hook(type);
+        if (buttons == MB_YESNO || buttons == MB_YESNOCANCEL)
+            return accept ? IDYES : IDNO;
+        if (buttons == MB_OKCANCEL)
+            return accept ? IDOK : IDCANCEL;
+        return IDOK;  /* MB_OK — accept is irrelevant */
     }
 
     /* In test mode, return the preset value without showing any UI */

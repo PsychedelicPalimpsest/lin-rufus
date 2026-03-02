@@ -52,6 +52,13 @@ extern void drive_linux_add_drive(const char *id, const char *name,
 extern DWORD ErrorStatus;
 extern DWORD FormatThread(void *param);
 
+/* Alert hook — stdlg.c (item 131) */
+extern void alert_set_hook(BOOL (*hook)(int type));
+extern void alert_clear_hook(void);
+
+/* Auto-accept hook used by --no-prompt */
+static BOOL cli_no_prompt_hook(int type) { (void)type; return TRUE; }
+
 /* ---- helpers ---- */
 
 static int parse_fs(const char *s)
@@ -106,6 +113,7 @@ void cli_print_usage(const char *prog)
 	       "      --quick               Quick format (default)\n"
 	       "      --no-quick            Full format (zero-fill)\n"
 	       "      --verify              Verify write after image write\n"
+	       "      --no-prompt           Auto-accept all confirmation dialogs\n"
 	       "  -h, --help                Show this help\n",
 	       prog ? prog : "rufus");
 }
@@ -122,6 +130,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "quick",            no_argument,       NULL, 'q' },
 		{ "no-quick",         no_argument,       NULL, 'Q' },
 		{ "verify",           no_argument,       NULL, 'V' },
+		{ "no-prompt",        no_argument,       NULL, 'y' },
 		{ "help",             no_argument,       NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
@@ -133,7 +142,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 1;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:l:hqQV",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:l:hqQVy",
 	                        long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'd':
@@ -197,6 +206,10 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 
 		case 'V':
 			opts->verify = 1;
+			break;
+
+		case 'y':
+			opts->no_prompt = 1;
 			break;
 
 		case 'h':
@@ -294,6 +307,10 @@ int cli_run(const cli_options_t *opts)
 	/* Propagate CLI options into Rufus globals */
 	cli_apply_options(opts);
 
+	/* Non-interactive mode: auto-accept all confirmation dialogs */
+	if (opts->no_prompt)
+		alert_set_hook(cli_no_prompt_hook);
+
 	/* Launch FormatThread and wait for it */
 	ErrorStatus = 0;
 	thread = CreateThread(NULL, 0, FormatThread,
@@ -304,6 +321,10 @@ int cli_run(const cli_options_t *opts)
 	}
 	WaitForSingleObject(thread, INFINITE);
 	CloseHandle(thread);
+
+	/* Remove the no-prompt hook now that the operation is complete */
+	if (opts->no_prompt)
+		alert_clear_hook();
 
 	if (ErrorStatus != 0) {
 		fprintf(stderr, "rufus: format failed (status 0x%08X)\n", ErrorStatus);

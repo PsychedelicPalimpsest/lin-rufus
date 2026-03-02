@@ -324,7 +324,33 @@ static void test_verify_sets_verify_true(void)
     CHECK(opts.verify == 1);
 }
 
-/* ---- --label tests ---- */
+/* ---- --no-prompt tests (item 131) ---- */
+
+static void test_no_prompt_sets_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --no-prompt", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_prompt == 1);
+}
+
+static void test_no_prompt_default_is_zero(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.no_prompt == 0);
+}
+
+static void test_no_prompt_combined_with_other_opts(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --quick --no-prompt", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_prompt == 1);
+    CHECK(opts.quick == 1);
+}
+
+
 
 static void test_label_is_parsed(void)
 {
@@ -428,6 +454,10 @@ int main(void)
     RUN_TEST(test_no_quick_sets_quick_false);
 
     RUN_TEST(test_verify_sets_verify_true);
+
+    RUN_TEST(test_no_prompt_sets_flag);
+    RUN_TEST(test_no_prompt_default_is_zero);
+    RUN_TEST(test_no_prompt_combined_with_other_opts);
 
     RUN_TEST(test_label_is_parsed);
 

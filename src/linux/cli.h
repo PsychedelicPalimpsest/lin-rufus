@@ -48,6 +48,7 @@ typedef struct {
     int  target;            /* --target bios|uefi          → TT_* or -1 */
     int  quick;             /* --quick / --no-quick: 1=yes, 0=no, -1=default(yes) */
     int  verify;            /* --verify: 1=yes, 0=no(default) */
+    int  no_prompt;         /* --no-prompt: 1=auto-accept all dialogs, 0=interactive */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

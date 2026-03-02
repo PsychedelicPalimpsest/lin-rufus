@@ -29,6 +29,12 @@
  * 31.  NotificationEx fallback — MB_OKCANCEL without test mode returns IDOK
  * 32.  NotificationEx fallback — MB_YESNO without test mode returns IDNO (safe)
  * 33.  NotificationEx fallback — MB_YESNOCANCEL without test mode returns IDNO
+ * 40.  alert_set_hook — hook receives full type flags
+ * 41.  alert_set_hook — hook returning TRUE yields IDYES for MB_YESNO
+ * 42.  alert_set_hook — hook returning FALSE yields IDNO for MB_YESNO
+ * 43.  alert_set_hook — hook on MB_OK always yields IDOK
+ * 44.  alert_clear_hook — clears hook, restores fallback behaviour
+ * 45.  alert_set_hook — hook takes priority over test-injection response
  */
 
 #include "framework.h"
@@ -45,6 +51,10 @@
 /* Test injection API — defined in stdlg.c */
 extern void stdlg_set_test_response(int response, const char *file_path);
 extern void stdlg_clear_test_mode(void);
+
+/* Alert hook API — defined in stdlg.c */
+extern void alert_set_hook(BOOL (*hook)(int type));
+extern void alert_clear_hook(void);
 
 /* Minimal stubs required by stdlg.c / stdfn.c */
 HWND hMainDialog = NULL;
@@ -528,10 +538,87 @@ TEST(list_dialog_null_msg_returns_no_crash)
 }
 
 /* =========================================================================
- * main
+ * alert_set_hook / alert_clear_hook tests (item 131)
  * =========================================================================*/
 
-/* app_dir stub — needed by find_license_file() in stdlg.c */
+/* Helper hook that records the type it received and returns TRUE */
+static int hook_received_type = 0;
+static BOOL hook_record_and_yes(int type)
+{
+    hook_received_type = type;
+    return TRUE;
+}
+
+static BOOL hook_always_no(int type)
+{
+    (void)type;
+    return FALSE;
+}
+
+/* 40. Hook receives full type flags */
+TEST(alert_hook_receives_type)
+{
+    stdlg_clear_test_mode();
+    hook_received_type = 0;
+    alert_set_hook(hook_record_and_yes);
+    (void)NotificationEx(MB_ICONQUESTION | MB_YESNO, NULL, NULL, "T", "m");
+    alert_clear_hook();
+    CHECK_INT_EQ(MB_ICONQUESTION | MB_YESNO, hook_received_type);
+}
+
+/* 41. Hook returning TRUE yields IDYES for MB_YESNO */
+TEST(alert_hook_yes_yields_idyes_for_yesno)
+{
+    stdlg_clear_test_mode();
+    alert_set_hook(hook_record_and_yes);
+    int r = NotificationEx(MB_YESNO, NULL, NULL, "T", "m");
+    alert_clear_hook();
+    CHECK_INT_EQ(IDYES, r);
+}
+
+/* 42. Hook returning FALSE yields IDNO for MB_YESNO */
+TEST(alert_hook_no_yields_idno_for_yesno)
+{
+    stdlg_clear_test_mode();
+    alert_set_hook(hook_always_no);
+    int r = NotificationEx(MB_YESNO, NULL, NULL, "T", "m");
+    alert_clear_hook();
+    CHECK_INT_EQ(IDNO, r);
+}
+
+/* 43. Hook on MB_OK always yields IDOK regardless of return value */
+TEST(alert_hook_on_mb_ok_yields_idok)
+{
+    stdlg_clear_test_mode();
+    alert_set_hook(hook_always_no);  /* even a "no" hook should give IDOK for MB_OK */
+    int r = NotificationEx(MB_OK, NULL, NULL, "T", "m");
+    alert_clear_hook();
+    CHECK_INT_EQ(IDOK, r);
+}
+
+/* 44. alert_clear_hook restores fallback behaviour */
+TEST(alert_clear_hook_restores_fallback)
+{
+    stdlg_clear_test_mode();
+    alert_set_hook(hook_record_and_yes);
+    alert_clear_hook();
+    /* With hook gone and no GTK/test mode, MB_YESNO falls back to IDNO */
+    int r = NotificationEx(MB_YESNO, NULL, NULL, "T", "m");
+    CHECK_INT_EQ(IDNO, r);
+}
+
+/* 45. Hook takes priority over test-injection response */
+TEST(alert_hook_priority_over_test_injection)
+{
+    /* Pre-load a test response of IDYES, but set a hook that returns FALSE */
+    stdlg_set_test_response(IDYES, NULL);
+    alert_set_hook(hook_always_no);
+    int r = NotificationEx(MB_YESNO, NULL, NULL, "T", "m");
+    alert_clear_hook();
+    stdlg_clear_test_mode();
+    CHECK_INT_EQ(IDNO, r);
+}
+
 char app_dir[MAX_PATH] = "";
 char app_data_dir[MAX_PATH] = "";
 char szFolderPath[MAX_PATH] = "";
@@ -638,6 +725,14 @@ int main(void)
     RUN(find_license_file_with_real_repo_path);
     RUN(find_license_file_with_bad_path_returns_null);
     RUN(license_callback_returns_true);
+
+    printf("\n  alert_set_hook / alert_clear_hook (item 131)\n");
+    RUN(alert_hook_receives_type);
+    RUN(alert_hook_yes_yields_idyes_for_yesno);
+    RUN(alert_hook_no_yields_idno_for_yesno);
+    RUN(alert_hook_on_mb_ok_yields_idok);
+    RUN(alert_clear_hook_restores_fallback);
+    RUN(alert_hook_priority_over_test_injection);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;
