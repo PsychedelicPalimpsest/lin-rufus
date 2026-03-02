@@ -805,6 +805,14 @@ DWORD WINAPI FormatThread(void* param)
 				unattend_xml_path = NULL;
 			}
 
+			/* Apply WinPE fixup for BIOS-boot WinPE images */
+			if (!IS_ERROR(ErrorStatus) && (target_type == TT_BIOS) && HAS_WINPE(img_report)) {
+				wue_set_mount_path(mount_path);
+				if (!SetupWinPE(0))
+					ErrorStatus = RUFUS_ERROR(APPERR(ERROR_CANT_PATCH));
+				wue_set_mount_path(NULL);
+			}
+
 			/* Install GRUB2 core.img for BIOS-boot GRUB2 images */
 			if (!IS_ERROR(ErrorStatus) && img_report.has_grub2
 			    && target_type == TT_BIOS && partition_type == PARTITION_STYLE_MBR) {
