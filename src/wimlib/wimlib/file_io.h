@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #ifdef WITH_LIBCDIO
-#  define DO_NOT_WANT_COMPATIBILITY
 #  undef PRAGMA_BEGIN_PACKED
 #  undef PRAGMA_END_PACKED
 #  include <cdio/udf.h>

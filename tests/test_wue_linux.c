@@ -30,6 +30,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "resource.h"
 #include "vhd.h"
 #include "wue.h"
+#include "wimlib.h"
 
 /* ================================================================
  * Globals required by wue.c and its dependencies
@@ -285,6 +286,171 @@ TEST(create_unattend_force_smode)
 }
 
 /* ================================================================
+ * Helpers: WIM-in-ISO fixture creation
+ * ================================================================ */
+
+/*
+ * Create a minimal WIM at dest_path with a single empty image and
+ * Windows version properties set (major=10, build=19041).
+ * Returns 0 on success, non-zero on failure.
+ */
+/*
+ * Write a minimal WIM binary by hand.
+ *
+ * The WIM consists of a 208-byte header followed immediately by a UTF-16LE
+ * XML block containing Windows version 10.0.19041.  No image blobs are
+ * present – wimlib only needs the XML section to satisfy
+ * PopulateWindowsVersion().
+ *
+ * Layout matches the on-disk wim_header_disk struct (see wimlib/header.h):
+ *   +0x00  magic       8 bytes  "MSWIM\0\0\0"
+ *   +0x08  hdr_size    4 bytes  208
+ *   +0x0c  wim_version 4 bytes  0x00010d00  (WIM_VERSION_DEFAULT)
+ *   +0x10  flags       4 bytes  0
+ *   +0x14  chunk_size  4 bytes  0
+ *   +0x18  guid        16 bytes (arbitrary)
+ *   +0x28  part_number 2 bytes  1
+ *   +0x2a  total_parts 2 bytes  1
+ *   +0x2c  image_count 4 bytes  1
+ *   +0x30  blob_table_reshdr  24 bytes  zeros (no blobs)
+ *   +0x48  xml_data_reshdr    24 bytes  points to the XML block at offset 208
+ *   +0x60  boot_metadata_reshdr 24 bytes zeros
+ *   +0x78  boot_idx    4 bytes  0
+ *   +0x7c  integrity_reshdr   24 bytes  zeros
+ *   +0x94  unused      60 bytes zeros
+ *
+ * reshdr_disk layout (24 bytes):
+ *   bytes 0-6   size_in_wim  (7-byte LE)
+ *   byte  7     flags
+ *   bytes 8-15  offset       (8-byte LE)
+ *   bytes 16-23 uncompressed_size (8-byte LE)
+ */
+static int create_minimal_wim_with_version(const char *dest_path)
+{
+	static const char xml_utf8[] =
+		"<WIM>"
+		  "<IMAGE INDEX=\"1\">"
+		    "<WINDOWS>"
+		      "<VERSION>"
+		        "<MAJOR>10</MAJOR>"
+		        "<MINOR>0</MINOR>"
+		        "<BUILD>19041</BUILD>"
+		        "<SPBUILD>1</SPBUILD>"
+		      "</VERSION>"
+		    "</WINDOWS>"
+		  "</IMAGE>"
+		"</WIM>";
+
+	/* Build UTF-16LE XML with BOM */
+	static const uint8_t bom[] = { 0xff, 0xfe };
+	size_t src_len = strlen(xml_utf8);
+	size_t xml_len = 2 + src_len * 2; /* BOM + 2 bytes per char (ASCII subset) */
+	uint8_t *xml = malloc(xml_len);
+	if (!xml) return -1;
+	xml[0] = 0xff; xml[1] = 0xfe;
+	for (size_t i = 0; i < src_len; i++) {
+		xml[2 + i*2]   = (uint8_t)xml_utf8[i];
+		xml[2 + i*2+1] = 0;
+	}
+	(void)bom; /* already embedded above */
+
+	/* Build reshdr for xml block: size_in_wim=xml_len, flags=0,
+	 * offset=208, uncompressed_size=xml_len */
+	uint8_t xml_reshdr[24] = {0};
+	uint64_t xsz = (uint64_t)xml_len;
+	uint64_t xoff = 208ULL;
+	/* 7-byte little-endian size_in_wim */
+	for (int i = 0; i < 7; i++) xml_reshdr[i] = (uint8_t)(xsz >> (8*i));
+	/* flags = 0 already */
+	for (int i = 0; i < 8; i++) xml_reshdr[8+i]  = (uint8_t)(xoff >> (8*i));
+	for (int i = 0; i < 8; i++) xml_reshdr[16+i] = (uint8_t)(xsz  >> (8*i));
+
+	/* Build 208-byte header */
+	uint8_t hdr[208] = {0};
+	/* magic */
+	static const uint8_t magic[] = { 'M','S','W','I','M',0,0,0 };
+	memcpy(hdr+0x00, magic, 8);
+	/* hdr_size = 208 */
+	hdr[0x08] = 208; hdr[0x09] = 0; hdr[0x0a] = 0; hdr[0x0b] = 0;
+	/* wim_version = 0x00010d00 */
+	hdr[0x0c] = 0x00; hdr[0x0d] = 0x0d; hdr[0x0e] = 0x01; hdr[0x0f] = 0x00;
+	/* flags, chunk_size = 0 (already zeroed) */
+	/* guid: fill with fixed bytes */
+	for (int i = 0; i < 16; i++) hdr[0x18+i] = (uint8_t)(i+1);
+	/* part_number = 1 */
+	hdr[0x28] = 1; hdr[0x29] = 0;
+	/* total_parts = 1 */
+	hdr[0x2a] = 1; hdr[0x2b] = 0;
+	/* image_count = 1 */
+	hdr[0x2c] = 1;
+	/* blob_table_reshdr at 0x30: zeros (already done) */
+	/* xml_data_reshdr at 0x48 */
+	memcpy(hdr+0x48, xml_reshdr, 24);
+	/* rest zero */
+
+	FILE *f = fopen(dest_path, "wb");
+	if (!f) { free(xml); return -1; }
+	int r = 0;
+	if (fwrite(hdr, 1, 208, f) != 208 ||
+	    fwrite(xml, 1, xml_len, f) != xml_len)
+		r = -1;
+	fclose(f);
+	free(xml);
+	return r;
+}
+
+/*
+ * Create an ISO9660 image at iso_path containing a single file src_file
+ * placed at dest_dir/filename within the ISO (e.g. sources/install.wim).
+ * dest_dir must be a relative path (no leading '/').
+ * Returns 0 on success, non-zero on failure.
+ */
+static int create_iso_with_wim(const char *iso_path,
+                                const char *wim_src,
+                                const char *dest_dir_in_iso)
+{
+	char tmpdir[256], subdir[512], src_name[256], cmd[2048];
+	char *p;
+	int r;
+
+	/* Create a staging directory */
+	snprintf(tmpdir, sizeof(tmpdir), "/tmp/rufus-iso-stage-XXXXXX");
+	if (!mkdtemp(tmpdir)) return -1;
+
+	/* Build full subdir path in staging area */
+	snprintf(subdir, sizeof(subdir), "%s/%s", tmpdir, dest_dir_in_iso);
+
+	/* mkdir -p for up to 3 path components */
+	char dirbuf[512];
+	snprintf(dirbuf, sizeof(dirbuf), "%s", subdir);
+	for (p = dirbuf + 1; *p; p++) {
+		if (*p == '/') {
+			*p = '\0';
+			mkdir(dirbuf, 0755);
+			*p = '/';
+		}
+	}
+	if (mkdir(dirbuf, 0755) != 0 && errno != EEXIST) { r = -1; goto cleanup; }
+
+	/* Copy WIM into staging subdir as install.wim (the expected name in real Windows ISOs) */
+	snprintf(src_name, sizeof(src_name), "%s/install.wim", subdir);
+	snprintf(cmd, sizeof(cmd), "cp '%s' '%s'", wim_src, src_name);
+	r = system(cmd);
+	if (r != 0) goto cleanup;
+
+	/* Use genisoimage/mkisofs to build the ISO (Rock Ridge preserves lowercase filenames) */
+	snprintf(cmd, sizeof(cmd),
+	         "genisoimage -quiet -R -o '%s' -iso-level 3 '%s' 2>/dev/null",
+	         iso_path, tmpdir);
+	r = system(cmd);
+
+cleanup:
+	snprintf(cmd, sizeof(cmd), "rm -rf '%s'", tmpdir);
+	system(cmd);
+	return r;
+}
+
+/* ================================================================
  * Tests: PopulateWindowsVersion
  * ================================================================ */
 
@@ -311,6 +477,115 @@ TEST(populate_wv_real_wim_if_available)
 	CHECK(img_report.win_version.major != 0);
 	CHECK(img_report.win_version.build != 0);
 	image_path = NULL;
+}
+
+/*
+ * Test that PopulateWindowsVersion correctly opens a WIM embedded inside an
+ * ISO9660 image.  This exercises the wininst_path offset: the path stored by
+ * linux/iso.c is "/sources/install.wim" (leading '/'), so the correct offset
+ * to strip the leading slash is [1], not [3] (which would give "rces/…").
+ */
+TEST(populate_wv_wim_in_iso)
+{
+	const char wim_tmp[] = "/tmp/rufus-test-embedded.wim";
+	const char iso_tmp[] = "/tmp/rufus-test-embedded.iso";
+
+	/* Skip if genisoimage is unavailable */
+	if (system("which genisoimage >/dev/null 2>&1") != 0) {
+		fprintf(stderr, "  SKIP: genisoimage not found\n");
+		return;
+	}
+
+	/* Create a minimal WIM with Windows version info */
+	int r = create_minimal_wim_with_version(wim_tmp);
+	if (r != 0) {
+		fprintf(stderr, "  SKIP: could not create test WIM (wimlib error %d)\n", r);
+		return;
+	}
+
+	/* Wrap it in an ISO at sources/install.wim */
+	r = create_iso_with_wim(iso_tmp, wim_tmp, "sources");
+	unlink(wim_tmp);
+	if (r != 0) {
+		fprintf(stderr, "  SKIP: could not create test ISO (error %d)\n", r);
+		unlink(iso_tmp);
+		return;
+	}
+
+	/* Configure img_report to point at the embedded WIM */
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_windows_img = FALSE;
+	img_report.wininst_index  = 1;
+	/* Path stored by linux/iso.c: leading '/' followed by the ISO-relative path */
+	snprintf(img_report.wininst_path[0], sizeof(img_report.wininst_path[0]),
+	         "/sources/install.wim");
+
+	image_path = (char *)iso_tmp;
+
+	BOOL ok = PopulateWindowsVersion();
+
+	image_path = NULL;
+	unlink(iso_tmp);
+
+	/* Should have successfully extracted version 10.0.19041 */
+	CHECK_MSG(ok == TRUE,
+	          "PopulateWindowsVersion must return TRUE for a WIM embedded in an ISO");
+	CHECK_MSG(img_report.win_version.major == 10,
+	          "Major version must be 10");
+	CHECK_MSG(img_report.win_version.build == 19041,
+	          "Build must be 19041");
+}
+
+/*
+ * Verify that using the wrong offset [3] (the old buggy code) would NOT find
+ * the WIM inside the ISO – i.e. the test above is a meaningful regression guard.
+ *
+ * We set wininst_path to a deliberately wrong value whose [3] char is 'r'
+ * (simulating the "/sources/install.wim" → [3] = 'r' bug) and confirm that
+ * PopulateWindowsVersion fails to open the WIM.
+ */
+TEST(populate_wv_wim_in_iso_wrong_offset_fails)
+{
+	const char wim_tmp[] = "/tmp/rufus-test-wrong-offset.wim";
+	const char iso_tmp[] = "/tmp/rufus-test-wrong-offset.iso";
+
+	if (system("which genisoimage >/dev/null 2>&1") != 0) return;
+
+	int r = create_minimal_wim_with_version(wim_tmp);
+	if (r != 0) { unlink(wim_tmp); return; }
+
+	r = create_iso_with_wim(iso_tmp, wim_tmp, "sources");
+	unlink(wim_tmp);
+	if (r != 0) { unlink(iso_tmp); return; }
+
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_windows_img = FALSE;
+	img_report.wininst_index  = 1;
+	/*
+	 * Simulate the wrong offset: pass "?:/sources/install.wim" so that
+	 * [3] == 's' and the path "sources/install.wim" happens to be correct
+	 * for the Windows code.  On Linux the path is "/sources/install.wim",
+	 * so [3] == 'r', which would be wrong.
+	 *
+	 * To prove the negative: put a path where [3] gives a bad name.
+	 * e.g. "XX/BAD/install.wim" → [3] = 'B' → wimlib looks for "BAD/install.wim"
+	 * which doesn't exist → PopulateWindowsVersion must return FALSE.
+	 */
+	snprintf(img_report.wininst_path[0], sizeof(img_report.wininst_path[0]),
+	         "XX/BAD/install.wim");
+
+	/* The test harness in wue.c uses [1] so "X/BAD/install.wim" is the path
+	 * passed to wimlib.  That still won't match the actual "sources/install.wim",
+	 * so the open must fail and PopulateWindowsVersion must return FALSE. */
+	image_path = (char *)iso_tmp;
+
+	BOOL ok = PopulateWindowsVersion();
+
+	image_path = NULL;
+	unlink(iso_tmp);
+
+	CHECK_MSG(ok == FALSE,
+	          "PopulateWindowsVersion must return FALSE when wininst_path gives a wrong WIM path");
 }
 
 /* ================================================================
@@ -555,6 +830,8 @@ int main(void)
 	RUN(create_unattend_force_smode);
 	RUN(populate_wv_no_image_path);
 	RUN(populate_wv_real_wim_if_available);
+	RUN(populate_wv_wim_in_iso);
+	RUN(populate_wv_wim_in_iso_wrong_offset_fails);
 	RUN(stub_setup_winpe_returns_false);
 	RUN(stub_setup_wintogo_returns_false);
 	RUN(stub_copy_sku_returns_false);

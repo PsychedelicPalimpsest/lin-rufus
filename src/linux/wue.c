@@ -319,10 +319,10 @@ BOOL PopulateWindowsVersion(void)
 	assert(safe_strlen(image_path) + 1 < ARRAYSIZE(wim_path));
 	static_strcpy(wim_path, image_path);
 	if (!img_report.is_windows_img) {
-		assert(safe_strlen(image_path) + safe_strlen(&img_report.wininst_path[0][3]) + 1
+		assert(safe_strlen(image_path) + safe_strlen(&img_report.wininst_path[0][1]) + 1
 			< ARRAYSIZE(wim_path));
 		static_strcat(wim_path, "|");
-		static_strcat(wim_path, &img_report.wininst_path[0][3]);
+		static_strcat(wim_path, &img_report.wininst_path[0][1]);
 	}
 
 	r = wimlib_open_wimU(wim_path, 0, &wim);
