@@ -1155,8 +1155,188 @@ TEST(apply_customization_multiple_flags)
 }
 
 /* ================================================================
- * Main
+ * Helpers for boot.wim tests
  * ================================================================ */
+
+/*
+ * make_sources_boot_wim - Create sources/boot.wim with two empty images,
+ * using the system wimlib-imagex / wimcapture command.
+ * Returns 0 on success, -1 on failure (or if wimlib-imagex is not available).
+ */
+static int make_sources_boot_wim(const char *mount)
+{
+	/* Require wimlib-imagex (from 'wimtools' package) */
+	if (system("wimlib-imagex --version >/dev/null 2>&1") != 0)
+		return -1;
+
+	char sources_dir[512];
+	snprintf(sources_dir, sizeof(sources_dir), "%s/sources", mount);
+	if (mkdir(sources_dir, 0755) != 0 && errno != EEXIST) return -1;
+
+	char wim_path[512];
+	snprintf(wim_path, sizeof(wim_path), "%s/sources/boot.wim", mount);
+
+	/* Create two temporary directories to use as image content */
+	char img1[] = "/tmp/rufus-wim-img1-XXXXXX";
+	char img2[] = "/tmp/rufus-wim-img2-XXXXXX";
+	if (mkdtemp(img1) == NULL || mkdtemp(img2) == NULL) return -1;
+
+	char cmd1[768], cmd2[768];
+	/* create WIM with image 1 */
+	snprintf(cmd1, sizeof(cmd1),
+	         "wimlib-imagex capture %s %s --no-acls --compress=none >/dev/null 2>&1",
+	         img1, wim_path);
+	/* append image 2 */
+	snprintf(cmd2, sizeof(cmd2),
+	         "wimlib-imagex append %s %s --no-acls --compress=none >/dev/null 2>&1",
+	         img2, wim_path);
+
+	int r = system(cmd1);
+	if (r == 0) r = system(cmd2);
+
+	rmdir(img1);
+	rmdir(img2);
+	return (r == 0) ? 0 : -1;
+}
+
+/*
+ * wim_contains_file - return 1 if file at wim_target_path exists in image
+ * image_idx (1-based) of the WIM at wim_path.
+ */
+static int wim_contains_file(const char *wim_path, int image_idx,
+                              const char *wim_target_path)
+{
+	WIMStruct *wim = NULL;
+	char extract_dir[] = "/tmp/rufus-wim-check-XXXXXX";
+	if (mkdtemp(extract_dir) == NULL) return 0;
+
+	wimlib_global_init(0);
+	int r = 0;
+	if (wimlib_open_wim(wim_path, 0, &wim) != 0) goto out;
+
+	/* wimlib_extract_paths needs an array of const char * */
+	const char *paths[1] = { wim_target_path };
+	if (wimlib_extract_paths(wim, image_idx, extract_dir,
+	                         paths, 1,
+	                         WIMLIB_EXTRACT_FLAG_NO_PRESERVE_DIR_STRUCTURE) == 0) {
+		/* extracted filename is the basename of wim_target_path */
+		const char *basename = strrchr(wim_target_path, '/');
+		basename = basename ? basename + 1 : wim_target_path;
+		char check_path[1024];
+		snprintf(check_path, sizeof(check_path), "%s/%s", extract_dir, basename);
+		struct stat st;
+		r = (stat(check_path, &st) == 0);
+	}
+out:
+	if (wim) wimlib_free(wim);
+	char cmd[512];
+	snprintf(cmd, sizeof(cmd), "rm -rf %s", extract_dir);
+	system(cmd);
+	return r;
+}
+
+/* ================================================================
+ * Tests: ApplyWindowsCustomization with WINPE_SETUP_MASK (boot.wim)
+ * ================================================================ */
+
+/* 7. WINPE_SETUP_MASK without boot.wim → still succeeds (OEM Panther fallback) */
+TEST(apply_customization_winpe_no_boot_wim_succeeds)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	char sources_dir[512];
+	snprintf(sources_dir, sizeof(sources_dir), "%s/sources", mount);
+	mkdir(sources_dir, 0755);
+
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_SECUREBOOT_TPM_MINRAM);
+	SKIP_IF(unattend_xml_path == NULL);
+
+	wue_set_mount_path(mount);
+	int flags = UNATTEND_SECUREBOOT_TPM_MINRAM;
+	BOOL r = ApplyWindowsCustomization(0, flags);
+	CHECK_MSG(r == TRUE, "Must succeed even when boot.wim is absent");
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 8. WINPE_SETUP_MASK with boot.wim → Autounattend.xml injected into image 2 */
+TEST(apply_customization_winpe_injects_autounattend_into_boot_wim)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	int made = make_sources_boot_wim(mount);
+	if (made != 0) {
+		rmdir_tree(mount);
+		free(mount);
+		return; /* SKIP if wimlib can't create WIM */
+	}
+
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_SECUREBOOT_TPM_MINRAM);
+	SKIP_IF(unattend_xml_path == NULL);
+
+	wue_set_mount_path(mount);
+	int flags = UNATTEND_SECUREBOOT_TPM_MINRAM;
+	BOOL r = ApplyWindowsCustomization(0, flags);
+	CHECK_MSG(r == TRUE, "ApplyWindowsCustomization with boot.wim must succeed");
+
+	char wim_path[512];
+	snprintf(wim_path, sizeof(wim_path), "%s/sources/boot.wim", mount);
+	CHECK_MSG(wim_contains_file(wim_path, 2, "Autounattend.xml"),
+	          "boot.wim image 2 must contain Autounattend.xml");
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 9. WINPE_SETUP_MASK with boot.wim → appraiserres.dll renamed to .bak */
+TEST(apply_customization_winpe_renames_appraiserres)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	int made = make_sources_boot_wim(mount);
+	if (made != 0) {
+		rmdir_tree(mount);
+		free(mount);
+		return;
+	}
+
+	/* Create a fake appraiserres.dll */
+	char dll_path[512], bak_path[512];
+	snprintf(dll_path, sizeof(dll_path), "%s/sources/appraiserres.dll", mount);
+	snprintf(bak_path, sizeof(bak_path), "%s/sources/appraiserres.bak", mount);
+	winpe_write_file(dll_path, "fake-dll", 8);
+
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_SECUREBOOT_TPM_MINRAM);
+	SKIP_IF(unattend_xml_path == NULL);
+
+	wue_set_mount_path(mount);
+	BOOL r = ApplyWindowsCustomization(0, UNATTEND_SECUREBOOT_TPM_MINRAM);
+	CHECK_MSG(r == TRUE, "Must succeed with appraiserres.dll present");
+	CHECK_MSG(file_exists(bak_path), "appraiserres.dll must be renamed to .bak");
+	CHECK_MSG(file_exists(dll_path), "appraiserres.dll placeholder must be created");
+
+	/* Verify the placeholder is empty */
+	size_t len = 0;
+	char *content = read_file_contents(dll_path, &len);
+	CHECK_MSG(len == 0, "appraiserres.dll placeholder must be 0 bytes");
+	free(content);
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
 int main(void)
 {
 	printf("=== WUE Linux Tests ===\n");
@@ -1201,6 +1381,11 @@ int main(void)
 	RUN(apply_customization_content_matches);
 	RUN(apply_customization_null_mount_returns_false);
 	RUN(apply_customization_multiple_flags);
+
+	printf("\n=== ApplyWindowsCustomization boot.wim tests ===\n");
+	RUN(apply_customization_winpe_no_boot_wim_succeeds);
+	RUN(apply_customization_winpe_injects_autounattend_into_boot_wim);
+	RUN(apply_customization_winpe_renames_appraiserres);
 
 	TEST_RESULTS();
 }

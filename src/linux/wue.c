@@ -553,7 +553,13 @@ static BOOL copy_file(const char *src, const char *dst)
 BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 {
 	(void)drive_letter;
+	BOOL r = FALSE, update_boot_wim = FALSE;
+	int wim_index = 2, wuc_index = 0;
 	char dir_path[MAX_PATH], file_path[MAX_PATH];
+	char boot_wim_path[MAX_PATH];
+	char appraiserres_src[MAX_PATH], appraiserres_bak[MAX_PATH];
+	WIMStruct *wim = NULL;
+	struct wimlib_update_command wuc[2] = { { 0 } };
 
 	if (unattend_xml_path == NULL) {
 		uprintf("ApplyWindowsCustomization: unattend_xml_path is NULL");
@@ -579,39 +585,108 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 			return FALSE;
 		}
 		uprintf("Created '%s'", file_path);
-	} else if (flags & UNATTEND_WINPE_SETUP_MASK) {
-		/* TPM/SB bypass requires boot.wim patching — not yet implemented on Linux */
-		uprintf("WARNING: Windows PE/setup customisation (TPM/SB bypass) requires "
-		        "boot.wim patching which is not yet implemented on Linux");
-		uprintf("The unattend.xml bypass will be skipped; other OOBE settings will apply");
-		/* Fall through to copy the OOBE parts via the OEM Panther path */
-		snprintf(dir_path, sizeof(dir_path),
-		         "%s/sources/$OEM$/$$/Panther", s_mount_path);
-		if (!mkdir_all(dir_path)) {
-			uprintf_errno("Could not create '%s'", dir_path);
-			return FALSE;
+		return TRUE;
+	}
+
+	snprintf(boot_wim_path, sizeof(boot_wim_path), "%s/sources/boot.wim", s_mount_path);
+
+	if (flags & UNATTEND_WINPE_SETUP_MASK) {
+		/* Rename appraiserres.dll to .bak and create empty placeholder */
+		snprintf(appraiserres_src, sizeof(appraiserres_src),
+		         "%s/sources/appraiserres.dll", s_mount_path);
+		snprintf(appraiserres_bak, sizeof(appraiserres_bak),
+		         "%s/sources/appraiserres.bak", s_mount_path);
+
+		struct stat st;
+		if (stat(appraiserres_src, &st) == 0) {
+			if (rename(appraiserres_src, appraiserres_bak) != 0)
+				uprintf_errno("Could not rename '%s'", appraiserres_src);
+			else
+				uprintf("Renamed '%s' → '%s'", appraiserres_src, appraiserres_bak);
 		}
-		snprintf(file_path, sizeof(file_path), "%s/unattend.xml", dir_path);
-		if (!copy_file(unattend_xml_path, file_path)) {
-			uprintf("Could not copy unattend.xml to '%s'", file_path);
-			return FALSE;
+		/* Create empty placeholder regardless of whether we renamed */
+		FILE *fp = fopen(appraiserres_src, "wb");
+		if (fp) {
+			fclose(fp);
+			uprintf("Created '%s' placeholder", appraiserres_src);
 		}
-		uprintf("Created '%s'", file_path);
+
+		/* Open boot.wim for write access */
+		if (stat(boot_wim_path, &st) == 0) {
+			wimlib_global_init(0);
+			wimlib_set_print_errors(true);
+			if (wimlib_open_wim(boot_wim_path, WIMLIB_OPEN_FLAG_WRITE_ACCESS, &wim) == 0) {
+				update_boot_wim = TRUE;
+				/* Verify image 2 exists; fall back to 1 for unofficial ISOs */
+				if (wimlib_resolve_image(wim, "2") != 2) {
+					uprintf("WARNING: This image appears to be an UNOFFICIAL Windows ISO!");
+					wim_index = 1;
+				}
+			} else {
+				uprintf("Could not open '%s' for update", boot_wim_path);
+				goto out;
+			}
+		}
+	}
+
+	if (flags & UNATTEND_WINPE_SETUP_MASK) {
+		if (update_boot_wim) {
+			/* Inject Autounattend.xml into image root of boot.wim */
+			wuc[wuc_index].op = WIMLIB_UPDATE_OP_ADD;
+			wuc[wuc_index].add.fs_source_path = unattend_xml_path;
+			wuc[wuc_index].add.wim_target_path = "Autounattend.xml";
+			uprintf("Adding '%s' to '%s[%d]'",
+			        wuc[wuc_index].add.wim_target_path, boot_wim_path, wim_index);
+			wuc_index++;
+		} else {
+			/*
+			 * No boot.wim present — fall back to OEM Panther.
+			 * The unattend.xml will still be picked up for OOBE passes.
+			 */
+			uprintf("No boot.wim found; using OEM Panther fallback for unattend.xml");
+			snprintf(dir_path, sizeof(dir_path),
+			         "%s/sources/$OEM$/$$/Panther", s_mount_path);
+			if (!mkdir_all(dir_path)) {
+				uprintf_errno("Could not create '%s'", dir_path);
+				goto out;
+			}
+			snprintf(file_path, sizeof(file_path), "%s/unattend.xml", dir_path);
+			if (!copy_file(unattend_xml_path, file_path)) {
+				uprintf("Could not copy unattend.xml to '%s'", file_path);
+				goto out;
+			}
+			uprintf("Created '%s'", file_path);
+		}
 	} else {
 		/* OOBE-only: copy to <mount>/sources/$OEM$/$$/Panther/unattend.xml */
 		snprintf(dir_path, sizeof(dir_path),
 		         "%s/sources/$OEM$/$$/Panther", s_mount_path);
 		if (!mkdir_all(dir_path)) {
 			uprintf_errno("Could not create '%s'", dir_path);
-			return FALSE;
+			goto out;
 		}
 		snprintf(file_path, sizeof(file_path), "%s/unattend.xml", dir_path);
 		if (!copy_file(unattend_xml_path, file_path)) {
 			uprintf("Could not copy unattend.xml to '%s'", file_path);
-			return FALSE;
+			goto out;
 		}
 		uprintf("Created '%s'", file_path);
 	}
 
-	return TRUE;
+	r = TRUE;
+
+out:
+	if (update_boot_wim) {
+		if (r && wuc_index > 0) {
+			uprintf("Updating '%s[%d]'...", boot_wim_path, wim_index);
+			if (wimlib_update_image(wim, wim_index, wuc, wuc_index, 0) != 0 ||
+			    wimlib_overwrite(wim, WIMLIB_WRITE_FLAG_RECOMPRESS, 0) != 0) {
+				uprintf("Error: Failed to update '%s'", boot_wim_path);
+				r = FALSE;
+			}
+		}
+		wimlib_free(wim);
+		wimlib_global_cleanup();
+	}
+	return r;
 }

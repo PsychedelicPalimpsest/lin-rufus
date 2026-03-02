@@ -390,7 +390,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `PopulateWindowsVersion()` | ✅ | wimlib + ezxml (cross-platform) |
 | `CopySKUSiPolicy()` | 🚫 | Windows-only WDAC policy; stub returns FALSE |
 | `SetWinToGoIndex()` / `SetupWinToGo()` | 🚫 | Windows-only; stubs return -1/FALSE |
-| `ApplyWindowsCustomization()` | ✅ | POSIX file copy to Panther/OEM paths; boot.wim patching not yet implemented |
+| `ApplyWindowsCustomization()` | ✅ | POSIX file copy to Panther/OEM paths; boot.wim patching via wimlib_update_image + wimlib_overwrite; appraiserres.dll rename + empty placeholder |
 
 ### 3o. S.M.A.R.T. (`smart.c`)
 

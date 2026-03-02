@@ -11,6 +11,7 @@ apt-get install -y --no-install-recommends \
   libfontconfig1-dev libxml2-dev \
   libcdio-dev libcdio-utils \
   libz-dev \
+  wimtools \
   mingw-w64 \
   dosfstools \
   gcc-12
