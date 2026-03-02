@@ -17,8 +17,9 @@
 
 /* On Linux, strings are already UTF-8 — no conversion needed. */
 /* These macros make wimlib.h's _RUFUS helpers compile as pass-throughs. */
-static __inline char* utf8_to_wchar(const char* str) { return (char*)(str); }
-static __inline char* wchar_to_utf8(const char* wstr) { return (char*)(wstr); }
+/* utf8_to_wchar must allocate (strdup) because wimlib.h's helpers call free() on the result. */
+static __inline char* utf8_to_wchar(const char* str) { return str ? strdup(str) : NULL; }
+static __inline char* wchar_to_utf8(const char* wstr) { return wstr ? strdup(wstr) : NULL; }
 #define wconvert(p)     char* w ## p = (char*)(p)
 #define walloc(p, size) char* w ## p = (p == NULL) ? NULL : (char*)(p)
 #define wfree(p)        ((void)w ## p)

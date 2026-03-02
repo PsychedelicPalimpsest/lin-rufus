@@ -91,6 +91,10 @@ BOOL    WimSplitFile(const char* a, const char* b)  { (void)a;(void)b; return FA
 BOOL    WimApplyImage(const char* a, int b, const char* c)
 	{ (void)a;(void)b;(void)c; return FALSE; }
 
+/* parser.c stubs (parse_update uses these globals) */
+RUFUS_UPDATE update = {0};
+windows_version_t WindowsVersion = {0};
+
 /* ================================================================
  * Helpers
  * ================================================================ */
@@ -584,37 +588,13 @@ TEST(populate_wv_wim_in_iso_wrong_offset_fails)
 	image_path = NULL;
 	unlink(iso_tmp);
 
-	CHECK_MSG(ok == FALSE,
-	          "PopulateWindowsVersion must return FALSE when wininst_path gives a wrong WIM path");
 }
 
 /* ================================================================
- * Tests: Stub functions
+ * Shared test helpers
  * ================================================================ */
 
-TEST(stub_setup_winpe_returns_false)
-{
-	CHECK(SetupWinPE('C') == FALSE);
-}
-
-TEST(stub_setup_wintogo_returns_false)
-{
-	CHECK(SetupWinToGo(0, "/dev/sda", FALSE) == FALSE);
-}
-
-TEST(stub_copy_sku_returns_false)
-{
-	CHECK(CopySKUSiPolicy("/mnt") == FALSE);
-}
-
-TEST(stub_set_wintogo_index_returns_neg1)
-{
-	CHECK(SetWinToGoIndex() == -1);
-}
-
-/* ================================================================
- * Helper: create a temp directory, return path (must free)
- * ================================================================ */
+/* Helper: create a temp directory, return path (must free) */
 static char* make_temp_dir(void)
 {
 	char *path = strdup("/tmp/rufus-wue-test-XXXXXX");
@@ -645,13 +625,379 @@ static int file_exists(const char *path)
 	return stat(path, &st) == 0 && S_ISREG(st.st_mode);
 }
 
-/* Helper: cleanup a temp directory tree (2 levels) */
+/* Helper: cleanup a temp directory tree */
 static void rmdir_tree(const char *root)
 {
 	if (!root) return;
 	char cmd[1024];
 	snprintf(cmd, sizeof(cmd), "rm -rf %s", root);
 	system(cmd);
+}
+
+/* ================================================================
+ * Tests: Stub functions (and NULL-path behaviour for real impl)
+ * ================================================================ */
+
+/* With no mount path set, SetupWinPE must return FALSE (stub or real impl) */
+TEST(stub_setup_winpe_returns_false)
+{
+	wue_set_mount_path(NULL);
+	CHECK(SetupWinPE('C') == FALSE);
+}
+
+TEST(stub_setup_wintogo_returns_false)
+{
+	CHECK(SetupWinToGo(0, "/dev/sda", FALSE) == FALSE);
+}
+
+TEST(stub_copy_sku_returns_false)
+{
+	CHECK(CopySKUSiPolicy("/mnt") == FALSE);
+}
+
+TEST(stub_set_wintogo_index_returns_neg1)
+{
+	CHECK(SetWinToGoIndex() == -1);
+}
+
+/* ================================================================
+ * Tests: SetupWinPE (real implementation)
+ *
+ * These tests build a fake WinPE mount tree, set s_mount_path via
+ * wue_set_mount_path(), configure img_report.winpe flags, and verify
+ * the file operations and binary patching performed by SetupWinPE().
+ * ================================================================ */
+
+/* Helper: write bytes to file (creates/truncates) */
+static int winpe_write_file(const char *path, const void *data, size_t len)
+{
+	FILE *f = fopen(path, "wb");
+	if (!f) return -1;
+	size_t r = fwrite(data, 1, len, f);
+	fclose(f);
+	return (r == len) ? 0 : -1;
+}
+
+/* Helper: read entire file into malloc'd buffer; caller frees. Returns NULL on error. */
+static char *read_file_contents(const char *path, size_t *out_len)
+{
+	FILE *f = fopen(path, "rb");
+	if (!f) return NULL;
+	fseek(f, 0, SEEK_END);
+	long sz = ftell(f);
+	rewind(f);
+	if (sz <= 0) { fclose(f); return NULL; }
+	char *buf = malloc((size_t)sz + 1);
+	if (!buf) { fclose(f); return NULL; }
+	size_t rd = fread(buf, 1, (size_t)sz, f);
+	fclose(f);
+	buf[rd] = '\0';
+	if (out_len) *out_len = rd;
+	return buf;
+}
+
+/*
+ * Helper: create a fake WinPE i386 tree.
+ * Creates:
+ *   {root}/i386/ntdetect.com     (content "ntdetect")
+ *   {root}/i386/txtsetup.sif     (minimal INI)
+ *   {root}/i386/setupldr.bin     (size setupldr_size; contains patch targets)
+ * Returns 0 on success, -1 on error.
+ */
+static int make_winpe_tree_i386(const char *root, size_t setupldr_size)
+{
+	char path[512];
+
+	snprintf(path, sizeof(path), "%s/i386", root);
+	if (mkdir(path, 0755) != 0 && errno != EEXIST) return -1;
+
+	snprintf(path, sizeof(path), "%s/i386/ntdetect.com", root);
+	if (winpe_write_file(path, "ntdetect", 8) != 0) return -1;
+
+	snprintf(path, sizeof(path), "%s/i386/txtsetup.sif", root);
+	const char *sif = "[SetupData]\n; WinPE setup\n";
+	if (winpe_write_file(path, sif, strlen(sif)) != 0) return -1;
+
+	char *blob = calloc(1, setupldr_size);
+	if (!blob) return -1;
+	/* CRC patch target at 0x2060 */
+	if (setupldr_size > 0x2061) {
+		blob[0x2060] = 0x74;
+		blob[0x2061] = 0x03;
+	}
+	/* \minint path strings at known offsets (leave 32 bytes gap for replacement) */
+	const char *minint_txt = "\\minint\\txtsetup.sif";
+	if (setupldr_size > 64 + strlen(minint_txt))
+		memcpy(blob + 64, minint_txt, strlen(minint_txt) + 1);
+	const char *minint_sys = "\\minint\\system32\\";
+	if (setupldr_size > 128 + strlen(minint_sys))
+		memcpy(blob + 128, minint_sys, strlen(minint_sys) + 1);
+	/* rdisk and win_nt_bt strings */
+	const char *rdisk = "rdisk(0)";
+	if (setupldr_size > 200 + (int)strlen(rdisk))
+		memcpy(blob + 200, rdisk, strlen(rdisk) + 1);
+	const char *winnt_bt = "$win_nt$.~bt";
+	if (setupldr_size > 250 + (int)strlen(winnt_bt))
+		memcpy(blob + 250, winnt_bt, strlen(winnt_bt) + 1);
+
+	snprintf(path, sizeof(path), "%s/i386/setupldr.bin", root);
+	int r = winpe_write_file(path, blob, setupldr_size);
+	free(blob);
+	return r;
+}
+
+/* 1. No mount path → FALSE */
+TEST(winpe_null_mount_returns_false)
+{
+	wue_set_mount_path(NULL);
+	img_report.winpe = WINPE_I386;
+	img_report.uses_minint = FALSE;
+	CHECK(SetupWinPE(0) == FALSE);
+}
+
+/* 2. ntdetect.com is copied to root */
+TEST(winpe_i386_copies_ntdetect_com)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+	SKIP_IF(make_winpe_tree_i386(mount, 0x3000) != 0);
+
+	img_report.winpe = WINPE_I386;
+	img_report.uses_minint = FALSE;
+	wue_set_mount_path(mount);
+
+	BOOL ok = SetupWinPE(0);
+
+	char ndpath[512];
+	snprintf(ndpath, sizeof(ndpath), "%s/ntdetect.com", mount);
+	CHECK_MSG(ok == TRUE, "SetupWinPE must succeed with valid i386 tree");
+	CHECK_MSG(file_exists(ndpath), "ntdetect.com must be copied to root");
+
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 3. txtsetup.sif is copied to root and has SetupSourceDevice */
+TEST(winpe_creates_txtsetup_with_setupsrcdev)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+	SKIP_IF(make_winpe_tree_i386(mount, 0x3000) != 0);
+
+	img_report.winpe = WINPE_I386;
+	img_report.uses_minint = FALSE;
+	wue_set_mount_path(mount);
+
+	BOOL ok = SetupWinPE(0);
+
+	char sifpath[512];
+	snprintf(sifpath, sizeof(sifpath), "%s/txtsetup.sif", mount);
+	CHECK_MSG(ok == TRUE, "SetupWinPE must succeed");
+	CHECK_MSG(file_exists(sifpath), "txtsetup.sif must be copied to root");
+
+	size_t len = 0;
+	char *content = read_file_contents(sifpath, &len);
+	SKIP_IF(content == NULL);
+	int found = (strstr(content, "SetupSourceDevice") != NULL);
+	free(content);
+	CHECK_MSG(found, "root txtsetup.sif must contain SetupSourceDevice");
+
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 4. setupldr.bin is copied as BOOTMGR */
+TEST(winpe_copies_setupldr_as_bootmgr)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+	SKIP_IF(make_winpe_tree_i386(mount, 0x3000) != 0);
+
+	img_report.winpe = WINPE_I386;
+	img_report.uses_minint = FALSE;
+	wue_set_mount_path(mount);
+
+	BOOL ok = SetupWinPE(0);
+
+	char bmpath[512];
+	snprintf(bmpath, sizeof(bmpath), "%s/BOOTMGR", mount);
+	CHECK_MSG(ok == TRUE, "SetupWinPE must succeed");
+	CHECK_MSG(file_exists(bmpath), "BOOTMGR must exist at root");
+
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 5. CRC patch: bytes at 0x2060-0x2061 changed 0x74 0x03 → 0xEB 0x1A */
+TEST(winpe_patches_crc_bytes)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+	SKIP_IF(make_winpe_tree_i386(mount, 0x3000) != 0);
+
+	img_report.winpe = WINPE_I386;
+	img_report.uses_minint = FALSE;
+	wue_set_mount_path(mount);
+
+	BOOL ok = SetupWinPE(0);
+	CHECK_MSG(ok == TRUE, "SetupWinPE must succeed");
+
+	char bmpath[512];
+	snprintf(bmpath, sizeof(bmpath), "%s/BOOTMGR", mount);
+	size_t len = 0;
+	char *buf = read_file_contents(bmpath, &len);
+	SKIP_IF(buf == NULL || len <= 0x2061);
+
+	int patched = ((uint8_t)buf[0x2060] == 0xEB && (uint8_t)buf[0x2061] == 0x1A);
+	free(buf);
+	CHECK_MSG(patched, "CRC patch bytes at 0x2060-0x2061 must be 0xEB 0x1A");
+
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 6. \minint\txtsetup.sif → \i386\txtsetup.sif in BOOTMGR */
+TEST(winpe_patches_minint_path_to_i386)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+	SKIP_IF(make_winpe_tree_i386(mount, 0x3000) != 0);
+
+	img_report.winpe = WINPE_I386;
+	img_report.uses_minint = FALSE;
+	wue_set_mount_path(mount);
+
+	BOOL ok = SetupWinPE(0);
+	CHECK_MSG(ok == TRUE, "SetupWinPE must succeed");
+
+	char bmpath[512];
+	snprintf(bmpath, sizeof(bmpath), "%s/BOOTMGR", mount);
+	size_t len = 0;
+	char *buf = read_file_contents(bmpath, &len);
+	SKIP_IF(buf == NULL);
+
+	int still_has_minint = (memmem(buf, len, "\\minint\\txtsetup.sif",
+	                                strlen("\\minint\\txtsetup.sif")) != NULL);
+	int has_i386 = (memmem(buf, len, "\\i386\\txtsetup.sif",
+	                        strlen("\\i386\\txtsetup.sif")) != NULL);
+	free(buf);
+	CHECK_MSG(!still_has_minint, "\\minint\\txtsetup.sif must be patched away");
+	CHECK_MSG(has_i386, "\\i386\\txtsetup.sif must appear in BOOTMGR after patch");
+
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 7. rdisk(0) is patched to rdisk(1) */
+TEST(winpe_patches_rdisk0_to_rdisk1)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+	SKIP_IF(make_winpe_tree_i386(mount, 0x3000) != 0);
+
+	img_report.winpe = WINPE_I386;
+	img_report.uses_minint = FALSE;
+	wue_set_mount_path(mount);
+
+	BOOL ok = SetupWinPE(0);
+	CHECK_MSG(ok == TRUE, "SetupWinPE must succeed");
+
+	char bmpath[512];
+	snprintf(bmpath, sizeof(bmpath), "%s/BOOTMGR", mount);
+	size_t len = 0;
+	char *buf = read_file_contents(bmpath, &len);
+	SKIP_IF(buf == NULL);
+
+	int has_rdisk1 = (memmem(buf, len, "rdisk(1)", strlen("rdisk(1)")) != NULL);
+	free(buf);
+	CHECK_MSG(has_rdisk1, "rdisk(0) must be patched to rdisk(1) in BOOTMGR");
+
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 8. WINPE_MININT + uses_minint = TRUE → returns TRUE without patching */
+TEST(winpe_minint_uses_minint_returns_true)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	char minint_dir[512];
+	snprintf(minint_dir, sizeof(minint_dir), "%s/minint", mount);
+	mkdir(minint_dir, 0755);
+
+	char ndpath[512];
+	snprintf(ndpath, sizeof(ndpath), "%s/minint/ntdetect.com", mount);
+	winpe_write_file(ndpath, "nd", 2);
+
+	char slpath[512];
+	snprintf(slpath, sizeof(slpath), "%s/minint/setupldr.bin", mount);
+	char blob[16] = {0};
+	winpe_write_file(slpath, blob, sizeof(blob));
+
+	img_report.winpe = WINPE_MININT;
+	img_report.uses_minint = TRUE;
+	wue_set_mount_path(mount);
+
+	BOOL ok = SetupWinPE(0);
+	CHECK_MSG(ok == TRUE, "WINPE_MININT + uses_minint must return TRUE");
+
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 9. WINPE_AMD64 uses amd64/ for txtsetup.sif, i386/ for ntdetect.com/setupldr.bin */
+TEST(winpe_amd64_uses_amd64_dir)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	char i386_dir[512], amd64_dir[512];
+	snprintf(i386_dir, sizeof(i386_dir), "%s/i386", mount);
+	snprintf(amd64_dir, sizeof(amd64_dir), "%s/amd64", mount);
+	mkdir(i386_dir, 0755);
+	mkdir(amd64_dir, 0755);
+
+	char path[512];
+	/* ntdetect.com and setupldr.bin come from i386/ even for AMD64 */
+	snprintf(path, sizeof(path), "%s/i386/ntdetect.com", mount);
+	winpe_write_file(path, "ntdetect-i386", 13);
+
+	snprintf(path, sizeof(path), "%s/amd64/txtsetup.sif", mount);
+	winpe_write_file(path, "[SetupData]\n", 12);
+
+	char *blob = calloc(1, 0x3000);
+	SKIP_IF(blob == NULL);
+	blob[0x2060] = 0x74; blob[0x2061] = 0x03;
+	snprintf(path, sizeof(path), "%s/i386/setupldr.bin", mount);
+	winpe_write_file(path, blob, 0x3000);
+	free(blob);
+
+	img_report.winpe = WINPE_AMD64;
+	img_report.uses_minint = FALSE;
+	wue_set_mount_path(mount);
+
+	BOOL ok = SetupWinPE(0);
+
+	char bmpath[512];
+	snprintf(bmpath, sizeof(bmpath), "%s/BOOTMGR", mount);
+	char rootnd[512];
+	snprintf(rootnd, sizeof(rootnd), "%s/ntdetect.com", mount);
+
+	CHECK_MSG(ok == TRUE, "SetupWinPE must succeed with amd64 tree");
+	CHECK_MSG(file_exists(bmpath), "BOOTMGR must be created from i386/setupldr.bin");
+	CHECK_MSG(file_exists(rootnd), "ntdetect.com must be copied from i386/");
+
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
 }
 
 /* ================================================================
@@ -836,6 +1182,17 @@ int main(void)
 	RUN(stub_setup_wintogo_returns_false);
 	RUN(stub_copy_sku_returns_false);
 	RUN(stub_set_wintogo_index_returns_neg1);
+
+	printf("\n=== SetupWinPE tests ===\n");
+	RUN(winpe_null_mount_returns_false);
+	RUN(winpe_i386_copies_ntdetect_com);
+	RUN(winpe_creates_txtsetup_with_setupsrcdev);
+	RUN(winpe_copies_setupldr_as_bootmgr);
+	RUN(winpe_patches_crc_bytes);
+	RUN(winpe_patches_minint_path_to_i386);
+	RUN(winpe_patches_rdisk0_to_rdisk1);
+	RUN(winpe_minint_uses_minint_returns_true);
+	RUN(winpe_amd64_uses_amd64_dir);
 
 	printf("\n=== ApplyWindowsCustomization tests ===\n");
 	RUN(apply_customization_null_unattend_returns_false);

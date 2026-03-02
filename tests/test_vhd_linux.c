@@ -401,6 +401,215 @@ TEST(vhdmount_no_such_file)
 }
 
 /* ================================================================
+ * WIM test helpers
+ * ================================================================ */
+
+/*
+ * Build a minimal WIM binary in-memory:
+ *   208-byte header + UTF-16LE XML (no images, image_count=0)
+ * A 0-image WIM is valid and can be opened by wimlib; any attempt to
+ * extract/apply image 1 fails gracefully (no such image).
+ * Writes to dest_path. Returns 0 on success.
+ */
+static int make_minimal_wim(const char *dest_path)
+{
+	/* Empty WIM XML — no <IMAGE> elements → image_count=0 */
+	static const char xml_utf8[] = "<WIM></WIM>";
+
+	size_t src_len = strlen(xml_utf8);
+	size_t xml_len = 2 + src_len * 2; /* BOM + 2 bytes/ASCII char */
+	uint8_t *xml = malloc(xml_len);
+	if (!xml) return -1;
+	xml[0] = 0xff; xml[1] = 0xfe;
+	for (size_t i = 0; i < src_len; i++) {
+		xml[2 + i*2]   = (uint8_t)xml_utf8[i];
+		xml[2 + i*2+1] = 0;
+	}
+
+	uint8_t xml_reshdr[24] = {0};
+	uint64_t xsz = (uint64_t)xml_len, xoff = 208ULL;
+	for (int i = 0; i < 7; i++) xml_reshdr[i]    = (uint8_t)(xsz  >> (8*i));
+	for (int i = 0; i < 8; i++) xml_reshdr[8+i]  = (uint8_t)(xoff >> (8*i));
+	for (int i = 0; i < 8; i++) xml_reshdr[16+i] = (uint8_t)(xsz  >> (8*i));
+
+	uint8_t hdr[208] = {0};
+	static const uint8_t magic[] = {'M','S','W','I','M',0,0,0};
+	memcpy(hdr, magic, 8);
+	hdr[0x08] = 208;
+	hdr[0x0c] = 0x00; hdr[0x0d] = 0x0d; hdr[0x0e] = 0x01; hdr[0x0f] = 0x00;
+	for (int i = 0; i < 16; i++) hdr[0x18+i] = (uint8_t)(i+1);
+	hdr[0x28] = 1; hdr[0x2a] = 1; hdr[0x2c] = 0; /* 0 images: avoids missing metadata-blob crash */
+	memcpy(hdr+0x48, xml_reshdr, 24);
+
+	FILE *f = fopen(dest_path, "wb");
+	if (!f) { free(xml); return -1; }
+	int r = (fwrite(hdr, 1, 208, f) != 208 || fwrite(xml, 1, xml_len, f) != xml_len) ? -1 : 0;
+	fclose(f);
+	free(xml);
+	return r;
+}
+
+/* ================================================================
+ * Tests: GetWimVersion with minimal WIM
+ * ================================================================ */
+
+TEST(getwimversion_minimal_wim)
+{
+	char path[] = "/tmp/rufus_test_wim_ver_XXXXXX";
+	int fd = mkstemp(path);
+	SKIP_IF(fd < 0);
+	close(fd);
+	unlink(path);
+	/* append .wim so wimlib recognises the extension */
+	char wim_path[256];
+	snprintf(wim_path, sizeof(wim_path), "%s.wim", path);
+
+	int r = make_minimal_wim(wim_path);
+	SKIP_IF(r != 0);
+
+	uint32_t v = GetWimVersion(wim_path);
+	/* WIM_VERSION_DEFAULT = 0x00010d00 */
+	CHECK_MSG(v == 0x00010d00u, "GetWimVersion must return WIM_VERSION_DEFAULT for a standard WIM");
+	unlink(wim_path);
+}
+
+/* ================================================================
+ * Tests: WimExtractFile
+ * ================================================================ */
+
+TEST(wimextract_null_args)
+{
+	/* Any NULL argument → FALSE */
+	CHECK(WimExtractFile(NULL, 1, "/foo/bar", "/tmp/out/file") == FALSE);
+	CHECK(WimExtractFile("/tmp/nofile.wim", 1, NULL, "/tmp/out/file") == FALSE);
+	CHECK(WimExtractFile("/tmp/nofile.wim", 1, "/foo/bar", NULL) == FALSE);
+}
+
+TEST(wimextract_nonexistent_wim)
+{
+	/* dst must be a writable buffer (WimExtractFile modifies it in-place) */
+	char src[] = "/sources/install.wim";
+	char dst[] = "/tmp/rufus_wimext_nofile/install.wim";
+	CHECK(WimExtractFile("/tmp/rufus_nonexistent_XXXXXX.wim", 1, src, dst) == FALSE);
+}
+
+TEST(wimextract_not_a_wim)
+{
+	char path[] = "/tmp/rufus_notwim_XXXXXX.wim";
+	int fd = mkstemp(path);
+	SKIP_IF(fd < 0);
+	write(fd, "not a wim\n", 10);
+	close(fd);
+	char src[] = "/sources/install.wim";
+	char dst[] = "/tmp/rufus_wimext_bad/install.wim";
+	CHECK(WimExtractFile(path, 1, src, dst) == FALSE);
+	unlink(path);
+}
+
+TEST(wimextract_minimal_wim_missing_file)
+{
+	/* A minimal WIM with 0 images: extracting from image 1 must fail gracefully */
+	char tmp[] = "/tmp/rufus_wimext_XXXXXX";
+	int fd = mkstemp(tmp);
+	SKIP_IF(fd < 0);
+	close(fd);
+	/* build .wim path */
+	char final_path[256];
+	snprintf(final_path, sizeof(final_path), "%s.wim", tmp);
+	rename(tmp, final_path);
+
+	int r = make_minimal_wim(final_path);
+	SKIP_IF(r != 0);
+
+	/* dst must be a writable buffer — WimExtractFile truncates at last '/' */
+	char src_path[] = "/sources/install.wim";
+	char dst_path[] = "/tmp/rufus_wimext_miss/install.wim";
+	BOOL ok = WimExtractFile(final_path, 1, src_path, dst_path);
+	/* Should fail because our minimal WIM has no file content */
+	CHECK(ok == FALSE);
+	unlink(final_path);
+}
+
+/* ================================================================
+ * Tests: WimSplitFile
+ * ================================================================ */
+
+TEST(wimsplit_null_args)
+{
+	CHECK(WimSplitFile(NULL, "/tmp/out.swm") == FALSE);
+	CHECK(WimSplitFile("/tmp/in.wim", NULL) == FALSE);
+}
+
+TEST(wimsplit_nonexistent_src)
+{
+	CHECK(WimSplitFile("/tmp/rufus_nonexistent_XXXXXX.wim",
+	                   "/tmp/rufus_split_out.swm") == FALSE);
+}
+
+TEST(wimsplit_not_a_wim)
+{
+	char src[] = "/tmp/rufus_notwim_split_XXXXXX.wim";
+	int fd = mkstemp(src);
+	SKIP_IF(fd < 0);
+	write(fd, "garbage data\n", 13);
+	close(fd);
+	CHECK(WimSplitFile(src, "/tmp/rufus_split_out.swm") == FALSE);
+	unlink(src);
+}
+
+/* ================================================================
+ * Tests: WimApplyImage
+ * ================================================================ */
+
+TEST(wimapply_nonexistent_wim)
+{
+	/* Non-existent WIM → FALSE, no crash */
+	BOOL ok = WimApplyImage("/tmp/rufus_nonexistent_XXXXXX.wim", 1, "/tmp");
+	CHECK(ok == FALSE);
+}
+
+TEST(wimapply_not_a_wim)
+{
+	char src[] = "/tmp/rufus_notwim_apply_XXXXXX.wim";
+	int fd = mkstemp(src);
+	SKIP_IF(fd < 0);
+	write(fd, "not a wim\n", 10);
+	close(fd);
+	BOOL ok = WimApplyImage(src, 1, "/tmp");
+	CHECK(ok == FALSE);
+	unlink(src);
+}
+
+TEST(wimapply_minimal_wim_fails_gracefully)
+{
+	/* A minimal WIM with 0 images: applying image 1 must fail, not crash */
+	char tmp[] = "/tmp/rufus_wimapply_XXXXXX";
+	int fd = mkstemp(tmp);
+	SKIP_IF(fd < 0);
+	close(fd);
+	char wim_path[256];
+	snprintf(wim_path, sizeof(wim_path), "%s.wim", tmp);
+	rename(tmp, wim_path);
+
+	int r = make_minimal_wim(wim_path);
+	SKIP_IF(r != 0);
+
+	char dst[] = "/tmp/rufus_wimapply_dst_XXXXXX";
+	int dfd = mkstemp(dst);
+	if (dfd >= 0) { close(dfd); unlink(dst); }
+	mkdir(dst, 0755);
+
+	BOOL ok = WimApplyImage(wim_path, 1, dst);
+	/* 0-image WIM → apply of image 1 fails — must not crash */
+	(void)ok;
+	CHECK(1);
+
+	/* cleanup */
+	unlink(wim_path);
+	rmdir(dst);
+}
+
+/* ================================================================
  * Main
  * ================================================================ */
 int main(void)
@@ -421,9 +630,22 @@ int main(void)
 	RUN(getwimversion_nonexistent);
 	RUN(getwimversion_not_a_wim);
 	RUN(getwimversion_real_wim_if_available);
+	RUN(getwimversion_minimal_wim);
 	RUN(vhdmount_null_path);
 	RUN(vhdmount_unknown_extension);
 	RUN(vhdmount_no_such_file);
+
+	printf("\n=== WIM function tests ===\n");
+	RUN(wimextract_null_args);
+	RUN(wimextract_nonexistent_wim);
+	RUN(wimextract_not_a_wim);
+	RUN(wimextract_minimal_wim_missing_file);
+	RUN(wimsplit_null_args);
+	RUN(wimsplit_nonexistent_src);
+	RUN(wimsplit_not_a_wim);
+	RUN(wimapply_nonexistent_wim);
+	RUN(wimapply_not_a_wim);
+	RUN(wimapply_minimal_wim_fails_gracefully);
 
 	TEST_RESULTS();
 }

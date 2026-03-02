@@ -386,7 +386,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `VhdMountImageAndGetSize()` | ✅ | qemu-nbd + BLKGETSIZE64 ioctl |
 | `VhdUnmountImage()` | ✅ | qemu-nbd --disconnect |
 | `CreateUnattendXml()` | ✅ | POSIX + timezone section skipped on Linux |
-| `SetupWinPE()` | 🚫 | Windows-only; stub returns FALSE |
+| `SetupWinPE()` | ✅ | POSIX file copy + binary patching (CRC/path/rdisk patches) |
 | `PopulateWindowsVersion()` | ✅ | wimlib + ezxml (cross-platform) |
 | `CopySKUSiPolicy()` | 🚫 | Windows-only WDAC policy; stub returns FALSE |
 | `SetWinToGoIndex()` / `SetupWinToGo()` | 🚫 | Windows-only; stubs return -1/FALSE |

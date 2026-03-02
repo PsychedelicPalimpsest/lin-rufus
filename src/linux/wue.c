@@ -350,10 +350,141 @@ out:
 /* -----------------------------------------------------------------------
  * Stubs for Windows-only / unported functions
  * ----------------------------------------------------------------------- */
+static BOOL copy_file(const char *src, const char *dst); /* defined later */
+
+/* Module-level mount path set by the caller before using WUE functions */
+static char *s_mount_path = NULL;
+
 BOOL SetupWinPE(char drive_letter)
 {
-	(void)drive_letter;
-	return FALSE;
+	(void)drive_letter; /* Linux uses s_mount_path instead */
+
+	if (s_mount_path == NULL)
+		return FALSE;
+
+	const char* basedir[3] = { "i386", "amd64", "minint" };
+	const char* patch_str_org[2] = { "\\minint\\txtsetup.sif", "\\minint\\system32\\" };
+	const char* patch_str_rep[2][2] = {
+		{ "\\i386\\txtsetup.sif",  "\\i386\\system32\\"  },
+		{ "\\amd64\\txtsetup.sif", "\\amd64\\system32\\" }
+	};
+	const char* setupsrcdev = "SetupSourceDevice = \"\\device\\harddisk1\\partition1\"";
+	const char* win_nt_bt_org = "$win_nt$.~bt";
+	const char* rdisk_zero = "rdisk(0)";
+	unsigned i, j;
+	int index = 0;
+	BOOL r = FALSE;
+	char src[MAX_PATH], dst[MAX_PATH];
+	char *buffer = NULL;
+	FILE *fh = NULL;
+	size_t size, read_size;
+
+	if ((img_report.winpe & WINPE_AMD64) == WINPE_AMD64)
+		index = 1;
+	else if ((img_report.winpe & WINPE_MININT) == WINPE_MININT)
+		index = 2;
+
+	/* Copy ntdetect.com to root */
+	static_sprintf(src, "%s/%s/ntdetect.com", s_mount_path, basedir[2 * (index / 2)]);
+	static_sprintf(dst, "%s/ntdetect.com", s_mount_path);
+	if (!copy_file(src, dst))
+		uprintf("Did not copy %s as %s\n", src, dst);
+
+	if (!img_report.uses_minint) {
+		/* Copy txtsetup.sif to root (keep original unmodified) */
+		static_sprintf(src, "%s/%s/txtsetup.sif", s_mount_path, basedir[index]);
+		static_sprintf(dst, "%s/txtsetup.sif", s_mount_path);
+		if (!copy_file(src, dst))
+			uprintf("Did not copy %s as %s\n", src, dst);
+		if (insert_section_data(dst, "[SetupData]", setupsrcdev, FALSE) == NULL) {
+			uprintf("Failed to add SetupSourceDevice in %s\n", dst);
+			goto out;
+		}
+		uprintf("Successfully added '%s' to %s\n", setupsrcdev, dst);
+	}
+
+	/* Copy setupldr.bin as BOOTMGR */
+	static_sprintf(src, "%s/%s/setupldr.bin", s_mount_path, basedir[2 * (index / 2)]);
+	static_sprintf(dst, "%s/BOOTMGR", s_mount_path);
+	if (!copy_file(src, dst))
+		uprintf("Did not copy %s as %s\n", src, dst);
+
+	/* \minint + /minint option → no further patching needed */
+	/* \minint without /minint and no i386/amd64 → unclear, skip */
+	if (img_report.winpe & WINPE_MININT) {
+		if (img_report.uses_minint) {
+			uprintf("Detected \\minint directory with /minint option: nothing to patch\n");
+			r = TRUE;
+		} else if (!(img_report.winpe & (WINPE_I386 | WINPE_AMD64))) {
+			uprintf("Detected \\minint directory only but no /minint option: not sure what to do\n");
+		}
+		goto out;
+	}
+
+	/* Open BOOTMGR for patching */
+	fh = fopen(dst, "r+b");
+	if (fh == NULL) {
+		uprintf("Could not open %s for patching\n", dst);
+		goto out;
+	}
+	fseek(fh, 0, SEEK_END);
+	size = (size_t)ftell(fh);
+	rewind(fh);
+	buffer = malloc(size);
+	if (buffer == NULL)
+		goto out;
+	read_size = fread(buffer, 1, size, fh);
+	if (read_size != size) {
+		uprintf("Could not read file %s\n", dst);
+		goto out;
+	}
+	rewind(fh);
+
+	/* Patch BOOTMGR */
+	uprintf("Patching file %s\n", dst);
+	/* Remove CRC check for 32-bit setupldr.bin from Win2k3 */
+	if ((size > 0x2061) && ((uint8_t)buffer[0x2060] == 0x74) && ((uint8_t)buffer[0x2061] == 0x03)) {
+		buffer[0x2060] = (char)0xeb;
+		buffer[0x2061] = (char)0x1a;
+		uprintf("  0x00002060: 0x74 0x03 -> 0xEB 0x1A (disable Win2k3 CRC check)\n");
+	}
+	for (i = 1; i < size - 32; i++) {
+		for (j = 0; j < 2; j++) {
+			if (safe_strnicmp(&buffer[i], patch_str_org[j], strlen(patch_str_org[j]) - 1) == 0) {
+				assert(index < 2);
+				uprintf("  0x%08X: '%s' -> '%s'\n", i, &buffer[i], patch_str_rep[index][j]);
+				strcpy(&buffer[i], patch_str_rep[index][j]);
+				i += (unsigned)max(strlen(patch_str_org[j]), strlen(patch_str_rep[index][j]));
+			}
+		}
+	}
+	if (!img_report.uses_minint) {
+		for (i = 0; i < size - 32; i++) {
+			/* rdisk(0) → rdisk(1) */
+			if (safe_strnicmp(&buffer[i], rdisk_zero, strlen(rdisk_zero) - 1) == 0) {
+				buffer[i + 6] = '1';
+				uprintf("  0x%08X: '%s' -> 'rdisk(1)'\n", i, rdisk_zero);
+			}
+			/* $win_nt$.~bt → i386/amd64 */
+			if (safe_strnicmp(&buffer[i], win_nt_bt_org, strlen(win_nt_bt_org) - 1) == 0) {
+				uprintf("  0x%08X: '%s' -> '%s%s'\n", i, &buffer[i], basedir[index],
+				        &buffer[i + strlen(win_nt_bt_org)]);
+				strcpy(&buffer[i], basedir[index]);
+				buffer[i + strlen(basedir[index])] = buffer[i + strlen(win_nt_bt_org)];
+				buffer[i + strlen(basedir[index]) + 1] = 0;
+			}
+		}
+	}
+	if (fwrite(buffer, 1, size, fh) != size) {
+		uprintf("Could not write patched file %s\n", dst);
+		goto out;
+	}
+	r = TRUE;
+
+out:
+	if (fh) fclose(fh);
+	free(buffer);
+	return r;
 }
 
 BOOL SetupWinToGo(DWORD di, const char* dn, BOOL use_esp)
@@ -374,8 +505,6 @@ int SetWinToGoIndex(void)
 }
 
 /* Module-level mount path set by the caller before ApplyWindowsCustomization */
-static char *s_mount_path = NULL;
-
 void wue_set_mount_path(const char *path)
 {
 	free(s_mount_path);
