@@ -722,6 +722,19 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 			return;
 	}
 
+	/* Warn if any UEFI bootloader in the image has been revoked */
+	if (boot_type == BT_IMAGE && (img_report.has_secureboot_bootloader & 0xfe)) {
+		const char *msg;
+		/* MSG_341 is for the Windows SSP (0xc0000428) case (bit 2 = 1<<2 = 4) */
+		if ((img_report.has_secureboot_bootloader & 0xfe) == 4)
+			msg = lmprintf(MSG_341, "Error code: 0xc0000428");
+		else
+			msg = lmprintf(MSG_340);
+		if (Notification(MB_OKCANCEL | MB_ICONWARNING,
+		                 lmprintf(MSG_338), lmprintf(MSG_339, msg)) != IDOK)
+			return;
+	}
+
 	/* Windows User Experience dialog — show before formatting a Windows 10/11 image */
 	if (boot_type == BT_IMAGE && IS_WINDOWS_1X(img_report)) {
 		if (img_report.has_panther_unattend) {
@@ -1361,6 +1374,15 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 				         "Boot type\n─────────\n%s", info);
 				gtk_widget_set_tooltip_text(rw.boot_combo, tip);
 			}
+		}
+
+		/* Log bootloader revocation status for EFI-bootable images */
+		if (IS_EFI_BOOTABLE(img_report)) {
+			if (img_report.has_secureboot_bootloader & 0xfe)
+				uprintf("WARNING: Image contains a revoked UEFI bootloader "
+				        "(revocation mask: 0x%02x)", img_report.has_secureboot_bootloader);
+			else if (img_report.has_secureboot_bootloader & 1)
+				uprintf("Image bootloaders are signed by a Secure Boot authority");
 		}
 		break;
 	}

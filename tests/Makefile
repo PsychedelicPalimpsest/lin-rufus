@@ -687,7 +687,23 @@ LDFLAGS_LINUX_test_image_scan_linux := \
 	$(SRC_DIR)/syslinux/libfat/libfat.a
 EXTRA_SRC_LINUX_test_image_scan_linux := $(IMAGE_SCAN_LINUX_SRC) iso_linux_glue.c
 
-# dos_linux tests: ExtractFreeDOS, SetDOSLocale, ExtractDOS
+# bootloader_scan_linux tests: GetBootladerInfo() — EFI bootloader revocation check
+# Uses image_scan.c (GetBootladerInfo), stubs for ReadISOFileToBuffer/IsSignedBy/IsRevoked.
+CFLAGS_LINUX_test_bootloader_scan_linux := \
+	-D_RUFUS -DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_bootloader_scan_linux := -lpthread
+EXTRA_SRC_LINUX_test_bootloader_scan_linux := \
+	$(SRC_DIR)/linux/image_scan.c \
+	$(SRC_DIR)/linux/stdfn.c \
+	$(SRC_DIR)/linux/stdio.c \
+	$(COMMON)/parser.c \
+	$(COMMON)/localization.c \
+	$(SRC_DIR)/linux/localization.c \
+	bootloader_scan_linux_glue.c
 DOS_LINUX_SRC := $(SRC_DIR)/linux/dos.c \
                  $(SRC_DIR)/linux/dos_locale.c \
                  $(SRC_DIR)/linux/stdio.c \
