@@ -114,6 +114,11 @@ BOOL    WimApplyImage(const char* a, int b, const char* c)
 RUFUS_UPDATE update = {0};
 windows_version_t WindowsVersion = {0};
 
+/* efi_archname is defined in iso.c; provide it here for the test build */
+const char* efi_archname[] = {
+	"", "ia32", "x64", "arm", "aa64", "ia64", "riscv64", "loongarch64", "ebc"
+};
+
 /* CustomSelectionDialog mock — test_set_wintogo_index tests inject a response
  * by setting _mock_dialog_response before calling SetWinToGoIndex().
  *   -1 = not set (cancel / not called expectation)
@@ -1713,6 +1718,71 @@ out:
 	return r;
 }
 
+/*
+ * make_boot_wim_with_ms2023_bootloaders - Create sources/boot.wim with 2 images.
+ * Image 1 is empty; image 2 contains Windows/Boot/EFI_EX/ and Windows/Boot/Fonts_EX/.
+ * Returns 0 on success, -1 on failure.
+ */
+static int make_boot_wim_with_ms2023_bootloaders(const char *mount)
+{
+	/* Require wimlib-imagex (from 'wimtools' package) */
+	if (system("wimlib-imagex --version >/dev/null 2>&1") != 0)
+		return -1;
+
+	char staging[] = "/tmp/rufus-ms2023-stg-XXXXXX";
+	if (mkdtemp(staging) == NULL) return -1;
+
+	/* Create EFI_EX directory with fake bootloader files */
+	char efi_ex_dir[512];
+	snprintf(efi_ex_dir, sizeof(efi_ex_dir), "%s/Windows/Boot/EFI_EX", staging);
+	if (mkdir_p(efi_ex_dir) != 0 && errno != EEXIST) {
+		rmdir_tree(staging); return -1;
+	}
+
+	char path[512];
+	snprintf(path, sizeof(path), "%s/bootmgfw_EX.efi", efi_ex_dir);
+	winpe_write_file(path, "bootmgfw-2023", 13);
+	snprintf(path, sizeof(path), "%s/bootmgr_EX.efi", efi_ex_dir);
+	winpe_write_file(path, "bootmgr-2023", 12);
+
+	/* Create Fonts_EX directory with a fake font file */
+	char fonts_ex_dir[512];
+	snprintf(fonts_ex_dir, sizeof(fonts_ex_dir), "%s/Windows/Boot/Fonts_EX", staging);
+	if (mkdir_p(fonts_ex_dir) != 0 && errno != EEXIST) {
+		rmdir_tree(staging); return -1;
+	}
+	snprintf(path, sizeof(path), "%s/segoe_EX.ttf", fonts_ex_dir);
+	winpe_write_file(path, "font-data", 9);
+
+	char sources[512];
+	snprintf(sources, sizeof(sources), "%s/sources", mount);
+	if (mkdir(sources, 0755) != 0 && errno != EEXIST) {
+		rmdir_tree(staging); return -1;
+	}
+	char wim_path[512];
+	snprintf(wim_path, sizeof(wim_path), "%s/sources/boot.wim", mount);
+
+	/* Create WIM: image 1 = empty dir, image 2 = staging tree */
+	char empty_dir[] = "/tmp/rufus-ms2023-emp-XXXXXX";
+	if (mkdtemp(empty_dir) == NULL) { rmdir_tree(staging); return -1; }
+
+	char cmd[1024];
+	snprintf(cmd, sizeof(cmd),
+	         "wimlib-imagex capture %s %s --no-acls --compress=none >/dev/null 2>&1",
+	         empty_dir, wim_path);
+	int ret = system(cmd);
+	if (ret == 0) {
+		snprintf(cmd, sizeof(cmd),
+		         "wimlib-imagex append %s %s --no-acls --compress=none >/dev/null 2>&1",
+		         staging, wim_path);
+		ret = system(cmd);
+	}
+
+	rmdir(empty_dir);
+	rmdir_tree(staging);
+	return (ret == 0) ? 0 : -1;
+}
+
 /* ================================================================
  * Tests: ApplyWindowsCustomization with WINPE_SETUP_MASK (boot.wim)
  * ================================================================ */
@@ -1815,6 +1885,215 @@ TEST(apply_customization_winpe_renames_appraiserres)
 	rmdir_tree(mount);
 	free(mount);
 }
+
+/* ================================================================
+ * Tests: ApplyWindowsCustomization with UNATTEND_USE_MS2023_BOOTLOADERS
+ * ================================================================ */
+
+/* 10. MS2023 bootloaders: replaces existing efi/boot/bootx64.efi */
+TEST(apply_customization_ms2023_replaces_efi_boot)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	int made = make_boot_wim_with_ms2023_bootloaders(mount);
+	if (made != 0) { rmdir_tree(mount); free(mount); return; }
+	char efi_dir[512];
+	snprintf(efi_dir, sizeof(efi_dir), "%s/efi/boot", mount);
+	mkdir_p(efi_dir);
+	char efi_file[512];
+	snprintf(efi_file, sizeof(efi_file), "%s/bootx64.efi", efi_dir);
+	winpe_write_file(efi_file, "old-bootloader", 14);
+
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_USE_MS2023_BOOTLOADERS);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
+
+	wue_set_mount_path(mount);
+	BOOL r = ApplyWindowsCustomization(0, UNATTEND_USE_MS2023_BOOTLOADERS);
+	CHECK_MSG(r == TRUE, "ApplyWindowsCustomization with MS2023 must succeed");
+
+	/* Verify efi/boot/bootx64.efi was replaced with the 2023 content */
+	size_t len = 0;
+	char *content = read_file_contents(efi_file, &len);
+	CHECK_MSG(content != NULL, "bootx64.efi must exist after MS2023 install");
+	if (content) {
+		CHECK_MSG(len == 13 && memcmp(content, "bootmgfw-2023", 13) == 0,
+		          "bootx64.efi must contain 2023 bootloader content");
+		free(content);
+	}
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 11. MS2023 bootloaders: creates/replaces bootmgr.efi at mount root */
+TEST(apply_customization_ms2023_creates_bootmgr_efi)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	int made = make_boot_wim_with_ms2023_bootloaders(mount);
+	if (made != 0) { rmdir_tree(mount); free(mount); return; }
+
+	/* Create efi/boot/ so we have a bootx64.efi to replace */
+	char efi_dir[512];
+	snprintf(efi_dir, sizeof(efi_dir), "%s/efi/boot", mount);
+	mkdir_p(efi_dir);
+	char efi_file[512];
+	snprintf(efi_file, sizeof(efi_file), "%s/bootx64.efi", efi_dir);
+	winpe_write_file(efi_file, "old", 3);
+
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_USE_MS2023_BOOTLOADERS);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
+
+	wue_set_mount_path(mount);
+	BOOL r = ApplyWindowsCustomization(0, UNATTEND_USE_MS2023_BOOTLOADERS);
+	CHECK_MSG(r == TRUE, "ApplyWindowsCustomization with MS2023 must succeed");
+
+	char bootmgr_path[512];
+	snprintf(bootmgr_path, sizeof(bootmgr_path), "%s/bootmgr.efi", mount);
+	CHECK_MSG(file_exists(bootmgr_path), "bootmgr.efi must be created at mount root");
+
+	size_t len = 0;
+	char *content = read_file_contents(bootmgr_path, &len);
+	if (content) {
+		CHECK_MSG(len == 12 && memcmp(content, "bootmgr-2023", 12) == 0,
+		          "bootmgr.efi must contain 2023 bootmgr content");
+		free(content);
+	}
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 12. MS2023 bootloaders: copies font to efi/microsoft/boot/Fonts/ with _EX stripped */
+TEST(apply_customization_ms2023_copies_fonts)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	int made = make_boot_wim_with_ms2023_bootloaders(mount);
+	if (made != 0) { rmdir_tree(mount); free(mount); return; }
+
+	/* Create efi/boot/ with bootx64.efi */
+	char efi_dir[512];
+	snprintf(efi_dir, sizeof(efi_dir), "%s/efi/boot", mount);
+	mkdir_p(efi_dir);
+	char efi_file[512];
+	snprintf(efi_file, sizeof(efi_file), "%s/bootx64.efi", efi_dir);
+	winpe_write_file(efi_file, "old", 3);
+
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_USE_MS2023_BOOTLOADERS);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
+
+	wue_set_mount_path(mount);
+	BOOL r = ApplyWindowsCustomization(0, UNATTEND_USE_MS2023_BOOTLOADERS);
+	CHECK_MSG(r == TRUE, "ApplyWindowsCustomization with MS2023 must succeed");
+
+	/* segoe_EX.ttf → efi/microsoft/boot/Fonts/segoe.ttf */
+	char font_path[512];
+	snprintf(font_path, sizeof(font_path),
+	         "%s/efi/microsoft/boot/Fonts/segoe.ttf", mount);
+	CHECK_MSG(file_exists(font_path),
+	          "Font must be in efi/microsoft/boot/Fonts/ with _EX stripped");
+
+	size_t len = 0;
+	char *content = read_file_contents(font_path, &len);
+	if (content) {
+		CHECK_MSG(len == 9 && memcmp(content, "font-data", 9) == 0,
+		          "Copied font must have correct content");
+		free(content);
+	}
+
+	/* Ensure the _EX version does NOT exist */
+	char bad_path[512];
+	snprintf(bad_path, sizeof(bad_path),
+	         "%s/efi/microsoft/boot/Fonts_EX/segoe_EX.ttf", mount);
+	CHECK_MSG(!file_exists(bad_path),
+	          "Font must NOT exist at path with _EX suffix");
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 13. MS2023 bootloaders: no boot.wim → succeeds silently */
+TEST(apply_customization_ms2023_no_boot_wim_succeeds)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	/* Create sources/ but NO boot.wim */
+	char sources_dir[512];
+	snprintf(sources_dir, sizeof(sources_dir), "%s/sources", mount);
+	mkdir(sources_dir, 0755);
+
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_USE_MS2023_BOOTLOADERS);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
+
+	wue_set_mount_path(mount);
+	BOOL r = ApplyWindowsCustomization(0, UNATTEND_USE_MS2023_BOOTLOADERS);
+	/* Should succeed (unattend.xml copied, MS2023 skipped due to no boot.wim) */
+	CHECK_MSG(r == TRUE, "Must succeed even when boot.wim is absent for MS2023");
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/* 14. MS2023 + WINPE_SETUP_MASK together: both Autounattend.xml and bootloaders applied */
+TEST(apply_customization_ms2023_combined_with_winpe)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	int made = make_boot_wim_with_ms2023_bootloaders(mount);
+	if (made != 0) { rmdir_tree(mount); free(mount); return; }
+
+	/* Create efi/boot/bootx64.efi and fake appraiserres.dll */
+	char efi_dir[512];
+	snprintf(efi_dir, sizeof(efi_dir), "%s/efi/boot", mount);
+	mkdir_p(efi_dir);
+	char efi_file[512];
+	snprintf(efi_file, sizeof(efi_file), "%s/bootx64.efi", efi_dir);
+	winpe_write_file(efi_file, "old-boot", 8);
+
+	int flags = UNATTEND_SECUREBOOT_TPM_MINRAM | UNATTEND_USE_MS2023_BOOTLOADERS;
+	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, flags);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
+
+	wue_set_mount_path(mount);
+	BOOL r = ApplyWindowsCustomization(0, flags);
+	CHECK_MSG(r == TRUE, "Combined WINPE+MS2023 must succeed");
+
+	/* Autounattend.xml injected into boot.wim */
+	char wim_path[512];
+	snprintf(wim_path, sizeof(wim_path), "%s/sources/boot.wim", mount);
+	CHECK_MSG(wim_contains_file(wim_path, 2, "Autounattend.xml"),
+	          "boot.wim must contain Autounattend.xml");
+
+	/* bootmgr.efi must have been replaced */
+	char bootmgr_path[512];
+	snprintf(bootmgr_path, sizeof(bootmgr_path), "%s/bootmgr.efi", mount);
+	CHECK_MSG(file_exists(bootmgr_path), "bootmgr.efi must exist after combined install");
+
+	unlink(unattend_xml_path);
+	unattend_xml_path = NULL;
+	wue_set_mount_path(NULL);
+	rmdir_tree(mount);
+	free(mount);
+}
+
 int main(void)
 {
 	printf("=== WUE Linux Tests ===\n");
@@ -1888,6 +2167,13 @@ int main(void)
 	RUN(apply_customization_winpe_no_boot_wim_succeeds);
 	RUN(apply_customization_winpe_injects_autounattend_into_boot_wim);
 	RUN(apply_customization_winpe_renames_appraiserres);
+
+	printf("\n=== ApplyWindowsCustomization MS2023 bootloaders tests ===\n");
+	RUN(apply_customization_ms2023_replaces_efi_boot);
+	RUN(apply_customization_ms2023_creates_bootmgr_efi);
+	RUN(apply_customization_ms2023_copies_fonts);
+	RUN(apply_customization_ms2023_no_boot_wim_succeeds);
+	RUN(apply_customization_ms2023_combined_with_winpe);
 
 	TEST_RESULTS();
 }

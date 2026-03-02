@@ -636,7 +636,7 @@ open_iso_wim_file(const tchar* filename, struct filedes* fd_ret)
 	}
 
 	*iso_filename++ = '\0';
-	filedes_init(fd_ret, 0);
+	filedes_invalidate(fd_ret);
 
 	/* Try to open as UDF image */
 	fd_ret->p_udf = udf_open(iso_path);
@@ -674,7 +674,7 @@ out:
 	FREE(iso_path);
 	/* Because we use an union, make sure fd is cleared on error */
 	if (ret)
-		fd_ret->fd = 0;
+		filedes_invalidate(fd_ret);
 	return ret;
 }
 #endif

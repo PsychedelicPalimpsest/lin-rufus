@@ -16,6 +16,8 @@
 #include <assert.h>
 #include <strings.h>  /* strcasecmp */
 #include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
 #include <errno.h>
 
 #include "rufus.h"
@@ -786,10 +788,125 @@ static BOOL copy_file(const char *src, const char *dst)
 	return ok;
 }
 
+extern const char* efi_archname[];
+
+/* Remove all occurrences of sub from str in-place */
+static void remove_substring(char *str, const char *sub)
+{
+	size_t sublen = strlen(sub);
+	char *p;
+	while ((p = strstr(str, sub)) != NULL)
+		memmove(p, p + sublen, strlen(p + sublen) + 1);
+}
+
+/*
+ * Extract Windows/Boot/EFI_EX and Windows/Boot/Fonts_EX from boot.wim
+ * and copy them to the correct locations on the mounted drive.
+ *
+ * EFI_EX/bootmgfw_EX.efi → efi/boot/boot<arch>.efi (for each arch present)
+ * EFI_EX/bootmgr_EX.efi  → bootmgr.efi
+ * Fonts_EX/<name>         → efi/microsoft/boot/Fonts/<name with _EX removed>
+ */
+static BOOL install_ms2023_bootloaders(WIMStruct *wim, int wim_index,
+                                        const char *mount_path)
+{
+	BOOL r = FALSE;
+	char tmp_dir[] = "/tmp/rufus-ms2023-XXXXXX";
+	char src_path[MAX_PATH], dst_path[MAX_PATH];
+
+	if (mkdtemp(tmp_dir) == NULL) {
+		uprintf_errno("MS2023 bootloaders: mkdtemp failed");
+		return FALSE;
+	}
+
+	/* Extract EFI_EX → tmp_dir/EFI_EX/ */
+	const char *efi_ex_wim_path = "\\Windows\\Boot\\EFI_EX";
+	if (wimlib_extract_pathsU(wim, wim_index, tmp_dir, &efi_ex_wim_path, 1,
+	        WIMLIB_EXTRACT_FLAG_NO_ACLS |
+	        WIMLIB_EXTRACT_FLAG_NO_PRESERVE_DIR_STRUCTURE) != 0) {
+		uprintf("MS2023 bootloaders: EFI_EX not found in boot.wim — skipping");
+		goto cleanup;
+	}
+
+	/* Replace efi/boot/boot<arch>.efi for each arch present on the drive */
+	snprintf(src_path, sizeof(src_path), "%s/EFI_EX/bootmgfw_EX.efi", tmp_dir);
+	for (int i = 1; i < ARCH_MAX; i++) {
+		snprintf(dst_path, sizeof(dst_path), "%s/efi/boot/boot%s.efi",
+		         mount_path, efi_archname[i]);
+		if (access(dst_path, F_OK) == 0) {
+			if (copy_file(src_path, dst_path))
+				uprintf("  Replaced efi/boot/boot%s.efi with MS 2023 bootloader",
+				        efi_archname[i]);
+			else
+				uprintf("  WARNING: failed to replace efi/boot/boot%s.efi",
+				        efi_archname[i]);
+		}
+	}
+
+	/* Replace bootmgr.efi at the mount root */
+	snprintf(src_path, sizeof(src_path), "%s/EFI_EX/bootmgr_EX.efi", tmp_dir);
+	snprintf(dst_path, sizeof(dst_path), "%s/bootmgr.efi", mount_path);
+	if (access(src_path, F_OK) == 0) {
+		if (copy_file(src_path, dst_path))
+			uprintf("  Replaced bootmgr.efi with MS 2023 bootloader");
+	}
+
+	/* Extract Fonts_EX → tmp_dir/Fonts_EX/ (non-fatal if absent) */
+	const char *fonts_ex_wim_path = "\\Windows\\Boot\\Fonts_EX";
+	if (wimlib_extract_pathsU(wim, wim_index, tmp_dir, &fonts_ex_wim_path, 1,
+	        WIMLIB_EXTRACT_FLAG_NO_ACLS |
+	        WIMLIB_EXTRACT_FLAG_NO_PRESERVE_DIR_STRUCTURE) != 0) {
+		uprintf("MS2023 bootloaders: Fonts_EX not found in boot.wim — skipping fonts");
+		r = TRUE;
+		goto cleanup;
+	}
+
+	/* Walk Fonts_EX, copy each file with _EX stripped from the path */
+	{
+		char fonts_src_dir[MAX_PATH];
+		snprintf(fonts_src_dir, sizeof(fonts_src_dir), "%s/Fonts_EX", tmp_dir);
+		DIR *dp = opendir(fonts_src_dir);
+		if (dp) {
+			struct dirent *ent;
+			while ((ent = readdir(dp)) != NULL) {
+				if (ent->d_name[0] == '.') continue;
+				snprintf(src_path, sizeof(src_path), "%s/%s",
+				         fonts_src_dir, ent->d_name);
+				/* Build dst: <mount>/efi/microsoft/boot/Fonts_EX/<name> */
+				snprintf(dst_path, sizeof(dst_path),
+				         "%s/efi/microsoft/boot/Fonts_EX/%s",
+				         mount_path, ent->d_name);
+				/* Remove _EX from dir name and filename */
+				remove_substring(dst_path, "_EX");
+				/* Ensure parent directory exists */
+				char parent[MAX_PATH];
+				snprintf(parent, sizeof(parent), "%s", dst_path);
+				char *slash = strrchr(parent, '/');
+				if (slash) {
+					*slash = '\0';
+					mkdir_all(parent);
+				}
+				if (copy_file(src_path, dst_path))
+					uprintf("  Copied MS 2023 font: %s", ent->d_name);
+			}
+			closedir(dp);
+		}
+	}
+
+	r = TRUE;
+cleanup:
+	{
+		char cmd[MAX_PATH + 16];
+		snprintf(cmd, sizeof(cmd), "rm -rf %s", tmp_dir);
+		system(cmd);
+	}
+	return r;
+}
+
 BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 {
 	(void)drive_letter;
-	BOOL r = FALSE, update_boot_wim = FALSE;
+	BOOL r = FALSE, update_boot_wim = FALSE, wim_write_needed = FALSE;
 	int wim_index = 2, wuc_index = 0;
 	char dir_path[MAX_PATH], file_path[MAX_PATH];
 	char boot_wim_path[MAX_PATH];
@@ -846,12 +963,18 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 			fclose(fp);
 			uprintf("Created '%s' placeholder", appraiserres_src);
 		}
+	}
 
-		/* Open boot.wim for write access */
+	/* Open boot.wim when WINPE_SETUP_MASK (write access needed) or
+	 * MS2023_BOOTLOADERS (read-only suffices for extraction). */
+	if ((flags & UNATTEND_WINPE_SETUP_MASK) || (flags & UNATTEND_USE_MS2023_BOOTLOADERS)) {
+		struct stat st;
 		if (stat(boot_wim_path, &st) == 0) {
+			wim_write_needed = (flags & UNATTEND_WINPE_SETUP_MASK) != 0;
+			int open_flags = wim_write_needed ? WIMLIB_OPEN_FLAG_WRITE_ACCESS : 0;
 			wimlib_global_init(0);
 			wimlib_set_print_errors(true);
-			if (wimlib_open_wim(boot_wim_path, WIMLIB_OPEN_FLAG_WRITE_ACCESS, &wim) == 0) {
+			if (wimlib_open_wim(boot_wim_path, open_flags, &wim) == 0) {
 				update_boot_wim = TRUE;
 				/* Verify image 2 exists; fall back to 1 for unofficial ISOs */
 				if (wimlib_resolve_image(wim, "2") != 2) {
@@ -859,8 +982,12 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 					wim_index = 1;
 				}
 			} else {
-				uprintf("Could not open '%s' for update", boot_wim_path);
-				goto out;
+				if (wim_write_needed) {
+					uprintf("Could not open '%s' for update", boot_wim_path);
+					goto out;
+				}
+				uprintf("Could not open '%s' for reading (MS2023 bootloaders skipped)",
+				        boot_wim_path);
 			}
 		}
 	}
@@ -909,14 +1036,22 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 		uprintf("Created '%s'", file_path);
 	}
 
+	if ((flags & UNATTEND_USE_MS2023_BOOTLOADERS) && update_boot_wim) {
+		uprintf("Installing MS 2023 bootloaders...");
+		if (!install_ms2023_bootloaders(wim, wim_index, s_mount_path)) {
+			uprintf("WARNING: MS 2023 bootloader installation failed (non-fatal)");
+			/* Non-fatal — continue */
+		}
+	}
+
 	r = TRUE;
 
 out:
 	if (update_boot_wim) {
-		if (r && wuc_index > 0) {
+		if (wim_write_needed && r && wuc_index > 0) {
 			uprintf("Updating '%s[%d]'...", boot_wim_path, wim_index);
 			if (wimlib_update_image(wim, wim_index, wuc, wuc_index, 0) != 0 ||
-			    wimlib_overwrite(wim, WIMLIB_WRITE_FLAG_RECOMPRESS, 0) != 0) {
+			    wimlib_overwrite(wim, WIMLIB_WRITE_FLAG_RECOMPRESS, 1) != 0) {
 				uprintf("Error: Failed to update '%s'", boot_wim_path);
 				r = FALSE;
 			}
