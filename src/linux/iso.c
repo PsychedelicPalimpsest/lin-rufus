@@ -55,6 +55,7 @@
 
 #include "iso_private.h"
 #include "iso_scan.h"
+#include "../common/iso_config.h"
 
 /* ---- globals (defined here, extern in rufus.h or ui.h) ---- */
 FILE*    fd_md5sum          = NULL;
@@ -121,17 +122,8 @@ static const char* pop_os_name      = "pop-os";
 static const int64_t old_c32_threshold[NB_OLD_C32] = OLD_C32_THRESHOLD;
 
 /* ------------------------------------------------------------------ */
-/* Internal types                                                       */
+/* Internal types (EXTRACT_PROPS is defined in common/iso_config.h)    */
 /* ------------------------------------------------------------------ */
-
-typedef struct {
-	BOOLEAN is_cfg;
-	BOOLEAN is_conf;
-	BOOLEAN is_syslinux_cfg;
-	BOOLEAN is_grub_cfg;
-	BOOLEAN is_menu_cfg;
-	BOOLEAN is_old_c32[NB_OLD_C32];
-} EXTRACT_PROPS;
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                              */
@@ -194,6 +186,44 @@ static BOOL write_all(int fd, const void* buf, size_t len)
 		len -= (size_t)w;
 	}
 	return TRUE;
+}
+
+/* ------------------------------------------------------------------ */
+/* Config-file patching (post-extraction)                              */
+/* ------------------------------------------------------------------ */
+
+/* POSIX file copy callback used by iso_patch_config_file for Tails workaround */
+static BOOL posix_copy_file(const char* src, const char* dst)
+{
+	char buf[4096];
+	int rfd = open(src, O_RDONLY);
+	if (rfd < 0) return FALSE;
+	int wfd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (wfd < 0) { close(rfd); return FALSE; }
+	ssize_t n;
+	while ((n = read(rfd, buf, sizeof(buf))) > 0)
+		if (write(wfd, buf, (size_t)n) != n) { close(rfd); close(wfd); return FALSE; }
+	close(rfd);
+	close(wfd);
+	return n == 0;
+}
+
+/* Wrapper that calls iso_patch_config_file() with runtime globals */
+static void fix_config(const char* psz_fullpath, const char* psz_path,
+                       const char* psz_basename, EXTRACT_PROPS* props)
+{
+	iso_patch_config_file(
+		psz_fullpath, psz_path, psz_basename, props,
+		boot_type,
+		persistence_size,
+		HAS_PERSISTENCE(img_report),
+		img_report.rh8_derivative,
+		img_report.has_efi_syslinux,
+		img_report.label,
+		img_report.usb_label,
+		image_path,
+		&modified_files,
+		posix_copy_file);
 }
 
 /* ------------------------------------------------------------------ */
@@ -495,6 +525,7 @@ static int udf_extract_files(udf_t* p_udf, udf_dirent_t* p_udf_dirent,
 				}
 			}
 			close(fd); fd = -1;
+			fix_config(psz_sanpath, psz_path, psz_basename, &props);
 			safe_free(psz_sanpath);
 		}
 		safe_free(psz_fullpath);
@@ -647,6 +678,7 @@ static int iso_extract_files(iso9660_t* p_iso, const char* psz_path)
 				utime(psz_sanpath, &ut);
 			}
 			close(fd); fd = -1;
+			fix_config(psz_sanpath, psz_path, psz_basename_ptr, &props);
 			safe_free(psz_sanpath);
 		}
 	}

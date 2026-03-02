@@ -355,6 +355,22 @@ CFLAGS_WIN_test_iso_scan_common := \
 	-Wno-missing-field-initializers
 EXTRA_SRC_WIN_test_iso_scan_common := $(SRC_DIR)/common/iso_scan.c
 
+# iso_config_linux tests: iso_patch_config_file() config-patching logic
+# Uses linux/parser.c (replace_in_token_data) + common/parser.c (replace_char)
+# + common/iso_config.c (implementation).
+CFLAGS_LINUX_test_iso_config_linux := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_iso_config_linux := \
+	$(SRC_DIR)/common/iso_config.c \
+	$(SRC_DIR)/common/parser.c \
+	$(SRC_DIR)/common/localization.c \
+	$(SRC_DIR)/linux/parser.c \
+	$(SRC_DIR)/linux/stdfn.c
+
 # fat32_common tests: portable fat32_default_cluster_size()
 # No OS I/O — the test file is self-contained; only common/format_fat32.c needed.
 CFLAGS_LINUX_test_fat32_common := \

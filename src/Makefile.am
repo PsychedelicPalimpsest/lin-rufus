@@ -28,7 +28,7 @@ windows/%_rc.o: windows/%.rc ../res/loc/embedded.loc
 endif
 
 COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c \
-	common/localization.c common/parser.c common/iso_scan.c common/format_fat32.c \
+	common/localization.c common/parser.c common/iso_scan.c common/iso_config.c common/format_fat32.c \
 	common/bootloader_scan.c common/drive.c
 
 if TARGET_WINDOWS
