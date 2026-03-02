@@ -1437,6 +1437,25 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 			row++;
 		}
 
+		/* Show signer and chain trust info if the file has a PE signature */
+		if (image_path && image_path[0]) {
+			cert_info_t ci;
+			memset(&ci, 0, sizeof(ci));
+			if (GetSignatureCertInfo(image_path, &ci) > 0) {
+				char sig_val[320];
+				snprintf(sig_val, sizeof(sig_val), "%s  (%s)", ci.name,
+				         ci.chain_trusted ? "chain trusted ✓" : "chain not trusted ✗");
+				label = gtk_label_new("Signer");
+				gtk_widget_set_halign(label, GTK_ALIGN_END);
+				gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
+				label = gtk_label_new(sig_val);
+				gtk_widget_set_halign(label, GTK_ALIGN_START);
+				gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+				gtk_grid_attach(GTK_GRID(grid), label, 1, row, 1, 1);
+				row++;
+			}
+		}
+
 		gtk_widget_show_all(dlg);
 		gtk_dialog_run(GTK_DIALOG(dlg));
 		gtk_widget_destroy(dlg);

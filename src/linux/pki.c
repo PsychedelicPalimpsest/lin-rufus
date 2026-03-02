@@ -39,9 +39,24 @@
 #include <openssl/sha.h>
 #include <openssl/core_names.h>
 #include <openssl/param_build.h>
+#include <openssl/x509_vfy.h>
 
 #include "rufus.h"
 #include "resource.h"
+
+/* CA bundle path — injectable for tests */
+#ifdef RUFUS_TEST
+static const char *_ca_bundle_override = NULL;
+void pki_set_ca_bundle_path(const char *path) { _ca_bundle_override = path; }
+static const char *get_ca_bundle_path(void) {
+	return _ca_bundle_override ? _ca_bundle_override
+	                           : "/etc/ssl/certs/ca-certificates.crt";
+}
+#else
+static const char *get_ca_bundle_path(void) {
+	return "/etc/ssl/certs/ca-certificates.crt";
+}
+#endif
 
 /* Rufus RSA-2048 public key modulus (from windows/pki.c, big-endian).
  * The array includes a leading 0x00 byte (DER sign bit); skip it for BN. */
@@ -385,6 +400,7 @@ int GetIssuerCertificateInfo(uint8_t* cert, cert_info_t* info)
 	int ret = 0;
 
 	if (info == NULL) return -1;
+	info->chain_trusted = FALSE;
 	if (wc == NULL || wc->dwLength == 0) return 0;
 
 	/* The PKCS7 DER data follows the WIN_CERTIFICATE header (8 bytes) */
@@ -421,10 +437,57 @@ int GetIssuerCertificateInfo(uint8_t* cert, cert_info_t* info)
 
 	ret = (sk_X509_num(certs) >= 2) ? 2 : 1;
 
+	/* Chain validation: verify the leaf signer against the system CA bundle */
+	{
+		STACK_OF(X509) *signers = PKCS7_get0_signers(p7, certs, 0);
+		if (signers && sk_X509_num(signers) > 0) {
+			X509 *leaf = sk_X509_value(signers, 0);
+			X509_STORE *store = X509_STORE_new();
+			if (store) {
+				if (X509_STORE_load_locations(store, get_ca_bundle_path(), NULL) == 1) {
+					X509_STORE_CTX *ctx = X509_STORE_CTX_new();
+					if (ctx) {
+						if (X509_STORE_CTX_init(ctx, store, leaf, certs) == 1)
+							info->chain_trusted = (X509_verify_cert(ctx) == 1);
+						X509_STORE_CTX_free(ctx);
+					}
+				}
+				X509_STORE_free(store);
+			}
+			sk_X509_free(signers);
+		}
+	}
+
 out:
 	PKCS7_free(p7);
 	return ret;
 }
+
+/*
+ * GetSignatureCertInfo: extract certificate info (name, thumbprint, chain_trusted)
+ * from a PE file's embedded PKCS7 signature.
+ * Returns 1 or 2 on success (same as GetIssuerCertificateInfo), -1 on error.
+ */
+int GetSignatureCertInfo(const char *path, cert_info_t *info)
+{
+	uint8_t *buf = NULL;
+	uint32_t buf_len;
+	uint8_t *cert_data;
+	int ret;
+
+	if (path == NULL || info == NULL)
+		return -1;
+	buf_len = read_file(path, &buf);
+	if (buf == NULL || buf_len == 0) {
+		free(buf);
+		return -1;
+	}
+	cert_data = GetPeSignatureData(buf);
+	ret = GetIssuerCertificateInfo(cert_data, info);
+	free(buf);
+	return ret;
+}
+
 
 LONG ValidateSignature(HWND hDlg, const char* path)
 {

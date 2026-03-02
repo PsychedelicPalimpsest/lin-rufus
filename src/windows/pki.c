@@ -413,6 +413,7 @@ int GetIssuerCertificateInfo(uint8_t* cert, cert_info_t* info)
 
 	if (info == NULL)
 		return -1;
+	info->chain_trusted = FALSE;
 	if (pWinCert == NULL || pWinCert->dwLength == 0)
 		return 0;
 
@@ -482,6 +483,9 @@ int GetIssuerCertificateInfo(uint8_t* cert, cert_info_t* info)
 		goto out;
 	}
 	ret = CertIndex + 1;
+	/* Report chain trust status from the chain context error bits */
+	if (pChainContext != NULL)
+		info->chain_trusted = (pChainContext->TrustStatus.dwErrorStatus == 0);
 
 out:
 	safe_free(pSignerInfo);

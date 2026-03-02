@@ -510,6 +510,7 @@ EXTRA_SRC_LINUX_test_smart_linux := $(SRC_DIR)/linux/smart.c
 
 # pki_linux tests: PKI/certificate functions via OpenSSL
 CFLAGS_LINUX_test_pki_linux := \
+	-DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers

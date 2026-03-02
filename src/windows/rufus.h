@@ -588,6 +588,7 @@ typedef struct ALIGNED(64) {
 typedef struct {
 	char name[256];
 	uint8_t thumbprint[SHA1_HASHSIZE];
+	BOOL chain_trusted;  /* TRUE if full chain verified against trusted CA */
 } cert_info_t;
 
 /* Hash functions */
@@ -883,6 +884,7 @@ extern int sanitize_label(char* label);
 extern int IsHDD(DWORD DriveIndex, uint16_t vid, uint16_t pid, const char* strid);
 extern char* GetSignatureName(const char* path, const char* country_code, uint8_t* thumbprint, BOOL bSilent);
 extern int GetIssuerCertificateInfo(uint8_t* cert, cert_info_t* info);
+extern int GetSignatureCertInfo(const char* path, cert_info_t* info);
 extern uint64_t GetSignatureTimeStamp(const char* path);
 extern LONG ValidateSignature(HWND hDlg, const char* path);
 extern BOOL ValidateOpensslSignature(BYTE* pbBuffer, DWORD dwBufferLen, BYTE* pbSignature, DWORD dwSigLen);
