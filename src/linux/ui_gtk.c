@@ -62,6 +62,7 @@ extern BOOL quick_format, zero_drive;
 extern BOOL enable_bad_blocks;
 extern BOOL enable_verify_write;
 extern int  nb_passes_sel;
+extern BOOL write_as_image, write_as_esp;
 
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
@@ -792,6 +793,30 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 		}
 	}
 
+	/* ISOHybrid detection: if the selected image has an MBR boot signature
+	 * AND is also an ISO, ask the user whether to write it in ISO mode
+	 * (file extraction, recommended) or DD mode (raw block copy).
+	 * This preserves the exact boot geometry embedded by the ISO author. */
+	if (boot_type == BT_IMAGE && IS_DD_BOOTABLE(img_report)
+	    && img_report.is_iso && persistence_size == 0) {
+		char *iso_image = lmprintf(MSG_036);   /* "ISO Image" */
+		char *dd_image  = lmprintf(MSG_095);   /* "DD Image" */
+		StrArray choices;
+		StrArrayCreate(&choices, 2);
+		StrArrayAdd(&choices, lmprintf(MSG_276, iso_image), TRUE);
+		StrArrayAdd(&choices, lmprintf(MSG_277, dd_image),  TRUE);
+		int isoh_choice = SelectionDialog(
+			lmprintf(MSG_274, "ISOHybrid"),
+			lmprintf(MSG_275, iso_image, dd_image, iso_image, dd_image),
+			choices.String, (int)choices.Index);
+		StrArrayDestroy(&choices);
+		if (isoh_choice < 0) {
+			/* User cancelled — abort */
+			return;
+		}
+		write_as_image = (isoh_choice & 2) ? TRUE : FALSE;
+	}
+
 	if (format_thread == NULL) {
 		op_in_progress = TRUE;
 		ErrorStatus = 0;
@@ -804,7 +829,6 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 		}
 	}
 }
-
 static void on_select_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
@@ -839,6 +863,9 @@ static void on_select_clicked(GtkButton *btn, gpointer data)
 		free(image_path);
 		image_path = strdup(filename);
 		g_free(filename);
+		/* Reset DD/ESP mode on each new image selection */
+		write_as_image = FALSE;
+		write_as_esp   = FALSE;
 		uprintf("Image selected: %s", image_path);
 		/* Launch ImageScanThread to populate img_report; it posts
 		 * UM_IMAGE_SCANNED when done so the UI can refresh. */

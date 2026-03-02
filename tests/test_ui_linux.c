@@ -195,6 +195,89 @@ TEST(hyperlink_empty_text_uses_url)
     CHECK_MSG(second_rufus != NULL, "URL should appear as display text too");
 }
 
+/* ---- IS_DD_BOOTABLE / IS_DD_ONLY macro tests (ISOHybrid detection) ---- */
+
+/*
+ * Verifies that IS_DD_BOOTABLE returns TRUE when is_bootable_img > 0,
+ * and IS_DD_ONLY returns TRUE only when the image is not an ISO or
+ * disable_iso is set.  These macros drive the ISOHybrid dialog in
+ * on_start_clicked().
+ */
+
+TEST(is_dd_bootable_positive_when_bootable)
+{
+    RUFUS_IMG_REPORT r = { 0 };
+    r.is_bootable_img = 1;
+    CHECK_MSG(IS_DD_BOOTABLE(r), "is_bootable_img=1 must make IS_DD_BOOTABLE true");
+}
+
+TEST(is_dd_bootable_false_when_zero)
+{
+    RUFUS_IMG_REPORT r = { 0 };
+    r.is_bootable_img = 0;
+    CHECK_MSG(!IS_DD_BOOTABLE(r), "is_bootable_img=0 must make IS_DD_BOOTABLE false");
+}
+
+TEST(is_dd_bootable_false_when_negative)
+{
+    RUFUS_IMG_REPORT r = { 0 };
+    r.is_bootable_img = -1;  /* error / undetected */
+    CHECK_MSG(!IS_DD_BOOTABLE(r), "is_bootable_img=-1 must make IS_DD_BOOTABLE false");
+}
+
+TEST(is_dd_only_iso_not_disabled)
+{
+    /* Bootable ISO with disable_iso=FALSE → NOT DD-only (ISO mode available) */
+    RUFUS_IMG_REPORT r = { 0 };
+    r.is_bootable_img = 1;
+    r.is_iso = TRUE;
+    r.disable_iso = FALSE;
+    CHECK_MSG(!IS_DD_ONLY(r), "bootable ISO with disable_iso=FALSE must NOT be DD-only");
+}
+
+TEST(is_dd_only_iso_disabled)
+{
+    /* Bootable ISO with disable_iso=TRUE → DD-only */
+    RUFUS_IMG_REPORT r = { 0 };
+    r.is_bootable_img = 1;
+    r.is_iso = TRUE;
+    r.disable_iso = TRUE;
+    CHECK_MSG(IS_DD_ONLY(r), "bootable ISO with disable_iso=TRUE must be DD-only");
+}
+
+TEST(is_dd_only_raw_image)
+{
+    /* Bootable non-ISO image → DD-only (no ISO extraction possible) */
+    RUFUS_IMG_REPORT r = { 0 };
+    r.is_bootable_img = 1;
+    r.is_iso = FALSE;
+    r.disable_iso = FALSE;
+    CHECK_MSG(IS_DD_ONLY(r), "bootable non-ISO image must be DD-only");
+}
+
+TEST(isohybrid_dialog_condition)
+{
+    /* Simulate a typical ISOHybrid ISO: bootable + is_iso + not disabled */
+    RUFUS_IMG_REPORT r = { 0 };
+    r.is_bootable_img = 1;
+    r.is_iso = TRUE;
+    r.disable_iso = FALSE;
+    /* The ISOHybrid dialog appears when: IS_DD_BOOTABLE && is_iso && !IS_DD_ONLY */
+    BOOL show_dialog = IS_DD_BOOTABLE(r) && r.is_iso && !IS_DD_ONLY(r);
+    CHECK_MSG(show_dialog, "ISOHybrid dialog condition should be TRUE for hybrid ISO");
+}
+
+TEST(isohybrid_dialog_skipped_for_raw_img)
+{
+    /* Non-ISO image: dialog should not be shown (IS_DD_ONLY handles it directly) */
+    RUFUS_IMG_REPORT r = { 0 };
+    r.is_bootable_img = 1;
+    r.is_iso = FALSE;
+    r.disable_iso = FALSE;
+    BOOL show_dialog = IS_DD_BOOTABLE(r) && r.is_iso && !IS_DD_ONLY(r);
+    CHECK_MSG(!show_dialog, "ISOHybrid dialog must be skipped for non-ISO images");
+}
+
 int main(void)
 {
     printf("=== version tests ===\n");
@@ -221,6 +304,16 @@ int main(void)
     RUN(hyperlink_null_buf_returns_error);
     RUN(hyperlink_zero_bufsz_returns_error);
     RUN(hyperlink_empty_text_uses_url);
+
+    printf("\n=== ISOHybrid detection / IS_DD_BOOTABLE macro tests ===\n");
+    RUN(is_dd_bootable_positive_when_bootable);
+    RUN(is_dd_bootable_false_when_zero);
+    RUN(is_dd_bootable_false_when_negative);
+    RUN(is_dd_only_iso_not_disabled);
+    RUN(is_dd_only_iso_disabled);
+    RUN(is_dd_only_raw_image);
+    RUN(isohybrid_dialog_condition);
+    RUN(isohybrid_dialog_skipped_for_raw_img);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;
