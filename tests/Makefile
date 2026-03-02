@@ -218,6 +218,20 @@ CFLAGS_LINUX_test_drive2_linux := \
 LDFLAGS_LINUX_test_drive2_linux := -lblkid
 EXTRA_SRC_LINUX_test_drive2_linux := $(DRIVE2_LINUX_SRC) $(BLED_LIB)
 
+# analyze_br_common tests: AnalyzeMBR() and AnalyzePBR() from common/drive.c
+ANALYZE_BR_COMMON_SRC := $(SRC_DIR)/linux/drive.c $(COMMON)/drive.c \
+                         $(SRC_DIR)/linux/stdfn.c \
+                         $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
+                         $(SRC_DIR)/linux/ui.c \
+                         $(FORMAT_MS_SRC)
+CFLAGS_LINUX_test_analyze_br_common := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_analyze_br_common := -lblkid
+EXTRA_SRC_LINUX_test_analyze_br_common := $(ANALYZE_BR_COMMON_SRC) $(BLED_LIB)
+
 # partition_ops_linux tests: DeletePartition, GetEspOffset, ToggleEsp
 PARTITION_OPS_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(COMMON)/drive.c \
                             $(SRC_DIR)/linux/stdfn.c \

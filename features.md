@@ -164,7 +164,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `CreatePartition()` | ✅ | `ioctl(BLKPG_ADD_PARTITION)` via libfdisk table manipulation |
 | `InitializeDisk()` | ✅ | Writes fresh MBR/GPT with libfdisk |
 | `RefreshDriveLayout()` / `RefreshLayout()` | ✅ | `ioctl(BLKRRPART)`; `RefreshLayout(DWORD)` opens by drive index; tests pass |
-| `AnalyzeMBR()` / `AnalyzePBR()` | ✅ | ms-sys boot record analysis via FAKE_FD trick; tests pass |
+| `AnalyzeMBR()` / `AnalyzePBR()` | ✅ | Extracted to `src/common/drive.c`; ms-sys boot record analysis via FAKE_FD trick; unified impl honors `bSilent`, NULL TargetName guard, SectorSize=0 fallback; 39 tests pass |
 | `GetDrivePartitionData()` | ✅ | Reads MBR/GPT partition table via libfdisk; populates PartitionStyle, nPartitions, etc. |
 | `GetMBRPartitionType()` / `GetGPTPartitionType()` | ✅ | Lookup in `mbr_types.h` / `gpt_types.h` tables (no Windows dep); tests pass |
 | `DeletePartition()` | ✅ | MBR+GPT table manipulation + `BLKPG_DEL_PARTITION` ioctl for real block devices; 42 tests pass |

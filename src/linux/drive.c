@@ -35,11 +35,8 @@
 #include "../windows/drive.h"
 #include "drive_linux.h"
 
-/* ms-sys headers for AnalyzeMBR / AnalyzePBR */
+/* partition_info is still used by format.c for WriteMBR / WritePBR via FAKE_FD */
 #include "file.h"
-#include "br.h"
-#include "fat16.h"
-#include "fat32.h"
 #include "partition_info.h"
 
 /* blkid for GetDriveLabel */
@@ -1213,94 +1210,6 @@ BOOL GetDriveLabel(DWORD DriveIndex, char *letters, char **label, BOOL bSilent)
     return (*label && **label) ? TRUE : FALSE;
 }
 
-/* -------------------------------------------------------------------------
- * AnalyzeMBR / AnalyzePBR — boot-sector analysis via ms-sys
- * --------------------------------------------------------------------- */
-
-static const struct { int (*fn)(FILE *fp); const char *str; } known_mbr[] = {
-    { is_dos_mbr,         "DOS/NT/95A" },
-    { is_dos_f2_mbr,      "DOS/NT/95A (F2)" },
-    { is_95b_mbr,         "Windows 95B/98/98SE/ME" },
-    { is_2000_mbr,        "Windows 2000/XP/2003" },
-    { is_vista_mbr,       "Windows Vista" },
-    { is_win7_mbr,        "Windows 7" },
-    { is_rufus_mbr,       "Rufus" },
-    { is_syslinux_mbr,    "Syslinux" },
-    { is_reactos_mbr,     "ReactOS" },
-    { is_kolibrios_mbr,   "KolibriOS" },
-    { is_grub4dos_mbr,    "Grub4DOS" },
-    { is_grub2_mbr,       "Grub 2.0" },
-    { is_zero_mbr_not_including_disk_signature_or_copy_protect, "Zeroed" },
-};
-
-BOOL AnalyzeMBR(HANDLE hPhysicalDrive, const char *TargetName, BOOL bSilent)
-{
-    (void)bSilent;
-    if (!hPhysicalDrive || hPhysicalDrive == INVALID_HANDLE_VALUE)
-        return FALSE;
-
-    FAKE_FD fake_fd = { 0 };
-    FILE *fp = (FILE *)&fake_fd;
-    fake_fd._handle = hPhysicalDrive;
-    set_bytes_per_sector(SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512);
-
-    if (!is_br(fp)) {
-        uprintf("%s does not have a Boot Marker", TargetName ? TargetName : "Drive");
-        return FALSE;
-    }
-
-    for (int i = 0; i < (int)(sizeof(known_mbr)/sizeof(known_mbr[0])); i++) {
-        if (known_mbr[i].fn(fp)) {
-            uprintf("%s has a %s Master Boot Record",
-                    TargetName ? TargetName : "Drive", known_mbr[i].str);
-            return TRUE;
-        }
-    }
-
-    uprintf("%s has an unknown Master Boot Record", TargetName ? TargetName : "Drive");
-    return TRUE;
-}
-
-static const struct { int (*fn)(FILE *fp); const char *str; } known_pbr[] = {
-    { entire_fat_16_br_matches,     "FAT16 DOS" },
-    { entire_fat_16_fd_br_matches,  "FAT16 FreeDOS" },
-    { entire_fat_16_ros_br_matches, "FAT16 ReactOS" },
-    { entire_fat_32_br_matches,     "FAT32 DOS" },
-    { entire_fat_32_nt_br_matches,  "FAT32 NT" },
-    { entire_fat_32_fd_br_matches,  "FAT32 FreeDOS" },
-    { entire_fat_32_ros_br_matches, "FAT32 ReactOS" },
-    { entire_fat_32_kos_br_matches, "FAT32 KolibriOS" },
-};
-
-BOOL AnalyzePBR(HANDLE hLogicalVolume)
-{
-    if (!hLogicalVolume || hLogicalVolume == INVALID_HANDLE_VALUE)
-        return FALSE;
-
-    const char *pbr_name = "Partition Boot Record";
-    FAKE_FD fake_fd = { 0 };
-    FILE *fp = (FILE *)&fake_fd;
-    fake_fd._handle = hLogicalVolume;
-    set_bytes_per_sector(SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512);
-
-    if (!is_br(fp)) {
-        uprintf("Volume does not have an x86 %s", pbr_name);
-        return FALSE;
-    }
-
-    if (is_fat_16_br(fp) || is_fat_32_br(fp)) {
-        for (int i = 0; i < (int)(sizeof(known_pbr)/sizeof(known_pbr[0])); i++) {
-            if (known_pbr[i].fn(fp)) {
-                uprintf("Drive has a %s %s", known_pbr[i].str, pbr_name);
-                return TRUE;
-            }
-        }
-        uprintf("Volume has an unknown FAT16 or FAT32 %s", pbr_name);
-    } else {
-        uprintf("Volume has an unknown %s", pbr_name);
-    }
-    return TRUE;
-}
 BOOL MountVolume(char* dn, char* dg)
 {
     if (!dn || !dg)
