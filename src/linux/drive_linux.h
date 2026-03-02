@@ -94,4 +94,15 @@ BOOL uefi_ntfs_needs_extra_partition(int boot_type, int fs_type,
                                      int target_type,
                                      const RUFUS_IMG_REPORT *report);
 
+/* ---- Automount test injection ------------------------------------------- */
+
+#ifdef RUFUS_TEST
+/*
+ * Redirect the udev rule file written by SetAutoMount() to an arbitrary
+ * path.  Pass NULL to restore the default (/run/udev/rules.d/…).
+ * Only available in RUFUS_TEST builds.
+ */
+void automount_set_rule_file(const char *path);
+#endif
+
 #endif /* !_WIN32 */

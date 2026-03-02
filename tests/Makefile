@@ -565,6 +565,16 @@ CFLAGS_LINUX_test_mount_linux := \
 LDFLAGS_LINUX_test_mount_linux := -lblkid
 EXTRA_SRC_LINUX_test_mount_linux := $(MOUNT_LINUX_SRC) $(BLED_LIB)
 
+# automount_linux tests: SetAutoMount() / GetAutoMount() via udev rules
+CFLAGS_LINUX_test_automount_linux := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_automount_linux := -lblkid
+EXTRA_SRC_LINUX_test_automount_linux := $(MOUNT_LINUX_SRC) $(BLED_LIB)
+
 # localization_linux tests: apply_localization, reset_localization,
 #                           dispatch_loc_cmd (GTK widget refs all NULL — no display needed)
 LOC_LINUX_SRC := $(SRC_DIR)/linux/localization.c \

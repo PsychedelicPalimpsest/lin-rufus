@@ -30,7 +30,9 @@
 
 /* GUID table: define the GUID constants in this translation unit */
 #include "rufus.h"
-#include "drive.h"
+/* Explicitly reference the Windows drive.h so the include path ordering
+ * in tests (which puts common/ before windows/) doesn't shadow it. */
+#include "../windows/drive.h"
 #include "drive_linux.h"
 
 /* ms-sys headers for AnalyzeMBR / AnalyzePBR */
@@ -898,11 +900,98 @@ BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
 }
 
 /* -------------------------------------------------------------------------
- * Stubs for not-yet-implemented functions
+ * SetAutoMount / GetAutoMount — udev-rules-based automount inhibit
+ *
+ * When enable=FALSE, writes a udev rule that tells udisks2 not to
+ * automount any block device, then reloads the rules.  When enable=TRUE,
+ * the rule file is removed and rules are reloaded.
+ *
+ * The rule file path can be redirected in RUFUS_TEST builds (see below).
  * --------------------------------------------------------------------- */
 
-BOOL SetAutoMount(BOOL enable)                        { (void)enable; return FALSE; }
-BOOL GetAutoMount(BOOL* enabled)                      { (void)enabled; return FALSE; }
+/* Default udev rules directory.  Written to /run so it is ephemeral
+ * and survives only until the next reboot (or until Rufus removes it). */
+#define AUTOMOUNT_RULE_FILE_DEFAULT "/run/udev/rules.d/99-rufus-noauto.rules"
+
+/* In RUFUS_TEST builds the path is overridable so unit tests can work
+ * without root and without a live udev daemon. */
+#ifdef RUFUS_TEST
+static const char *automount_rule_file = NULL;   /* NULL → default */
+
+void automount_set_rule_file(const char *path)
+{
+    automount_rule_file = path;
+}
+
+static const char *get_rule_file(void)
+{
+    return automount_rule_file ? automount_rule_file : AUTOMOUNT_RULE_FILE_DEFAULT;
+}
+#else
+static const char *get_rule_file(void)
+{
+    return AUTOMOUNT_RULE_FILE_DEFAULT;
+}
+#endif /* RUFUS_TEST */
+
+/*
+ * SetAutoMount(FALSE) — inhibit automounting by writing a udev rule.
+ * SetAutoMount(TRUE)  — restore automounting by removing the rule.
+ *
+ * Returns TRUE on success, FALSE on failure (with errno set).
+ */
+BOOL SetAutoMount(BOOL enable)
+{
+    const char *rule = get_rule_file();
+
+    if (!enable) {
+        /* Create the inhibit rule */
+        FILE *fp = fopen(rule, "w");
+        if (!fp) {
+            uprintf_errno("SetAutoMount: cannot create '%s'", rule);
+            return FALSE;
+        }
+        /* Suppress udisks2 automount for all block devices.
+         * ENV{UDISKS_AUTO}="0" prevents udisks2 from automounting.
+         * ENV{UDISKS_IGNORE}="1" hides the device from udisks2 entirely. */
+        fprintf(fp,
+            "# Written by Rufus during a write operation — do not remove manually.\n"
+            "SUBSYSTEM==\"block\", ENV{UDISKS_AUTO}=\"0\", ENV{UDISKS_IGNORE}=\"1\"\n");
+        fclose(fp);
+    } else {
+        /* Remove the inhibit rule (ignore ENOENT — already gone is fine) */
+        if (remove(rule) != 0 && errno != ENOENT) {
+            uprintf_errno("SetAutoMount: cannot remove '%s'", rule);
+            return FALSE;
+        }
+    }
+
+#ifndef RUFUS_TEST
+    /* Ask udev to reload its rules so the change takes effect immediately. */
+    int rc = system("udevadm control --reload-rules 2>/dev/null");
+    if (rc != 0)
+        uprintf("SetAutoMount: udevadm reload returned %d (non-fatal)", rc);
+#endif
+
+    return TRUE;
+}
+
+/*
+ * GetAutoMount — query whether automounting is currently enabled.
+ *
+ * Returns FALSE (sets *enabled=FALSE) when the Rufus inhibit rule exists,
+ * TRUE (sets *enabled=TRUE) otherwise.
+ */
+BOOL GetAutoMount(BOOL *enabled)
+{
+    if (enabled == NULL)
+        return FALSE;
+
+    struct stat st;
+    *enabled = (stat(get_rule_file(), &st) != 0);
+    return TRUE;
+}
+
 BOOL IsVdsAvailable(BOOL bSilent)                     { (void)bSilent; return FALSE; }
 
 /* -------------------------------------------------------------------------
