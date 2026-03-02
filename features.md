@@ -73,13 +73,19 @@ the host system stays clean:
 
 ```
 ./run_tests.sh --container   # builds rufus-test-env image (cached), then runs
-                             # works with both docker and podman
+                             # works with docker, root podman, and rootless podman
                              # mirrors the GitHub CI environment exactly
 ```
 
 The container image is defined in `tests/Dockerfile` (Ubuntu 22.04 + all build
 and test dependencies pre-baked via `tests/install-deps.sh`).  After the first
 build, repeated runs skip the apt-install layer and start immediately.
+
+**Rootless podman** is handled automatically: the image is built with plain
+`podman build`, then `podman image scp` copies it into root's podman store, and
+the tests run under `sudo podman run --privileged` so that `/dev/loop*` devices
+work.  The copy is skipped on subsequent runs when the image digest already
+matches in both stores.
 
 To run them directly (if you are already root or in a CI environment that
 provides `/dev/loop*`):
@@ -97,7 +103,8 @@ The container approach is unified with the GitHub CI:
   then `./run_tests.sh --container`, exercising the same code path as local runs.
 
 The `CONTAINER_RUNTIME` environment variable selects `docker` or `podman`
-(default: auto-detected, docker preferred).
+(default: auto-detected, docker preferred).  When rootless podman is detected
+automatically the run step is transparently escalated via `sudo podman`.
 
 ---
 
@@ -194,9 +201,10 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `ExtractISO()` | ✅ | Full POSIX implementation using system libcdio; ISO9660 + UDF; scan + extract modes; label, block count, EFI detection; 6 tests pass |
+| `ExtractISO()` | ✅ | Full POSIX implementation using bundled libcdio; ISO9660 + UDF; scan + extract modes; label, block count, EFI detection; 6 tests pass |
 | `ExtractISOFile()` | ✅ | Single-file extraction from ISO; UDF-first with ISO9660 fallback; 5 tests pass |
 | `ReadISOFileToBuffer()` | ✅ | Reads file from ISO into malloc'd buffer; UDF-first with ISO9660 fallback; 6 tests pass |
+| `is_in_md5sum()` / `md5sum_totalbytes` | ✅ | Tracks bytes of md5sum-listed files during extraction; only accumulates when validating an existing md5sum.txt (not when creating); 3 tests pass |
 | `GetGrubVersion()` / `GetGrubFs()` / `GetEfiBootInfo()` | ✅ | Pure buffer scans for version strings and filesystem modules; 11 tests pass |
 | `HasEfiImgBootLoaders()` | ✅ | Reads `img_report.efi_img_path`; 2 tests pass |
 | `ImageScanThread()` | ✅ | `src/linux/image_scan.c`: calls `ExtractISO` (scan mode) + `IsBootableImage`; posts `UM_IMAGE_SCANNED`; wired from `on_select_clicked()`; 7 tests / 14 assertions pass |
@@ -501,7 +509,7 @@ This is the most structurally significant porting gap.
 7. ~~**Format thread** (`format.c`)~~ ✅ **DONE** — Full FormatThread workflow implemented: ClearMBRGPT, CreatePartition, FormatPartition, WriteMBR, WritePBR; FAT32 + ext2/3; MBR + GPT; image write + zero-drive modes; Syslinux installation wired (BT_SYSLINUX_V4/V6 and BT_IMAGE+sl_version); 115 tests pass
 8. ~~**FAT32 formatter** (`format_fat32.c`)~~ ✅ **DONE** — 16 tests pass
 9. ~~**ext formatter** (`format_ext.c`)~~ ✅ **DONE** — 9 tests pass
-10. ~~**ISO extraction** (`iso.c`)~~ ✅ **DONE** — full POSIX implementation using libcdio; 12345 tests pass
+10. ~~**ISO extraction** (`iso.c`)~~ ✅ **DONE** — full POSIX implementation using libcdio; 12367 tests pass (includes md5sum tracking tests); fixed bundled libcdio `DO_NOT_WANT_COMPATIBILITY` struct-layout mismatch and `md5sum_totalbytes` reset logic
 11. ~~**Hashing** (`hash.c`)~~ ✅ **DONE** — all hash algorithms + HashThread/IndividualHashThread; hash results dialog via `UM_HASH_COMPLETED` → GTK GtkGrid dialog; 107 tests pass; hash button (`rw.hash_btn`) wired to `on_hash_clicked` → `CreateThread(HashThread)`; `on_log_clicked` missing header fixed; `on_toggle_dark_mode` forward declaration added
 11. ~~**Networking** (`net.c`)~~ ✅ **DONE** — `IsDownloadable` + `DownloadToFileOrBufferEx` implemented with libcurl; 45 tests pass; `configure.ac` updated with `PKG_CHECK_MODULES` for libcurl; stubs remain for `CheckForUpdates`/`DownloadISO`/`DownloadSignedFileThreaded`
 12. ~~**PKI / signatures** (`pki.c`)~~ ✅ **DONE** — OpenSSL EVP API for `ValidateOpensslSignature`; mmap PE parsing for `GetSignatureName`/`GetSignatureTimeStamp`/`GetIssuerCertificateInfo`; 21 tests pass

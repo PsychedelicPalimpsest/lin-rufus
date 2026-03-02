@@ -644,6 +644,138 @@ TEST(readfat_outofrange_null_iso_fails)
 }
 
 /* ================================================================
+ * is_in_md5sum / md5sum_totalbytes tests
+ *
+ * Create an ISO containing a data file and a matching md5sum.txt.
+ * Verify that ExtractISO correctly accumulates md5sum_totalbytes for
+ * every file that appears in md5sum.txt.
+ * ================================================================ */
+
+#define TEST_MD5_ISO_PATH    "/tmp/test_rufus_md5_iso.iso"
+#define TEST_MD5_EXTRACT_DIR "/tmp/test_rufus_md5_extract"
+
+static int md5_iso_available = 0;
+
+static void setup_md5_iso(void)
+{
+    /*
+     * Build an ISO containing:
+     *   hello.txt   (14 bytes: "Hello, world!\n")
+     *   listed.bin  (8 bytes:  "LISTED!!")       — listed in md5sum.txt
+     *   unlisted.bin(6 bytes:  "NOPE!!")         — NOT listed in md5sum.txt
+     *   md5sum.txt  — lists hello.txt and listed.bin only
+     *
+     * md5sum.txt format uses the standard "hash  ./path" layout.
+     * The hash values are intentionally dummy (the test only verifies
+     * that md5sum_totalbytes accumulates file sizes for listed files).
+     */
+    const char *script =
+        "python3 -c \""
+        "import pycdlib, io\n"
+        "iso = pycdlib.PyCdlib()\n"
+        "iso.new(interchange_level=1, joliet=3, rock_ridge='1.09', vol_ident='MD5TEST')\n"
+        "c1 = b'Hello, world!\\n'\n"
+        "iso.add_fp(io.BytesIO(c1), len(c1), '/HELLO.TXT;1', joliet_path='/hello.txt', rr_name='hello.txt')\n"
+        "c2 = b'LISTED!!'\n"
+        "iso.add_fp(io.BytesIO(c2), len(c2), '/LISTED.BIN;1', joliet_path='/listed.bin', rr_name='listed.bin')\n"
+        "c3 = b'NOPE!!'\n"
+        "iso.add_fp(io.BytesIO(c3), len(c3), '/UNLISTED.BIN;1', joliet_path='/unlisted.bin', rr_name='unlisted.bin')\n"
+        "# md5sum.txt lists hello.txt and listed.bin but NOT unlisted.bin\n"
+        "md5 = b'aabbcc0000000000000000000000000000  ./hello.txt\\n'\n"
+        "md5 += b'ddeeff0000000000000000000000000000  ./listed.bin\\n'\n"
+        "iso.add_fp(io.BytesIO(md5), len(md5), '/MD5SUM.TXT;1', joliet_path='/md5sum.txt', rr_name='md5sum.txt')\n"
+        "iso.write('" TEST_MD5_ISO_PATH "')\n"
+        "iso.close()\n"
+        "\"";
+
+    struct stat st;
+    system(script);
+    if (stat(TEST_MD5_ISO_PATH, &st) == 0 && st.st_size > 0)
+        md5_iso_available = 1;
+}
+
+static void cleanup_md5_iso(void)
+{
+    unlink(TEST_MD5_ISO_PATH);
+    system("rm -rf " TEST_MD5_EXTRACT_DIR);
+}
+
+/* md5sum_totalbytes should equal the sum of listed files (14 + 8 = 22) */
+TEST(md5sum_totalbytes_counts_listed_files)
+{
+    if (!md5_iso_available) { printf("  (skipped: no md5 test ISO)\n"); return; }
+    system("rm -rf " TEST_MD5_EXTRACT_DIR);
+    mkdir(TEST_MD5_EXTRACT_DIR, 0755);
+
+    memset(&img_report, 0, sizeof(img_report));
+    md5sum_totalbytes = 0;
+    enable_iso = TRUE;
+    validate_md5sum = TRUE;
+
+    /* Scan phase sets img_report.has_md5sum and total_blocks */
+    BOOL r = ExtractISO(TEST_MD5_ISO_PATH, TEST_MD5_EXTRACT_DIR, TRUE);
+    CHECK(r == TRUE);
+    CHECK(img_report.has_md5sum == 1);
+
+    /* Extract phase uses is_in_md5sum to accumulate md5sum_totalbytes */
+    r = ExtractISO(TEST_MD5_ISO_PATH, TEST_MD5_EXTRACT_DIR, FALSE);
+    CHECK(r == TRUE);
+
+    /* hello.txt (14) + listed.bin (8) = 22, unlisted.bin excluded */
+    CHECK_INT_EQ((int)md5sum_totalbytes, 22);
+
+    validate_md5sum = FALSE;
+    system("rm -rf " TEST_MD5_EXTRACT_DIR);
+}
+
+/* When validate_md5sum is FALSE, md5sum_totalbytes stays 0 */
+TEST(md5sum_totalbytes_zero_when_disabled)
+{
+    if (!md5_iso_available) { printf("  (skipped: no md5 test ISO)\n"); return; }
+    system("rm -rf " TEST_MD5_EXTRACT_DIR);
+    mkdir(TEST_MD5_EXTRACT_DIR, 0755);
+
+    memset(&img_report, 0, sizeof(img_report));
+    md5sum_totalbytes = 0;
+    enable_iso = TRUE;
+    validate_md5sum = FALSE;
+
+    BOOL r = ExtractISO(TEST_MD5_ISO_PATH, TEST_MD5_EXTRACT_DIR, TRUE);
+    CHECK(r == TRUE);
+    r = ExtractISO(TEST_MD5_ISO_PATH, TEST_MD5_EXTRACT_DIR, FALSE);
+    CHECK(r == TRUE);
+
+    CHECK_INT_EQ((int)md5sum_totalbytes, 0);
+
+    system("rm -rf " TEST_MD5_EXTRACT_DIR);
+}
+
+/* When no md5sum.txt exists in the ISO, md5sum_totalbytes stays 0 */
+TEST(md5sum_totalbytes_zero_when_no_md5sum_file)
+{
+    if (!test_iso_available) { printf("  (skipped: no test ISO)\n"); return; }
+    system("rm -rf " TEST_EXTRACT_DIR);
+    mkdir(TEST_EXTRACT_DIR, 0755);
+
+    memset(&img_report, 0, sizeof(img_report));
+    md5sum_totalbytes = 0;
+    enable_iso = TRUE;
+    validate_md5sum = TRUE;
+
+    BOOL r = ExtractISO(TEST_ISO_PATH, TEST_EXTRACT_DIR, TRUE);
+    CHECK(r == TRUE);
+    CHECK(img_report.has_md5sum == 0);  /* no md5sum.txt in test ISO */
+
+    r = ExtractISO(TEST_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    CHECK(r == TRUE);
+
+    CHECK_INT_EQ((int)md5sum_totalbytes, 0);
+
+    validate_md5sum = FALSE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
+
+/* ================================================================
  * DumpFatDir tests
  *
  * Create a FAT filesystem image with a few files and one sub-directory,
@@ -981,6 +1113,10 @@ int main(void)
     if (!fat_iso_available)
         printf("  NOTE: FAT-in-ISO not available (mkfs.fat/mcopy/genisoimage missing?); DumpFatDir tests skipped\n\n");
 
+    setup_md5_iso();
+    if (!md5_iso_available)
+        printf("  NOTE: md5sum test ISO not available (pycdlib not installed?); md5sum tracking tests skipped\n\n");
+
     StrArrayCreate(&modified_files, 8);
 
     printf("  GetGrubVersion\n");
@@ -1049,9 +1185,15 @@ int main(void)
     RUN(dumpfatdir_skips_existing_file);
     RUN(dumpfatdir_filenames_are_valid_utf8);
 
+    printf("\n  is_in_md5sum / md5sum_totalbytes\n");
+    RUN(md5sum_totalbytes_zero_when_no_md5sum_file);
+    RUN(md5sum_totalbytes_zero_when_disabled);
+    RUN(md5sum_totalbytes_counts_listed_files);
+
     StrArrayDestroy(&modified_files);
     cleanup_test_iso();
     cleanup_fat_iso();
+    cleanup_md5_iso();
 
     TEST_RESULTS();
 }

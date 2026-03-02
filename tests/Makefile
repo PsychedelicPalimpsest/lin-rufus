@@ -352,8 +352,9 @@ ISO_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
                  $(COMMON)/iso_config.c
 CFLAGS_LINUX_test_iso_linux := \
 	-DRUFUS_TEST \
+	-DDO_NOT_WANT_COMPATIBILITY \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
+	-I$(SRC_DIR) -I$(SRC_DIR)/libcdio -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_iso_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a
@@ -374,7 +375,7 @@ ISO_SAVE_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
 CFLAGS_LINUX_test_iso_save_linux := \
 	-DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
+	-I$(SRC_DIR) -I$(SRC_DIR)/libcdio -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_iso_save_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a
@@ -845,7 +846,7 @@ IMAGE_SCAN_LINUX_SRC := \
 CFLAGS_LINUX_test_image_scan_linux := \
 	-D_RUFUS -DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
+	-I$(SRC_DIR) -I$(SRC_DIR)/libcdio -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-I$(SRC_DIR)/bled -I$(SRC_DIR)/wimlib -I$(COMMON) \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \

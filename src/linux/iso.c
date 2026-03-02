@@ -189,6 +189,70 @@ static BOOL write_all(int fd, const void* buf, size_t len)
 }
 
 /* ------------------------------------------------------------------ */
+/* MD5 sum tracking                                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Returns TRUE if the file at 'path' (absolute path under psz_extract_dir)
+ * is listed in the md5sum.txt that was loaded during the scan phase.
+ * Mirrors the Windows implementation but works with POSIX paths rather
+ * than "D:/..." drive-letter paths.
+ * Side effect: updates md5sum_pos so sequential calls run in O(n).
+ */
+static BOOL is_in_md5sum(const char *path)
+{
+	char search[MAX_PATH + 3];
+	const char *rel;
+	char *p, *pos = md5sum_pos;
+	size_t slen;
+	BOOL found = FALSE;
+
+	/* If we are creating the md5sum file from scratch, every file is "in" it */
+	if (fd_md5sum != NULL)
+		return TRUE;
+
+	/* If no md5sum was loaded, nothing is in it */
+	if (md5sum_size == 0 || md5sum_data == NULL)
+		return FALSE;
+
+	/* Get relative path by stripping the extraction-dir prefix */
+	rel = (psz_extract_dir &&
+	       strncmp(path, psz_extract_dir, strlen(psz_extract_dir)) == 0)
+	      ? path + strlen(psz_extract_dir)
+	      : path;
+
+	/* Build search string: " ." + "/relative/path" == " ./relative/path" */
+	if (snprintf(search, sizeof(search), " .%s", rel) < 0)
+		return FALSE;
+	slen = strlen(search);
+
+	/* Search forward from the current position */
+	p = strstr(pos, search);
+	while (p != NULL && p[slen] != '\n' && p[slen] != '\r' && p[slen] != '\0') {
+		pos = p + slen;
+		p = strstr(pos, search);
+	}
+	found = (p != NULL);
+
+	/* If not found in the remainder, wrap around from the beginning up to pos */
+	if (!found && pos != md5sum_data) {
+		char saved = *pos;
+		*pos = '\0';
+		p = strstr(md5sum_data, search);
+		while (p != NULL && p[slen] != '\n' && p[slen] != '\r' && p[slen] != '\0') {
+			char *npos = p + slen;
+			p = strstr(npos, search);
+		}
+		*pos = saved;
+		found = (p != NULL);
+	}
+
+	if (found)
+		md5sum_pos = p + slen;
+	return found;
+}
+
+/* ------------------------------------------------------------------ */
 /* Config-file patching (post-extraction)                              */
 /* ------------------------------------------------------------------ */
 
@@ -294,6 +358,8 @@ static int udf_extract_files(udf_t* p_udf, udf_dirent_t* p_udf_dirent,
 				continue;
 			}
 			uprintf("Extracting: %s", rel);
+			if (validate_md5sum && md5sum_data != NULL && is_in_md5sum(psz_fullpath))
+				md5sum_totalbytes += (uint64_t)udf_get_file_length(p_udf_dirent);
 			psz_sanpath = sanitize_filename(psz_fullpath, &is_identical);
 			if (!psz_sanpath) goto out;
 			/* Ensure parent directory exists */
@@ -416,6 +482,8 @@ static int iso_extract_files(iso9660_t* p_iso, const char* psz_path)
 			}
 
 			uprintf("Extracting: %s", psz_iso_base);
+			if (validate_md5sum && md5sum_data != NULL && is_in_md5sum(psz_fullpath))
+				md5sum_totalbytes += (uint64_t)p_statbuf->total_size;
 			psz_sanpath = sanitize_filename(psz_fullpath, &is_identical);
 			if (!psz_sanpath) goto out;
 
@@ -718,8 +786,8 @@ BOOL ExtractISO(const char* src_iso, const char* dest_dir, BOOL scan)
 		iso_blocking_status = 0;
 		symlinked_syslinux[0] = 0;
 		StrArrayClear(&modified_files);
+		md5sum_totalbytes = 0;
 		if (validate_md5sum) {
-			md5sum_totalbytes = 0;
 			if (img_report.has_md5sum != 1) {
 				char path[MAX_PATH];
 				snprintf(path, sizeof(path), "%s/%s", dest_dir, md5sum_name[0]);
