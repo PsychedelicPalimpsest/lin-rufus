@@ -111,8 +111,21 @@ size_t format_img_info(const RUFUS_IMG_REPORT *r, char *buf, size_t sz)
 	}
 
 	/* ---- WinPE ---- */
-	if (HAS_WINPE(img))
-		APPEND("\nWinPE: yes");
+	if (HAS_WINPE(img)) {
+		const char *pe_arch;
+		if ((img.winpe & WINPE_I386) == WINPE_I386)
+			pe_arch = "i386";
+		else if ((img.winpe & WINPE_AMD64) == WINPE_AMD64)
+			pe_arch = "x86-64";
+		else if ((img.winpe & WINPE_MININT) == WINPE_MININT)
+			pe_arch = "i386 (MININT)";
+		else
+			pe_arch = "unknown";
+		if (img.uses_minint)
+			APPEND("\nWinPE: %s (with /minint)", pe_arch);
+		else
+			APPEND("\nWinPE: %s", pe_arch);
+	}
 
 	/* ---- EFI / architecture ---- */
 	if (IS_EFI_BOOTABLE(img)) {

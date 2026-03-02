@@ -22,8 +22,15 @@
  * 16. xz_compression                 — compression_type=XZ → "Compression: XZ"
  * 17. no_size_when_zero              — image_size=0 → no "Size:" line
  * 18. grub2_version_included         — grub2="2.12" → "GRUB: 2.12"
- * 19. winpe_flag_shown               — winpe=WINPE_AMD64 → "WinPE: yes"
+ * 19. winpe_flag_shown               — winpe=WINPE_AMD64 → "WinPE: x86-64"
  * 20. buf_truncation_safe            — tiny buf=16 → no crash, NUL-terminated
+ * 21. winpe_i386_architecture        — winpe=WINPE_I386  → "WinPE: i386"
+ * 22. winpe_amd64_architecture       — winpe=WINPE_AMD64 → "WinPE: x86-64"
+ * 23. winpe_minint_architecture      — winpe=WINPE_MININT → "WinPE: i386 (MININT)"
+ * 24. winpe_uses_minint_shown        — WINPE_I386 + uses_minint=TRUE → "with /minint"
+ * 25. winpe_no_minint_suffix         — WINPE_AMD64 + uses_minint=FALSE → no "/minint" in output
+ * 26. winpe_unknown_bitmask_fallback — some non-zero winpe bits that don't match any
+ *                                      named arch → "WinPE: unknown" fallback
  */
 #ifndef __linux__
 #include <stdio.h>
@@ -234,7 +241,66 @@ TEST(winpe_flag_shown)
     r.winpe = WINPE_AMD64;
     char buf[BUF_SZ];
     format_img_info(&r, buf, sizeof(buf));
-    CHECK_MSG(has_line(buf, "WinPE: yes"), "WinPE flag must appear");
+    CHECK_MSG(has_line(buf, "WinPE: x86-64"), "WINPE_AMD64 must produce 'WinPE: x86-64'");
+}
+
+TEST(winpe_i386_architecture)
+{
+    RUFUS_IMG_REPORT r = make_empty();
+    r.winpe = WINPE_I386;
+    char buf[BUF_SZ];
+    format_img_info(&r, buf, sizeof(buf));
+    CHECK_MSG(has_line(buf, "WinPE: i386"), "WINPE_I386 must produce 'WinPE: i386'");
+}
+
+TEST(winpe_amd64_architecture)
+{
+    RUFUS_IMG_REPORT r = make_empty();
+    r.winpe = WINPE_AMD64;
+    char buf[BUF_SZ];
+    format_img_info(&r, buf, sizeof(buf));
+    CHECK_MSG(has_line(buf, "WinPE: x86-64"), "WINPE_AMD64 must produce 'WinPE: x86-64'");
+}
+
+TEST(winpe_minint_architecture)
+{
+    RUFUS_IMG_REPORT r = make_empty();
+    r.winpe = WINPE_MININT;
+    char buf[BUF_SZ];
+    format_img_info(&r, buf, sizeof(buf));
+    CHECK_MSG(has_line(buf, "WinPE: i386 (MININT)"), "WINPE_MININT must produce 'WinPE: i386 (MININT)'");
+}
+
+TEST(winpe_uses_minint_shown)
+{
+    RUFUS_IMG_REPORT r = make_empty();
+    r.winpe = WINPE_I386;
+    r.uses_minint = TRUE;
+    char buf[BUF_SZ];
+    format_img_info(&r, buf, sizeof(buf));
+    CHECK_MSG(has_line(buf, "WinPE: i386"), "uses_minint must still show architecture");
+    CHECK_MSG(has_line(buf, "with /minint"), "uses_minint must show 'with /minint'");
+}
+
+TEST(winpe_no_minint_suffix)
+{
+    RUFUS_IMG_REPORT r = make_empty();
+    r.winpe = WINPE_AMD64;
+    r.uses_minint = FALSE;
+    char buf[BUF_SZ];
+    format_img_info(&r, buf, sizeof(buf));
+    CHECK_MSG(!has_line(buf, "/minint"), "uses_minint=FALSE must not produce /minint suffix");
+}
+
+TEST(winpe_unknown_bitmask_fallback)
+{
+    /* Set a single bit that does not complete any named arch pattern */
+    RUFUS_IMG_REPORT r = make_empty();
+    r.winpe = 0x01;   /* bit 0 only: not enough to satisfy WINPE_I386 = 0x0007 */
+    char buf[BUF_SZ];
+    format_img_info(&r, buf, sizeof(buf));
+    /* HAS_WINPE is false for 0x01, so no WinPE line should appear */
+    CHECK_MSG(!has_line(buf, "WinPE:"), "partial winpe bits must NOT produce a WinPE line");
 }
 
 TEST(buf_truncation_safe)
@@ -271,6 +337,12 @@ int main(void)
     RUN(no_size_when_zero);
     RUN(grub2_version_included);
     RUN(winpe_flag_shown);
+    RUN(winpe_i386_architecture);
+    RUN(winpe_amd64_architecture);
+    RUN(winpe_minint_architecture);
+    RUN(winpe_uses_minint_shown);
+    RUN(winpe_no_minint_suffix);
+    RUN(winpe_unknown_bitmask_fallback);
     RUN(buf_truncation_safe);
 
     TEST_RESULTS();

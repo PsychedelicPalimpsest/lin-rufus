@@ -820,6 +820,32 @@ out:
 		StrArrayDestroy(&config_path);
 		StrArrayDestroy(&isolinux_path);
 		StrArrayDestroy(&grub_filesystems);
+
+		/* For WinPE 1.x images, check txtsetup.sif for /minint in OsLoadOptions.
+		 * This flag controls whether the disk ID byte in the MBR should be 0x80
+		 * or 0x81, so it must be detected during scan. */
+		if (HAS_WINPE(img_report)) {
+			static const char *basedir[] = { "i386", "amd64", "minint" };
+			int pe_idx = ((img_report.winpe & WINPE_I386) == WINPE_I386)   ? 0 :
+			             ((img_report.winpe & WINPE_AMD64) == WINPE_AMD64)  ? 1 : 2;
+			char pe_path[64];
+			uint8_t *pe_buf = NULL;
+			snprintf(pe_path, sizeof(pe_path), "/%s/txtsetup.sif", basedir[pe_idx]);
+			uint32_t pe_size = ReadISOFileToBuffer(src_iso, pe_path, &pe_buf);
+			if (pe_size > 0 && pe_buf != NULL) {
+				char *osl = get_token_data_buffer("OsLoadOptions", 1,
+				                                  (const char *)pe_buf, pe_size);
+				if (osl != NULL) {
+					/* Lowercase for case-insensitive match */
+					for (size_t si = 0; si < strlen(osl); si++)
+						osl[si] = (char)tolower((unsigned char)osl[si]);
+					uprintf("  Checking %s: OsLoadOptions = %s", pe_path, osl);
+					img_report.uses_minint = (strstr(osl, "/minint") != NULL);
+					safe_free(osl);
+				}
+				safe_free(pe_buf);
+			}
+		}
 	} else {
 		if (fd_md5sum) { fclose(fd_md5sum); fd_md5sum = NULL; }
 		safe_free(md5sum_data);
