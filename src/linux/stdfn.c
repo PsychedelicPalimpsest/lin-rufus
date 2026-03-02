@@ -22,14 +22,32 @@
 #define _GNU_SOURCE
 #endif
 #include "rufus.h"
+#include "version.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <sched.h>
 #include <fontconfig/fontconfig.h>
 #include "freedos_data.h"
+
+/*
+ * Version marker embedded in this binary so that GetExecutableVersion()
+ * can find the build version by scanning the file's raw bytes.
+ *
+ * Format: "RUFUS:VER:MAJOR.MINOR.PATCH\n"
+ *
+ * The string is split ("RUFUS" ":VER:") so that the literal search key
+ * used inside GetExecutableVersion() does not match the marker itself —
+ * only the contiguous string in .rodata will match.
+ *
+ * __attribute__((used)) prevents the compiler from discarding the
+ * variable when no C code references it by name.
+ */
+static const char __attribute__((used))
+    _rufus_ver_marker[] = "RUFUS" ":VER:" RUFUS_VERSION_STR "\n";
 
 /* Emulates Windows SetLastError / GetLastError */
 DWORD _win_last_error = 0;
@@ -48,7 +66,75 @@ __attribute__((weak)) const fd_resource_t fd_resources[FD_RESOURCES_COUNT] =
 /* Misc stubs */
 BOOL    isSMode(void)                                             { return FALSE; }
 void    GetWindowsVersion(windows_version_t* wv)                  { if(wv) memset(wv,0,sizeof(*wv)); }
-version_t* GetExecutableVersion(const char* path)                 { (void)path; return NULL; }
+
+/*
+ * GetExecutableVersion — scan a binary for the embedded RUFUS:VER: marker
+ * and return the parsed version, or NULL if not found / unparseable.
+ *
+ * path == NULL → read /proc/self/exe (the running binary).
+ * path != NULL → read the specified file.
+ *
+ * The function reads the file in 4 KiB chunks and handles the case where
+ * the marker straddles a chunk boundary by carrying an overlap buffer.
+ *
+ * Returns a pointer to a static version_t on success, NULL on any error.
+ * Not thread-safe (static return value).
+ */
+version_t* GetExecutableVersion(const char* path)
+{
+    static version_t ver;
+    /* Split key so this function's .rodata literal does not self-match */
+    static const char prefix[] = "RUFUS" ":VER:";
+    const size_t prefix_len = sizeof(prefix) - 1;   /* 10 */
+    /* Overlap must cover at least (prefix_len - 1) bytes from the previous chunk */
+    enum { CHUNK = 4096, OVERLAP = 16 };
+
+    const char *scan_path = (path != NULL) ? path : "/proc/self/exe";
+    int fd = open(scan_path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return NULL;
+
+    char buf[CHUNK + OVERLAP];
+    size_t carry = 0;       /* bytes retained from previous chunk */
+    BOOL found = FALSE;
+
+    memset(&ver, 0, sizeof(ver));
+
+    while (!found) {
+        ssize_t nr = read(fd, buf + carry, CHUNK);
+        if (nr < 0) break;
+        size_t avail = carry + (size_t)nr;
+        if (avail == 0) break;
+
+        /* Search for the prefix in the current window */
+        for (size_t i = 0; i + prefix_len <= avail; i++) {
+            if (memcmp(buf + i, prefix, prefix_len) != 0)
+                continue;
+            /* Prefix found — try to parse MAJOR.MINOR.MICRO */
+            const char *ver_str = buf + i + prefix_len;
+            unsigned maj = 0, min = 0, mic = 0;
+            int n = 0;
+            /* sscanf needs a NUL-terminated string; safe because buf has room */
+            if (sscanf(ver_str, "%u.%u.%u%n", &maj, &min, &mic, &n) == 3 && n > 0) {
+                ver.Major = maj;
+                ver.Minor = min;
+                ver.Micro = mic;
+                ver.Nano  = 0;
+                found = TRUE;
+            }
+            break; /* only inspect the first occurrence of the prefix */
+        }
+
+        if (nr == 0) break; /* EOF */
+
+        /* Keep the last (prefix_len - 1) bytes as carry for the next chunk */
+        carry = (avail >= prefix_len - 1) ? (prefix_len - 1) : avail;
+        memmove(buf, buf + avail - carry, carry);
+    }
+
+    close(fd);
+    return found ? &ver : NULL;
+}
 
 /*
  * FileIO — read, write, or append a whole file using standard POSIX I/O.

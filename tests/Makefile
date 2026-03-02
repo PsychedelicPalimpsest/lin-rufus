@@ -66,6 +66,14 @@ CFLAGS_LINUX_test_stdfn  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux 
 EXTRA_SRC_LINUX_test_stdfn := $(STDFN_SRC)
 LDFLAGS_LINUX_test_stdfn := $(FONTCONFIG_LIBS)
 
+# exe_version_linux tests: GetExecutableVersion() — ELF version-marker scanner
+# Links stdfn.c so that the test binary itself contains the RUFUS:VER: marker,
+# enabling the NULL-path round-trip tests.
+CFLAGS_LINUX_test_exe_version_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                         -Wno-implicit-function-declaration $(FONTCONFIG_CFLAGS)
+EXTRA_SRC_LINUX_test_exe_version_linux := $(STDFN_SRC)
+LDFLAGS_LINUX_test_exe_version_linux := $(FONTCONFIG_LIBS)
+
 # dev_linux tests: device enumeration via fake sysfs
 DEV_LINUX_SRC := $(SRC_DIR)/linux/dev.c $(SRC_DIR)/linux/stdfn.c
 CFLAGS_LINUX_test_dev_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \

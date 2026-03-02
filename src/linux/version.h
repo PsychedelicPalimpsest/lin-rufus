@@ -22,3 +22,16 @@
 #define RUFUS_LINUX_VERSION_MAJOR 4
 #define RUFUS_LINUX_VERSION_MINOR 13
 #define RUFUS_LINUX_VERSION_PATCH 0
+
+/* Stringify helpers for RUFUS_VERSION_STR */
+#define _RUFUS_STR(x)  #x
+#define _RUFUS_XSTR(x) _RUFUS_STR(x)
+
+/*
+ * RUFUS_VERSION_STR — compile-time version string "MAJOR.MINOR.PATCH",
+ * e.g. "4.13.0".  Used to embed the version marker in the binary.
+ */
+#define RUFUS_VERSION_STR \
+    _RUFUS_XSTR(RUFUS_LINUX_VERSION_MAJOR) "." \
+    _RUFUS_XSTR(RUFUS_LINUX_VERSION_MINOR) "." \
+    _RUFUS_XSTR(RUFUS_LINUX_VERSION_PATCH)

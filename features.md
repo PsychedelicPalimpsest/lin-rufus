@@ -112,7 +112,7 @@ The `CONTAINER_RUNTIME` environment variable selects `docker` or `podman`
 | Test system (`tests/`, `run_tests.sh`) | ✅ | Runs native + Wine + privileged container (root tests) |
 | GCC 15 compound-literal regression fix in `cregex_compile.c` | ✅ | Static node lifetimes replaced with local vars |
 | GTK3 UI backend (`-DUSE_GTK`) | ✅ | Window builds and launches |
-| Non-GTK console fallback (`src/linux/rufus.c main()`) | 🔧 | Prints error and exits; no real CLI yet |
+| Non-GTK console fallback (`src/linux/rufus.c main()`) | ✅ | Full CLI mode via `cli.c`; `cli_parse_args` + `cli_run`; all `--device`, `--image`, `--fs`, etc. flags; 64 tests pass (see item 46) |
 
 ---
 
@@ -269,7 +269,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `SetPrivilege()` | 🚫 | Windows token privilege — no Linux equivalent |
 | `SetThreadAffinity()` | ✅ | Uses `sched_getaffinity` to get available CPUs; spreads across threads with disjoint bitmasks; `SetThreadAffinityMask` uses `pthread_setaffinity_np`; 5 tests pass |
 | `GetWindowsVersion()` | 🚫 | N/A; return zeroed struct (done) |
-| `GetExecutableVersion()` | 🟡 | Read `ELF` / PE version; stub returns NULL (no PE version resources in ELF); low priority |
+| `GetExecutableVersion()` | ✅ | `"RUFUS:VER:MAJOR.MINOR.PATCH\n"` marker embedded in .rodata; scanner in `linux/stdfn.c` reads `/proc/self/exe` (NULL) or any path; 20 tests pass |
 | `IsFontAvailable()` | ✅ | Uses fontconfig `FcFontMatch` + family name substring comparison; 3 tests pass |
 | `ToLocaleName()` | ✅ | Returns BCP-47 locale from `LANG` env var (e.g. `en_US.UTF-8` → `en-US`); falls back to `en-US` for C/POSIX; 5 tests pass |
 | `IsCurrentProcessElevated()` | ✅ | Returns `geteuid() == 0` |
@@ -546,7 +546,7 @@ This is the most structurally significant porting gap.
 47. ~~**NTFS formatter**~~ ✅ **DONE** — `FormatPartition()` routes to `FormatNTFS()` via `mkntfs` (ntfs-3g); `format_ntfs_build_cmd()` builds command with `-Q`/`-F`/`-c`/`-L` flags; runtime tool detection via `access()`; `populate_fs_combo()` shows NTFS when `mkntfs` present; 60 tests pass
 48. ~~**exFAT formatter**~~ ✅ **DONE** — `FormatPartition()` routes to `FormatExFAT()` via `mkfs.exfat`/`mkexfatfs`; `format_exfat_build_cmd()` builds command; runtime detection; `populate_fs_combo()` shows exFAT when tool present; cluster-size + label passthrough wired; 60 tests pass (exFAT skipped when tool absent)
 49. ~~**`OpticalDiscSaveImage()` / `IsoSaveImageThread()`**~~ ✅ **DONE** — `iso_save_run_sync()` is synchronous testable core; reads raw sectors from source device/file and writes to destination ISO with buffer-size proportional to disc size (8–32 MiB); progress via `UpdateProgressWithInfo`; `OpticalDiscSaveImageThread()` wraps in a pthread; `OpticalDiscSaveImage()` uses `GetOpticalMedia()`, `FileDialog()`, `EnableControls()`; `save_btn` wired in GTK UI (`on_save_clicked`); 10 tests in `test_iso_save_linux.c` all pass
-50. ~~**`GetExecutableVersion()` ELF version string**~~ 🔧 **PARTIAL** — `rufus_version[3]` array initialized via `init_rufus_version()` in `globals.c` from `version.h` constants (MAJOR=4, MINOR=13, PATCH=0); called early in `on_app_activate()`; full ELF section embedding for `GetExecutableVersion()` still pending
+50. ~~**`GetExecutableVersion()` ELF version marker**~~ ✅ **DONE** — see item 133; `RUFUS_VERSION_STR` macro added to `version.h`; version marker embedded in binary via `_rufus_ver_marker[]`; `GetExecutableVersion()` fully implemented with chunk-boundary-safe scanner; 20 tests pass
 
 ---
 
@@ -678,7 +678,7 @@ This is the most structurally significant porting gap.
     - **Phase 2 DONE**: `GuidToString`/`StringToGuid`/`TimestampToHumanReadable` extracted to new `src/common/stdio.c`; both `linux/stdio.c` and `windows/stdio.c` now `#include` the common file. Windows `StringToGuid` bug fixed (UB via `uint32_t*` cast on `uint16_t` fields); `GuidToString` upgraded from `sprintf` to `snprintf`; 8 new tests in `test_stdio_linux.c`; `test_image_scan_linux.c` build failure fixed; 232 stdio tests pass.
     - TODO Phase 3: Identify further portable logic in `format.c`, `drive.c`, `iso.c` that can be moved to `common/`.
     - **Phase 3 (partial) DONE**: `GetGrubVersion` / `GetGrubFs` / `GetEfiBootInfo` extracted from both `linux/iso.c` and `windows/iso.c` into `src/common/iso_scan.c`; 19 tests in `test_iso_scan_common.c`. Remaining candidates: `GetExtFsLabel()` (differs only in `io_manager`), FAT32 cluster-size validation table in `format.c`.
-122. ~~**Ensure consistent copyright headers**~~ ✅ **DONE** — GPL-3.0 headers added to all 30 Linux source files/headers that were missing them; ported files use Pete Batard's copyright with matching years from the Windows counterpart; new Linux-only files use "2025 Rufus contributors"; `drive_linux.h` skipped (root-owned, requires separate commit)
+122. ~~**Ensure consistent copyright headers**~~ ✅ **DONE** — GPL-3.0 headers added to all 30 Linux source files/headers that were missing them; ported files use Pete Batard's copyright with matching years from the Windows counterpart; new Linux-only files use "2025 Rufus contributors"; `drive_linux.h` skipped 
 123. Full end to end iso flashing testing using virtual/emulated devices. Then compare to windows version
 124. For FOSS and publically avalible operating systems (linux and freedos), use emulation to test flashed device drivers (such as qemu in docker container)
 125. End to end testing of mocked UI/CLI to ensure functionality (with emulated devices)
@@ -701,7 +701,7 @@ This is the most structurally significant porting gap.
 
 132. ✅ **`CreateStaticFont()` / `SetHyperLinkFont()` → Pango markup hyperlinks** — DONE: `hyperlink_build_markup()` in `src/linux/hyperlink.c` (pure C, no GLib deps); `set_hyperlink_label()` in `ui_gtk.c` uses Pango markup + `activate-link` → `g_app_info_launch_default_for_uri()`; XML-escapes &, <, >, ", '; 7 tests in `test_ui_linux.c` (34 total UI tests pass).
 
-133. **`GetExecutableVersion()` full ELF `.version` section** — item 50 is marked 🔧 PARTIAL; `rufus_version[]` is populated from `version.h` constants at startup but `GetExecutableVersion()` returns `NULL` (no PE resources in ELF); embed the version string as a linker script section (`--defsym` or `.section .rodata.rufus_ver`) via an `objcopy --add-section` post-link step in `Makefile.am`; make `GetExecutableVersion()` return a pointer into that section; add 3 tests that build a minimal ELF fixture and verify the function returns a valid version string
+133. ~~**`GetExecutableVersion()` full ELF version marker**~~ ✅ **DONE** — `version.h` gains `RUFUS_VERSION_STR` macro (stringify of MAJOR.MINOR.PATCH); `linux/stdfn.c` embeds `static const char __attribute__((used)) _rufus_ver_marker[] = "RUFUS:VER:<version>\n"` in .rodata; `GetExecutableVersion(path)` (path==NULL → `/proc/self/exe`) scans the binary in 4 KiB chunks for the `"RUFUS:VER:"` prefix and parses MAJOR.MINOR.MICRO via sscanf; split key `"RUFUS" ":VER:"` avoids false-matching the search literal; chunk-boundary overlap prevents missed matches; returns NULL for bad versions; 20 tests (57 checks) in `tests/test_exe_version_linux.c` pass: null-path round-trip, explicit file, chunk-boundary, large versions, missing marker, malformed, partial, empty file, nonexistent, consistency
 
 134. ✅ **Wayland XDG portal support for `FileDialog()`** — DONE: replaced `GtkFileChooserDialog` with `GtkFileChooserNative` (GTK 3.20+) in `src/linux/stdlg.c`; on Wayland it transparently uses the XDG Desktop Portal; on X11 it falls back to the classic GTK file-chooser; added file-filter support using the `ext_t` argument (per-type filters + combined "all" filter); added `selected_ext` index resolution by matching the chosen filename's extension against the `ext` list; bumped `configure.ac` min GTK from 3.18 → 3.20; 3 new tests: `file_dialog_ext_filter_index_from_path`, `file_dialog_ext_filter_no_match_leaves_zero`, `file_dialog_native_chooser_api_available`; 56 stdlg tests pass
 
