@@ -51,6 +51,18 @@ static int selected_pt  = -1;   /* user-overridden partition type, -1 = auto */
 static int selected_fs  = FS_UNKNOWN;
 static int preselected_fs = FS_UNKNOWN;
 
+/*
+ * set_preselected_fs  —  record a filesystem requested on the command line.
+ * Pass FS_UNKNOWN (-1) to clear the preselection and restore automatic choice.
+ * SetFSFromISO() will honour this value when the corresponding FS entry is
+ * present in hFileSystem.
+ */
+void set_preselected_fs(int fs)
+{
+	preselected_fs = fs;
+}
+
+
 /* -------------------------------------------------------------------------
  * populate_fs_combo
  *
@@ -195,7 +207,7 @@ void SetFSFromISO(void)
 	}
 
 	/* If a filesystem was preselected from the command line, honour it */
-	if ((preselected_fs != FS_UNKNOWN) && (fs_mask & (1 << preselected_fs))) {
+	if ((preselected_fs >= 0 && preselected_fs < FS_MAX) && (fs_mask & (1 << preselected_fs))) {
 		preferred_fs = preselected_fs;
 	} else {
 		/*

@@ -1,0 +1,8 @@
+usr/bin/rufus
+usr/share/applications/ie.akeo.rufus.desktop
+usr/share/metainfo/ie.akeo.rufus.appdata.xml
+usr/share/polkit-1/actions/ie.akeo.rufus.policy
+usr/share/icons/hicolor/32x32/apps/ie.akeo.rufus.png
+usr/share/icons/hicolor/48x48/apps/ie.akeo.rufus.png
+usr/share/icons/hicolor/256x256/apps/ie.akeo.rufus.png
+usr/share/man/man1/rufus.1

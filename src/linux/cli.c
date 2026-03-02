@@ -34,6 +34,7 @@
 #include "drive.h"
 #include "compat/winioctl.h"
 #include "cli.h"
+#include "ui_combo_logic.h"
 
 /* Globals set by cli_apply_options(); extern'd in format.c and globals.c */
 extern int    fs_type;
@@ -237,8 +238,10 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 void cli_apply_options(const cli_options_t *opts)
 {
 	/* Filesystem */
-	if (opts->fs >= 0)
+	if (opts->fs >= 0) {
 		fs_type = opts->fs;
+		set_preselected_fs(opts->fs);
+	}
 
 	/* Partition scheme */
 	if (opts->part_scheme >= 0)

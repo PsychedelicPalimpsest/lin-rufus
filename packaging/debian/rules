@@ -1,0 +1,39 @@
+#!/usr/bin/make -f
+# Rufus Debian package rules
+# Copyright © 2025 Rufus contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Verbose build output
+export DH_VERBOSE = 1
+
+# Harden the build
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	autoreconf -fi
+	dh_auto_configure -- \
+		--with-os=linux \
+		--prefix=/usr \
+		--sysconfdir=/etc \
+		--localstatedir=/var \
+		--disable-silent-rules
+
+override_dh_auto_build:
+	dh_auto_build -- -j$(shell nproc)
+
+override_dh_auto_install:
+	dh_auto_install
+
+# Remove Windows-specific files that should not be installed on Linux
+override_dh_install:
+	dh_install
+	# Remove Windows-only binaries if they ended up in the package
+	rm -f debian/rufus/usr/bin/rufus.exe 2>/dev/null || true
+
+override_dh_fixperms:
+	dh_fixperms
+	# rufus needs to be setuid or use polkit; polkit is preferred
+	# (do not set setuid here — polkit handles privilege escalation)

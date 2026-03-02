@@ -670,6 +670,94 @@ TEST(image_scanned_handler_order)
 }
 
 /* =========================================================================
+ * set_preselected_fs tests
+ * ======================================================================= */
+
+/*
+ * After set_preselected_fs(FS_NTFS), SetFSFromISO should prefer NTFS even for
+ * a Syslinux image that would normally prefer FAT32.
+ */
+TEST(preselected_fs_overrides_syslinux_default)
+{
+	setup_combos();
+	setup_fs_combo();
+	boot_type  = BT_IMAGE;
+	image_path = strdup("/tmp/linux.iso");
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_iso     = TRUE;
+	img_report.sl_version = (5 << 8) | 1;   /* Syslinux 5.1 */
+	img_report.has_efi    = 0x2;
+
+	set_preselected_fs(FS_NTFS);
+	SetFSFromISO();
+
+	/* User-requested NTFS must win */
+	CHECK_INT_EQ(combo_cur_data(hFileSystem), FS_NTFS);
+
+	/* Reset for subsequent tests */
+	set_preselected_fs(FS_UNKNOWN);
+	teardown_combos();
+}
+
+/*
+ * set_preselected_fs(FS_UNKNOWN) reverts to automatic selection so that the
+ * next call uses normal image-based heuristics.
+ */
+TEST(preselected_fs_unknown_reverts_to_auto)
+{
+	setup_combos();
+	setup_fs_combo();
+	boot_type  = BT_IMAGE;
+	image_path = strdup("/tmp/linux.iso");
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_iso     = TRUE;
+	img_report.sl_version = (5 << 8) | 1;   /* Syslinux 5.1 */
+	img_report.has_efi    = 0x2;
+
+	/* Set then immediately clear the preselection */
+	set_preselected_fs(FS_NTFS);
+	set_preselected_fs(FS_UNKNOWN);
+	SetFSFromISO();
+
+	/* Without a preselection, Syslinux heuristic should win → FAT32 */
+	CHECK_INT_EQ(combo_cur_data(hFileSystem), FS_FAT32);
+
+	teardown_combos();
+}
+
+/*
+ * Preselected FS must be honoured only when that FS is actually present in
+ * the combo.  If the FS is absent, automatic selection falls through as
+ * normal.
+ */
+TEST(preselected_fs_absent_from_combo_falls_through)
+{
+	setup_combos();
+	/* Only FAT32 and NTFS in combo — no ext4 */
+	ComboBox_ResetContent(hFileSystem);
+	ComboBox_SetItemData(hFileSystem, ComboBox_AddString(hFileSystem, "FAT32"), FS_FAT32);
+	ComboBox_SetItemData(hFileSystem, ComboBox_AddString(hFileSystem, "NTFS"),  FS_NTFS);
+	ComboBox_SetCurSel(hFileSystem, 0);
+	fs_type = FS_FAT32;
+
+	boot_type  = BT_IMAGE;
+	image_path = strdup("/tmp/linux.iso");
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_iso     = TRUE;
+	img_report.sl_version = (5 << 8) | 1;
+
+	/* ext4 is not in the combo; preselection should be ignored */
+	set_preselected_fs(FS_EXT4);
+	SetFSFromISO();
+
+	/* Syslinux heuristic: FAT32 */
+	CHECK_INT_EQ(combo_cur_data(hFileSystem), FS_FAT32);
+
+	set_preselected_fs(FS_UNKNOWN);
+	teardown_combos();
+}
+
+/* =========================================================================
  * main
  * ======================================================================= */
 int main(void)
@@ -695,6 +783,9 @@ int main(void)
 	RUN(set_fs_4gb_file_blocks_fat32);
 	RUN(roundtrip_windows_then_linux_iso);
 	RUN(image_scanned_handler_order);
+	RUN(preselected_fs_overrides_syslinux_default);
+	RUN(preselected_fs_unknown_reverts_to_auto);
+	RUN(preselected_fs_absent_from_combo_falls_through);
 
 	TEST_RESULTS();
 	return (_fail > 0) ? 1 : 0;

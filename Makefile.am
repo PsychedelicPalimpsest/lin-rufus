@@ -11,6 +11,9 @@ if TARGET_LINUX
 desktopdir      = $(datadir)/applications
 dist_desktop_DATA = res/ie.akeo.rufus.desktop
 
+man_MANS = doc/rufus.1
+
+
 metainfodir     = $(datadir)/metainfo
 dist_metainfo_DATA = res/ie.akeo.rufus.appdata.xml
 
@@ -29,6 +32,24 @@ install-data-hook:
 	@update-desktop-database "$(DESTDIR)$(datadir)/applications" 2>/dev/null ||:
 
 endif # TARGET_LINUX
+
+# Static analysis target — runs cppcheck over Linux and common source
+check-cppcheck:
+	@command -v cppcheck >/dev/null 2>&1 || { echo "cppcheck not found; skipping"; exit 0; }
+	cppcheck --enable=warning,performance \
+	         --suppress=missingIncludeSystem \
+	         --suppress=normalCheckLevelMaxBranches \
+	         --suppressions-list=$(srcdir)/cppcheck.suppress \
+	         --error-exitcode=1 \
+	         -I $(srcdir)/src/linux \
+	         -I $(srcdir)/src/linux/compat \
+	         -I $(srcdir)/src/windows \
+	         -I $(srcdir)/src/common \
+	         -D__linux__ \
+	         $(srcdir)/src/linux/*.c \
+	         $(srcdir)/src/common/*.c
+
+.PHONY: check-cppcheck
 
 upx: all
 	@upx --lzma --best src/$(TARGET)$(EXEEXT)

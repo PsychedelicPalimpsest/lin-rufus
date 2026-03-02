@@ -1,0 +1,52 @@
+Source: rufus
+Section: utils
+Priority: optional
+Maintainer: Pete Batard <pete@akeo.ie>
+Build-Depends: debhelper-compat (= 13),
+               autoconf,
+               automake,
+               libtool,
+               pkg-config,
+               libgtk-3-dev,
+               libcurl4-openssl-dev,
+               libudev-dev,
+               libblkid-dev,
+               libfdisk-dev,
+               libext2fs-dev,
+               libssl-dev,
+               libfontconfig1-dev,
+               libnotify-dev,
+               nasm
+Standards-Version: 4.6.2
+Homepage: https://github.com/pbatard/rufus
+Vcs-Browser: https://github.com/pbatard/rufus
+Vcs-Git: https://github.com/pbatard/rufus.git
+Rules-Requires-Root: no
+
+Package: rufus
+Architecture: amd64 arm64
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         policykit-1 | polkit,
+         ntfs-3g,
+         mtools,
+         dosfstools,
+         e2fsprogs
+Recommends: exfatprogs | exfat-utils,
+            udftools,
+            grub-pc-bin,
+            qemu-utils
+Description: Reliable USB Formatting Utility
+ Rufus is a utility that helps format and create bootable USB flash
+ drives, such as USB keys/pendrives, memory sticks, etc.
+ .
+ It is useful for cases where you need to create USB installation media
+ from bootable ISOs (Windows, Linux, UEFI, etc.), or where you need to
+ work with a device that has no OS installed, or where you need to flash
+ a BIOS or other firmware from DOS.
+ .
+ Rufus supports a wide range of bootable image formats (ISO/IMG/VHD/VHDX),
+ filesystem types (FAT16/FAT32/NTFS/exFAT/ext2/ext3/ext4/UDF), and
+ partition schemes (MBR/GPT) for both BIOS and UEFI targets.
+ .
+ On Linux, Rufus uses GTK3 for its graphical interface and can also operate
+ in headless/CLI mode via command-line arguments.

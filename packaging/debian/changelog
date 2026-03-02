@@ -1,0 +1,16 @@
+rufus (4.13.0-1) unstable; urgency=medium
+
+  * Initial Debian packaging for the Linux port of Rufus.
+  * GTK3 graphical interface with polkit privilege escalation.
+  * CLI mode (--device, --image, --fs, --partition-scheme, --target, etc.).
+  * Supports FAT16/FAT32/NTFS/exFAT/ext2/ext3/ext4/UDF filesystems.
+  * Supports MBR/GPT partition schemes for BIOS and UEFI targets.
+  * Full bootable ISO extraction (ISO9660/UDF via libcdio).
+  * SHA256/SHA512/MD5 hashing with Secure Boot authority validation.
+  * WIM image support via bundled wimlib.
+  * Resumable downloads via libcurl.
+  * Desktop notifications via libnotify.
+  * Automatic dark mode following system theme.
+  * udev-based device hot-plug detection with 1s debounce.
+
+ -- Pete Batard <pete@akeo.ie>  Sun, 01 Jan 2025 00:00:00 +0000

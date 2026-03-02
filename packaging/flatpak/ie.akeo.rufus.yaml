@@ -1,0 +1,111 @@
+app-id: ie.akeo.rufus
+runtime: org.gnome.Platform
+runtime-version: '45'
+sdk: org.gnome.Sdk
+command: rufus
+
+# Permissions required for USB formatting:
+#   --device=block   access to block devices (/dev/sd*, /dev/loop*)
+#   --share=network  download ISOs, check for updates, download DBX
+#   --filesystem=xdg-download  save ISO images to Downloads folder
+finish-args:
+  - --device=block
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --filesystem=xdg-download
+  - --filesystem=xdg-run/polkit-agent
+  - --system-talk-name=org.freedesktop.PolicyKit1
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --env=RUFUS_DATADIR=/app/share/rufus
+
+build-options:
+  cflags: -O2
+  cxxflags: -O2
+  env:
+    PKG_CONFIG_PATH: /app/lib/pkgconfig
+
+modules:
+  # --------------------------------------------------------------------------
+  # libblkid (part of util-linux) — partition/filesystem probing
+  # --------------------------------------------------------------------------
+  - name: util-linux
+    buildsystem: autotools
+    config-opts:
+      - --disable-all-programs
+      - --enable-libblkid
+      - --enable-libfdisk
+      - --enable-libuuid
+      - --without-python
+    sources:
+      - type: git
+        url: https://github.com/util-linux/util-linux.git
+        tag: v2.39.3
+
+  # --------------------------------------------------------------------------
+  # libcurl — HTTP downloads (update check, ISO download, DBX update)
+  # --------------------------------------------------------------------------
+  - name: libcurl
+    buildsystem: autotools
+    config-opts:
+      - --with-openssl
+      - --disable-manual
+      - --disable-ftp
+      - --disable-ldap
+      - --disable-ldaps
+      - --disable-dict
+      - --disable-telnet
+      - --disable-tftp
+      - --disable-pop3
+      - --disable-imap
+      - --disable-smtp
+      - --disable-gopher
+      - --disable-rtsp
+    sources:
+      - type: archive
+        url: https://curl.se/download/curl-8.6.0.tar.xz
+        sha256: 3ccd55d91af9516539df80625f818c734dc6f2ecf9bada33c76765e99121db15
+
+  # --------------------------------------------------------------------------
+  # libnotify — desktop notifications on format completion
+  # --------------------------------------------------------------------------
+  - name: libnotify
+    buildsystem: meson
+    config-opts:
+      - -Dtests=false
+      - -Dintrospection=disabled
+      - -Dman=false
+      - -Dgtk_doc=false
+    sources:
+      - type: git
+        url: https://gitlab.gnome.org/GNOME/libnotify.git
+        tag: 0.8.3
+
+  # --------------------------------------------------------------------------
+  # Rufus itself
+  # --------------------------------------------------------------------------
+  - name: rufus
+    buildsystem: autotools
+    config-opts:
+      - --with-os=linux
+      - --prefix=/app
+    build-options:
+      env:
+        CFLAGS: -O2 -DRUFUS_FLATPAK
+    post-install:
+      # Install resource data (syslinux, uefi-ntfs, grub2, locale, freedos)
+      - install -d ${FLATPAK_DEST}/share/rufus/res
+      - cp -r res/* ${FLATPAK_DEST}/share/rufus/res/
+    sources:
+      - type: dir
+        path: ../..
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/gtk-doc
+  - /share/doc
+  - '*.la'
+  - '*.a'

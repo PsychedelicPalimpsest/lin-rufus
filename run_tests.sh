@@ -64,6 +64,12 @@ info() { printf '\n==> %s\n' "$*"; }
 
 # ---------------------------------------------------------------------------
 # Container runtime detection (shared by --container and --full-container)
+# Sets CONTAINER_RUNTIME (string), CONTAINER_BUILD_CMD and CONTAINER_RUN_CMD
+# (arrays).  When rootless podman is detected:
+#   - CONTAINER_BUILD_CMD stays as plain "podman" (no sudo needed for builds)
+#   - CONTAINER_RUN_CMD is "sudo podman" (real root needed for loop devices)
+#   - CONTAINER_ROOTLESS=1 triggers a "podman image scp" to copy the freshly
+#     built image into root's podman storage before running.
 # ---------------------------------------------------------------------------
 _detect_container_runtime() {
   if [ -z "${CONTAINER_RUNTIME:-}" ]; then
@@ -75,6 +81,33 @@ _detect_container_runtime() {
       die "No container runtime found. Install docker or podman."
     fi
   fi
+  CONTAINER_BUILD_CMD=("${CONTAINER_RUNTIME}")
+  CONTAINER_RUN_CMD=("${CONTAINER_RUNTIME}")
+  CONTAINER_ROOTLESS=0
+  if [[ "${CONTAINER_RUNTIME}" == "podman" ]] && \
+     podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null | grep -q "^true"; then
+    CONTAINER_RUN_CMD=(sudo "${CONTAINER_RUNTIME}")
+    CONTAINER_ROOTLESS=1
+  fi
+}
+
+# Copy the image from rootless podman storage into root podman storage so that
+# "sudo podman run" can find it.  Uses "podman image scp" which is fast on
+# repeat runs because already-present blobs are skipped automatically.
+# Note: "podman image scp" may return exit code 125 even on success (podman
+# bug); we therefore verify that the image actually arrived in root's store.
+_sync_image_to_root() {
+  # Skip the (expensive) copy if root podman already has the exact same image.
+  local user_id root_id
+  user_id=$(podman image inspect localhost/rufus-test-env --format '{{.Id}}' 2>/dev/null || true)
+  root_id=$(sudo podman image inspect localhost/rufus-test-env --format '{{.Id}}' 2>/dev/null || true)
+  if [[ -n "${user_id}" && "${user_id}" == "${root_id}" ]]; then
+    return 0
+  fi
+  info "Copying image to root podman storage (needed for loop-device access) ..."
+  podman image scp localhost/rufus-test-env root@ || true
+  sudo podman image exists rufus-test-env || \
+    die "Failed to copy rufus-test-env to root podman storage"
 }
 
 # ---------------------------------------------------------------------------
@@ -87,9 +120,10 @@ _detect_container_runtime() {
 if [ "${RUN_CONTAINER}" -eq 1 ]; then
   _detect_container_runtime
   info "Building container image rufus-test-env (cached after first run) ..."
-  "${CONTAINER_RUNTIME}" build -t rufus-test-env "${SCRIPT_DIR}/tests"
+  "${CONTAINER_BUILD_CMD[@]}" build -t rufus-test-env "${SCRIPT_DIR}/tests"
+  [ "${CONTAINER_ROOTLESS}" -eq 1 ] && _sync_image_to_root
   info "Running root tests in privileged ${CONTAINER_RUNTIME} container ..."
-  exec "${CONTAINER_RUNTIME}" run --rm --privileged \
+  exec "${CONTAINER_RUN_CMD[@]}" run --rm --privileged \
     -v "${SCRIPT_DIR}:/src" \
     -w /src \
     rufus-test-env \
@@ -113,9 +147,10 @@ fi
 if [ "${RUN_FULL_CONTAINER}" -eq 1 ]; then
   _detect_container_runtime
   info "Building container image rufus-test-env (cached after first run) ..."
-  "${CONTAINER_RUNTIME}" build -t rufus-test-env "${SCRIPT_DIR}/tests"
+  "${CONTAINER_BUILD_CMD[@]}" build -t rufus-test-env "${SCRIPT_DIR}/tests"
+  [ "${CONTAINER_ROOTLESS}" -eq 1 ] && _sync_image_to_root
   info "Running full test suite in privileged ${CONTAINER_RUNTIME} container ..."
-  exec "${CONTAINER_RUNTIME}" run --rm --privileged \
+  exec "${CONTAINER_RUN_CMD[@]}" run --rm --privileged \
     -v "${SCRIPT_DIR}:/src" \
     -w /src \
     rufus-test-env \

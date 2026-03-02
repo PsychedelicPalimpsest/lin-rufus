@@ -26,6 +26,14 @@
 void SetComboEntry(HWND hDlg, int data);
 
 /*
+ * set_preselected_fs  —  record a filesystem requested on the command line.
+ * Pass FS_UNKNOWN (-1) to clear the preselection and restore automatic
+ * heuristic selection.  SetFSFromISO() honours this value when the
+ * corresponding FS entry is present in hFileSystem.
+ */
+void set_preselected_fs(int fs);
+
+/*
  * populate_fs_combo  —  reset the hFileSystem combo and fill it with every
  * filesystem that is supported on this machine (FAT32 always; NTFS, exFAT,
  * UDF, ext2/3/4 conditionally on tool availability).  Defaults to FAT32.

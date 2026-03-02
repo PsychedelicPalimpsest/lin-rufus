@@ -1,0 +1,232 @@
+.\" Rufus man page
+.\" Copyright © 2025 Rufus contributors
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.TH RUFUS 1 "2025" "Rufus 4.13" "User Commands"
+.SH NAME
+rufus \- The Reliable USB Formatting Utility
+.SH SYNOPSIS
+.B rufus
+[\fIOPTIONS\fR]
+.PP
+.B rufus
+\fB\-\-device\fR \fIDEVICE\fR
+[\fB\-\-image\fR \fIIMAGE\fR]
+[\fB\-\-fs\fR \fIFILESYSTEM\fR]
+[\fB\-\-partition\-scheme\fR \fISCHEME\fR]
+[\fB\-\-target\fR \fITARGET\fR]
+[\fB\-\-label\fR \fILABEL\fR]
+[\fB\-\-quick\fR|\fB\-\-no\-quick\fR]
+[\fB\-\-verify\fR]
+[\fB\-\-no\-prompt\fR]
+.SH DESCRIPTION
+.B rufus
+creates bootable USB drives and formats removable media.  It supports a
+wide range of bootable image formats (ISO, IMG, VHD/VHDX), filesystem
+types, and partition schemes.
+.PP
+When invoked without arguments (or when compiled with GTK support and a
+display is available) Rufus presents a graphical user interface.  When
+\fB\-\-device\fR is supplied on the command line the non\-interactive
+\fIcli\fR mode is activated; this mode is useful for scripting and
+headless servers.
+.PP
+.B WARNING:
+Formatting a device permanently destroys all data on it.  Make sure you
+specify the correct device path.  Rufus requires root privileges to open
+block devices for writing; it will attempt to re-launch itself via
+.BR pkexec (1)
+if it is not already running as root.
+.SH OPTIONS
+.SS Mandatory (CLI mode)
+.TP
+.BR \-d ", " \-\-device " " \fIDEVICE\fR
+Target block device path, e.g.\& \fB/dev/sdb\fR.
+This option is required when operating in CLI mode.
+.SS Optional (CLI mode)
+.TP
+.BR \-i ", " \-\-image " " \fIIMAGE\fR
+Path to an image file (\fI.iso\fR, \fI.img\fR, \fI.vhd\fR, \fI.vhdx\fR,
+\fI.gz\fR, \fI.xz\fR, \fI.bz2\fR, \fI.zstd\fR) to write to the device.
+If omitted the device is formatted without copying an image.
+.TP
+.BR \-f ", " \-\-fs " " \fIFILESYSTEM\fR
+Filesystem to create on the device.  Supported values:
+.RS
+.IP \fBfat16\fR
+FAT16 (for small volumes ≤ 2 GiB).
+.IP \fBfat32\fR
+FAT32 (default for most bootable drives).
+.IP \fBntfs\fR
+NTFS (requires
+.BR mkntfs (8)
+from ntfs-3g).
+.IP \fBudf\fR
+UDF (requires
+.BR mkudffs (8)).
+.IP \fBexfat\fR
+exFAT (requires
+.BR mkfs.exfat (8)
+or
+.BR mkexfatfs (8)).
+.IP \fBext2\fR
+ext2 filesystem.
+.IP \fBext3\fR
+ext3 journaling filesystem.
+.IP \fBext4\fR
+ext4 journaling filesystem.
+.RE
+.TP
+.BR \-p ", " \-\-partition\-scheme " " \fISCHEME\fR
+Partition table type.  Supported values:
+.RS
+.IP \fBmbr\fR
+Master Boot Record (default; compatible with legacy BIOS and older systems).
+.IP \fBgpt\fR
+GUID Partition Table (required for drives > 2 TiB and for UEFI Class 3).
+.RE
+.TP
+.BR \-t ", " \-\-target " " \fITARGET\fR
+Boot target system.  Supported values:
+.RS
+.IP \fBbios\fR
+Target legacy BIOS / CSM boot.
+.IP \fBuefi\fR
+Target UEFI boot.
+.RE
+.TP
+.BR \-l ", " \-\-label " " \fILABEL\fR
+Volume label to assign to the formatted filesystem.  Maximum length
+depends on the filesystem: 11 characters for FAT/FAT32, 32 for NTFS, 30
+for exFAT, 16 for ext2/3/4.
+.TP
+.B \-\-quick
+Perform a quick format (write filesystem structures only; do not zero-fill
+the data area).  This is the default.
+.TP
+.B \-\-no\-quick
+Perform a full format (zero-fill the entire data area before writing
+filesystem structures).  Significantly slower but useful when the device
+may contain residual data that could confuse firmware.
+.TP
+.B \-\-verify
+After writing an image file, verify the written data by re-reading the
+device and comparing checksums.  Adds time proportional to the image size.
+.TP
+.B \-\-no\-prompt
+Suppress all interactive confirmation dialogs and automatically accept
+them.  Useful for scripting.  Use with care: this will proceed through all
+warnings, including the "all data will be destroyed" prompt.
+.TP
+.BR \-h ", " \-\-help
+Print a brief usage summary and exit.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Failure (device could not be opened, format operation failed, bad
+arguments, etc.).  A human-readable error message is printed to
+.IR stderr .
+.SH EXAMPLES
+Format \fI/dev/sdb\fR as FAT32 with MBR (quick format):
+.PP
+.RS
+.EX
+sudo rufus --device /dev/sdb --fs fat32 --partition-scheme mbr
+.EE
+.RE
+.PP
+Write an ISO image to \fI/dev/sdb\fR:
+.PP
+.RS
+.EX
+sudo rufus --device /dev/sdb --image ubuntu-24.04-desktop-amd64.iso
+.EE
+.RE
+.PP
+Write an image and verify the result, suppressing prompts:
+.PP
+.RS
+.EX
+sudo rufus --device /dev/sdb \\
+           --image archlinux-2024.01.01-x86_64.iso \\
+           --verify --no-prompt
+.EE
+.RE
+.PP
+Create an ext4 volume with GPT on \fI/dev/sdb\fR:
+.PP
+.RS
+.EX
+sudo rufus --device /dev/sdb --fs ext4 --partition-scheme gpt \\
+           --label "MYDATA" --no-quick
+.EE
+.RE
+.SH FILES
+.TP
+.I ~/.config/rufus/rufus.ini
+Per-user settings file (XDG_CONFIG_HOME/rufus/rufus.ini).
+.TP
+.I /usr/share/rufus/res/
+Data directory: locale files, boot resources (syslinux, uefi-ntfs, etc.).
+.TP
+.I /usr/share/polkit-1/actions/ie.akeo.rufus.policy
+Polkit policy granting Rufus the right to re-launch with elevated
+privileges without a full password prompt on desktop sessions.
+.SH ENVIRONMENT
+.TP
+.B RUFUS_DATADIR
+Override the data directory (default: \fI/usr/share/rufus\fR).  Useful
+when running a local build: \fIRUFUS_DATADIR=./\fR.
+.TP
+.B XDG_CONFIG_HOME
+Base directory for user configuration.  Defaults to \fI~/.config\fR.
+.TP
+.B XDG_DATA_HOME
+Base directory for user data (cached DBX, Fido script, etc.).
+Defaults to \fI~/.local/share\fR.
+.TP
+.B DISPLAY
+.TQ
+.B WAYLAND_DISPLAY
+When either variable is set and Rufus was compiled with GTK support, the
+graphical interface is presented unless \fB\-\-device\fR is given.
+.SH NOTES
+Rufus requires root privileges for all operations that open a block device
+for writing.  On desktop systems with Polkit installed the application
+re-launches itself transparently via
+.BR pkexec (1)
+when invoked as a normal user.  On headless systems run Rufus directly as
+root or prefix with
+.BR sudo (8).
+.PP
+The graphical and CLI modes share the same format engine.  CLI mode is
+activated automatically when
+.B \-\-device
+is supplied as a command-line argument; the GTK initialisation path is
+bypassed entirely.
+.SH BUGS
+Report bugs at <https://github.com/pbatard/rufus/issues>.
+.SH SEE ALSO
+.BR dd (1),
+.BR mkfs.fat (8),
+.BR mkntfs (8),
+.BR mkfs.ext4 (8),
+.BR mkfs.exfat (8),
+.BR fdisk (8),
+.BR gdisk (8),
+.BR pkexec (1)
+.SH AUTHORS
+Pete Batard and Rufus contributors.
+.PP
+This man page was written for the Linux port of Rufus.
+.SH COPYRIGHT
+Copyright \(co 2011\-2025 Pete Batard.
+.br
+Copyright \(co 2025 Rufus contributors.
+.PP
+Rufus is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any
+later version.

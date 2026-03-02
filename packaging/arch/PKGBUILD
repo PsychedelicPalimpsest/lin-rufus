@@ -1,0 +1,88 @@
+# Maintainer: Pete Batard <pete@akeo.ie>
+# Contributor: Rufus contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+pkgname=rufus
+pkgver=4.13.0
+pkgrel=1
+pkgdesc="The Reliable USB Formatting Utility"
+arch=('x86_64' 'aarch64')
+url="https://github.com/pbatard/rufus"
+license=('GPL3')
+
+depends=(
+    'gtk3'
+    'libcurl-gnutls'
+    'libudev.so'
+    'libblkid.so'
+    'libfdisk'
+    'openssl'
+    'fontconfig'
+    'libnotify'
+    'polkit'
+    'ntfs-3g'
+    'mtools'
+    'dosfstools'
+    'e2fsprogs'
+)
+
+makedepends=(
+    'autoconf'
+    'automake'
+    'libtool'
+    'pkg-config'
+    'nasm'
+)
+
+optdepends=(
+    'exfatprogs: exFAT filesystem support'
+    'udftools: UDF filesystem support'
+    'grub: GRUB2 bootloader installation'
+    'qemu-base: VHD/VHDX image support via qemu-nbd'
+)
+
+source=("git+https://github.com/pbatard/rufus.git#tag=v${pkgver}")
+sha256sums=('SKIP')
+
+prepare() {
+    cd "${pkgname}"
+    autoreconf -fi
+}
+
+build() {
+    cd "${pkgname}"
+    ./configure \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --localstatedir=/var \
+        --with-os=linux \
+        --disable-silent-rules
+    make -j$(nproc)
+}
+
+check() {
+    cd "${pkgname}"
+    ./run_tests.sh --linux-only
+}
+
+package() {
+    cd "${pkgname}"
+    make DESTDIR="${pkgdir}" install
+
+    # Install polkit policy
+    install -Dm644 res/ie.akeo.rufus.policy \
+        "${pkgdir}/usr/share/polkit-1/actions/ie.akeo.rufus.policy"
+
+    # Install man page
+    install -Dm644 doc/rufus.1 \
+        "${pkgdir}/usr/share/man/man1/rufus.1"
+    gzip -9 "${pkgdir}/usr/share/man/man1/rufus.1"
+
+    # Install resource data
+    install -d "${pkgdir}/usr/share/rufus"
+    cp -r res/* "${pkgdir}/usr/share/rufus/"
+
+    # Install license
+    install -Dm644 LICENSE.txt \
+        "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

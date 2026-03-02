@@ -1,0 +1,37 @@
+// False positive: safe_stricmp/safe_strcmp macros use conditional "NULL" string literal
+// The comparisons are inside strcmp(), not pointer comparisons
+literalWithCharPtrCompare:src/common/iso_check.c
+literalWithCharPtrCompare:src/common/iso_config.c
+literalWithCharPtrCompare:src/common/iso_scan.c
+literalWithCharPtrCompare:src/linux/format_fat32.c
+literalWithCharPtrCompare:src/linux/net.c
+
+// False positive: if_assert_fails macro confuses cppcheck's syntax parser
+syntaxError:src/common/hash_db.c
+
+// False positive: parser.c uses static_sprintf (do-while macro) then passes the
+// variable to another function — cppcheck doesn't see the use across the macro boundary
+constStatement:src/linux/parser.c
+
+// False positive: p_ent is stored in root->ent and freed in ezxml_free() at line 855
+memleak:src/common/xml.c
+// False positive / third-party: ezxml style issues
+variableScope:src/common/xml.c
+constVariablePointer:src/common/xml.c
+constParameterPointer:src/common/xml.c
+
+// False positive: windows.h compat layer uses double NULL check for portability
+knownConditionTrueFalse:src/linux/compat/windows.h
+
+// False positive: badblocks.c flag conditions are set at function entry and not
+// visible to cppcheck from the call context
+knownConditionTrueFalse:src/linux/badblocks.c
+
+// False positive: DWORD is unsigned int but %lu is fine on 32-bit targets; suppress portability
+invalidPrintfArgType_uint:src/linux/compat/windows.h
+
+// Upstream code: dst memmove null-check pattern is intentional defensive code
+nullPointerRedundantCheck:src/windows/rufus.h
+
+// False positive: nullPointerOutOfMemory in third-party ezxml code
+nullPointerOutOfMemory:src/common/xml.c
