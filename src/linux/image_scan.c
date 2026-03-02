@@ -39,6 +39,7 @@
 #include "missing.h"
 #include "resource.h"
 #include "../common/bootloader_scan.h"
+#include "../common/iso_report.h"
 
 /* ---- externs provided by other translation units ---- */
 extern char             *image_path;
@@ -77,6 +78,10 @@ DWORD WINAPI ImageScanThread(LPVOID param)
 	/* Analyse UEFI bootloaders for Secure Boot signature and revocation */
 	if (img_report.is_iso)
 		GetBootladerInfo();
+
+	/* Log all ISO scan properties (common implementation) */
+	if (img_report.is_iso)
+		log_iso_report();
 
 	/* If a Windows installation image was detected, gather version info */
 	if (img_report.wininst_index > 0 || img_report.is_windows_img)

@@ -277,6 +277,14 @@ CFLAGS_LINUX_test_img_info_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR
                                      -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_img_info_linux := $(SRC_DIR)/linux/img_info.c
 
+# iso_report_linux tests: log_iso_report() — common ISO scan results logger
+CFLAGS_LINUX_test_iso_report_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                       -I$(SRC_DIR) -I$(COMMON) \
+                                       -D_GNU_SOURCE -DRUFUS_TEST \
+                                       -Wno-unused-function -Wno-sign-compare \
+                                       -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_iso_report_linux := $(COMMON)/iso_report.c iso_report_linux_glue.c
+
 # notify_linux tests: desktop notification bridge (notify_build_cmd, rufus_notify, notify_format_message)
 CFLAGS_LINUX_test_notify_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                    -D_GNU_SOURCE -DRUFUS_TEST \
