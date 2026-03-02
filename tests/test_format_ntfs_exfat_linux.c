@@ -847,6 +847,26 @@ TEST(writepbr_exfat_returns_true)
     free(path);
 }
 
+TEST(writepbr_fat16_returns_true)
+{
+    /* mkfs.fat writes its own boot sector for FAT16 — WritePBR_fs must return TRUE */
+    char *path = create_temp_image(512 * 512);
+    CHECK(path != NULL);
+    setup_drive(path, 512 * 512);
+
+    int fd = open(path, O_RDWR);
+    CHECK(fd >= 0);
+    HANDLE h = (HANDLE)(intptr_t)fd;
+
+    BOOL r = WritePBR_fs(h, FS_FAT16);
+    CHECK(r == TRUE);
+
+    close(fd);
+    teardown_drive();
+    unlink(path);
+    free(path);
+}
+
 /* ================================================================
  * 4. FormatPartition routing
  * ================================================================ */
@@ -1186,6 +1206,7 @@ int main(void)
     /* WritePBR */
     RUN(writepbr_ntfs_returns_true);
     RUN(writepbr_exfat_returns_true);
+    RUN(writepbr_fat16_returns_true);
 
     /* FormatPartition routing */
     RUN(format_partition_ntfs_returns_false_no_tool);

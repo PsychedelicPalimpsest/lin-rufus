@@ -139,7 +139,8 @@ BOOL WritePBR_fs(HANDLE hLogicalVolume, int fs_type)
 		return TRUE;
 	case FS_NTFS:
 	case FS_EXFAT:
-		/* mkntfs / mkfs.exfat write their own boot sectors; no PBR step needed */
+	case FS_FAT16:
+		/* mkntfs / mkfs.exfat / mkfs.fat write their own boot sectors; no PBR step needed */
 		return TRUE;
 	default:
 		return FALSE;
