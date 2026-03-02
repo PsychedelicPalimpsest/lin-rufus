@@ -291,7 +291,9 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `read_file()` / `write_file()` | ✅ | Work correctly |
 | `DumpBufferHex()` | ✅ | xxd-style hex+ASCII dump via uprintf; 5 tests pass |
 | `_printbits()` | ✅ | 32-bit binary string renderer; 7 tests pass |
-| `WindowsErrorString()` / `StrError()` | 🔧 | Maps to `strerror()`; works, but DWORD error codes from compat layer may not match `errno` values |
+| `WindowsErrorString()` / `StrError()` | ✅ | Maps to `strerror()`; 36 DWORD-mapping tests pass |
+| `SizeToHumanReadable()` | ✅ | Formats byte counts as human-readable string |
+| `TimestampToHumanReadable()` | ✅ | Formats YYYYMMDDHHMMSS uint64 as "YYYY.MM.DD HH:MM:SS (UTC)"; ported from Windows; 8 tests pass |
 | `ExtractZip()` | ✅ | See stdfn above (bled-based implementation) |
 
 ### 3j. Standard Dialogs (`stdlg.c`)
@@ -334,7 +336,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | On-START → `FormatThread` launch | ✅ | `on_start_clicked()` reads combo selections into globals; shows MSG_003 "WARNING: ALL DATA WILL BE DESTROYED" GTK confirmation dialog; launches FormatThread with drive index on IDOK |
 | Cancel in-progress operation | ✅ | `on_close_clicked` sets `ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED)` |
 | Language menu (`ShowLanguageMenu`) | ✅ | Builds GTK menu from `locale_list`; activates via `PostMessage → main_dialog_handler` |
-| `SetAccessibleName()` | 🔧 | Maps to tooltip; should use `atk_object_set_name` for true accessibility |
+| `SetAccessibleName()` | ✅ | Sets tooltip text + `atk_object_set_name()` via `gtk_widget_get_accessible()` for screen-reader support |
 | Device-change notification (hot-plug) | ✅ | `device_monitor.c`: udev netlink monitor thread; 1 s debounce; posts `UM_MEDIA_CHANGE` → `GetDevices()`; wired in `ui_gtk.c`; 20 tests pass |
 | `SetComboEntry()` | ✅ | |
 | DPI scaling / `AdjustForLowDPI()` | ✅ | GTK handles natively |
@@ -533,8 +535,8 @@ This is the most structurally significant porting gap.
 36. **`wincrypt.h` / `wintrust.h` → OpenSSL compat stubs** — complete the header stubs (CERT_CONTEXT, HCRYPTPROV, etc.) so every call site in `pki.c` and `hash.c` compiles on Linux without the MSVC SDK; ensure no runtime no-ops hide missing implementations
 37. ~~**`LicenseCallback()` GTK dialog**~~ ✅ **DONE** — `find_license_file()` searches `<app_dir>/LICENSE.txt`, `<app_dir>/../LICENSE.txt`, `RUFUS_DATADIR/LICENSE.txt`; real GTK scrollable `GtkTextView` dialog under `#ifdef USE_GTK`, fallback returns TRUE without crash; 3 new tests: `find_license_file_with_real_repo_path`, `find_license_file_with_bad_path_returns_null`, `license_callback_returns_true`; 45 stdlg tests pass
 38. ~~**`UpdateCallback()` / `NewVersionCallback()` dialog**~~ ✅ **DONE** — Added `UM_NEW_VERSION` to `user_message_type` enum; `CheckForUpdates()` in `net.c` now posts `UM_NEW_VERSION` instead of calling `DownloadNewVersion()` directly; `main_dialog_handler` in `ui_gtk.c` handles `UM_NEW_VERSION` with a GTK `GtkMessageDialog` showing version string, optional release notes in a scrollable text view, and "Remind me later"/"Download" buttons; 4 new tests: `um_new_version_constant_differs_from_um_no_update`, `um_new_version_is_valid_wm_app_range`, `um_new_version_posted_when_version_is_newer`, `um_no_update_posted_when_version_is_same`; PostMessage stub in net glue now captures last message for test verification; 80 net tests pass
-39. **`SetAlertPromptHook()` / `SetAlertPromptMessages()` → GTK** — implement alert-prompt interception in `stdlg.c` using the existing test-injection pattern; display intercepted prompts as a `GtkMessageDialog`; needed for Windows-image customisation flow
-40. **Accessibility: `SetAccessibleName()` → `atk_object_set_name`** — replace the current tooltip-only fallback with `atk_object_set_name()` / `gtk_accessible_set_property()` (GTK4: `gtk_accessible_update_property`) on all controls; required for screen-reader support and GNOME a11y compliance
+39. **`SetAlertPromptHook()` / `SetAlertPromptMessages()` → GTK** — 🚫 N/A on Linux: these intercept a Windows-only "Format disk?" system dialog via WinEvent hooks; no equivalent Linux dialog exists
+40. ~~**Accessibility: `SetAccessibleName()` → `atk_object_set_name`**~~ ✅ **DONE** — `SetAccessibleName()` in `ui_gtk.c` now calls both `gtk_widget_set_tooltip_text()` and `atk_object_set_name()` via `gtk_widget_get_accessible()`; screen readers (Orca, etc.) receive proper accessible names
 41. **`CreateStaticFont()` / `SetHyperLinkFont()` → Pango / GTK CSS** — render hyperlink-style labels using a `GtkLabel` with `<a href="…">` Pango markup or a GTK CSS provider setting `color` and `text-decoration: underline`; wire `clicked` signal for `xdg-open`
 42. ~~**`wuprintf()` UTF-8 conversion**~~ ✅ **DONE** — `wuprintf()` in `stdio.c` uses an inline UCS-4→UTF-8 encoder (replaces locale-dependent `wcstombs`); handles NULL format guard; 5 new tests: ASCII round-trip, 2-byte UTF-8 (é,ü), 3-byte UTF-8 (中文), surrogate/NULL guard; 170 stdio tests pass
 43. ~~**`WindowsErrorString()` / `StrError()` DWORD mapping**~~ ✅ **DONE** — `windows_dword_to_errno` in `stdio.c` maps 20 DWORD constants to POSIX errno; `_StrError` covers all FACILITY_STORAGE cases; 36 new tests (19 per-constant mapping tests + 15 FACILITY_STORAGE tests + 2 extras); 135 stdio tests pass total
@@ -650,6 +652,7 @@ This is the most structurally significant porting gap.
 108. ~~**`DumpFatDir()` FAT directory lister**~~ ✅ **DONE** — full implementation in `src/linux/iso.c`; `wchar16_to_utf8()` helper converts UTF-16 code units stored in 32-bit wchar_t (libfat's read16() stores values in lower 16 bits) to valid UTF-8 including surrogate pairs; POSIX `mkdir`/`open`/`write_all` replace Windows `CreateDirectoryU`/`CreateFileU`/`WriteFileWithRetry`; `access(F_OK)` guards against overwriting pre-existing files; `iso_linux_glue.c` provides `LIBFAT_SECTOR_SIZE`/`_SHIFT`/`_MASK` for the test build; 13 tests in `test_iso_linux.c` pass (null-path, null image_path, invalid ISO, missing efi_img_path, success return, file extraction, content verification, subdirectory creation, nested-file extraction, nested content, skip-existing, valid UTF-8 filenames)
 109. ~~**Structured error context (`uprintf_errno`)**~~ ✅ **DONE** — `uprintf_errno(fmt, ...)` macro added to `src/windows/rufus.h` (Linux-only, `#ifndef _WIN32` guard); snapshots `errno` at the call site, calls `uprintf(fmt ": %s (%d)", ..., strerror(_e), _e)`; 47 occurrences of `uprintf("...%s", strerror(errno))` pattern replaced across `dev.c`, `dos.c`, `dos_locale.c`, `drive.c`, `format.c`, `format_ext.c`, `hash.c`, `iso.c`, `net.c`, `stdio.c`, `syslinux.c`, `vhd.c`, `wue.c`; 7 new tests in `test_stdio_linux.c` (187 total pass)
 110. ~~**`wuprintf()` UTF-8 path with test**~~ ✅ **DONE** — see item 42 above
+111. ~~**`TimestampToHumanReadable()` port**~~ ✅ **DONE** — ported from `src/windows/stdio.c` to `src/linux/stdio.c`; converts YYYYMMDDHHMMSS `uint64_t` to "YYYY.MM.DD HH:MM:SS (UTC)" string; algorithm uses divisor-based field extraction; 8 tests: non-null return, zero date, basic date, UTC suffix, dot/colon separators, length, max values, distinct outputs; 204 stdio tests pass
 
 121. Use docker to allow for non root root style testing
 
@@ -671,4 +674,4 @@ This is the most structurally significant porting gap.
 
 
 121. Windows + Linux => common merger. Minimize feature duplication between OSes by abstracting OS specific stuff, while keeping core logic in common.  
-122. Ensure consitent copyright headers
+122. ~~**Ensure consistent copyright headers**~~ ✅ **DONE** — GPL-3.0 headers added to all 30 Linux source files/headers that were missing them; ported files use Pete Batard's copyright with matching years from the Windows counterpart; new Linux-only files use "2025 Rufus contributors"; `drive_linux.h` skipped (root-owned, requires separate commit)

@@ -14,6 +14,7 @@
  * 10. Cancelled via ErrorStatus — child is terminated early
  * 11. SizeToHumanReadable — basic unit formatting
  * 12. WindowsErrorString — returns non-NULL
+ * 13. TimestampToHumanReadable — UTC timestamp formatting
  */
 
 #include "framework.h"
@@ -1414,6 +1415,90 @@ TEST(create_file_with_timeout_creates_file)
 }
 
 /* ===========================================================================
+ * TimestampToHumanReadable — UTC timestamp formatting
+ * Format: YYYYMMDDHHMMSS uint64 → "YYYY.MM.DD HH:MM:SS (UTC)"
+ * =========================================================================*/
+
+extern char* TimestampToHumanReadable(uint64_t ts);
+
+TEST(timestamp_returns_non_null)
+{
+    char *s = TimestampToHumanReadable(20250115120000ULL);
+    CHECK_MSG(s != NULL, "TimestampToHumanReadable must return non-NULL");
+}
+
+TEST(timestamp_zero_gives_zero_date)
+{
+    char *s = TimestampToHumanReadable(0ULL);
+    CHECK_MSG(s != NULL, "TimestampToHumanReadable(0) must return non-NULL");
+    CHECK_MSG(strcmp(s, "0000.00.00 00:00:00 (UTC)") == 0,
+              "TimestampToHumanReadable(0) must return zero timestamp");
+}
+
+TEST(timestamp_basic_date)
+{
+    /* 2025-01-15 12:00:00 UTC */
+    char *s = TimestampToHumanReadable(20250115120000ULL);
+    CHECK_MSG(s != NULL, "TimestampToHumanReadable must return non-NULL");
+    CHECK_MSG(strcmp(s, "2025.01.15 12:00:00 (UTC)") == 0,
+              "TimestampToHumanReadable basic date mismatch");
+}
+
+TEST(timestamp_result_contains_utc)
+{
+    char *s = TimestampToHumanReadable(20230630235959ULL);
+    CHECK_MSG(s != NULL, "TimestampToHumanReadable must return non-NULL");
+    CHECK_MSG(strstr(s, "(UTC)") != NULL,
+              "TimestampToHumanReadable result must contain '(UTC)'");
+}
+
+TEST(timestamp_format_separators)
+{
+    /* 2024.06.30 23:59:59 (UTC) */
+    char *s = TimestampToHumanReadable(20240630235959ULL);
+    CHECK_MSG(s != NULL, "TimestampToHumanReadable must return non-NULL");
+    /* verify dot separators in date and colon separators in time */
+    CHECK_MSG(s[4] == '.' && s[7] == '.',
+              "Date part must use '.' separators");
+    CHECK_MSG(s[13] == ':' && s[16] == ':',
+              "Time part must use ':' separators");
+}
+
+TEST(timestamp_length_correct)
+{
+    /* "YYYY.MM.DD HH:MM:SS (UTC)" = 25 characters */
+    char *s = TimestampToHumanReadable(20250101000000ULL);
+    CHECK_MSG(s != NULL, "TimestampToHumanReadable must return non-NULL");
+    CHECK_MSG(strlen(s) == 25,
+              "TimestampToHumanReadable result must be 25 chars");
+}
+
+TEST(timestamp_max_values)
+{
+    /* 9999.12.31 23:59:59 (UTC) */
+    char *s = TimestampToHumanReadable(99991231235959ULL);
+    CHECK_MSG(s != NULL, "TimestampToHumanReadable must return non-NULL");
+    CHECK_MSG(strcmp(s, "9999.12.31 23:59:59 (UTC)") == 0,
+              "TimestampToHumanReadable max-values mismatch");
+}
+
+TEST(timestamp_different_calls_give_different_results)
+{
+    char buf1[32], buf2[32];
+    char *s1 = TimestampToHumanReadable(20230101000000ULL);
+    CHECK_MSG(s1 != NULL, "first call must return non-NULL");
+    strncpy(buf1, s1, sizeof(buf1) - 1); buf1[sizeof(buf1)-1] = '\0';
+
+    char *s2 = TimestampToHumanReadable(20241225180000ULL);
+    CHECK_MSG(s2 != NULL, "second call must return non-NULL");
+    strncpy(buf2, s2, sizeof(buf2) - 1); buf2[sizeof(buf2)-1] = '\0';
+
+    /* Results must differ */
+    CHECK_MSG(strcmp(buf1, buf2) != 0,
+              "different timestamps must produce different results");
+}
+
+/* ===========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -1556,6 +1641,16 @@ int main(void)
     RUN(create_file_with_timeout_reads_existing);
     RUN(create_file_with_timeout_nonexistent);
     RUN(create_file_with_timeout_creates_file);
+
+    printf("\n  TimestampToHumanReadable — UTC timestamp formatting\n");
+    RUN(timestamp_returns_non_null);
+    RUN(timestamp_zero_gives_zero_date);
+    RUN(timestamp_basic_date);
+    RUN(timestamp_result_contains_utc);
+    RUN(timestamp_format_separators);
+    RUN(timestamp_length_correct);
+    RUN(timestamp_max_values);
+    RUN(timestamp_different_calls_give_different_results);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;

@@ -1,3 +1,22 @@
+/*
+ * Rufus: The Reliable USB Formatting Utility
+ * Linux implementation: stdio.c — I/O utilities and process execution
+ * Copyright © 2011-2025 Pete Batard <pete@akeo.ie>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 /* Linux: stdio.c - I/O utilities and process execution */
 #include "rufus.h"
 #include "resource.h"
@@ -704,4 +723,27 @@ GUID *StringToGuid(const char *str)
     guid.Data4[6] = (uint8_t)d[9];
     guid.Data4[7] = (uint8_t)d[10];
     return &guid;
+}
+
+/* -------------------------------------------------------------------------
+ * TimestampToHumanReadable
+ * Convert a YYYYMMDDHHMMSS UTC timestamp (stored as uint64_t) to a
+ * human-readable string: "YYYY.MM.DD HH:MM:SS (UTC)".
+ * Ported verbatim from src/windows/stdio.c (using snprintf).
+ * --------------------------------------------------------------------- */
+char *TimestampToHumanReadable(uint64_t ts)
+{
+    static char str[64];
+    uint64_t rem = ts, divisor = 10000000000ULL;
+    uint16_t data[6];
+    int i;
+
+    for (i = 0; i < 6; i++) {
+        data[i] = (uint16_t)((divisor == 0) ? rem : (rem / divisor));
+        rem %= divisor;
+        divisor /= 100ULL;
+    }
+    snprintf(str, sizeof(str), "%04d.%02d.%02d %02d:%02d:%02d (UTC)",
+             data[0], data[1], data[2], data[3], data[4], data[5]);
+    return str;
 }

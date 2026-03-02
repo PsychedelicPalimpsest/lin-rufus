@@ -983,8 +983,12 @@ static void on_gtk_dark_theme_changed(GObject *object, GParamSpec *pspec,
 void SetAccessibleName(HWND hCtrl, const char *name)
 {
 	GtkWidget *w = (GtkWidget *)hCtrl;
-	if (w && name)
+	if (w && name) {
 		gtk_widget_set_tooltip_text(w, name);
+		AtkObject *atk = gtk_widget_get_accessible(w);
+		if (atk)
+			atk_object_set_name(atk, name);
+	}
 }
 
 void SetComboEntry(HWND hDlg, int data)
