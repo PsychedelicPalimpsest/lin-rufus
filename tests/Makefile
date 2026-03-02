@@ -764,6 +764,25 @@ EXTRA_SRC_LINUX_test_bootloader_scan_linux := \
 	$(COMMON)/localization.c \
 	$(SRC_DIR)/linux/localization.c \
 	bootloader_scan_linux_glue.c
+# bootloader_scan_common tests: GetBootladerInfo() from common/bootloader_scan.c
+# Cross-platform: runs on both Linux (native) and Windows (Wine/MinGW).
+CFLAGS_LINUX_test_bootloader_scan_common := \
+	-D_RUFUS -DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_bootloader_scan_common := \
+	$(COMMON)/bootloader_scan.c
+
+CFLAGS_WIN_test_bootloader_scan_common := \
+	-D_WIN32 -DRUFUS_TEST \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_bootloader_scan_common := \
+	$(COMMON)/bootloader_scan.c
+
 DOS_LINUX_SRC := $(SRC_DIR)/linux/dos.c \
                  $(SRC_DIR)/linux/dos_locale.c \
                  $(SRC_DIR)/linux/stdio.c \

@@ -45,6 +45,7 @@
 #include "resource.h"
 #include "msapi_utf8.h"
 #include "localization.h"
+#include "../common/bootloader_scan.h"
 
 #include "ui.h"
 #include "vhd.h"
@@ -1249,42 +1250,6 @@ out:
 	safe_closehandle(hFile);
 	assert(ret != 0 && ret < ARCH_MAX);
 	return ret;
-}
-
-void GetBootladerInfo(void)
-{
-	static const char* revocation_type[] = { "UEFI DBX", "Windows SSP", "Linux SBAT", "Windows SVN", "Cert DBX" };
-	int r;
-	BOOL sb_signed;
-	uint32_t i, len;
-	uint8_t* buf = NULL;
-
-	// Check UEFI bootloaders for revocation
-	if (!IS_EFI_BOOTABLE(img_report))
-		return;
-
-	assert(ARRAYSIZE(img_report.efi_boot_entry) > 0);
-	PrintStatus(0, MSG_351);
-	uprintf("UEFI bootloaders analysis:");
-	for (i = 0; i < ARRAYSIZE(img_report.efi_boot_entry) && img_report.efi_boot_entry[i].path[0] != 0; i++) {
-		len = ReadISOFileToBuffer(image_path, img_report.efi_boot_entry[i].path, &buf);
-		if (len == 0) {
-			uprintf("  Warning: Failed to extract '%s' to check for UEFI Secure Boot info", img_report.efi_boot_entry[i].path);
-			continue;
-		}
-		sb_signed = IsSignedBySecureBootAuthority(buf, len);
-		if (sb_signed)
-			img_report.has_secureboot_bootloader |= 1;
-		uprintf("  • %s%s", img_report.efi_boot_entry[i].path, sb_signed ? "*" : "");
-		r = IsBootloaderRevoked(buf, len);
-		if (r > 0) {
-			assert(r <= ARRAYSIZE(revocation_type));
-			assert(r <= 7);
-			uprintf("  WARNING: '%s' has been revoked by %s", img_report.efi_boot_entry[i].path, revocation_type[r - 1]);
-			img_report.has_secureboot_bootloader |= 1 << r;
-		}
-		safe_free(buf);
-	}
 }
 
 // The scanning process can be blocking for message processing => use a thread
