@@ -24,6 +24,9 @@
 #include <errno.h>
 #include <ctype.h>
 #include <fcntl.h>
+#ifndef O_LARGEFILE
+#define O_LARGEFILE 0
+#endif
 #include <unistd.h>
 #include <utime.h>
 #include <sys/stat.h>
@@ -40,6 +43,7 @@
 #include "resource.h"
 #include "localization.h"
 #include "missing.h"
+#include "virtdisk.h"
 #include "syslinux/libfat/libfat.h"
 
 /* ---- constants ---- */
@@ -78,6 +82,10 @@ extern uint64_t    md5sum_totalbytes;
 extern BOOL        preserve_timestamps, enable_ntfs_compression, validate_md5sum;
 extern HANDLE      format_thread;
 extern StrArray    modified_files;
+
+/* extern declarations for functions defined in other TUs */
+extern BOOL GetOpticalMedia(IMG_SAVE* img_save);
+extern void EnableControls(BOOL enable, BOOL remove_checkboxes);
 
 /* ---- file-static state ---- */
 static BOOL         scan_only          = FALSE;
@@ -1311,7 +1319,181 @@ out:
 	return ret;
 }
 
-void OpticalDiscSaveImage(void) {}
+/* -----------------------------------------------------------------------
+ * OpticalDiscSaveImage implementation
+ *
+ * Reads the entire optical disc (or any block device / regular file) at
+ * img_save->DevicePath and writes it verbatim to img_save->ImagePath.
+ * Progress is reported via UpdateProgressWithInfo(OP_FORMAT, MSG_261, …).
+ * UM_FORMAT_COMPLETED is posted to hMainDialog when done (or on error).
+ *
+ * iso_save_run_sync() is the synchronous core used by unit tests.
+ * The public OpticalDiscSaveImage() wraps it in a pthread via CreateThread.
+ * ----------------------------------------------------------------------- */
+
+/* Shared state used by the save thread */
+static IMG_SAVE s_opt_save = { 0 };
+
+/* Core save logic — runs synchronously.  Returns 0 on success, 1 on error.
+ * Frees img_save->DevicePath, ->ImagePath, and ->Label on return. */
+DWORD iso_save_run_sync(IMG_SAVE* img_save)
+{
+	int    src_fd   = -1;
+	int    dst_fd   = -1;
+	uint8_t* buffer = NULL;
+	uint64_t wb     = 0;
+	DWORD    ret    = 1;
+
+	if (!img_save || !img_save->DevicePath || !img_save->ImagePath) {
+		ErrorStatus = RUFUS_ERROR(ERROR_INVALID_PARAMETER);
+		goto out;
+	}
+
+	src_fd = open(img_save->DevicePath, O_RDONLY | O_LARGEFILE);
+	if (src_fd < 0) {
+		uprintf_errno("Could not open '%s'", img_save->DevicePath);
+		ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
+		goto out;
+	}
+
+	dst_fd = open(img_save->ImagePath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (dst_fd < 0) {
+		uprintf_errno("Could not create '%s'", img_save->ImagePath);
+		ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
+		goto out;
+	}
+
+	if (img_save->BufSize == 0)
+		img_save->BufSize = 1 * 1024 * 1024;  /* fallback: 1 MiB */
+
+	buffer = malloc(img_save->BufSize);
+	if (!buffer) {
+		ErrorStatus = RUFUS_ERROR(ERROR_NOT_ENOUGH_MEMORY);
+		goto out;
+	}
+
+	uprintf("Saving optical disc to '%s' (%s)…",
+	        img_save->ImagePath,
+	        SizeToHumanReadable((uint64_t)img_save->DeviceSize, FALSE, FALSE));
+	UpdateProgressWithInfoInit(NULL, FALSE);
+
+	while (wb < (uint64_t)img_save->DeviceSize) {
+		CHECK_FOR_USER_CANCEL;
+
+		uint64_t to_read = MIN((uint64_t)img_save->BufSize,
+		                       (uint64_t)img_save->DeviceSize - wb);
+		ssize_t rSize = read(src_fd, buffer, (size_t)to_read);
+		if (rSize <= 0) {
+			if (rSize < 0)
+				uprintf_errno("Read error at offset %" PRIu64, wb);
+			else
+				uprintf("Premature end of disc at %" PRIu64 " (expected %" PRIu64 ")",
+				        wb, (uint64_t)img_save->DeviceSize);
+			ErrorStatus = RUFUS_ERROR(ERROR_READ_FAULT);
+			goto out;
+		}
+
+		/* Write with retries */
+		for (int retry = 0; retry < WRITE_RETRIES; retry++) {
+			CHECK_FOR_USER_CANCEL;
+			ssize_t wSize = write(dst_fd, buffer, (size_t)rSize);
+			if (wSize == rSize)
+				break;
+			if (retry == WRITE_RETRIES - 1) {
+				if (wSize < 0)
+					uprintf_errno("Write error at offset %" PRIu64, wb);
+				else
+					uprintf("Write error: wrote %zd of %zd bytes", wSize, rSize);
+				ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
+				goto out;
+			}
+			uprintf("Write error at offset %" PRIu64 ", retrying…", wb);
+			sleep(1);
+		}
+
+		wb += (uint64_t)rSize;
+		UpdateProgressWithInfo(OP_FORMAT, MSG_261, wb, (uint64_t)img_save->DeviceSize);
+	}
+
+	uprintf("Optical disc saved (%s).",
+	        SizeToHumanReadable(wb, FALSE, FALSE));
+	ret = 0;
+
+out:
+	free(buffer);
+	if (src_fd >= 0) close(src_fd);
+	if (dst_fd >= 0) close(dst_fd);
+	if (img_save) {
+		safe_free(img_save->DevicePath);
+		safe_free(img_save->ImagePath);
+		safe_free(img_save->Label);
+	}
+	PostMessage(hMainDialog, UM_FORMAT_COMPLETED, (WPARAM)TRUE, 0);
+	return ret;
+}
+
+/* Thread entry point — wraps iso_save_run_sync for use with CreateThread */
+static DWORD WINAPI OpticalDiscSaveImageThread(void* param)
+{
+	IMG_SAVE* img_save = (IMG_SAVE*)param;
+	DWORD r = iso_save_run_sync(img_save);
+	ExitThread(r);
+	return r; /* unreachable, silences -Wreturn-type */
+}
+
+void OpticalDiscSaveImage(void)
+{
+	char filename[128] = "disc_image.iso";
+	EXT_DECL(img_ext, filename, __VA_GROUP__("*.iso"),
+	         __VA_GROUP__(lmprintf(MSG_036)));
+
+	if (op_in_progress || (format_thread != NULL))
+		return;
+
+	memset(&s_opt_save, 0, sizeof(s_opt_save));
+	s_opt_save.Type = VIRTUAL_STORAGE_TYPE_DEVICE_ISO;
+
+	if (!GetOpticalMedia(&s_opt_save)) {
+		uprintf("No dumpable optical media found.");
+		return;
+	}
+
+	/* Choose a buffer size proportional to disc size (8–32 MiB) */
+	s_opt_save.BufSize = 32 * 1024 * 1024;
+	while (s_opt_save.BufSize > 8 * 1024 * 1024 &&
+	       s_opt_save.DeviceSize <= (LONGLONG)s_opt_save.BufSize * 64)
+		s_opt_save.BufSize /= 2;
+
+	if (s_opt_save.Label && s_opt_save.Label[0])
+		snprintf(filename, sizeof(filename), "%s.iso", s_opt_save.Label);
+
+	s_opt_save.ImagePath = FileDialog(TRUE, NULL, &img_ext, 0);
+	if (!s_opt_save.ImagePath) {
+		safe_free(s_opt_save.DevicePath);
+		safe_free(s_opt_save.Label);
+		return;
+	}
+
+	uprintf("ISO media size %s",
+	        SizeToHumanReadable((uint64_t)s_opt_save.DeviceSize, FALSE, FALSE));
+	SendMessage(hMainDialog, UM_PROGRESS_INIT, 0, 0);
+	ErrorStatus = 0;
+	EnableControls(FALSE, FALSE);
+	InitProgress(TRUE);
+
+	format_thread = CreateThread(NULL, 0, OpticalDiscSaveImageThread, &s_opt_save, 0, NULL);
+	if (format_thread != NULL) {
+		uprintf("\r\nSave to ISO operation started");
+		PrintInfo(0, -1);
+	} else {
+		uprintf("Unable to start ISO save thread");
+		ErrorStatus = RUFUS_ERROR(APPERR(ERROR_CANT_START_THREAD));
+		safe_free(s_opt_save.ImagePath);
+		safe_free(s_opt_save.DevicePath);
+		safe_free(s_opt_save.Label);
+		PostMessage(hMainDialog, UM_FORMAT_COMPLETED, (WPARAM)FALSE, 0);
+	}
+}
 
 DWORD WINAPI IsoSaveImageThread(void* param) { (void)param; return 0; }
 

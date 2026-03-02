@@ -274,6 +274,25 @@ CFLAGS_LINUX_test_iso_linux := \
 LDFLAGS_LINUX_test_iso_linux := -lcdio -liso9660 -ludf $(SRC_DIR)/syslinux/libfat/libfat.a
 EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) iso_linux_glue.c
 
+# test_iso_save_linux — OpticalDiscSaveImage / iso_save_run_sync tests
+# Uses ISO_SAVE_LINUX_SRC (same as ISO_LINUX_SRC, minus ui.c) so the test
+# file can provide its own tracking stubs for _UpdateProgressWithInfo and
+# PostMessageA without conflicts.
+ISO_SAVE_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
+                      $(SRC_DIR)/linux/stdfn.c \
+                      $(SRC_DIR)/linux/stdio.c \
+                      $(SRC_DIR)/linux/localization.c \
+                      $(COMMON)/parser.c \
+                      $(COMMON)/localization.c
+CFLAGS_LINUX_test_iso_save_linux := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_iso_save_linux := -lcdio -liso9660 -ludf $(SRC_DIR)/syslinux/libfat/libfat.a
+EXTRA_SRC_LINUX_test_iso_save_linux := $(ISO_SAVE_LINUX_SRC) $(BLED_LIB) iso_save_linux_glue.c
+
 # HashThread/IndividualHashThread tests additionally need:
 #   - stdio.c (uprintf), stdfn.c (safe_* helpers), ui.c (UpdateProgress stubs),
 #     stdlg.c (MyDialogBox stub), msg_dispatch.c (PostMessage compat bridge)

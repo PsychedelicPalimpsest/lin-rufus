@@ -126,6 +126,7 @@ static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 static void on_toggle_dark_mode(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
+static void on_save_clicked(GtkButton *btn, gpointer data);
 static void on_persistence_changed(GtkWidget *w, gpointer data);
 void SetPersistenceSize(void);   /* defined later in this file */
 extern DWORD WINAPI HashThread(void *param);  /* hash.c */
@@ -224,6 +225,7 @@ static GtkWidget *build_toolbar(void)
 	g_signal_connect(rw.about_btn, "clicked", G_CALLBACK(on_about_clicked), NULL);
 	g_signal_connect(rw.lang_btn,  "clicked", G_CALLBACK(on_lang_clicked),  NULL);
 	g_signal_connect(rw.hash_btn,  "clicked", G_CALLBACK(on_hash_clicked),  NULL);
+	g_signal_connect(rw.save_btn,  "clicked", G_CALLBACK(on_save_clicked),  NULL);
 
 	gtk_box_pack_start(GTK_BOX(bar), rw.lang_btn,     FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(bar), rw.about_btn,    FALSE, FALSE, 0);
@@ -947,6 +949,13 @@ static void on_lang_clicked(GtkButton *btn, gpointer data)
 	(void)btn; (void)data;
 	RECT rc = {0, 0, 0, 0};
 	ShowLanguageMenu(rc);
+}
+
+static void on_save_clicked(GtkButton *btn, gpointer data)
+{
+	(void)btn; (void)data;
+	extern void OpticalDiscSaveImage(void);
+	OpticalDiscSaveImage();
 }
 
 static void on_toggle_dark_mode(GtkWidget *w, gpointer data)
