@@ -613,6 +613,136 @@ TEST(format_partition_udf_returns_true_if_tool_present)
 }
 
 /* ================================================================
+ * FAT16 command builder tests
+ * ================================================================ */
+
+TEST(fat16_build_cmd_basic)
+{
+    char cmd[512];
+    BOOL r = format_fat16_build_cmd("/usr/sbin/mkfs.fat", "/dev/sdb1",
+                                     0, NULL, cmd, sizeof(cmd));
+    CHECK(r == TRUE);
+    CHECK(strstr(cmd, "/usr/sbin/mkfs.fat") != NULL);
+    CHECK(strstr(cmd, "-F 16") != NULL);
+    CHECK(strstr(cmd, "/dev/sdb1") != NULL);
+}
+
+TEST(fat16_build_cmd_with_label)
+{
+    char cmd[512];
+    format_fat16_build_cmd("/usr/sbin/mkfs.fat", "/dev/sdb1",
+                            0, "MYVOLUME", cmd, sizeof(cmd));
+    CHECK(strstr(cmd, "-n") != NULL);
+    CHECK(strstr(cmd, "MYVOLUME") != NULL);
+}
+
+TEST(fat16_build_cmd_empty_label_omitted)
+{
+    char cmd[512];
+    format_fat16_build_cmd("/usr/sbin/mkfs.fat", "/dev/sdb1",
+                            0, "", cmd, sizeof(cmd));
+    CHECK(strstr(cmd, "-n") == NULL);
+}
+
+TEST(fat16_build_cmd_null_label_omitted)
+{
+    char cmd[512];
+    format_fat16_build_cmd("/usr/sbin/mkfs.fat", "/dev/sdb1",
+                            0, NULL, cmd, sizeof(cmd));
+    CHECK(strstr(cmd, "-n") == NULL);
+}
+
+TEST(fat16_build_cmd_null_tool_returns_false)
+{
+    char cmd[512];
+    BOOL r = format_fat16_build_cmd(NULL, "/dev/sdb1",
+                                     0, NULL, cmd, sizeof(cmd));
+    CHECK(r == FALSE);
+}
+
+TEST(fat16_build_cmd_null_path_returns_false)
+{
+    char cmd[512];
+    BOOL r = format_fat16_build_cmd("/usr/sbin/mkfs.fat", NULL,
+                                     0, NULL, cmd, sizeof(cmd));
+    CHECK(r == FALSE);
+}
+
+TEST(fat16_build_cmd_null_buf_returns_false)
+{
+    BOOL r = format_fat16_build_cmd("/usr/sbin/mkfs.fat", "/dev/sdb1",
+                                     0, NULL, NULL, 512);
+    CHECK(r == FALSE);
+}
+
+TEST(fat16_build_cmd_buf_too_small_returns_false)
+{
+    char cmd[4];
+    BOOL r = format_fat16_build_cmd("/usr/sbin/mkfs.fat", "/dev/sdb1",
+                                     0, NULL, cmd, sizeof(cmd));
+    CHECK(r == FALSE);
+}
+
+TEST(fat16_format_creates_filesystem_if_tool_present)
+{
+    const char *tool = find_tool("mkfs.fat");
+    if (!tool) tool = find_tool("mkdosfs");
+    if (tool == NULL) {
+        printf("  [SKIP] mkfs.fat / mkdosfs not found\n");
+        return;
+    }
+
+    /* FAT16 requires at least 16 MiB (mkfs.fat -F 16 minimum cluster count) */
+    uint64_t size = 16ULL * 1024 * 1024;
+    char *path = create_temp_image(size);
+    CHECK(path != NULL);
+    setup_drive(path, size);
+    ErrorStatus = 0;
+
+    BOOL r = FormatFAT16(DRIVE_INDEX_MIN, 0, 0, "FAT16TST", FP_FORCE);
+    CHECK(r == TRUE);
+
+    /* FAT16 boot sector has OEM name at offset 3 and 0x55AA at offset 510 */
+    uint8_t sig[2] = {0};
+    CHECK(read_at(path, 510, sig, 2) == 0);
+    CHECK(sig[0] == 0x55 && sig[1] == 0xAA);
+
+    teardown_drive();
+    unlink(path);
+    free(path);
+}
+
+TEST(format_partition_fat16_returns_true_if_tool_present)
+{
+    const char *tool = find_tool("mkfs.fat");
+    if (!tool) tool = find_tool("mkdosfs");
+    if (tool == NULL) {
+        printf("  [SKIP] mkfs.fat / mkdosfs not found\n");
+        return;
+    }
+
+    uint64_t size = 16ULL * 1024 * 1024;
+    char *path = create_temp_image(size);
+    CHECK(path != NULL);
+    setup_drive(path, size);
+    ErrorStatus = 0;
+
+    BOOL r = FormatPartition(DRIVE_INDEX_MIN, 0, 0, FS_FAT16, "FAT16TST", FP_FORCE);
+    CHECK(r == TRUE);
+
+    teardown_drive();
+    unlink(path);
+    free(path);
+}
+
+TEST(fat16_invalid_drive_returns_false)
+{
+    ErrorStatus = 0;
+    BOOL r = FormatFAT16(DRIVE_INDEX_MIN - 1, 0, 0, "Test", FP_FORCE);
+    CHECK(r == FALSE);
+}
+
+/* ================================================================
  * 2. Graceful failure when tool is not present
  * ================================================================ */
 
@@ -1032,6 +1162,18 @@ int main(void)
     RUN(udf_build_cmd_null_tool_returns_false);
     RUN(udf_build_cmd_null_path_returns_false);
     RUN(udf_build_cmd_null_buf_returns_false);
+
+    RUN(fat16_build_cmd_basic);
+    RUN(fat16_build_cmd_with_label);
+    RUN(fat16_build_cmd_empty_label_omitted);
+    RUN(fat16_build_cmd_null_label_omitted);
+    RUN(fat16_build_cmd_null_tool_returns_false);
+    RUN(fat16_build_cmd_null_path_returns_false);
+    RUN(fat16_build_cmd_null_buf_returns_false);
+    RUN(fat16_build_cmd_buf_too_small_returns_false);
+    RUN(fat16_invalid_drive_returns_false);
+    RUN(fat16_format_creates_filesystem_if_tool_present);
+    RUN(format_partition_fat16_returns_true_if_tool_present);
 
     /* Graceful failure */
     RUN(ntfs_format_no_tool_returns_false);

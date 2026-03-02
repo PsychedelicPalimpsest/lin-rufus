@@ -74,6 +74,23 @@ void set_preselected_fs(int fs)
 void populate_fs_combo(void)
 {
 	IGNORE_RETVAL(ComboBox_ResetContent(hFileSystem));
+
+	/* FAT16 — only if mkfs.fat or mkdosfs is available */
+	{
+		static const char * const fat16_candidates[] = {
+			"/sbin/mkfs.fat", "/usr/sbin/mkfs.fat", "/bin/mkfs.fat", "/usr/bin/mkfs.fat",
+			"/usr/local/sbin/mkfs.fat", "/usr/local/bin/mkfs.fat",
+			"/sbin/mkdosfs", "/usr/sbin/mkdosfs", NULL
+		};
+		for (int i = 0; fat16_candidates[i]; i++) {
+			if (access(fat16_candidates[i], X_OK) == 0) {
+				IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
+				    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_FAT16]), FS_FAT16));
+				break;
+			}
+		}
+	}
+
 	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
 	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_FAT32]), FS_FAT32));
 

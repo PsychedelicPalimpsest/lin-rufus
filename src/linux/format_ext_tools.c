@@ -50,6 +50,120 @@ static const char *find_format_tool(const char *name)
 }
 
 /* =========================================================================
+ * format_fat16_build_cmd
+ *
+ * Build the mkfs.fat -F 16 command string into cmd_buf.
+ *
+ * Parameters:
+ *   tool         - absolute path to mkfs.fat (or mkdosfs) binary (must not be NULL)
+ *   part_path    - partition device/file path (must not be NULL)
+ *   cluster_size - bytes per cluster; 0 means let the tool choose
+ *   label        - volume label or NULL/empty to omit -n
+ *   cmd_buf      - output buffer (must not be NULL)
+ *   cmd_buf_len  - size of cmd_buf; must be large enough for the full command
+ *
+ * Returns TRUE on success, FALSE if any argument is NULL or the buffer is
+ * too small to hold the resulting command.
+ * ======================================================================= */
+BOOL format_fat16_build_cmd(const char *tool, const char *part_path,
+                             DWORD cluster_size, const char *label,
+                             char *cmd_buf, size_t cmd_buf_len)
+{
+	if (!tool || !part_path || !cmd_buf || cmd_buf_len < 16)
+		return FALSE;
+
+	char tmp[1024];
+	/* Force FAT16 with -F 16 */
+	int n = snprintf(tmp, sizeof(tmp), "%s -F 16", tool);
+	if (n < 0 || (size_t)n >= sizeof(tmp)) return FALSE;
+
+	if (cluster_size > 0) {
+		/* mkfs.fat -s expects sectors per cluster (power of 2, 1–128) */
+		DWORD spc = cluster_size / 512;
+		if (spc < 1) spc = 1;
+		int m = snprintf(tmp + n, sizeof(tmp) - (size_t)n, " -s %u", (unsigned)spc);
+		if (m < 0 || (size_t)(n + m) >= sizeof(tmp)) return FALSE;
+		n += m;
+	}
+
+	if (label && label[0] != '\0') {
+		int m = snprintf(tmp + n, sizeof(tmp) - (size_t)n, " -n \"%s\"", label);
+		if (m < 0 || (size_t)(n + m) >= sizeof(tmp)) return FALSE;
+		n += m;
+	}
+
+	int m = snprintf(tmp + n, sizeof(tmp) - (size_t)n, " \"%s\"", part_path);
+	if (m < 0 || (size_t)(n + m) >= sizeof(tmp)) return FALSE;
+	n += m;
+
+	if ((size_t)n >= cmd_buf_len) return FALSE;
+
+	memcpy(cmd_buf, tmp, (size_t)n + 1);
+	return TRUE;
+}
+
+/* =========================================================================
+ * FormatFAT16
+ *
+ * Format a partition as FAT16 using mkfs.fat (dosfstools) with -F 16.
+ *
+ * Returns TRUE on success, FALSE if mkfs.fat/mkdosfs is not installed or
+ * fails.
+ * ======================================================================= */
+BOOL FormatFAT16(DWORD DriveIndex, uint64_t PartitionOffset,
+                 DWORD UnitAllocationSize, LPCSTR Label, DWORD Flags)
+{
+	(void)Flags;
+
+	if ((DriveIndex < DRIVE_INDEX_MIN) || (DriveIndex > DRIVE_INDEX_MAX)) {
+		ErrorStatus = RUFUS_ERROR(ERROR_INVALID_PARAMETER);
+		return FALSE;
+	}
+
+	/* Try mkfs.fat (dosfstools >= 4.x) then the legacy alias mkdosfs */
+	const char *tool = find_format_tool("mkfs.fat");
+	if (!tool) tool = find_format_tool("mkdosfs");
+	if (!tool) {
+		uprintf("FormatFAT16: mkfs.fat not found; please install dosfstools");
+		ErrorStatus = RUFUS_ERROR(ERROR_NOT_SUPPORTED);
+		return FALSE;
+	}
+
+	char *part_path = GetLogicalName(DriveIndex, PartitionOffset, FALSE, TRUE);
+	if (!part_path)
+		part_path = GetPhysicalName(DriveIndex);
+	if (!part_path) {
+		ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
+		return FALSE;
+	}
+
+	char cmd[1024];
+	if (!format_fat16_build_cmd(tool, part_path, UnitAllocationSize,
+	                             Label, cmd, sizeof(cmd))) {
+		free(part_path);
+		ErrorStatus = RUFUS_ERROR(ERROR_INVALID_PARAMETER);
+		return FALSE;
+	}
+	free(part_path);
+
+	uprintf("Formatting as FAT16: %s", cmd);
+	PrintStatusInfo(FALSE, FALSE, 0, MSG_222, "FAT16");
+	UpdateProgressWithInfoInit(NULL, TRUE);
+
+	DWORD rc = RunCommandWithProgress(cmd, NULL, TRUE, MSG_217, NULL);
+	if (rc != 0) {
+		if (rc != ERROR_CANCELLED)
+			uprintf("mkfs.fat failed with exit code %lu", (unsigned long)rc);
+		if (!IS_ERROR(ErrorStatus))
+			ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
+		return FALSE;
+	}
+
+	UpdateProgressWithInfo(OP_FORMAT, MSG_217, 100, 100);
+	return TRUE;
+}
+
+/* =========================================================================
  * format_ntfs_build_cmd
  *
  * Build the mkntfs command string into cmd_buf.

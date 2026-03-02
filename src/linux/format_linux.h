@@ -84,6 +84,30 @@ BOOL InstallGrub2(const char *dev_path, const char *mount_path);
 BOOL WritePBR_fs(HANDLE hLogicalVolume, int fs_type);
 
 /*
+ * FormatFAT16 - format a partition as FAT16 using mkfs.fat (dosfstools).
+ *
+ * Returns FALSE if mkfs.fat / mkdosfs is not installed.
+ */
+BOOL FormatFAT16(DWORD DriveIndex, uint64_t PartitionOffset,
+                 DWORD UnitAllocationSize, LPCSTR Label, DWORD Flags);
+
+/*
+ * format_fat16_build_cmd - build a mkfs.fat -F 16 command string (testable helper).
+ *
+ *   tool         - absolute path to mkfs.fat (or mkdosfs) binary
+ *   part_path    - partition device/file path
+ *   cluster_size - bytes per cluster (0 = let tool choose)
+ *   label        - volume label (NULL or empty = omit -n)
+ *   cmd_buf      - output buffer
+ *   cmd_buf_len  - size of cmd_buf
+ *
+ * Returns TRUE on success, FALSE on NULL argument or buffer overflow.
+ */
+BOOL format_fat16_build_cmd(const char *tool, const char *part_path,
+                             DWORD cluster_size, const char *label,
+                             char *cmd_buf, size_t cmd_buf_len);
+
+/*
  * FormatNTFS - format a partition as NTFS using mkntfs.
  *
  * Locates mkntfs at runtime, resolves the partition path, and calls it via

@@ -78,6 +78,8 @@ BOOL FormatPartition(DWORD DriveIndex, uint64_t PartitionOffset, DWORD UnitAlloc
 		return FALSE;
 	}
 	actual_fs_type = FSType;
+	if (FSType == FS_FAT16)
+		return FormatFAT16(DriveIndex, PartitionOffset, UnitAllocationSize, Label, Flags);
 	if (FSType == FS_FAT32)
 		return FormatLargeFAT32(DriveIndex, PartitionOffset, UnitAllocationSize,
 		                        FileSystemLabel[FSType], Label, Flags);
