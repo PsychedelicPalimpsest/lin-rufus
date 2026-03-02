@@ -32,19 +32,24 @@
 #define IOCTL_MOUNTMGR_SET_AUTO_MOUNT       \
 	CTL_CODE(MOUNTMGRCONTROLTYPE, 16, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 
+#ifndef XP_MSR
 #define XP_MSR                              0x01
 #define XP_ESP                              0x02
 #define XP_UEFI_NTFS                        0x04
 #define XP_COMPAT                           0x08
 #define XP_PERSISTENCE                      0x10
+#endif
 
+#ifndef PI_MAIN
 #define PI_MAIN                             0
 #define PI_ESP                              1
 #define PI_CASPER                           2
 #define PI_UEFI_NTFS                        3
 #define PI_MAX                              4
+#endif
 
 // The following should match VDS_FSOF_FLAGS as much as possible
+#ifndef FP_FORCE
 #define FP_FORCE                            0x00000001
 #define FP_QUICK                            0x00000002
 #define FP_COMPRESSION                      0x00000004
@@ -53,6 +58,7 @@
 #define FP_NO_BOOT                          0x00020000
 #define FP_CREATE_PERSISTENCE_CONF          0x00040000
 #define FP_NO_PROGRESS                      0x00080000
+#endif
 
 #define FILE_FLOPPY_DISKETTE                0x00000004
 
@@ -338,6 +344,8 @@ static __inline BOOL UnlockDrive(HANDLE hDrive) {
 #define safe_unlockclose(h) do {if ((h != INVALID_HANDLE_VALUE) && (h != NULL)) {UnlockDrive(h); CloseHandle(h); h = INVALID_HANDLE_VALUE;}} while(0)
 
 /* Current drive info */
+#ifndef RUFUS_DRIVE_INFO_DEFINED
+#define RUFUS_DRIVE_INFO_DEFINED
 typedef struct {
 	LONGLONG DiskSize;
 	DWORD DeviceNumber;
@@ -363,6 +371,7 @@ typedef struct {
 } RUFUS_DRIVE_INFO;
 extern RUFUS_DRIVE_INFO SelectedDrive;
 extern int partition_index[PI_MAX];
+#endif /* RUFUS_DRIVE_INFO_DEFINED */
 
 BOOL SetAutoMount(BOOL enable);
 BOOL GetAutoMount(BOOL* enabled);

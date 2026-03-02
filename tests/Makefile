@@ -108,6 +108,7 @@ FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                     $(SRC_DIR)/linux/format_ext_tools.c \
                     $(SRC_DIR)/linux/drive.c \
                     $(COMMON)/drive.c \
+                    $(COMMON)/format_fat32.c \
                     $(SRC_DIR)/linux/window_text_bridge.c \
                     $(SRC_DIR)/ext2fs/posix_io.c
 EXT2FS_LIB := $(SRC_DIR)/ext2fs/libext2fs.a
@@ -144,6 +145,7 @@ FORMAT_NTFS_EXFAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                                 $(SRC_DIR)/linux/format_ext_tools.c \
                                 $(SRC_DIR)/linux/drive.c \
                                 $(COMMON)/drive.c \
+                                $(COMMON)/format_fat32.c \
                                 $(SRC_DIR)/linux/window_text_bridge.c \
                                 $(SRC_DIR)/ext2fs/posix_io.c
 CFLAGS_LINUX_test_format_ntfs_exfat_linux := \
@@ -165,6 +167,7 @@ FORMAT_THREAD_LINUX_SRC := \
 	$(SRC_DIR)/linux/format_ext_tools.c \
 	$(SRC_DIR)/linux/drive.c \
 	$(COMMON)/drive.c \
+	$(COMMON)/format_fat32.c \
 	$(SRC_DIR)/linux/window_text_bridge.c \
 	$(SRC_DIR)/linux/verify.c \
 	$(SRC_DIR)/ext2fs/posix_io.c \

@@ -66,5 +66,7 @@ BOOL verify_write_pass(const char *source_path, int device_fd, uint64_t written_
 int  unattend_xml_flags = 0;
 char *unattend_xml_path = NULL;
 void wue_set_mount_path(const char *path) { (void)path; }
+BOOL SetupWinPE(char drive_letter)
+{ (void)drive_letter; return TRUE; }
 BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 { (void)drive_letter; (void)flags; return FALSE; }

@@ -125,18 +125,18 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `windows.h` | 🔧 | ~1 200 lines; types, macros, most stubs present. `SendMessage`/`PostMessage` are no-ops — needs GTK dispatch integration |
 | `GetWindowTextA` / `SetWindowTextA` | ✅ | Real implementation via `window_text_bridge` — thread-safe HWND→text registry; GTK main thread keeps cache in sync via "changed" signal; worker threads (FormatThread) read cache safely; `window_text_register_gtk()` wired in `ui_gtk.c` for volume-label entry; 20 tests, 30 assertions pass |
 | `commctrl.h` | 🔧 | ComboBox/ListBox macros present, most map to GTK stubs |
-| `setupapi.h` | 🟡 | Empty stub; needed by `dev.c` device enumeration |
-| `wincrypt.h` / `wintrust.h` | 🟡 | Needed by `pki.c` — use OpenSSL as replacement |
-| `shlobj.h` / `shobjidl.h` | 🟡 | Shell path functions; replace with `XDG_*` / `g_get_*` |
-| `cfgmgr32.h` | 🟡 | Device manager stubs; replace with udev |
-| `dbt.h` | 🟡 | Device-change notifications; replace with udev monitor |
+| `setupapi.h` | ✅ | Compilation stub only; Linux `dev.c` uses sysfs/libudev directly, not setupapi |
+| `wincrypt.h` / `wintrust.h` | ✅ | Compilation stubs; Linux `hash.c` uses OpenSSL directly |
+| `shlobj.h` / `shobjidl.h` | ✅ | `src/linux/xdg.c`: `GetXdgUserDir` parses `user-dirs.dirs`; 17 tests pass (item 35) |
+| `cfgmgr32.h` | ✅ | Compilation stub; `device_monitor.c` handles device events via libudev netlink |
+| `dbt.h` | ✅ | `UM_MEDIA_CHANGE` replaces `WM_DEVICECHANGE`; `device_monitor.c` handles all device events via libudev; 20 tests pass |
 | `dbghelp.h` | 🚫 | Symbol walking — no Linux equivalent needed |
 | `gpedit.h` | 🚫 | Group Policy — N/A on Linux |
 | `delayimp.h` | 🚫 | Delay-load DLL mechanism — N/A on Linux |
 | All others | 🔧 | Typedefs / empty stubs compile; runtime behaviour untested |
 | `SendMessage` / `PostMessage` | ✅ | Full `msg_dispatch` bridge: thread-safe handler registry, async `PostMessage` via pluggable `MsgPostScheduler` (GTK: `g_idle_add`), synchronous `SendMessage` with pthread condvar blocking for cross-thread calls; 61 tests pass; GTK scheduler and main dialog handler registered in `ui_gtk.c` |
 | `CreateThread` / `WaitForSingleObject` | ✅ | Full pthread bridge: threads, events (auto/manual-reset), mutexes, `CRITICAL_SECTION`, `WaitForMultipleObjects`, `GetExitCodeThread`, `TerminateThread` — 51 tests pass |
-| Windows Registry (`RegOpenKey` etc.) | 🟡 | All no-ops; settings storage needs a Linux equivalent (e.g., `GKeyFile` / INI file) |
+| Windows Registry (`RegOpenKey` etc.) | ✅ | Settings use INI-file backend via `src/linux/settings.h`; `ReadSetting*`/`WriteSetting*` macros map to `ReadIniKey*`/`WriteIniKey*`; 80 tests pass |
 | `DEFINE_GUID` / `CompareGUID` / `GuidToString` / `StringToGuid` | ✅ | `DEFINE_GUID` in `guiddef.h` (INITGUID-conditional); others in `stdfn.c` / `stdio.c`; 19 tests pass |
 
 ---
@@ -307,15 +307,15 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `CreateTooltip()` / `DestroyTooltip()` | ✅ | Uses `gtk_widget_set_tooltip_text` / `gtk_widget_set_has_tooltip`; `#ifdef USE_GTK` guard; 6 tests pass; wired into `on_app_activate` for device, boot, filesystem, cluster, label, select, start controls |
 | `SetTaskbarProgressValue()` | 🚫 | Windows taskbar — N/A; could map to GTK window urgency hint |
 | `CreateAboutBox()` / `AboutCallback()` | 🔧 | GTK About dialog implemented in `ui_gtk.c`; callback stub unused |
-| `LicenseCallback()` | 🟡 | Show license in a `GtkDialog` |
-| `UpdateCallback()` / `NewVersionCallback()` | 🟡 | Update dialog; low priority |
+| `LicenseCallback()` | ✅ | GTK scrollable GtkTextView dialog; `find_license_file()` searches app_dir; 3 tests pass (item 37) |
+| `UpdateCallback()` / `NewVersionCallback()` | ✅ | `UM_NEW_VERSION` + GTK GtkMessageDialog with version string and release notes; 4 tests pass (item 38) |
 | `SetFidoCheck()` / `SetUpdateCheck()` | ✅ | Both implemented: `SetFidoCheck` checks for pwsh, spawns `CheckForFidoThread` (downloads Fido.ver, validates URL, posts `UM_ENABLE_DOWNLOAD_ISO` to reveal Download ISO button); wired into `on_app_activate`; 57 net tests pass |
 | `FlashTaskbar()` | 🚫 | N/A on Linux |
 | `MyCreateDialog()` / `MyDialogBox()` | 🔧 | Windows dialog resource system; `IDD_HASH` replaced with `UM_HASH_COMPLETED` → GTK dialog; others still stub |
 | `GetDialogTemplate()` | 🚫 | Windows `.rc` resource — not applicable on Linux |
-| `SetAlertPromptHook()` / `SetAlertPromptMessages()` | 🟡 | Alert interception; GTK equivalent needed |
+| `SetAlertPromptHook()` / `SetAlertPromptMessages()` | 🚫 | Windows-only WinEvent hooks for system format dialogs — N/A on Linux |
 | `CenterDialog()` / `ResizeMoveCtrl()` | 🚫 | GTK handles layout automatically |
-| `CreateStaticFont()` / `SetHyperLinkFont()` | 🟡 | Use Pango / CSS for hyperlink styling |
+| `CreateStaticFont()` / `SetHyperLinkFont()` | ✅ | CSM help ⓘ indicator with blue Pango markup; `SetHyperLinkFont` uses CSS label; 19 CSM tests pass (item 41) |
 | `DownloadNewVersion()` | ✅ | Calls `xdg-open DOWNLOAD_URL` to open browser to Rufus downloads page |
 
 ### 3k. UI Logic (`ui.c` / `ui_gtk.c`)

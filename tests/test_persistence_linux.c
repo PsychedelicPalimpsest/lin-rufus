@@ -259,6 +259,9 @@ int   unattend_xml_flags = 0;
 
 void wue_set_mount_path(const char *path) { (void)path; }
 
+BOOL SetupWinPE(char drive_letter)
+{ (void)drive_letter; return TRUE; }
+
 BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 {
     (void)drive_letter; (void)flags; return TRUE;
