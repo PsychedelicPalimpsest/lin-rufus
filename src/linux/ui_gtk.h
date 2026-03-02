@@ -63,6 +63,10 @@ typedef struct {
 	GtkWidget *persistence_size;    /* IDC_PERSISTENCE_SIZE (label) */
 	GtkWidget *persistence_units;   /* IDC_PERSISTENCE_UNITS */
 
+	/* Image info panel (shown after ImageScanThread completes) */
+	GtkWidget *img_info_expander;   /* collapsible "Image info" section */
+	GtkWidget *img_info_label;      /* label inside the expander */
+
 	/* Status / progress section */
 	GtkWidget *progress_bar;        /* IDC_PROGRESS */
 	GtkWidget *status_label;        /* IDC_STATUS */
@@ -128,6 +132,9 @@ static inline void gtk_combo_set_active_by_data(GtkWidget *combo, gint data)
 GtkWidget *rufus_gtk_create_window(GtkApplication *app);
 void       rufus_gtk_update_status(const char *msg);
 void       rufus_gtk_append_log(const char *msg);
+
+/* Image report summary (pure C, no GTK — see stdfn.c) */
+size_t format_img_info(const RUFUS_IMG_REPORT *r, char *buf, size_t sz);
 
 /* Linux-specific initialization (defined in rufus.c) */
 void rufus_init_paths(void);

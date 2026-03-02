@@ -635,6 +635,16 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_box_pack_start(GTK_BOX(vbox), build_format_options(),   FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), build_persistence_row(),  FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 2);
+
+	/* Image info expander — hidden until an image is scanned */
+	rw.img_info_label    = gtk_label_new("");
+	gtk_widget_set_halign(rw.img_info_label, GTK_ALIGN_START);
+	gtk_label_set_selectable(GTK_LABEL(rw.img_info_label), TRUE);
+	gtk_label_set_line_wrap(GTK_LABEL(rw.img_info_label), TRUE);
+	rw.img_info_expander = gtk_expander_new("Image info");
+	gtk_container_add(GTK_CONTAINER(rw.img_info_expander), rw.img_info_label);
+	gtk_box_pack_start(GTK_BOX(vbox), rw.img_info_expander, FALSE, FALSE, 2);
+
 	gtk_box_pack_start(GTK_BOX(vbox), build_status_section(),   FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), build_action_buttons(),   FALSE, FALSE, 4);
 
@@ -1445,6 +1455,15 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 				        "(revocation mask: 0x%02x)", img_report.has_secureboot_bootloader);
 			else if (img_report.has_secureboot_bootloader & 1)
 				uprintf("Image bootloaders are signed by a Secure Boot authority");
+		}
+
+		/* Populate the image info expander panel */
+		if (rw.img_info_label && rw.img_info_expander) {
+			char info_buf[512];
+			format_img_info(&img_report, info_buf, sizeof(info_buf));
+			gtk_label_set_text(GTK_LABEL(rw.img_info_label), info_buf);
+			gtk_widget_show(rw.img_info_expander);
+			gtk_widget_show(rw.img_info_label);
 		}
 		break;
 	}

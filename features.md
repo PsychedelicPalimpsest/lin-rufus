@@ -630,6 +630,7 @@ This is the most structurally significant porting gap.
 96. **Flatpak manifest** — create `packaging/flatpak/ie.akeo.rufus.yaml` with `finish-args` including `--device=block` (removable media), `--share=network`, and `--filesystem=xdg-download`; add a `make flatpak` convenience target wrapping `flatpak-builder`
 97. **AppImage build** — add a `make appimage` target using `linuxdeploy` + `linuxdeploy-plugin-gtk` to produce `Rufus-<version>-x86_64.AppImage`; include the GTK theme, hicolor icons, and locale data; test on a minimal Ubuntu container
 98. **Debian/Ubuntu package** — create `packaging/debian/` with `control`, `rules`, `changelog`, and `rufus.install`; `rules` wraps the autotools build; add `dh_install` entries for the `.desktop`, AppStream XML, and hicolor icons; target Ubuntu 22.04 LTS and Debian 12
+98.5. Arch linux package
 99. **RPM spec** — create `packaging/rpm/rufus.spec` for Fedora 39+ / openSUSE Tumbleweed; include `BuildRequires` for libcurl, libudev, libblkid, wimlib, GTK3; add `%check` section running `make check`
 100. **ARM64 cross-compile target** — add `--host=aarch64-linux-gnu` support to `configure.ac`; verify the `ioctl`-based paths (`BLKGETSIZE64`, `SG_IO`, `BLKPG_*`) compile cleanly on AArch64; add an ARM64 build job to the CI pipeline (item 94)
 101. **Reproducible builds** — pin all bundled library versions in `configure.ac` minimum checks; strip build-path prefixes via `-fmacro-prefix-map`; record `SOURCE_DATE_EPOCH` in the binary; verify that two independent builds of the same source produce bit-identical output
@@ -641,8 +642,7 @@ This is the most structurally significant porting gap.
 102. **Man page for CLI mode** — write `doc/rufus.1` documenting all flags from the CLI mode (item 46): `--device`, `--image`, `--fs`, `--partition-scheme`, `--target-sys`, `--cluster`, `--label`, `--quick`, `--verify`, `--bad-blocks`; install via `Makefile.am`
 103. **CONTRIBUTING.md for the Linux port** — document the porting conventions: compat-layer rules (no runtime no-ops allowed without a comment), test requirements (every new function needs ≥ 3 tests), how to add a new compat header, how to run the full test suite, Wine setup instructions
 104. **Architecture overview document** — write `doc/linux-architecture.md` describing the layered architecture: compat headers → Linux implementation files → common/ portable code → GTK UI; include a dependency graph of the major source files and their relationships
-105. **In-source Doxygen annotations** — add `@brief`, `@param`, `@return`, and `@note` Doxygen comments to all public functions in `src/linux/*.h` and `src/linux/compat/*.h`; add a `make docs` target running `doxygen Doxyfile`; publish generated HTML via GitHub Pages in CI
-
+105. Document the differences between this and the prefork repo. 
 ---
 
 ### Robustness & Diagnostics
@@ -663,7 +663,7 @@ This is the most structurally significant porting gap.
 111. **Windows-image customisation dialog on Linux** — build a `GtkDialog` mirroring the Windows "Windows User Experience" customization panel: checkboxes for bypass-TPM, bypass-RAM, bypass-Secure-Boot, disable-telemetry, remove-MS-account-requirement, set locale/keyboard; wire to `CreateUnattendXml()` and inject into `FormatThread`
 112. **Ventoy-compatible multi-boot mode** — detect an existing Ventoy layout (`VTOYEFI` partition GUID) on the selected device and offer an "Update Ventoy" mode that upgrades only the Ventoy boot partition without disturbing the data partition; this is a natural complement to Rufus's existing image-write flow
 113. **ISO-hybrid write optimisation** — detect ISO 9660 El Torito boot catalog + isohybrid MBR signature; when present, write the image as a raw block copy (`dd`-style) rather than extracting files, preserving the exact boot geometry used by the ISO author
-114. **`img_report` info panel in GTK UI** — after `ImageScanThread` completes, show a collapsible info panel below the boot combo displaying: detected OS name + version, architecture, Secure Boot requirement, TPM requirement, compression type, and SHA-256; sourced from `img_report` fields already populated
+114. ✅ **`img_report` info panel in GTK UI** — DONE: added `format_img_info()` to `src/linux/img_info.c` (pure C, no GTK); formats a multi-line summary from `RUFUS_IMG_REPORT`: image type (ISO/bootable/VHD/raw), label, size (KiB/MiB/GiB), Windows version, WinPE flag, EFI architecture bitmask, Secure Boot status (signed/revoked), GRUB2 version, compression type; `RufusWidgets` gained `img_info_expander` + `img_info_label`; `build_rufus_main_window()` builds a `GtkExpander` row (hidden until scan); `UM_IMAGE_SCANNED` handler calls `format_img_info()` and populates the label; `src/Makefile.am` lists `img_info.c`; 21 tests in `tests/test_img_info_linux.c`
 115. **Locale data auto-download** — if `embedded.loc` is absent or older than 30 days, offer to download the latest translation bundle from the Rufus update server; implement as an extension of the `CheckForUpdates()` flow with a separate `loc_version` field in `rufus_linux.ver`
 116. **Snap package** — create `packaging/snap/snapcraft.yaml` with `plugs: [removable-media, network, raw-usb, block-devices]`; build and test via `snapcraft`; publish to the `edge` channel of the Rufus Snap Store listing
 117. **`SetAutoMount()` / `GetAutoMount()` → udisks2** — implement via `udisks2` D-Bus API (`org.freedesktop.UDisks2.Manager.SetAutomount`); or simpler: create/remove a `udev` rule in `/run/udev/rules.d/` that sets `ENV{UDISKS_AUTO}="0"` for the target device during the write operation, then removes it
@@ -693,9 +693,9 @@ This is the most structurally significant porting gap.
 
 128. ✅ **`DownloadToFileOrBufferEx()` GTK progress dialog integration** — DONE: `xferinfo_ud_t` struct passes `hDlg` to libcurl progress callback; posts `UM_DOWNLOAD_PROGRESS` to `hDlg` when non-NULL (deduplicates by integer percent); `main_dialog_handler` handles `UM_DOWNLOAD_PROGRESS` and updates GTK progress bar; 4 tests in `test_net_linux.c` (107 total net tests pass).
 
-129. **`LicenseCallback()` GtkDialog** — show GPL-3.0 license text in a scrollable `GtkTextView` inside a `GtkDialog`; source text from the `LICENSE.txt` file at `app_dir/LICENSE.txt` or the installed `$(datadir)/rufus/LICENSE.txt`; wire to a Help → License menu item or the About dialog's license button (`gtk_about_dialog_set_license_type` with `GTK_LICENSE_GPL_3_0` already provides a built-in button); add 3 tests in `test_stdlg_linux.c`
+129. ✅ **`LicenseCallback()` GtkDialog** — DONE: see item 37 above.
 
-130. **`UpdateCallback()` / `NewVersionCallback()` GTK dialog** — show a "New version available" `GtkInfoBar` or `GtkMessageDialog` with the new version number, release notes URL (clickable via `xdg-open`), and a "Download" button that calls `DownloadNewVersion()`; wire into the `UM_UPDATE_AVAILABLE` message path already posted by `CheckForUpdates()`; add 4 tests in `test_update_check_linux.c` covering available-version display, no-update case, and user dismiss
+130. ✅ **`UpdateCallback()` / `NewVersionCallback()` GTK dialog** — DONE: see item 38 above.
 
 131. ✅ **`SetAlertPromptHook()` / `SetAlertPromptMessages()` → GTK alert intercept** — DONE: added `alert_set_hook(BOOL (*hook)(int type))` and `alert_clear_hook()` to `src/linux/stdlg.c`; `NotificationEx()` checks the hook first (before test injection and before GTK UI); CLI `--no-prompt` flag in `cli_options_t` installs a "always YES" hook in `cli_run()`; 6 tests in `test_stdlg_linux.c` + 3 tests in `test_cli_linux.c`. SetAlertPromptMessages() is Windows-only (MUI string loading) — N/A on Linux.
 
