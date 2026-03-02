@@ -308,8 +308,10 @@ ISO_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
                  $(SRC_DIR)/linux/stdio.c \
                  $(SRC_DIR)/linux/ui.c \
                  $(SRC_DIR)/linux/localization.c \
+                 $(SRC_DIR)/linux/parser.c \
                  $(COMMON)/parser.c \
-                 $(COMMON)/localization.c
+                 $(COMMON)/localization.c \
+                 $(COMMON)/iso_config.c
 CFLAGS_LINUX_test_iso_linux := \
 	-DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
@@ -327,8 +329,10 @@ ISO_SAVE_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
                       $(SRC_DIR)/linux/stdfn.c \
                       $(SRC_DIR)/linux/stdio.c \
                       $(SRC_DIR)/linux/localization.c \
+                      $(SRC_DIR)/linux/parser.c \
                       $(COMMON)/parser.c \
-                      $(COMMON)/localization.c
+                      $(COMMON)/localization.c \
+                      $(COMMON)/iso_config.c
 CFLAGS_LINUX_test_iso_save_linux := \
 	-DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
@@ -337,6 +341,22 @@ CFLAGS_LINUX_test_iso_save_linux := \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_iso_save_linux := -lcdio -liso9660 -ludf $(SRC_DIR)/syslinux/libfat/libfat.a
 EXTRA_SRC_LINUX_test_iso_save_linux := $(ISO_SAVE_LINUX_SRC) $(BLED_LIB) iso_save_linux_glue.c
+
+# iso_check_common tests: portable check_iso_props() ISO entry classifier
+# Uses the "include trick": the test defines all required statics/globals
+# and then #includes src/common/iso_check.c directly.  No extra .c files needed.
+CFLAGS_LINUX_test_iso_check_common := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+
+CFLAGS_WIN_test_iso_check_common := \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
 
 # iso_scan_common tests: portable GetGrubVersion / GetGrubFs / GetEfiBootInfo
 # No OS I/O — the test file provides all stubs (uprintf, StrArray*, sanitize_label).
@@ -772,8 +792,11 @@ IMAGE_SCAN_LINUX_SRC := \
 	$(SRC_DIR)/linux/stdio.c \
 	$(SRC_DIR)/linux/ui.c \
 	$(SRC_DIR)/linux/localization.c \
+	$(SRC_DIR)/linux/parser.c \
 	$(COMMON)/parser.c \
 	$(COMMON)/localization.c \
+	$(COMMON)/iso_config.c \
+	$(COMMON)/bootloader_scan.c \
 	$(BLED_LIB) \
 	$(WIM_LIB) \
 	$(XML_SRC)

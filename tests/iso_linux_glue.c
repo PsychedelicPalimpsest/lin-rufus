@@ -24,3 +24,7 @@ char *FileDialog(BOOL save, char* path, const ext_t* ext, UINT* sel)
 
 /* img_report is normally defined in globals.c but iso tests don't link it */
 RUFUS_IMG_REPORT img_report = { 0 };
+
+/* update / WindowsVersion — needed by linux/parser.c (parse_update) */
+RUFUS_UPDATE update = { {0,0,0}, {0,0}, NULL, NULL };
+windows_version_t WindowsVersion = { 0 };
