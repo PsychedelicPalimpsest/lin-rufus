@@ -107,6 +107,7 @@ FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                     $(SRC_DIR)/linux/format_ext.c \
                     $(SRC_DIR)/linux/format_ext_tools.c \
                     $(SRC_DIR)/linux/drive.c \
+                    $(COMMON)/drive.c \
                     $(SRC_DIR)/linux/window_text_bridge.c \
                     $(SRC_DIR)/ext2fs/posix_io.c
 EXT2FS_LIB := $(SRC_DIR)/ext2fs/libext2fs.a
@@ -142,6 +143,7 @@ FORMAT_NTFS_EXFAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                                 $(SRC_DIR)/linux/format_ext.c \
                                 $(SRC_DIR)/linux/format_ext_tools.c \
                                 $(SRC_DIR)/linux/drive.c \
+                                $(COMMON)/drive.c \
                                 $(SRC_DIR)/linux/window_text_bridge.c \
                                 $(SRC_DIR)/ext2fs/posix_io.c
 CFLAGS_LINUX_test_format_ntfs_exfat_linux := \
@@ -162,6 +164,7 @@ FORMAT_THREAD_LINUX_SRC := \
 	$(SRC_DIR)/linux/format_ext.c \
 	$(SRC_DIR)/linux/format_ext_tools.c \
 	$(SRC_DIR)/linux/drive.c \
+	$(COMMON)/drive.c \
 	$(SRC_DIR)/linux/window_text_bridge.c \
 	$(SRC_DIR)/linux/verify.c \
 	$(SRC_DIR)/ext2fs/posix_io.c \
@@ -184,7 +187,8 @@ CFLAGS_LINUX_test_pe_parser_linux := \
 EXTRA_SRC_LINUX_test_pe_parser_linux := $(PE_PARSER_SRC)
 
 # drive_linux tests: block device ops, partition parsing, GPT/MBR creation
-DRIVE_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
+DRIVE_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(COMMON)/drive.c \
+                   $(SRC_DIR)/linux/stdfn.c \
                    $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
                    $(SRC_DIR)/linux/ui.c \
                    $(SRC_DIR)/linux/parser.c \
@@ -198,7 +202,8 @@ EXTRA_SRC_LINUX_test_drive_linux := $(DRIVE_LINUX_SRC) $(BLED_LIB)
 
 # drive2_linux tests: GUID, partition types, AnalyzeMBR/PBR, RefreshLayout,
 #                     GetDriveTypeFromIndex, GetDriveLabel
-DRIVE2_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
+DRIVE2_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(COMMON)/drive.c \
+                    $(SRC_DIR)/linux/stdfn.c \
                     $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
                     $(SRC_DIR)/linux/ui.c \
                     $(FORMAT_MS_SRC)
@@ -211,7 +216,8 @@ LDFLAGS_LINUX_test_drive2_linux := -lblkid
 EXTRA_SRC_LINUX_test_drive2_linux := $(DRIVE2_LINUX_SRC) $(BLED_LIB)
 
 # partition_ops_linux tests: DeletePartition, GetEspOffset, ToggleEsp
-PARTITION_OPS_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(SRC_DIR)/linux/stdfn.c \
+PARTITION_OPS_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(COMMON)/drive.c \
+                            $(SRC_DIR)/linux/stdfn.c \
                             $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
                             $(SRC_DIR)/linux/ui.c \
                             $(FORMAT_MS_SRC)
@@ -529,6 +535,7 @@ EXTRA_SRC_LINUX_test_process_linux := $(SRC_DIR)/linux/process.c
 
 # mount_linux tests: AltMountVolume, AltUnmountVolume, MountVolume, RemountVolume
 MOUNT_LINUX_SRC := $(SRC_DIR)/linux/drive.c \
+                   $(COMMON)/drive.c \
                    $(SRC_DIR)/linux/stdfn.c \
                    $(SRC_DIR)/linux/stdio.c \
                    $(SRC_DIR)/linux/globals.c \
@@ -783,6 +790,27 @@ CFLAGS_WIN_test_bootloader_scan_common := \
 EXTRA_SRC_WIN_test_bootloader_scan_common := \
 	$(COMMON)/bootloader_scan.c
 
+# partition_types_common tests: GetMBRPartitionType() + GetGPTPartitionType()
+# from common/drive.c — cross-platform (Linux native + Windows MinGW/Wine).
+CFLAGS_LINUX_test_partition_types_common := \
+	-D_RUFUS -DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_partition_types_common := \
+	$(COMMON)/drive.c \
+	partition_types_common_glue.c
+
+CFLAGS_WIN_test_partition_types_common := \
+	-D_WIN32 -DRUFUS_TEST \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_partition_types_common := \
+	$(COMMON)/drive.c \
+	partition_types_common_glue.c
+
 DOS_LINUX_SRC := $(SRC_DIR)/linux/dos.c \
                  $(SRC_DIR)/linux/dos_locale.c \
                  $(SRC_DIR)/linux/stdio.c \
@@ -803,6 +831,7 @@ SYSLINUX_LINUX_SRC := \
 	$(SRC_DIR)/linux/syslinux.c \
 	$(SRC_DIR)/linux/stdfn.c \
 	$(SRC_DIR)/linux/drive.c \
+	$(COMMON)/drive.c \
 	$(FORMAT_MS_SRC)
 CFLAGS_LINUX_test_syslinux_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \

@@ -107,7 +107,9 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 	common/rufus-cregex_vm.$(OBJEXT) common/rufus-xml.$(OBJEXT) \
 	common/rufus-localization.$(OBJEXT) \
 	common/rufus-parser.$(OBJEXT) common/rufus-iso_scan.$(OBJEXT) \
-	common/rufus-format_fat32.$(OBJEXT)
+	common/rufus-format_fat32.$(OBJEXT) \
+	common/rufus-bootloader_scan.$(OBJEXT) \
+	common/rufus-drive.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@am__objects_2 =  \
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	linux/rufus-ui.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@am__objects_2 = linux/rufus-ui_gtk.$(OBJEXT)
@@ -455,7 +457,8 @@ top_srcdir = @top_srcdir@
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES_ = $(AM_V_WINDRES_$(AM_DEFAULT_VERBOSITY))
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES = $(AM_V_WINDRES_$(V))
 COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c \
-	common/localization.c common/parser.c common/iso_scan.c common/format_fat32.c
+	common/localization.c common/parser.c common/iso_scan.c common/format_fat32.c \
+	common/bootloader_scan.c common/drive.c
 
 @TARGET_WINDOWS_FALSE@OS_SOURCES = linux/compat/msg_dispatch.c \
 @TARGET_WINDOWS_FALSE@	linux/badblocks.c linux/combo_bridge.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
@@ -545,6 +548,8 @@ common/rufus-localization.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-parser.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-iso_scan.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-format_fat32.$(OBJEXT): common/$(am__dirstamp)
+common/rufus-bootloader_scan.$(OBJEXT): common/$(am__dirstamp)
+common/rufus-drive.$(OBJEXT): common/$(am__dirstamp)
 linux/compat/$(am__dirstamp):
 	@$(MKDIR_P) linux/compat
 	@: >>linux/compat/$(am__dirstamp)
@@ -697,6 +702,18 @@ common/rufus-format_fat32.o: common/format_fat32.c
 
 common/rufus-format_fat32.obj: common/format_fat32.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-format_fat32.obj `if test -f 'common/format_fat32.c'; then $(CYGPATH_W) 'common/format_fat32.c'; else $(CYGPATH_W) '$(srcdir)/common/format_fat32.c'; fi`
+
+common/rufus-bootloader_scan.o: common/bootloader_scan.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-bootloader_scan.o `test -f 'common/bootloader_scan.c' || echo '$(srcdir)/'`common/bootloader_scan.c
+
+common/rufus-bootloader_scan.obj: common/bootloader_scan.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-bootloader_scan.obj `if test -f 'common/bootloader_scan.c'; then $(CYGPATH_W) 'common/bootloader_scan.c'; else $(CYGPATH_W) '$(srcdir)/common/bootloader_scan.c'; fi`
+
+common/rufus-drive.o: common/drive.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-drive.o `test -f 'common/drive.c' || echo '$(srcdir)/'`common/drive.c
+
+common/rufus-drive.obj: common/drive.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-drive.obj `if test -f 'common/drive.c'; then $(CYGPATH_W) 'common/drive.c'; else $(CYGPATH_W) '$(srcdir)/common/drive.c'; fi`
 
 linux/compat/rufus-msg_dispatch.o: linux/compat/msg_dispatch.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/compat/rufus-msg_dispatch.o `test -f 'linux/compat/msg_dispatch.c' || echo '$(srcdir)/'`linux/compat/msg_dispatch.c

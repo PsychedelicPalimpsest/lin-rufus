@@ -29,7 +29,6 @@
 #include <time.h>
 
 /* GUID table: define the GUID constants in this translation unit */
-#define INITGUID
 #include "rufus.h"
 #include "drive.h"
 #include "drive_linux.h"
@@ -44,12 +43,8 @@
 /* blkid for GetDriveLabel */
 #include <blkid/blkid.h>
 
-/* Partition type lookup tables from the Windows source tree.
- * mbr_types.h is pure C.  gpt_types.h uses DEFINE_GUID which expands to
- * const-definitions because INITGUID is defined above. */
-#include "../windows/mbr_types.h"
-#include "../windows/gpt_types.h"
 #include "settings.h"
+#include "../common/drive.h"
 
 /* rufus_drive[] is defined in globals.c (production) or inline by tests */
 extern RUFUS_DRIVE rufus_drive[MAX_DRIVES];
@@ -1290,29 +1285,6 @@ char* AltMountVolume(DWORD di, uint64_t off, BOOL s)
 }
 
 BOOL RemountVolume(char* dn, BOOL s)                  { (void)dn;(void)s; return FALSE; }
-
-/* -------------------------------------------------------------------------
- * GetMBRPartitionType / GetGPTPartitionType — partition type lookup tables
- * (mbr_type[] from mbr_types.h; gpt_type[] from gpt_types.h)
- * --------------------------------------------------------------------- */
-
-const char *GetMBRPartitionType(const uint8_t type)
-{
-    for (int i = 0; i < (int)(sizeof(mbr_type)/sizeof(mbr_type[0])); i++) {
-        if (mbr_type[i].type == type)
-            return mbr_type[i].name;
-    }
-    return "Unknown";
-}
-
-const char *GetGPTPartitionType(const GUID *guid)
-{
-    for (int i = 0; i < (int)(sizeof(gpt_type)/sizeof(gpt_type[0])); i++) {
-        if (CompareGUID(guid, gpt_type[i].guid))
-            return gpt_type[i].name;
-    }
-    return GuidToString(guid, TRUE);
-}
 
 /* -------------------------------------------------------------------------
  * RefreshLayout(DWORD) — reread partition table by drive index

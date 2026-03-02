@@ -48,6 +48,7 @@
 #include "fat16.h"
 #include "fat32.h"
 #include "ntfs.h"
+#include "../common/drive.h"
 
 #define GLOBALROOT_NAME "\\\\?\\GLOBALROOT"
 const char* sfd_name = "Super Floppy Disk";
@@ -2592,23 +2593,6 @@ BOOL InitializeDisk(HANDLE hDrive)
 	}
 
 	return TRUE;
-}
-
-/*
- * Convert MBR or GPT partition types to their human readable forms
- */
-const char* GetMBRPartitionType(const uint8_t type)
-{
-	int i;
-	for (i = 0; (i < ARRAYSIZE(mbr_type)) && (mbr_type[i].type != type); i++);
-	return (i < ARRAYSIZE(mbr_type)) ? mbr_type[i].name : "Unknown";
-}
-
-const char* GetGPTPartitionType(const GUID* guid)
-{
-	int i;
-	for (i = 0; (i < ARRAYSIZE(gpt_type)) && !CompareGUID(guid, gpt_type[i].guid); i++);
-	return (i < ARRAYSIZE(gpt_type)) ? gpt_type[i].name : GuidToString(guid, TRUE);
 }
 
 /*
