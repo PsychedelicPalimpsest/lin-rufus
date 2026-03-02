@@ -4194,15 +4194,17 @@ out:
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 // Add a 16-byte marker for scripts to easily locate this section.
 static const char _load_config_marker[16] __attribute__((aligned(16))) __attribute__((section(".rdata"))) = "_RUFUS_LOAD_CFG";
+// MinGW-w64 calls this field 'Reserved1'; newer Windows SDKs rename it 'DependentLoadFlags'.
+// Both refer to the same struct offset so use the name the MinGW headers provide.
 #if defined(_M_AMD64)
 static const IMAGE_LOAD_CONFIG_DIRECTORY64 _load_config __attribute__((aligned(16))) __attribute__((section(".rdata"))) = {
 	.Size = sizeof(IMAGE_LOAD_CONFIG_DIRECTORY64),
-	.DependentLoadFlags = LOAD_LIBRARY_SEARCH_SYSTEM32
+	.Reserved1 = LOAD_LIBRARY_SEARCH_SYSTEM32
 };
 #else
 static const IMAGE_LOAD_CONFIG_DIRECTORY32 _load_config __attribute__((aligned(16))) __attribute__((section(".rdata"))) = {
 	.Size = sizeof(IMAGE_LOAD_CONFIG_DIRECTORY32),
-	.DependentLoadFlags = LOAD_LIBRARY_SEARCH_SYSTEM32
+	.Reserved1 = LOAD_LIBRARY_SEARCH_SYSTEM32
 };
 #endif
 #pragma GCC diagnostic pop

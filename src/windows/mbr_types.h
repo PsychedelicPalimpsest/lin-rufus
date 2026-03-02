@@ -35,7 +35,7 @@ typedef struct {
  * Note: If googling APTI (Alternative Partition Table Identification)
  * doesn't return squat, then IT ISN'T A REAL THING!!
  */
-mbr_type_t mbr_type[] = {
+static mbr_type_t mbr_type[] = {
 	{ 0x00, "Empty" },
 	{ 0x01, "FAT12" },
 	{ 0x02, "XENIX root" },

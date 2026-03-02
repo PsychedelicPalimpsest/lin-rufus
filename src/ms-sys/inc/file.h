@@ -2,6 +2,7 @@
 #define FILE_H
 
 #include <stdint.h>
+#include <stdio.h>
 
 /* Max valid value of uiLen for contains_data */
 #define MAX_DATA_LEN 65536

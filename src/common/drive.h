@@ -10,7 +10,12 @@
 
 #include <stdint.h>
 #include "rufus.h"
+/* On Windows, winioctl.h is already included via windows.h -> winscard.h.
+ * Re-including it after INITGUID is set (from gpt_types.h) would re-emit
+ * the GUID section (which lacks its own include guard) and cause redefinitions. */
+#ifndef _WIN32
 #include "winioctl.h"
+#endif
 
 /* ---- Extra-partition bit flags (XP_*) ---------------------------------- */
 #ifndef XP_MSR

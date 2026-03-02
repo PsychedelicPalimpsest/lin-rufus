@@ -140,7 +140,7 @@ typedef struct {
     const char* name;
 } gpt_type_t;
 
-gpt_type_t gpt_type[] = {
+static gpt_type_t gpt_type[] = {
     { &PARTITION_ANDROID_BOOT, "Android Boot Partition" },
     { &PARTITION_ANDROID_BOOTLOADER1, "Android Bootloader Partition" },
     { &PARTITION_ANDROID_BOOTLOADER2, "Android Bootloader Partition" },

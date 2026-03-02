@@ -80,9 +80,9 @@ else
 rufus_LDFLAGS = $(AM_LDFLAGS)
 if USE_GTK
 rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev -lssl -lcrypto $(FONTCONFIG_LIBS)
+	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a $(GTK_LIBS) -ludev -lssl -lcrypto $(FONTCONFIG_LIBS) $(CURL_LIBS) $(BLKID_LIBS) $(LIBNOTIFY_LIBS)
 else
 rufus_LDADD = bled/libbled.a ext2fs/libext2fs.a ms-sys/libmssys.a syslinux/libfat/libfat.a syslinux/libinstaller/libinstaller.a syslinux/win/libwin.a \
-	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev -lssl -lcrypto $(FONTCONFIG_LIBS)
+	libcdio/iso9660/libiso9660.a libcdio/udf/libudf.a libcdio/driver/libdriver.a wimlib/libwim.a -ludev -lssl -lcrypto $(FONTCONFIG_LIBS) $(CURL_LIBS) $(BLKID_LIBS) $(LIBNOTIFY_LIBS)
 endif
 endif

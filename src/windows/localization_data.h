@@ -25,7 +25,7 @@
 #define LOC_DLG(x)   { x, NULL, {NULL, NULL} }
 
 // Control IDs
-const loc_control_id control_id[] = {
+static const loc_control_id control_id[] = {
 	// The dialog IDs must come first
 	LOC_CTRL(IDD_DIALOG),
 	LOC_CTRL(IDD_ABOUTBOX),
@@ -571,7 +571,7 @@ const loc_control_id control_id[] = {
 };
 
 // Dialog data
-loc_dlg_list loc_dlg[] = {
+static loc_dlg_list loc_dlg[] = {
 	LOC_DLG(IDD_DIALOG),
 	LOC_DLG(IDD_ABOUTBOX),
 	LOC_DLG(IDD_NOTIFICATION),

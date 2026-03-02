@@ -20,6 +20,10 @@
 
 #include "rufus.h"       /* RUFUS_IMG_REPORT, HAS_* macros, WINPE_*, NB_OLD_C32 */
 #include "iso_report.h"
+#ifdef _WIN32
+#include "localization.h"  /* lmprintf() */
+#include "resource.h"      /* MSG_xxx constants */
+#endif
 
 /* Helper: log a line if condition is true */
 #define PRINT_ISO_PROP(b, ...) do { if (b) uprintf(__VA_ARGS__); } while (0)

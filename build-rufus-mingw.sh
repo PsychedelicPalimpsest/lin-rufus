@@ -70,7 +70,10 @@ info "  JOBS    = ${JOBS}"
 # -------- step 1: build delay-load libs --------
 
 info "Configuring for Windows target ..."
-./configure --with-os=windows CC="${CC}" WINDRES="${WINDRES}" DLLTOOL="${DLLTOOL}"
+# Derive --host triple from CC (e.g. x86_64-w64-mingw32-gcc -> x86_64-w64-mingw32)
+_host=$(echo "${CC}" | sed 's/-gcc$//')
+[ "x${_host}" = "x${CC}" ] && _host="x86_64-w64-mingw32"
+./configure --with-os=windows --host="${_host}" CC="${CC}" WINDRES="${WINDRES}" DLLTOOL="${DLLTOOL}"
 
 info "Building delay-load libraries in .mingw ..."
 make -C .mingw clean all DLLTOOL="${DLLTOOL}"
@@ -81,6 +84,7 @@ ls .mingw/*.lib 2>/dev/null || die "No *.lib files produced in .mingw"
 # -------- step 2: build rufus.exe --------
 
 info "Building Rufus with MinGW ..."
+make clean
 make CC="${CC}" WINDRES="${WINDRES}" -j"${JOBS}"
 
 info "Build completed."

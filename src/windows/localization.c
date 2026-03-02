@@ -34,6 +34,7 @@
 #include "resource.h"
 #include "msapi_utf8.h"
 #include "localization.h"
+/* control_id[] and loc_dlg[] are defined in localization_data.h */
 #include "localization_data.h"
 
 /* Portable functions (parse_cmd[], globals, free_loc_cmd,
@@ -105,8 +106,6 @@ void apply_localization(int dlg_id, HWND hDlg)
 void reset_localization(int dlg_id)
 {
 	loc_dlg[dlg_id-IDD_DIALOG].hDlg = NULL;
-}
-
 }
 
 /*
@@ -248,6 +247,10 @@ void PrintStatusInfo(BOOL info, BOOL debug, unsigned int duration, int msg_id, .
 	}
 }
 
+/*
+ * This call is used to get a supported Windows Language identifier we
+ * should pass to MessageBoxEx to try to get the buttons displayed in
+ * the currently selected language. This relies on the relevant language
  * pack having been installed.
  */
 static BOOL found_lang;
