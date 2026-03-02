@@ -108,6 +108,8 @@ BOOL FormatExFAT(DWORD DriveIndex, uint64_t PartitionOffset,
  *   cluster_size - bytes per cluster (0 = let mkntfs choose)
  *   label        - volume label (NULL or empty = omit -L)
  *   quick        - if TRUE, add -Q (quick format)
+ *   force        - if TRUE, add -F (force on non-block device)
+ *   compress     - if TRUE, add -C (enable NTFS compression)
  *   cmd_buf      - output buffer
  *   cmd_buf_len  - size of cmd_buf
  *
@@ -115,7 +117,7 @@ BOOL FormatExFAT(DWORD DriveIndex, uint64_t PartitionOffset,
  */
 BOOL format_ntfs_build_cmd(const char *tool, const char *part_path,
                             DWORD cluster_size, const char *label, BOOL quick,
-                            BOOL force,
+                            BOOL force, BOOL compress,
                             char *cmd_buf, size_t cmd_buf_len);
 
 /*

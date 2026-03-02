@@ -772,6 +772,8 @@ DWORD WINAPI FormatThread(void* param)
 	DWORD fmt_flags = FP_FORCE;
 	if (quick_format && !IS_EXT(fs_type))
 		fmt_flags |= FP_QUICK;
+	if ((fs_type == FS_NTFS) && enable_ntfs_compression)
+		fmt_flags |= FP_COMPRESSION;
 	if (!FormatPartition(DriveIndex, part_offset, 0, fs_type, label, fmt_flags)) {
 		uprintf("Format error: %s", WindowsErrorString());
 		if (!IS_ERROR(ErrorStatus))

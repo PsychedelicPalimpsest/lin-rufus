@@ -60,6 +60,8 @@ static const char *find_format_tool(const char *name)
  *   cluster_size - bytes per cluster; 0 means let mkntfs choose
  *   label        - volume label or NULL/empty to omit -L
  *   quick        - if TRUE, add -Q (quick format — skip zeroing)
+ *   force        - if TRUE, add -F (force format on non-block device)
+ *   compress     - if TRUE, add -C (enable NTFS compression)
  *   cmd_buf      - output buffer (must not be NULL)
  *   cmd_buf_len  - size of cmd_buf; must be large enough for the full command
  *
@@ -68,7 +70,7 @@ static const char *find_format_tool(const char *name)
  * ======================================================================= */
 BOOL format_ntfs_build_cmd(const char *tool, const char *part_path,
                             DWORD cluster_size, const char *label, BOOL quick,
-                            BOOL force,
+                            BOOL force, BOOL compress,
                             char *cmd_buf, size_t cmd_buf_len)
 {
 	if (!tool || !part_path || !cmd_buf || cmd_buf_len < 16)
@@ -86,6 +88,12 @@ BOOL format_ntfs_build_cmd(const char *tool, const char *part_path,
 
 	if (force) {
 		int m = snprintf(tmp + n, sizeof(tmp) - (size_t)n, " -F");
+		if (m < 0 || (size_t)(n + m) >= sizeof(tmp)) return FALSE;
+		n += m;
+	}
+
+	if (compress) {
+		int m = snprintf(tmp + n, sizeof(tmp) - (size_t)n, " -C");
 		if (m < 0 || (size_t)(n + m) >= sizeof(tmp)) return FALSE;
 		n += m;
 	}
@@ -202,6 +210,7 @@ BOOL FormatNTFS(DWORD DriveIndex, uint64_t PartitionOffset,
 	}
 
 	BOOL quick = (Flags & FP_QUICK) ? TRUE : FALSE;
+	BOOL compress = (Flags & FP_COMPRESSION) ? TRUE : FALSE;
 
 	/* When formatting a non-block device (e.g. test image file) mkntfs refuses
 	 * to proceed without -F (force).  Detect this and set the flag. */
@@ -210,7 +219,7 @@ BOOL FormatNTFS(DWORD DriveIndex, uint64_t PartitionOffset,
 
 	char cmd[1024];
 	if (!format_ntfs_build_cmd(tool, part_path, UnitAllocationSize,
-	                            Label, quick, force, cmd, sizeof(cmd))) {
+	                            Label, quick, force, compress, cmd, sizeof(cmd))) {
 		free(part_path);
 		ErrorStatus = RUFUS_ERROR(ERROR_INVALID_PARAMETER);
 		return FALSE;

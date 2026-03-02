@@ -249,7 +249,7 @@ TEST(ntfs_build_cmd_basic)
 {
     char cmd[512];
     BOOL r = format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
-                                    0, NULL, FALSE, FALSE, cmd, sizeof(cmd));
+                                    0, NULL, FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     CHECK(r == TRUE);
     /* Must contain the tool path and the device */
     CHECK(strstr(cmd, "/usr/sbin/mkntfs") != NULL);
@@ -260,7 +260,7 @@ TEST(ntfs_build_cmd_quick_flag)
 {
     char cmd[512];
     format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
-                           0, NULL, TRUE, FALSE, cmd, sizeof(cmd));
+                           0, NULL, TRUE, FALSE, FALSE, cmd, sizeof(cmd));
     /* Quick format flag -Q must appear */
     CHECK(strstr(cmd, "-Q") != NULL);
 }
@@ -269,7 +269,7 @@ TEST(ntfs_build_cmd_no_quick_when_false)
 {
     char cmd[512];
     format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
-                           0, NULL, FALSE, FALSE, cmd, sizeof(cmd));
+                           0, NULL, FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     /* -Q must NOT appear when quick is FALSE */
     CHECK(strstr(cmd, "-Q") == NULL);
 }
@@ -278,7 +278,7 @@ TEST(ntfs_build_cmd_with_label)
 {
     char cmd[512];
     format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
-                           0, "MyLabel", FALSE, FALSE, cmd, sizeof(cmd));
+                           0, "MyLabel", FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     CHECK(strstr(cmd, "-L") != NULL);
     CHECK(strstr(cmd, "MyLabel") != NULL);
 }
@@ -287,7 +287,7 @@ TEST(ntfs_build_cmd_empty_label_omitted)
 {
     char cmd[512];
     format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
-                           0, "", FALSE, FALSE, cmd, sizeof(cmd));
+                           0, "", FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     /* Empty label should not add -L flag */
     CHECK(strstr(cmd, "-L") == NULL);
 }
@@ -296,7 +296,7 @@ TEST(ntfs_build_cmd_with_cluster_size)
 {
     char cmd[512];
     format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
-                           4096, NULL, FALSE, FALSE, cmd, sizeof(cmd));
+                           4096, NULL, FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     CHECK(strstr(cmd, "-c") != NULL);
     CHECK(strstr(cmd, "4096") != NULL);
 }
@@ -305,7 +305,7 @@ TEST(ntfs_build_cmd_zero_cluster_omitted)
 {
     char cmd[512];
     format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
-                           0, NULL, FALSE, FALSE, cmd, sizeof(cmd));
+                           0, NULL, FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     /* Zero cluster size should not add -c flag */
     CHECK(strstr(cmd, "-c") == NULL);
 }
@@ -314,7 +314,7 @@ TEST(ntfs_build_cmd_null_tool_returns_false)
 {
     char cmd[512];
     BOOL r = format_ntfs_build_cmd(NULL, "/dev/sdb1",
-                                    0, NULL, FALSE, FALSE, cmd, sizeof(cmd));
+                                    0, NULL, FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     CHECK(r == FALSE);
 }
 
@@ -322,14 +322,14 @@ TEST(ntfs_build_cmd_null_path_returns_false)
 {
     char cmd[512];
     BOOL r = format_ntfs_build_cmd("/usr/sbin/mkntfs", NULL,
-                                    0, NULL, FALSE, FALSE, cmd, sizeof(cmd));
+                                    0, NULL, FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     CHECK(r == FALSE);
 }
 
 TEST(ntfs_build_cmd_null_buf_returns_false)
 {
     BOOL r = format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
-                                    0, NULL, FALSE, FALSE, NULL, 512);
+                                    0, NULL, FALSE, FALSE, FALSE, NULL, 512);
     CHECK(r == FALSE);
 }
 
@@ -337,8 +337,26 @@ TEST(ntfs_build_cmd_buf_too_small_returns_false)
 {
     char cmd[4];
     BOOL r = format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
-                                    0, NULL, FALSE, FALSE, cmd, sizeof(cmd));
+                                    0, NULL, FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     CHECK(r == FALSE);
+}
+
+TEST(ntfs_build_cmd_compress_flag)
+{
+    char cmd[512];
+    format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
+                           0, NULL, FALSE, FALSE, TRUE, cmd, sizeof(cmd));
+    /* NTFS compression flag -C must appear */
+    CHECK(strstr(cmd, "-C") != NULL);
+}
+
+TEST(ntfs_build_cmd_no_compress_when_false)
+{
+    char cmd[512];
+    format_ntfs_build_cmd("/usr/sbin/mkntfs", "/dev/sdb1",
+                           0, NULL, FALSE, FALSE, FALSE, cmd, sizeof(cmd));
+    /* -C must NOT appear when compress is FALSE */
+    CHECK(strstr(cmd, "-C") == NULL);
 }
 
 /* exFAT command builder tests */
@@ -609,7 +627,7 @@ TEST(ntfs_format_no_tool_returns_false)
     /* Directly test via the internal function with a bad tool path */
     char cmd[512];
     BOOL cmd_ok = format_ntfs_build_cmd("/nonexistent/mkntfs", path,
-                                         0, NULL, FALSE, FALSE, cmd, sizeof(cmd));
+                                         0, NULL, FALSE, FALSE, FALSE, cmd, sizeof(cmd));
     /* Command builds fine even with non-existent tool */
     CHECK(cmd_ok == TRUE);
     /* But running it should fail (exit code != 0) */
@@ -994,6 +1012,8 @@ int main(void)
     RUN(ntfs_build_cmd_null_path_returns_false);
     RUN(ntfs_build_cmd_null_buf_returns_false);
     RUN(ntfs_build_cmd_buf_too_small_returns_false);
+    RUN(ntfs_build_cmd_compress_flag);
+    RUN(ntfs_build_cmd_no_compress_when_false);
 
     RUN(exfat_build_cmd_basic);
     RUN(exfat_build_cmd_with_label);
