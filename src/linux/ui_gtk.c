@@ -49,6 +49,7 @@
 #include "wue.h"
 #include "polkit.h"
 #include "hyperlink.h"
+#include "csm_help.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -124,6 +125,7 @@ static void on_lang_menu_activate(GtkMenuItem *item, gpointer data);
 static void on_device_changed(GtkComboBox *combo, gpointer data);
 static void on_boot_changed(GtkComboBox *combo, gpointer data);
 static void on_fs_changed(GtkComboBox *combo, gpointer data);
+static void on_target_changed(GtkComboBox *combo, gpointer data);
 static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 static void on_toggle_dark_mode(GtkWidget *w, gpointer data);
@@ -378,10 +380,20 @@ static GtkWidget *build_drive_properties(void)
 	rw.target_system_label = gtk_label_new("Target system");
 	rw.target_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.target_combo, TRUE);
+	g_signal_connect(rw.target_combo, "changed", G_CALLBACK(on_target_changed), NULL);
+
+	/* CSM help indicator: "ⓘ" label with tooltip showing MSG_151/MSG_152.
+	 * Starts hidden; on_target_changed() will show/hide it as needed. */
+	rw.csm_help_label = gtk_label_new(NULL);
+	gtk_label_set_markup(GTK_LABEL(rw.csm_help_label),
+	    "<span color=\"#4a90d9\" underline=\"single\">ⓘ</span>");
+	gtk_widget_set_no_show_all(rw.csm_help_label, TRUE);
+
 	gtk_box_pack_start(GTK_BOX(row1), rw.partition_type_label, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(row1), rw.partition_combo,      TRUE,  TRUE,  0);
 	gtk_box_pack_start(GTK_BOX(row1), rw.target_system_label,  FALSE, FALSE, 8);
 	gtk_box_pack_start(GTK_BOX(row1), rw.target_combo,         TRUE,  TRUE,  0);
+	gtk_box_pack_start(GTK_BOX(row1), rw.csm_help_label,       FALSE, FALSE, 2);
 	gtk_box_pack_start(GTK_BOX(vbox), row1, FALSE, FALSE, 0);
 
 	/* Row: File system + Cluster size */
@@ -933,6 +945,21 @@ static void on_fs_changed(GtkComboBox *combo, gpointer data)
 	if (sel >= 0) {
 		fs_type = (int)ComboBox_GetItemData(hFileSystem, sel);
 		populate_cluster_combo(fs_type);
+	}
+}
+
+/* Update the CSM help label visibility and tooltip when the target combo changes */
+static void on_target_changed(GtkComboBox *combo, gpointer data)
+{
+	(void)combo; (void)data;
+	if (!rw.csm_help_label)
+		return;
+	if (csm_help_should_show(target_type, has_uefi_csm)) {
+		gtk_widget_set_tooltip_text(rw.csm_help_label,
+		    lmprintf(csm_help_get_msg_id(target_type, has_uefi_csm)));
+		gtk_widget_show(rw.csm_help_label);
+	} else {
+		gtk_widget_hide(rw.csm_help_label);
 	}
 }
 

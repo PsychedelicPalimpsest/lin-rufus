@@ -262,6 +262,13 @@ EXTRA_SRC_LINUX_test_ui_linux := $(SRC_DIR)/linux/globals.c \
                                   $(SRC_DIR)/linux/device_combo.c \
                                   $(SRC_DIR)/linux/hyperlink.c
 
+# csm_help_linux tests: CSM help label logic (csm_help_should_show, csm_help_get_msg_id)
+CFLAGS_LINUX_test_csm_help_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                     -D_GNU_SOURCE -DRUFUS_TEST \
+                                     -Wno-unused-function -Wno-sign-compare \
+                                     -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_csm_help_linux := $(SRC_DIR)/linux/csm_help.c
+
 # img_info_linux tests: format_img_info() — human-readable image report summary
 CFLAGS_LINUX_test_img_info_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                      -I$(SRC_DIR) -I$(SRC_DIR)/bled \

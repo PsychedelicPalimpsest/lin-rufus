@@ -39,6 +39,7 @@ typedef struct {
 	/* Drive properties section */
 	GtkWidget *partition_combo;     /* IDC_PARTITION_TYPE */
 	GtkWidget *target_combo;        /* IDC_TARGET_SYSTEM */
+	GtkWidget *csm_help_label;      /* IDS_CSM_HELP_TXT — "ⓘ" tooltip beside target combo */
 	GtkWidget *filesystem_combo;    /* IDC_FILE_SYSTEM */
 	GtkWidget *cluster_combo;       /* IDC_CLUSTER_SIZE */
 	GtkWidget *label_entry;         /* IDC_LABEL */

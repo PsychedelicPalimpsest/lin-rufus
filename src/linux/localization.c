@@ -74,6 +74,7 @@ static GtkWidget *ctrl_id_to_widget(int ctrl_id)
 	case IDS_CLUSTER_SIZE_TXT:     return rw.cluster_size_label;
 	case IDS_LABEL_TXT:            return rw.volume_label_label;
 	case IDS_TARGET_SYSTEM_TXT:    return rw.target_system_label;
+	case IDS_CSM_HELP_TXT:         return rw.csm_help_label;
 	case IDS_IMAGE_OPTION_TXT:     return rw.image_option_label;
 	case IDS_BOOT_SELECTION_TXT:   return rw.boot_selection_label;
 	case IDS_DRIVE_PROPERTIES_TXT: return rw.drive_props_label;

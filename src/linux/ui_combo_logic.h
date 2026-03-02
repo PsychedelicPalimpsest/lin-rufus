@@ -53,3 +53,7 @@ void SetFSFromISO(void);
  * unchanged; otherwise it is also rebuilt.
  */
 void SetPartitionSchemeAndTargetSystem(BOOL only_target);
+
+/* Global set by SetPartitionSchemeAndTargetSystem(): TRUE when a
+ * BIOS/UEFI-CSM target entry is present in the Target System combo. */
+extern BOOL has_uefi_csm;
