@@ -203,6 +203,16 @@ CFLAGS_LINUX_test_partition_ops_linux := \
 LDFLAGS_LINUX_test_partition_ops_linux := -lblkid
 EXTRA_SRC_LINUX_test_partition_ops_linux := $(PARTITION_OPS_LINUX_SRC) $(BLED_LIB)
 
+# uefi_ntfs_linux tests: load_uefi_ntfs_data, write_uefi_ntfs_partition,
+#                        uefi_ntfs_needs_extra_partition, CreatePartition+XP_UEFI_NTFS
+CFLAGS_LINUX_test_uefi_ntfs_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_uefi_ntfs_linux := -lblkid
+EXTRA_SRC_LINUX_test_uefi_ntfs_linux := $(PARTITION_OPS_LINUX_SRC) $(BLED_LIB)
+
 # stdio_linux tests: RunCommandWithProgress, SizeToHumanReadable, WindowsErrorString,
 #                    ListDirectoryContent, ExtractZip
 STDIO_LINUX_SRC := $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/stdfn.c \

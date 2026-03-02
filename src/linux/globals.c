@@ -118,6 +118,18 @@ char *current_msg_table[MSG_MAX] = { 0 };
 char **msg_table = NULL;
 BOOL en_msg_mode = FALSE;
 
+/*
+ * Weak stub for lmprintf — overridden by the real implementation in
+ * localization.c when the full localization module is compiled in.
+ * In test builds that only link globals.c (not localization.c), this
+ * stub returns an empty string rather than a translated message.
+ */
+char * __attribute__((weak)) lmprintf(uint32_t msg_id, ...)
+{
+    (void)msg_id;
+    return (char *)"";
+}
+
 /* ---- From wue.c ---- */
 int unattend_xml_flags = 0, wintogo_index = -1, wininst_index = 0;
 int unattend_xml_mask = 0;

@@ -70,4 +70,28 @@ char *GetLogicalNameWithRoot(DWORD DriveIndex, uint64_t PartitionOffset,
                              BOOL bKeepTrailingSlash, BOOL bSilent,
                              const char *sysfs_root, const char *dev_root);
 
+/* ---- UEFI:NTFS support -------------------------------------------------- */
+
+/*
+ * Load res/uefi/uefi-ntfs.img into a malloc'd buffer.
+ * On success sets *out_size and returns the buffer; caller must free() it.
+ * Returns NULL if the file cannot be found.
+ */
+uint8_t *load_uefi_ntfs_data(size_t *out_size);
+
+/*
+ * Write 'data' (size bytes) to the drive at byte offset 'offset'.
+ * Returns FALSE for NULL data, zero size, or invalid handle.
+ */
+BOOL write_uefi_ntfs_partition(HANDLE hDrive, uint64_t offset,
+                               const uint8_t *data, size_t size);
+
+/*
+ * Return TRUE when the given boot/fs/image combination requires a UEFI:NTFS
+ * extra partition (XP_UEFI_NTFS).  Pass NULL for 'report' to force FALSE.
+ */
+BOOL uefi_ntfs_needs_extra_partition(int boot_type, int fs_type,
+                                     int target_type,
+                                     const RUFUS_IMG_REPORT *report);
+
 #endif /* !_WIN32 */

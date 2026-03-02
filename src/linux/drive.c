@@ -427,6 +427,67 @@ BOOL RefreshDriveLayout(HANDLE hDrive)
     return TRUE;
 }
 
+/* -------------------------------------------------------------------------
+ * load_uefi_ntfs_data: load res/uefi/uefi-ntfs.img into a malloc'd buffer.
+ * Caller must free() the returned pointer.  Returns NULL on failure.
+ * --------------------------------------------------------------------- */
+uint8_t *load_uefi_ntfs_data(size_t *out_size)
+{
+    char path[MAX_PATH];
+    /* Search relative to app_dir (production), tests/ parent, or cwd */
+    const char *search_dirs[] = { app_dir, "..", ".", "../../", NULL };
+    for (int d = 0; search_dirs[d] != NULL; d++) {
+        snprintf(path, sizeof(path), "%s/res/uefi/uefi-ntfs.img", search_dirs[d]);
+        FILE *f = fopen(path, "rb");
+        if (!f) continue;
+        fseek(f, 0, SEEK_END);
+        long sz = ftell(f);
+        rewind(f);
+        if (sz <= 0) { fclose(f); continue; }
+        uint8_t *buf = (uint8_t *)malloc((size_t)sz);
+        if (!buf) { fclose(f); return NULL; }
+        size_t rd = fread(buf, 1, (size_t)sz, f);
+        fclose(f);
+        if (rd != (size_t)sz) { free(buf); continue; }
+        if (out_size) *out_size = (size_t)sz;
+        return buf;
+    }
+    return NULL;
+}
+
+/* -------------------------------------------------------------------------
+ * write_uefi_ntfs_partition: write 'data' of 'size' bytes to 'offset' on
+ * the drive identified by 'hDrive'.
+ * --------------------------------------------------------------------- */
+BOOL write_uefi_ntfs_partition(HANDLE hDrive, uint64_t offset,
+                               const uint8_t *data, size_t size)
+{
+    if (!hDrive || hDrive == INVALID_HANDLE_VALUE) return FALSE;
+    if (!data || size == 0) return FALSE;
+    int fd = (int)(intptr_t)hDrive;
+    ssize_t w = pwrite(fd, data, size, (off_t)offset);
+    return (w == (ssize_t)size) ? TRUE : FALSE;
+}
+
+/* -------------------------------------------------------------------------
+ * uefi_ntfs_needs_extra_partition: return TRUE when the UEFI:NTFS extra
+ * partition is required for the given boot/fs/image combination.
+ * --------------------------------------------------------------------- */
+BOOL uefi_ntfs_needs_extra_partition(int boot_type, int fs_type,
+                                     int target_type,
+                                     const RUFUS_IMG_REPORT *report)
+{
+    (void)target_type;
+    if (boot_type == BT_UEFI_NTFS)
+        return TRUE;
+    if (report == NULL)
+        return FALSE;
+    if ((boot_type == BT_IMAGE) && (report->has_efi != 0) &&
+        ((fs_type == FS_NTFS) || (fs_type == FS_EXFAT)))
+        return TRUE;
+    return FALSE;
+}
+
 BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
                      BOOL bMBRIsBootable, uint8_t extra_partitions)
 {
@@ -439,6 +500,8 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
     uint64_t total_sects = disk_size / sector_size;
     BOOL has_persistence = (extra_partitions & XP_PERSISTENCE) && (persistence_size > 0);
     uint32_t pers_sects  = has_persistence ? (uint32_t)(persistence_size / sector_size) : 0;
+    BOOL has_uefi_ntfs   = (extra_partitions & XP_UEFI_NTFS) ? TRUE : FALSE;
+    uint32_t uefi_sects  = has_uefi_ntfs ? (uint32_t)(1048576ULL / sector_size) : 0;
 
     if (PartitionStyle == PARTITION_STYLE_MBR) {
         uint8_t mbr[512] = { 0 };
@@ -447,9 +510,11 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         uint32_t lba_start = 2048;
         uint32_t lba_size  = (uint32_t)(total_sects > lba_start + 1
                                         ? total_sects - lba_start : 1);
-        /* Shrink main partition to make room for persistence partition */
+        /* Shrink main partition to make room for extra partitions at end of disk */
         if (has_persistence && lba_size > pers_sects)
             lba_size -= pers_sects;
+        if (has_uefi_ntfs && lba_size > uefi_sects)
+            lba_size -= uefi_sects;
 
         uint8_t *e = mbr + 446;
         e[0] = bMBRIsBootable ? 0x80 : 0x00;
@@ -465,7 +530,10 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         e[14] = (lba_size >> 16)  & 0xFF;
         e[15] = (lba_size >> 24)  & 0xFF;
 
-        /* Persistence partition (entry 1) immediately after main */
+        SelectedDrive.Partition[PI_MAIN].Offset = (uint64_t)lba_start * sector_size;
+        SelectedDrive.Partition[PI_MAIN].Size   = (uint64_t)lba_size  * sector_size;
+
+        /* Persistence partition immediately after main */
         if (has_persistence) {
             uint32_t p1_start = lba_start + lba_size;
             uint8_t *e1 = mbr + 446 + 16;
@@ -481,6 +549,28 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
             e1[13] = (pers_sects >>  8) & 0xFF;
             e1[14] = (pers_sects >> 16) & 0xFF;
             e1[15] = (pers_sects >> 24) & 0xFF;
+            SelectedDrive.Partition[PI_CASPER].Offset = (uint64_t)p1_start * sector_size;
+            SelectedDrive.Partition[PI_CASPER].Size   = (uint64_t)pers_sects * sector_size;
+        }
+
+        /* UEFI:NTFS EFI System partition at the very end of disk */
+        if (has_uefi_ntfs) {
+            uint32_t un_start = (uint32_t)(total_sects - uefi_sects);
+            int slot = has_persistence ? 2 : 1;
+            uint8_t *eu = mbr + 446 + 16 * slot;
+            eu[1] = 0xFE; eu[2] = 0xFF; eu[3] = 0xFF;
+            eu[4] = 0xEF; /* EFI System */
+            eu[5] = 0xFE; eu[6] = 0xFF; eu[7] = 0xFF;
+            eu[8]  = (un_start)        & 0xFF;
+            eu[9]  = (un_start >> 8)   & 0xFF;
+            eu[10] = (un_start >> 16)  & 0xFF;
+            eu[11] = (un_start >> 24)  & 0xFF;
+            eu[12] = (uefi_sects)      & 0xFF;
+            eu[13] = (uefi_sects >> 8) & 0xFF;
+            eu[14] = (uefi_sects >> 16) & 0xFF;
+            eu[15] = (uefi_sects >> 24) & 0xFF;
+            SelectedDrive.Partition[PI_UEFI_NTFS].Offset = (uint64_t)un_start * sector_size;
+            SelectedDrive.Partition[PI_UEFI_NTFS].Size   = (uint64_t)uefi_sects * sector_size;
         }
 
         BOOL mbr_ok = (pwrite(fd, mbr, 512, 0) == 512);
@@ -511,7 +601,7 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         uint64_t first_usable = 34;
         uint64_t last_usable  = (total_sects > 68) ? total_sects - 34 : first_usable;
 
-        /* Build partition entry 0 */
+        /* Build partition entry 0 (main) */
         static const uint8_t bd_type[16] = {
             0xA2,0xA0,0xD0,0xEB, 0xE5,0xB9, 0x33,0x44,
             0x87,0xC0, 0x68,0xB6,0xB7,0x26,0x99,0xC7
@@ -525,10 +615,12 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
             part_guid[8] = 0x80;
         }
 
-        /* Shrink main partition end to make room for persistence partition */
+        /* Shrink main partition to make room for extra partitions at end of disk */
         uint64_t main_last = last_usable;
-        if (has_persistence && last_usable > first_usable + pers_sects)
-            main_last = last_usable - pers_sects;
+        if (has_persistence)
+            main_last -= pers_sects;
+        if (has_uefi_ntfs)
+            main_last -= uefi_sects;
 
         uint8_t *pe = entries;
         memcpy(pe + 0,  bd_type,   16);
@@ -536,7 +628,10 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         for (int i = 0; i < 8; i++) pe[32 + i] = (first_usable >> (8*i)) & 0xFF;
         for (int i = 0; i < 8; i++) pe[40 + i] = (main_last    >> (8*i)) & 0xFF;
 
-        /* Build persistence partition entry 1 */
+        SelectedDrive.Partition[PI_MAIN].Offset = first_usable * sector_size;
+        SelectedDrive.Partition[PI_MAIN].Size   = (main_last - first_usable + 1) * sector_size;
+
+        /* Build persistence partition entry (follows main) */
         if (has_persistence) {
             static const uint8_t linux_type[16] = {
                 0xAF,0x3D,0xC6,0x0F, 0x83,0x84, 0x72,0x47,
@@ -557,6 +652,34 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
             memcpy(pe1 + 16, p1_guid,    16);
             for (int i = 0; i < 8; i++) pe1[32 + i] = (p1_first >> (8*i)) & 0xFF;
             for (int i = 0; i < 8; i++) pe1[40 + i] = (p1_last  >> (8*i)) & 0xFF;
+            SelectedDrive.Partition[PI_CASPER].Offset = p1_first * sector_size;
+            SelectedDrive.Partition[PI_CASPER].Size   = pers_sects * sector_size;
+        }
+
+        /* Build UEFI:NTFS EFI System partition at the very end of disk */
+        if (has_uefi_ntfs) {
+            static const uint8_t esp_type[16] = {
+                0x28,0x73,0x2A,0xC1, 0x1F,0xF8, 0xD2,0x11,
+                0xBA,0x4B, 0x00,0xA0,0xC9,0x3E,0xC9,0x3B
+            };
+            uint8_t un_guid[16] = { 0 };
+            {
+                struct timespec tsU;
+                clock_gettime(CLOCK_REALTIME, &tsU);
+                uint64_t tU = (uint64_t)tsU.tv_sec * 1000000000ULL + tsU.tv_nsec + 2;
+                memcpy(un_guid, &tU, 8);
+                un_guid[8] = 0x82;
+            }
+            uint64_t un_first = last_usable - uefi_sects + 1;
+            uint64_t un_last  = last_usable;
+            int slot = has_persistence ? 2 : 1;
+            uint8_t *peu = entries + 128 * slot;
+            memcpy(peu + 0,  esp_type, 16);
+            memcpy(peu + 16, un_guid,  16);
+            for (int i = 0; i < 8; i++) peu[32 + i] = (un_first >> (8*i)) & 0xFF;
+            for (int i = 0; i < 8; i++) peu[40 + i] = (un_last  >> (8*i)) & 0xFF;
+            SelectedDrive.Partition[PI_UEFI_NTFS].Offset = un_first * sector_size;
+            SelectedDrive.Partition[PI_UEFI_NTFS].Size   = uefi_sects * sector_size;
         }
 
         uint32_t entries_crc = crc32_ieee(entries, entries_sz);
