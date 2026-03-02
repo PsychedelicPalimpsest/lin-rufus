@@ -79,35 +79,7 @@ out:
 	return r;
 }
 
-/*
- * Convert an (unprefixed) hex string to a binary hash value.
- * Non-concurrent (returns pointer to a static buffer).
- */
-uint8_t* StringToHash(const char* str)
-{
-	static uint8_t ret[MAX_HASHSIZE];
-	size_t i, len = safe_strlen(str);
-	uint8_t val = 0;
-	char c;
-
-	if_assert_fails(len / 2 == MD5_HASHSIZE || len / 2 == SHA1_HASHSIZE ||
-	                len / 2 == SHA256_HASHSIZE || len / 2 == SHA512_HASHSIZE)
-		return NULL;
-	memset(ret, 0, sizeof(ret));
-
-	for (i = 0; i < len; i++) {
-		val <<= 4;
-		c = (char)tolower((unsigned char)str[i]);
-		if_assert_fails((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))
-			return NULL;
-		val |= ((c - '0') < 0xa) ? (c - '0') : (c - 'a' + 0xa);
-		if (i % 2)
-			ret[i / 2] = val;
-	}
-	return ret;
-}
-
-/* ---- DB lookup functions ---- */
+/* ---- DB lookup helpers: StringToHash, IsBufferInDB/IsFileInDB, BufferMatchesHash ---- */
 #include "../windows/db.h"
 #include "efi.h"
 
@@ -116,47 +88,7 @@ extern const char* efi_archname[];
 extern enum ArchType MachineToArch(WORD machine);
 extern BOOL UseLocalDbx(int arch);
 
-BOOL IsBufferInDB(const unsigned char* buf, const size_t len)
-{
-	int i;
-	uint8_t hash[SHA256_HASHSIZE];
-	if (!HashBuffer(HASH_SHA256, buf, len, hash))
-		return FALSE;
-	for (i = 0; i < (int)ARRAYSIZE(sha256db); i += SHA256_HASHSIZE)
-		if (memcmp(hash, &sha256db[i], SHA256_HASHSIZE) == 0)
-			return TRUE;
-	return FALSE;
-}
-
-BOOL IsFileInDB(const char* path)
-{
-	int i;
-	uint8_t hash[SHA256_HASHSIZE];
-	if (!HashFile(HASH_SHA256, path, hash))
-		return FALSE;
-	for (i = 0; i < (int)ARRAYSIZE(sha256db); i += SHA256_HASHSIZE)
-		if (memcmp(hash, &sha256db[i], SHA256_HASHSIZE) == 0)
-			return TRUE;
-	return FALSE;
-}
-
-BOOL FileMatchesHash(const char* path, const char* str)
-{
-	uint8_t hash[SHA256_HASHSIZE];
-	if (!HashFile(HASH_SHA256, path, hash))
-		return FALSE;
-	return (memcmp(hash, StringToHash(str), SHA256_HASHSIZE) == 0);
-}
-
-BOOL BufferMatchesHash(const uint8_t* buf, const size_t len, const char* str)
-{
-	uint8_t hash[SHA256_HASHSIZE];
-	if (buf == NULL || str == NULL)
-		return FALSE;
-	if (!HashBuffer(HASH_SHA256, buf, len, hash))
-		return FALSE;
-	return (memcmp(hash, StringToHash(str), SHA256_HASHSIZE) == 0);
-}
+#include "../../common/hash_db.c"
 
 /* ---- Secure Boot helper: check if PE hash matches any entry in a DBX binary ---- */
 static BOOL IsRevokedByDbx(uint8_t* hash, uint8_t* buf, uint32_t len)
@@ -570,146 +502,8 @@ void UpdateMD5Sum(const char* dest_dir, const char* md5sum_name)
     free(md5_data);
 }
 
-/* A part of an image, used for hashing */
-struct image_region {
-    const uint8_t *data;
-    uint32_t       size;
-};
-
-struct efi_image_regions {
-    int max;
-    int num;
-    struct image_region reg[];
-};
-
-static BOOL efi_image_region_add(struct efi_image_regions *regs,
-    const void *start, const void *end, int nocheck)
-{
-    struct image_region *reg;
-    int i, j;
-    if (regs->num >= regs->max) return FALSE;
-    if (end < start) return FALSE;
-    for (i = 0; i < regs->num; i++) {
-        reg = &regs->reg[i];
-        if (nocheck) continue;
-        if ((uint8_t *)start >= reg->data + reg->size) continue;
-        if ((uint8_t *)end <= reg->data) {
-            for (j = regs->num - 1; j >= i; j--)
-                memcpy(&regs->reg[j + 1], &regs->reg[j], sizeof(*reg));
-            break;
-        }
-        return FALSE;
-    }
-    reg = &regs->reg[i];
-    reg->data = start;
-    reg->size = (uint32_t)((uintptr_t)end - (uintptr_t)start);
-    regs->num++;
-    return TRUE;
-}
-
-static int cmp_pe_section(const void *arg1, const void *arg2)
-{
-    const IMAGE_SECTION_HEADER *s1 = *((const IMAGE_SECTION_HEADER **)arg1);
-    const IMAGE_SECTION_HEADER *s2 = *((const IMAGE_SECTION_HEADER **)arg2);
-    if (s1->VirtualAddress < s2->VirtualAddress) return -1;
-    if (s1->VirtualAddress == s2->VirtualAddress) return 0;
-    return 1;
-}
-
-BOOL efi_image_parse(uint8_t *efi, size_t len, struct efi_image_regions **regp)
-{
-    struct efi_image_regions *regs;
-    IMAGE_DOS_HEADER *dos;
-    IMAGE_NT_HEADERS32 *nt;
-    IMAGE_SECTION_HEADER *sections, **sorted;
-    int num_regions, num_sections, i;
-    DWORD ctidx = IMAGE_DIRECTORY_ENTRY_SECURITY;
-    uint32_t align, size, authsz;
-    size_t bytes_hashed;
-
-    if (len < 0x80) return FALSE;
-    dos = (void *)efi;
-    if (dos->e_lfanew > (LONG)len - 0x40) return FALSE;
-    nt = (void *)(efi + dos->e_lfanew);
-    authsz = 0;
-
-    num_regions = 3 + nt->FileHeader.NumberOfSections + 1;
-    regs = calloc(sizeof(*regs) + sizeof(struct image_region) * num_regions, 1);
-    if (!regs) return FALSE;
-    regs->max = num_regions;
-
-    if (nt->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
-        IMAGE_NT_HEADERS64 *nt64 = (void *)nt;
-        IMAGE_OPTIONAL_HEADER64 *opt = &nt64->OptionalHeader;
-        efi_image_region_add(regs, efi, &opt->CheckSum, 0);
-        if (nt64->OptionalHeader.NumberOfRvaAndSizes <= ctidx) {
-            efi_image_region_add(regs, &opt->Subsystem, efi + opt->SizeOfHeaders, 0);
-        } else {
-            efi_image_region_add(regs, &opt->Subsystem, &opt->DataDirectory[ctidx], 0);
-            efi_image_region_add(regs, &opt->DataDirectory[ctidx] + 1, efi + opt->SizeOfHeaders, 0);
-            authsz = opt->DataDirectory[ctidx].Size;
-        }
-        bytes_hashed = opt->SizeOfHeaders;
-        align = opt->FileAlignment;
-    } else if (nt->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
-        IMAGE_OPTIONAL_HEADER32 *opt = &nt->OptionalHeader;
-        efi_image_region_add(regs, efi, &opt->CheckSum, 0);
-        if (nt->OptionalHeader.NumberOfRvaAndSizes <= ctidx) {
-            efi_image_region_add(regs, &opt->Subsystem, efi + opt->SizeOfHeaders, 0);
-        } else {
-            efi_image_region_add(regs, &opt->Subsystem, &opt->DataDirectory[ctidx], 0);
-            efi_image_region_add(regs, &opt->DataDirectory[ctidx] + 1, efi + opt->SizeOfHeaders, 0);
-            authsz = opt->DataDirectory[ctidx].Size;
-        }
-        bytes_hashed = opt->SizeOfHeaders;
-        align = opt->FileAlignment;
-    } else {
-        free(regs);
-        return FALSE;
-    }
-
-    num_sections = nt->FileHeader.NumberOfSections;
-    sections = (void *)((uint8_t *)&nt->OptionalHeader + nt->FileHeader.SizeOfOptionalHeader);
-    sorted = calloc(sizeof(IMAGE_SECTION_HEADER *), num_sections);
-    if (!sorted) { free(regs); return FALSE; }
-    for (i = 0; i < num_sections; i++) sorted[i] = &sections[i];
-    qsort(sorted, num_sections, sizeof(sorted[0]), cmp_pe_section);
-    for (i = 0; i < num_sections; i++) {
-        if (!sorted[i]->SizeOfRawData) continue;
-        size = (sorted[i]->SizeOfRawData + align - 1) & ~(align - 1);
-        efi_image_region_add(regs, efi + sorted[i]->PointerToRawData,
-            efi + sorted[i]->PointerToRawData + size, 0);
-        bytes_hashed += size;
-    }
-    free(sorted);
-    if (bytes_hashed + authsz < len)
-        efi_image_region_add(regs, efi + bytes_hashed, efi + len - authsz, 0);
-    *regp = regs;
-    return TRUE;
-}
-
-BOOL PE256Buffer(uint8_t *buf, uint32_t len, uint8_t *hash)
-{
-    BOOL r = FALSE;
-    HASH_CONTEXT hash_ctx = { {0} };
-    int i;
-    struct efi_image_regions *regs = NULL;
-
-    if (!buf || !len || len < 1 * KB || len > 64 * MB || !hash)
-        goto out;
-    if (!efi_image_parse(buf, len, &regs))
-        goto out;
-
-    sha256_init(&hash_ctx);
-    for (i = 0; i < regs->num; i++)
-        sha256_write(&hash_ctx, regs->reg[i].data, regs->reg[i].size);
-    sha256_final(&hash_ctx);
-    memcpy(hash, hash_ctx.buf, SHA256_HASHSIZE);
-    r = TRUE;
-out:
-    free(regs);
-    return r;
-}
+/* ---- PE image region collection and PE256 hash ---- */
+#include "../../common/hash_pe.c"
 INT_PTR CALLBACK HashCallback(HWND h, UINT msg, WPARAM w, LPARAM lp)
                                                                    { (void)h; (void)msg; (void)w; (void)lp; return 0; }
 
