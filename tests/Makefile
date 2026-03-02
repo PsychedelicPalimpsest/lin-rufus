@@ -110,6 +110,7 @@ FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                     $(SRC_DIR)/linux/drive.c \
                     $(COMMON)/drive.c \
                     $(COMMON)/format_fat32.c \
+                    $(COMMON)/format.c \
                     $(SRC_DIR)/linux/window_text_bridge.c \
                     $(SRC_DIR)/ext2fs/posix_io.c
 EXT2FS_LIB := $(SRC_DIR)/ext2fs/libext2fs.a
@@ -152,6 +153,7 @@ FORMAT_NTFS_EXFAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                                 $(SRC_DIR)/linux/drive.c \
                                 $(COMMON)/drive.c \
                                 $(COMMON)/format_fat32.c \
+                                $(COMMON)/format.c \
                                 $(SRC_DIR)/linux/window_text_bridge.c \
                                 $(SRC_DIR)/ext2fs/posix_io.c
 CFLAGS_LINUX_test_format_ntfs_exfat_linux := \
@@ -174,6 +176,7 @@ FORMAT_THREAD_LINUX_SRC := \
 	$(SRC_DIR)/linux/drive.c \
 	$(COMMON)/drive.c \
 	$(COMMON)/format_fat32.c \
+	$(COMMON)/format.c \
 	$(SRC_DIR)/linux/window_text_bridge.c \
 	$(SRC_DIR)/linux/verify.c \
 	$(SRC_DIR)/ext2fs/posix_io.c \
@@ -442,6 +445,23 @@ CFLAGS_WIN_test_fat32_common := \
 	-I$(SRC_DIR)/common \
 	-Wno-unused-function -Wno-sign-compare
 EXTRA_SRC_WIN_test_fat32_common := $(SRC_DIR)/common/format_fat32.c
+
+# format_common tests: portable ToValidLabel() from common/format.c.
+# Self-contained — stubs and globals defined in the test file.
+CFLAGS_LINUX_test_format_common := \
+	-D_RUFUS -DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_format_common := $(COMMON)/format.c
+
+CFLAGS_WIN_test_format_common := \
+	-D_WIN32 -DRUFUS_TEST \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_format_common := $(COMMON)/format.c
 
 # HashThread/IndividualHashThread tests additionally need:
 #   - stdio.c (uprintf), stdfn.c (safe_* helpers), ui.c (UpdateProgress stubs),

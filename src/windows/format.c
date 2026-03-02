@@ -37,6 +37,7 @@
 
 #include "rufus.h"
 #include "format.h"
+#include "../common/label.h"
 #include "missing.h"
 #include "resource.h"
 #include "settings.h"
@@ -253,81 +254,6 @@ static BOOLEAN __stdcall ChkdskCallback(FILE_SYSTEM_CALLBACK_COMMAND Command, DW
 		break;
 	}
 	return TRUE;
-}
-
-/*
- * Converts an UTF-8 label to a valid FAT/NTFS one
- * TODO: Use IVdsService::QueryFileSystemTypes -> VDS_FILE_SYSTEM_TYPE_PROP
- * to get the list of unauthorised and max length for each FS.
- */
-static void ToValidLabel(char* Label, BOOL bFAT)
-{
-	size_t i, j, k;
-	BOOL found;
-	const WCHAR unauthorized[] = L"*?,;:/\\|+=<>[]\"";
-	const WCHAR to_underscore[] = L"\t.";
-	char label[16] = { 0 };
-	WCHAR *wLabel = utf8_to_wchar(Label);
-
-	if (wLabel == NULL)
-		return;
-
-	for (i = 0, k = 0; i < wcslen(wLabel); i++) {
-		if (bFAT) {	// NTFS does allows all the FAT unauthorized above
-			found = FALSE;
-			for (j = 0; j < wcslen(unauthorized); j++) {
-				if (wLabel[i] == unauthorized[j]) {
-					found = TRUE;
-					break;
-				}
-			}
-			// A FAT label that contains extended chars will be rejected
-			if (wLabel[i] >= 0x80) {
-				wLabel[k++] = L'_';
-				found = TRUE;
-			}
-			if (found)
-				continue;
-		}
-		found = FALSE;
-		for (j = 0; j < wcslen(to_underscore); j++) {
-			if (wLabel[i] == to_underscore[j]) {
-				wLabel[k++] = '_';
-				found = TRUE;
-				break;
-			}
-		}
-		if (found)
-			continue;
-		wLabel[k++] = bFAT ? toupper(wLabel[i]) : wLabel[i];
-	}
-	wLabel[k] = 0;
-
-	if (bFAT) {
-		if (wcslen(wLabel) > 11)
-			wLabel[11] = 0;
-		for (i = 0, j = 0; wLabel[i] != 0 ; i++)
-			if (wLabel[i] == '_')
-				j++;
-		if (i < 2*j) {
-			// If the final label is mostly underscore, use an alternate label according to the
-			// size (eg: "256 MB", "7.9 GB"). Note that we can't use SelectedDrive.proposed_label
-			// here as it may contain localized character for GB or MB, so make sure that the
-			// effective label we use is an English one, and also make sure we convert the dot.
-			static_sprintf(label, "%s", SizeToHumanReadable(SelectedDrive.DiskSize, TRUE, FALSE));
-			for (i = 0; label[i] != 0; i++)
-				wLabel[i] = (label[i] == '.') ? '_' : label[i];
-			wLabel[i] = 0;
-			uprintf("FAT label is mostly underscores. Using '%S' label instead.", wLabel);
-		}
-	} else if (wcslen(wLabel) > 32) {
-		wLabel[32] = 0;
-	}
-
-	// Needed for disk by label isolinux.cfg workaround
-	wchar_to_utf8_no_alloc(wLabel, img_report.usb_label, sizeof(img_report.usb_label));
-	safe_strcpy(Label, strlen(Label) + 1, img_report.usb_label);
-	free(wLabel);
 }
 
 /*

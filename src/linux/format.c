@@ -39,6 +39,7 @@
 #include "drive.h"
 #include "format.h"
 #include "format_linux.h"
+#include "../common/label.h"
 #include "badblocks.h"
 #include "settings.h"
 #include "verify.h"
@@ -766,6 +767,8 @@ DWORD WINAPI FormatThread(void* param)
 	PrintStatusInfo(FALSE, FALSE, 0, MSG_229);
 	/* Get label from UI (may be empty) */
 	GetWindowTextA(hLabel, label, (int)sizeof(label));
+	/* Sanitize label for the target filesystem */
+	ToValidLabel(label, (fs_type == FS_FAT16) || (fs_type == FS_FAT32) || (fs_type == FS_EXFAT));
 	DWORD fmt_flags = FP_FORCE;
 	if (quick_format && !IS_EXT(fs_type))
 		fmt_flags |= FP_QUICK;
