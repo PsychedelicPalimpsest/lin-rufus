@@ -637,6 +637,327 @@ TEST(readfat_outofrange_null_iso_fails)
 }
 
 /* ================================================================
+ * DumpFatDir tests
+ *
+ * Create a FAT filesystem image with a few files and one sub-directory,
+ * embed it inside an ISO-9660 image, then verify that DumpFatDir()
+ * correctly extracts every entry.
+ * ================================================================ */
+
+#define TEST_FAT_ISO_PATH    "/tmp/test_rufus_fat_iso.iso"
+#define TEST_FAT_EXTRACT_DIR "/tmp/test_rufus_fat_extract"
+static int fat_iso_available = 0;
+
+/* Helper: run a shell command; return 0 on success */
+static int run_cmd(const char *cmd) { return system(cmd); }
+
+static void setup_fat_iso(void)
+{
+    /* Build a small FAT image with: BOOTX64.EFI, BOOTIA32.EFI, BOOT/GRUB.CFG */
+    const char *setup =
+        "set -e\n"
+        "T=$(mktemp -d)\n"
+        /* 2 MiB FAT12 image */
+        "dd if=/dev/zero of=$T/efi.img bs=512 count=4096 2>/dev/null\n"
+        "mkfs.fat -F 12 $T/efi.img >/dev/null 2>&1\n"
+        /* Seed files */
+        "printf 'EFI-x64-content' > $T/bootx64.efi\n"
+        "printf 'EFI-ia32-content' > $T/bootia32.efi\n"
+        "printf 'grub-cfg-content' > $T/grub.cfg\n"
+        /* Populate FAT image */
+        "MTOOLS_SKIP_CHECK=1 mcopy -i $T/efi.img $T/bootx64.efi   ::/BOOTX64.EFI\n"
+        "MTOOLS_SKIP_CHECK=1 mcopy -i $T/efi.img $T/bootia32.efi  ::/BOOTIA32.EFI\n"
+        "MTOOLS_SKIP_CHECK=1 mmd   -i $T/efi.img                  ::/BOOT\n"
+        "MTOOLS_SKIP_CHECK=1 mcopy -i $T/efi.img $T/grub.cfg      ::/BOOT/GRUB.CFG\n"
+        /* Embed FAT image into ISO */
+        "mkdir -p $T/isoroot\n"
+        "cp $T/efi.img $T/isoroot/efi.img\n"
+        "genisoimage -quiet -o " TEST_FAT_ISO_PATH " -J -R $T/isoroot 2>/dev/null\n"
+        "rm -rf $T\n";
+
+    struct stat st;
+    run_cmd(setup);
+    if (stat(TEST_FAT_ISO_PATH, &st) == 0 && st.st_size > 0)
+        fat_iso_available = 1;
+}
+
+static void cleanup_fat_iso(void)
+{
+    unlink(TEST_FAT_ISO_PATH);
+    run_cmd("rm -rf " TEST_FAT_EXTRACT_DIR);
+}
+
+/* Helper: prepare a fresh extraction directory */
+static void prepare_extract_dir(void)
+{
+    run_cmd("rm -rf " TEST_FAT_EXTRACT_DIR);
+    mkdir(TEST_FAT_EXTRACT_DIR, 0755);
+}
+
+/* ---- unit tests ---- */
+
+TEST(dumpfatdir_null_path_returns_false)
+{
+    CHECK(DumpFatDir(NULL, 0) == FALSE);
+}
+
+TEST(dumpfatdir_null_image_path_returns_false)
+{
+    /* cluster == 0 triggers init path; image_path NULL → FALSE */
+    char *saved = image_path;
+    image_path = NULL;
+    CHECK(DumpFatDir("/tmp", 0) == FALSE);
+    image_path = saved;
+}
+
+TEST(dumpfatdir_invalid_iso_returns_false)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    char *saved = image_path;
+    image_path = (char *)"/nonexistent/no.iso";
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    CHECK(DumpFatDir("/tmp", 0) == FALSE);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+}
+
+TEST(dumpfatdir_missing_efi_img_returns_false)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/no_such_file.img");
+    CHECK(DumpFatDir("/tmp", 0) == FALSE);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+}
+
+TEST(dumpfatdir_returns_true_on_success)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    prepare_extract_dir();
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    BOOL r = DumpFatDir(TEST_FAT_EXTRACT_DIR, 0);
+    CHECK(r == TRUE);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+}
+
+TEST(dumpfatdir_extracts_first_file)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    prepare_extract_dir();
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    DumpFatDir(TEST_FAT_EXTRACT_DIR, 0);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+
+    /* At least one of the EFI files must be present */
+    struct stat st;
+    int found = (stat(TEST_FAT_EXTRACT_DIR "/BOOTX64.EFI", &st) == 0) ||
+                (stat(TEST_FAT_EXTRACT_DIR "/bootx64.efi", &st) == 0);
+    CHECK(found);
+}
+
+TEST(dumpfatdir_extracts_second_file)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    prepare_extract_dir();
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    DumpFatDir(TEST_FAT_EXTRACT_DIR, 0);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+
+    struct stat st;
+    int found = (stat(TEST_FAT_EXTRACT_DIR "/BOOTIA32.EFI", &st) == 0) ||
+                (stat(TEST_FAT_EXTRACT_DIR "/bootia32.efi", &st) == 0);
+    CHECK(found);
+}
+
+TEST(dumpfatdir_file_content_correct)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    prepare_extract_dir();
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    DumpFatDir(TEST_FAT_EXTRACT_DIR, 0);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+
+    /* Verify file content of BOOTX64.EFI */
+    const char *path64 = NULL;
+    struct stat st;
+    if (stat(TEST_FAT_EXTRACT_DIR "/BOOTX64.EFI", &st) == 0)
+        path64 = TEST_FAT_EXTRACT_DIR "/BOOTX64.EFI";
+    else if (stat(TEST_FAT_EXTRACT_DIR "/bootx64.efi", &st) == 0)
+        path64 = TEST_FAT_EXTRACT_DIR "/bootx64.efi";
+    if (path64 == NULL) { CHECK(0); return; }
+
+    FILE *f = fopen(path64, "rb");
+    CHECK(f != NULL);
+    if (!f) return;
+    char buf[64] = {0};
+    fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    CHECK(strncmp(buf, "EFI-x64-content", 15) == 0);
+}
+
+TEST(dumpfatdir_creates_subdirectory)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    prepare_extract_dir();
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    DumpFatDir(TEST_FAT_EXTRACT_DIR, 0);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+
+    struct stat st;
+    int found = (stat(TEST_FAT_EXTRACT_DIR "/BOOT", &st) == 0 && S_ISDIR(st.st_mode)) ||
+                (stat(TEST_FAT_EXTRACT_DIR "/boot", &st) == 0 && S_ISDIR(st.st_mode));
+    CHECK(found);
+}
+
+TEST(dumpfatdir_extracts_nested_file)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    prepare_extract_dir();
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    DumpFatDir(TEST_FAT_EXTRACT_DIR, 0);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+
+    struct stat st;
+    int found = (stat(TEST_FAT_EXTRACT_DIR "/BOOT/GRUB.CFG", &st) == 0) ||
+                (stat(TEST_FAT_EXTRACT_DIR "/BOOT/grub.cfg", &st) == 0) ||
+                (stat(TEST_FAT_EXTRACT_DIR "/boot/GRUB.CFG", &st) == 0) ||
+                (stat(TEST_FAT_EXTRACT_DIR "/boot/grub.cfg", &st) == 0);
+    CHECK(found);
+}
+
+TEST(dumpfatdir_nested_file_content_correct)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    prepare_extract_dir();
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    DumpFatDir(TEST_FAT_EXTRACT_DIR, 0);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+
+    /* Find the grub.cfg file regardless of case */
+    const char *candidates[] = {
+        TEST_FAT_EXTRACT_DIR "/BOOT/GRUB.CFG",
+        TEST_FAT_EXTRACT_DIR "/BOOT/grub.cfg",
+        TEST_FAT_EXTRACT_DIR "/boot/GRUB.CFG",
+        TEST_FAT_EXTRACT_DIR "/boot/grub.cfg",
+        NULL
+    };
+    const char *found = NULL;
+    struct stat st;
+    for (int i = 0; candidates[i]; i++) {
+        if (stat(candidates[i], &st) == 0) { found = candidates[i]; break; }
+    }
+    CHECK(found != NULL);
+    if (!found) return;
+    FILE *f = fopen(found, "rb");
+    CHECK(f != NULL);
+    if (!f) return;
+    char buf[64] = {0};
+    fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    CHECK(strncmp(buf, "grub-cfg-content", 16) == 0);
+}
+
+TEST(dumpfatdir_skips_existing_file)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    prepare_extract_dir();
+
+    /* Pre-create a file to verify it is NOT overwritten */
+    FILE *f = fopen(TEST_FAT_EXTRACT_DIR "/BOOTX64.EFI", "wb");
+    if (f) { fwrite("ORIGINAL", 8, 1, f); fclose(f); }
+    /* Also create lower-case variant to handle both cases */
+    f = fopen(TEST_FAT_EXTRACT_DIR "/bootx64.efi", "wb");
+    if (f) { fwrite("ORIGINAL", 8, 1, f); fclose(f); }
+
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    DumpFatDir(TEST_FAT_EXTRACT_DIR, 0);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+
+    /* The pre-existing file should not have been changed */
+    char buf[64] = {0};
+    const char *path64 = NULL;
+    struct stat st;
+    if (stat(TEST_FAT_EXTRACT_DIR "/BOOTX64.EFI", &st) == 0)
+        path64 = TEST_FAT_EXTRACT_DIR "/BOOTX64.EFI";
+    else if (stat(TEST_FAT_EXTRACT_DIR "/bootx64.efi", &st) == 0)
+        path64 = TEST_FAT_EXTRACT_DIR "/bootx64.efi";
+    if (path64 == NULL) { CHECK(0); return; }
+    f = fopen(path64, "rb");
+    CHECK(f != NULL);
+    if (!f) return;
+    fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    CHECK(strncmp(buf, "ORIGINAL", 8) == 0);
+}
+
+/* wchar16_to_utf8 is a static function in iso.c; we test it indirectly
+ * by verifying that DumpFatDir produces correct filenames even for
+ * characters outside ASCII (here we probe basic ASCII correctness via
+ * the fixture files whose names contain only A-Z digits and dots). */
+TEST(dumpfatdir_filenames_are_valid_utf8)
+{
+    if (!fat_iso_available) { printf("  (skipped: no FAT ISO)\n"); return; }
+    prepare_extract_dir();
+    char *saved = image_path;
+    image_path = (char *)TEST_FAT_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/efi.img");
+    DumpFatDir(TEST_FAT_EXTRACT_DIR, 0);
+    image_path = saved;
+    memset(&img_report, 0, sizeof(img_report));
+
+    /* Every byte in every extracted filename must be valid ASCII (< 0x80)
+     * which is a subset of valid UTF-8. */
+    DIR *d = opendir(TEST_FAT_EXTRACT_DIR);
+    CHECK(d != NULL);
+    if (!d) return;
+    struct dirent *de;
+    while ((de = readdir(d)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        for (const char *p = de->d_name; *p; p++) {
+            CHECK((unsigned char)*p < 0x80);
+        }
+    }
+    closedir(d);
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 
@@ -644,10 +965,14 @@ int main(void)
 {
     printf("=== ISO extraction tests (Linux) ===\n\n");
 
-    /* Setup: generate test ISO */
+    /* Setup: generate test ISOs */
     setup_test_iso();
     if (!test_iso_available)
         printf("  NOTE: test ISO not available (pycdlib not installed?); ISO I/O tests skipped\n\n");
+
+    setup_fat_iso();
+    if (!fat_iso_available)
+        printf("  NOTE: FAT-in-ISO not available (mkfs.fat/mcopy/genisoimage missing?); DumpFatDir tests skipped\n\n");
 
     StrArrayCreate(&modified_files, 8);
 
@@ -702,8 +1027,24 @@ int main(void)
     RUN(readfat_inrange_sector_1_offset);
     RUN(readfat_outofrange_null_iso_fails);
 
+    printf("\n  DumpFatDir\n");
+    RUN(dumpfatdir_null_path_returns_false);
+    RUN(dumpfatdir_null_image_path_returns_false);
+    RUN(dumpfatdir_invalid_iso_returns_false);
+    RUN(dumpfatdir_missing_efi_img_returns_false);
+    RUN(dumpfatdir_returns_true_on_success);
+    RUN(dumpfatdir_extracts_first_file);
+    RUN(dumpfatdir_extracts_second_file);
+    RUN(dumpfatdir_file_content_correct);
+    RUN(dumpfatdir_creates_subdirectory);
+    RUN(dumpfatdir_extracts_nested_file);
+    RUN(dumpfatdir_nested_file_content_correct);
+    RUN(dumpfatdir_skips_existing_file);
+    RUN(dumpfatdir_filenames_are_valid_utf8);
+
     StrArrayDestroy(&modified_files);
     cleanup_test_iso();
+    cleanup_fat_iso();
 
     TEST_RESULTS();
 }

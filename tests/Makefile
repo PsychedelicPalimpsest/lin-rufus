@@ -268,11 +268,11 @@ ISO_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
 CFLAGS_LINUX_test_iso_linux := \
 	-DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_iso_linux := -lcdio -liso9660 -ludf
-EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB)
+LDFLAGS_LINUX_test_iso_linux := -lcdio -liso9660 -ludf $(SRC_DIR)/syslinux/libfat/libfat.a
+EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) iso_linux_glue.c
 
 # HashThread/IndividualHashThread tests additionally need:
 #   - stdio.c (uprintf), stdfn.c (safe_* helpers), ui.c (UpdateProgress stubs),
