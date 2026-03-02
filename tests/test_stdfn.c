@@ -343,6 +343,42 @@ TEST(strarray_empty_string)
     StrArrayDestroy(&arr);
 }
 
+/* Dynamic growth: adding more items than the initial capacity must succeed */
+TEST(strarray_grows_beyond_initial_capacity)
+{
+    StrArray arr;
+    StrArrayCreate(&arr, 2);
+    CHECK_INT_EQ(0, StrArrayAdd(&arr, "a", TRUE));
+    CHECK_INT_EQ(1, StrArrayAdd(&arr, "b", TRUE));
+    /* Array is now full (Index == Max == 2); next add must grow it */
+    CHECK_INT_EQ(2, StrArrayAdd(&arr, "c", TRUE));
+    CHECK_INT_EQ(3, StrArrayAdd(&arr, "d", TRUE));
+    CHECK_INT_EQ(4, (int32_t)arr.Index);
+    CHECK(arr.Max >= 4);
+    /* All four entries must be findable */
+    CHECK_INT_EQ(0, StrArrayFind(&arr, "a"));
+    CHECK_INT_EQ(1, StrArrayFind(&arr, "b"));
+    CHECK_INT_EQ(2, StrArrayFind(&arr, "c"));
+    CHECK_INT_EQ(3, StrArrayFind(&arr, "d"));
+    StrArrayDestroy(&arr);
+}
+
+/* dup=FALSE: the pointer stored must be the original, not a copy */
+TEST(strarray_dup_false_stores_pointer)
+{
+    StrArray arr;
+    StrArrayCreate(&arr, 4);
+    const char* literal = "no_copy_here";
+    int32_t idx = StrArrayAdd(&arr, literal, FALSE);
+    CHECK(idx >= 0);
+    /* The stored pointer must be identical to the one we passed in */
+    CHECK(arr.String[idx] == literal);
+    /* Prevent StrArrayDestroy from trying to free a string literal */
+    arr.String[idx] = NULL;
+    arr.Index = 0;
+    StrArrayDestroy(&arr);
+}
+
 /* ===========================================================================
  * SetThreadAffinity tests
  * =========================================================================*/
@@ -549,6 +585,8 @@ int main(void)
     RUN(strarray_destroy);
     RUN(strarray_find_null);
     RUN(strarray_empty_string);
+    RUN(strarray_grows_beyond_initial_capacity);
+    RUN(strarray_dup_false_stores_pointer);
 
     printf("\n=== SetThreadAffinity ===\n");
     RUN(set_thread_affinity_null_array);
