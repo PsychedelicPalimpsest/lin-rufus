@@ -51,3 +51,6 @@ char* get_token_data_file_indexed(const char* token, const char* filename, int i
 	(void)token; (void)filename; (void)index;
 	return NULL;
 }
+
+/* img_report is normally defined in globals.c but iso tests don't link it */
+RUFUS_IMG_REPORT img_report = { 0 };

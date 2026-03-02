@@ -806,7 +806,7 @@ TEST(create_partition_gpt_verifies_crc)
 
 	uint8_t tmp[92];
 	memcpy(tmp, header, 92);
-	uint32_t stored_crc = tmp[16] | (tmp[17]<<8) | (tmp[18]<<16) | (tmp[19]<<24);
+	uint32_t stored_crc = (uint32_t)tmp[16] | ((uint32_t)tmp[17]<<8) | ((uint32_t)tmp[18]<<16) | ((uint32_t)tmp[19]<<24);
 	tmp[16] = tmp[17] = tmp[18] = tmp[19] = 0;
 	uint32_t computed_crc = crc32(tmp, 92);
 	CHECK_INT_EQ((int)stored_crc, (int)computed_crc);
@@ -1243,5 +1243,6 @@ int main(void)
 	RUN_TEST(is_filtered_drive_gpt_match_second_slot);
 
 	PRINT_RESULTS();
+	drive_linux_reset_drives();  /* free any drives added by the last test */
 	return (g_failed == 0) ? 0 : 1;
 }

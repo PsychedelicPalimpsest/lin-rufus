@@ -131,9 +131,10 @@ uint32_t read_file(const char* path, uint8_t** buf) {
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     rewind(f);
-    *buf = (uint8_t*)malloc(sz);
+    *buf = (uint8_t*)malloc(sz + 1);
     if (!*buf) { fclose(f); return 0; }
     uint32_t r = (uint32_t)fread(*buf, 1, sz, f);
+    (*buf)[r] = '\0';  /* null-terminate for callers using strstr/strchr */
     fclose(f);
     return r;
 }

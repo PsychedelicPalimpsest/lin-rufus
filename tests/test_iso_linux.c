@@ -239,7 +239,7 @@ TEST(grubfs_finds_fshelp_entry)
     const char* entry = "fshelp\0fat";
     memcpy(buf + 50, entry, 11);
     StrArrayCreate(&grub_filesystems, 8);
-    GetGrubFs(buf, sizeof(buf));
+    GetGrubFs(buf, sizeof(buf), &grub_filesystems);
     CHECK(grub_filesystems.Index >= 1);
     /* The filesystem name 'fat' should be in the array */
     BOOL found = FALSE;
@@ -256,7 +256,7 @@ TEST(grubfs_no_entry)
     memset(buf, 'z', sizeof(buf));
     buf[255] = 0;
     StrArrayCreate(&grub_filesystems, 8);
-    GetGrubFs(buf, sizeof(buf));
+    GetGrubFs(buf, sizeof(buf), &grub_filesystems);
     CHECK(grub_filesystems.Index == 0);
     StrArrayDestroy(&grub_filesystems);
 }
@@ -271,7 +271,7 @@ TEST(grubfs_multiple_entries)
     memcpy(buf + 20, e1, 12);
     memcpy(buf + 50, e2, 12);
     StrArrayCreate(&grub_filesystems, 8);
-    GetGrubFs(buf, sizeof(buf));
+    GetGrubFs(buf, sizeof(buf), &grub_filesystems);
     CHECK(grub_filesystems.Index >= 2);
     StrArrayDestroy(&grub_filesystems);
 }

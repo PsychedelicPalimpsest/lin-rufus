@@ -21,3 +21,6 @@ BOOL GetOpticalMedia(IMG_SAVE* s) { (void)s; return FALSE; }
 
 char *FileDialog(BOOL save, char* path, const ext_t* ext, UINT* sel)
 { (void)save; (void)path; (void)ext; (void)sel; return NULL; }
+
+/* img_report is normally defined in globals.c but iso tests don't link it */
+RUFUS_IMG_REPORT img_report = { 0 };

@@ -14,6 +14,7 @@
 
 @SET_MAKE@
 
+
 VPATH = @srcdir@
 am__is_gnu_make = { \
   if test -z '$(MAKELEVEL)'; then \
@@ -94,7 +95,8 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
-DIST_COMMON = $(srcdir)/Makefile.am
+DIST_COMMON = $(srcdir)/Makefile.am \
+	$(am__dist_polkitactions_DATA_DIST)
 mkinstalldirs = $(install_sh) -d
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
@@ -104,7 +106,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 	common/rufus-cregex_parse.$(OBJEXT) \
 	common/rufus-cregex_vm.$(OBJEXT) common/rufus-xml.$(OBJEXT) \
 	common/rufus-localization.$(OBJEXT) \
-	common/rufus-parser.$(OBJEXT)
+	common/rufus-parser.$(OBJEXT) common/rufus-iso_scan.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@am__objects_2 =  \
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	linux/rufus-ui.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@am__objects_2 = linux/rufus-ui_gtk.$(OBJEXT)
@@ -147,7 +149,13 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-notify.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-system_info.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-timezone.$(OBJEXT) \
-@TARGET_WINDOWS_FALSE@	linux/rufus-xdg.$(OBJEXT)
+@TARGET_WINDOWS_FALSE@	linux/rufus-xdg.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-polkit.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-verify.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-download_resume.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-cli.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-crash_handler.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-hyperlink.$(OBJEXT)
 @TARGET_WINDOWS_TRUE@am__objects_3 =  \
 @TARGET_WINDOWS_TRUE@	windows/rufus-badblocks.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-darkmode.$(OBJEXT) \
@@ -261,6 +269,36 @@ am__can_run_installinfo = \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
+am__dist_polkitactions_DATA_DIST =  \
+	$(top_srcdir)/res/ie.akeo.rufus.policy
+am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
+am__vpath_adj = case $$p in \
+    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
+    *) f=$$p;; \
+  esac;
+am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
+am__install_max = 40
+am__nobase_strip_setup = \
+  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
+am__nobase_strip = \
+  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
+am__nobase_list = $(am__nobase_strip_setup); \
+  for p in $$list; do echo "$$p $$p"; done | \
+  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
+  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
+    if (++n[$$2] == $(am__install_max)) \
+      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
+    END { for (dir in files) print dir, files[dir] }'
+am__base_list = \
+  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
+  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
+am__uninstall_files_from_dir = { \
+  { test ! -d "$$dir" && test ! -f "$$dir" && test ! -r "$$dir"; } \
+  || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
+       $(am__cd) "$$dir" && echo $$files | $(am__xargs_n) 40 $(am__rm_f); }; \
+  }
+am__installdirs = "$(DESTDIR)$(polkitactionsdir)"
+DATA = $(dist_polkitactions_DATA)
 RECURSIVE_CLEAN_TARGETS = mostlyclean-recursive clean-recursive	\
   distclean-recursive maintainer-clean-recursive
 am__recursive_targets = \
@@ -415,7 +453,7 @@ top_srcdir = @top_srcdir@
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES_ = $(AM_V_WINDRES_$(AM_DEFAULT_VERBOSITY))
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES = $(AM_V_WINDRES_$(V))
 COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c \
-	common/localization.c common/parser.c
+	common/localization.c common/parser.c common/iso_scan.c
 
 @TARGET_WINDOWS_FALSE@OS_SOURCES = linux/compat/msg_dispatch.c \
 @TARGET_WINDOWS_FALSE@	linux/badblocks.c linux/combo_bridge.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
@@ -423,7 +461,7 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -435,6 +473,8 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 # Select the UI backend source for Linux builds
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@LINUX_UI_SRC = linux/ui_gtk.c
 rufus_SOURCES = $(COMMON_SOURCES) $(OS_SOURCES)
+@TARGET_WINDOWS_FALSE@polkitactionsdir = $(datadir)/polkit-1/actions
+@TARGET_WINDOWS_FALSE@dist_polkitactions_DATA = $(top_srcdir)/res/ie.akeo.rufus.policy
 @TARGET_WINDOWS_FALSE@rufus_CFLAGS = -I$(srcdir)/linux/compat -I$(srcdir)/linux -I$(srcdir)/windows -I$(srcdir)/common \
 @TARGET_WINDOWS_FALSE@	-I$(srcdir)/ms-sys/inc -I$(srcdir)/syslinux/libfat -I$(srcdir)/syslinux/libinstaller \
 @TARGET_WINDOWS_FALSE@	-I$(srcdir)/syslinux/win -I$(srcdir)/libcdio -I$(srcdir)/wimlib -I$(srcdir)/../res \
@@ -501,6 +541,7 @@ common/rufus-cregex_vm.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-xml.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-localization.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-parser.$(OBJEXT): common/$(am__dirstamp)
+common/rufus-iso_scan.$(OBJEXT): common/$(am__dirstamp)
 linux/compat/$(am__dirstamp):
 	@$(MKDIR_P) linux/compat
 	@: >>linux/compat/$(am__dirstamp)
@@ -549,6 +590,12 @@ linux/rufus-notify.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-system_info.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-timezone.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-xdg.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-polkit.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-verify.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-download_resume.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-cli.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-crash_handler.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-hyperlink.$(OBJEXT): linux/$(am__dirstamp)
 windows/$(am__dirstamp):
 	@$(MKDIR_P) windows
 	@: >>windows/$(am__dirstamp)
@@ -634,6 +681,12 @@ common/rufus-parser.o: common/parser.c
 
 common/rufus-parser.obj: common/parser.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-parser.obj `if test -f 'common/parser.c'; then $(CYGPATH_W) 'common/parser.c'; else $(CYGPATH_W) '$(srcdir)/common/parser.c'; fi`
+
+common/rufus-iso_scan.o: common/iso_scan.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-iso_scan.o `test -f 'common/iso_scan.c' || echo '$(srcdir)/'`common/iso_scan.c
+
+common/rufus-iso_scan.obj: common/iso_scan.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-iso_scan.obj `if test -f 'common/iso_scan.c'; then $(CYGPATH_W) 'common/iso_scan.c'; else $(CYGPATH_W) '$(srcdir)/common/iso_scan.c'; fi`
 
 linux/compat/rufus-msg_dispatch.o: linux/compat/msg_dispatch.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/compat/rufus-msg_dispatch.o `test -f 'linux/compat/msg_dispatch.c' || echo '$(srcdir)/'`linux/compat/msg_dispatch.c
@@ -881,6 +934,42 @@ linux/rufus-xdg.o: linux/xdg.c
 linux/rufus-xdg.obj: linux/xdg.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-xdg.obj `if test -f 'linux/xdg.c'; then $(CYGPATH_W) 'linux/xdg.c'; else $(CYGPATH_W) '$(srcdir)/linux/xdg.c'; fi`
 
+linux/rufus-polkit.o: linux/polkit.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-polkit.o `test -f 'linux/polkit.c' || echo '$(srcdir)/'`linux/polkit.c
+
+linux/rufus-polkit.obj: linux/polkit.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-polkit.obj `if test -f 'linux/polkit.c'; then $(CYGPATH_W) 'linux/polkit.c'; else $(CYGPATH_W) '$(srcdir)/linux/polkit.c'; fi`
+
+linux/rufus-verify.o: linux/verify.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-verify.o `test -f 'linux/verify.c' || echo '$(srcdir)/'`linux/verify.c
+
+linux/rufus-verify.obj: linux/verify.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-verify.obj `if test -f 'linux/verify.c'; then $(CYGPATH_W) 'linux/verify.c'; else $(CYGPATH_W) '$(srcdir)/linux/verify.c'; fi`
+
+linux/rufus-download_resume.o: linux/download_resume.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-download_resume.o `test -f 'linux/download_resume.c' || echo '$(srcdir)/'`linux/download_resume.c
+
+linux/rufus-download_resume.obj: linux/download_resume.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-download_resume.obj `if test -f 'linux/download_resume.c'; then $(CYGPATH_W) 'linux/download_resume.c'; else $(CYGPATH_W) '$(srcdir)/linux/download_resume.c'; fi`
+
+linux/rufus-cli.o: linux/cli.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-cli.o `test -f 'linux/cli.c' || echo '$(srcdir)/'`linux/cli.c
+
+linux/rufus-cli.obj: linux/cli.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-cli.obj `if test -f 'linux/cli.c'; then $(CYGPATH_W) 'linux/cli.c'; else $(CYGPATH_W) '$(srcdir)/linux/cli.c'; fi`
+
+linux/rufus-crash_handler.o: linux/crash_handler.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-crash_handler.o `test -f 'linux/crash_handler.c' || echo '$(srcdir)/'`linux/crash_handler.c
+
+linux/rufus-crash_handler.obj: linux/crash_handler.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-crash_handler.obj `if test -f 'linux/crash_handler.c'; then $(CYGPATH_W) 'linux/crash_handler.c'; else $(CYGPATH_W) '$(srcdir)/linux/crash_handler.c'; fi`
+
+linux/rufus-hyperlink.o: linux/hyperlink.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-hyperlink.o `test -f 'linux/hyperlink.c' || echo '$(srcdir)/'`linux/hyperlink.c
+
+linux/rufus-hyperlink.obj: linux/hyperlink.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-hyperlink.obj `if test -f 'linux/hyperlink.c'; then $(CYGPATH_W) 'linux/hyperlink.c'; else $(CYGPATH_W) '$(srcdir)/linux/hyperlink.c'; fi`
+
 windows/rufus-badblocks.o: windows/badblocks.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-badblocks.o `test -f 'windows/badblocks.c' || echo '$(srcdir)/'`windows/badblocks.c
 
@@ -1036,6 +1125,27 @@ windows/rufus-wue.o: windows/wue.c
 
 windows/rufus-wue.obj: windows/wue.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-wue.obj `if test -f 'windows/wue.c'; then $(CYGPATH_W) 'windows/wue.c'; else $(CYGPATH_W) '$(srcdir)/windows/wue.c'; fi`
+install-dist_polkitactionsDATA: $(dist_polkitactions_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(dist_polkitactions_DATA)'; test -n "$(polkitactionsdir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(polkitactionsdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(polkitactionsdir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(polkitactionsdir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(polkitactionsdir)" || exit $$?; \
+	done
+
+uninstall-dist_polkitactionsDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_polkitactions_DATA)'; test -n "$(polkitactionsdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(polkitactionsdir)'; $(am__uninstall_files_from_dir)
 
 # This directory's subdirectories are mostly independent; you can cd
 # into them and run 'make' without going through this Makefile.
@@ -1137,9 +1247,12 @@ distclean-tags:
 	-rm -f TAGS ID GTAGS GRTAGS GSYMS GPATH tags
 check-am: all-am
 check: check-recursive
-all-am: Makefile $(PROGRAMS)
+all-am: Makefile $(PROGRAMS) $(DATA)
 installdirs: installdirs-recursive
 installdirs-am:
+	for dir in "$(DESTDIR)$(polkitactionsdir)"; do \
+	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
+	done
 install: install-recursive
 install-exec: install-exec-recursive
 install-data: install-data-recursive
@@ -1195,7 +1308,7 @@ info: info-recursive
 
 info-am:
 
-install-data-am:
+install-data-am: install-dist_polkitactionsDATA
 
 install-dvi: install-dvi-recursive
 
@@ -1239,7 +1352,7 @@ ps: ps-recursive
 
 ps-am:
 
-uninstall-am:
+uninstall-am: uninstall-dist_polkitactionsDATA
 
 .MAKE: $(am__recursive_targets) install-am install-strip
 
@@ -1248,14 +1361,15 @@ uninstall-am:
 	cscopelist-am ctags ctags-am distclean distclean-compile \
 	distclean-generic distclean-tags dvi dvi-am html html-am info \
 	info-am install install-am install-data install-data-am \
-	install-dvi install-dvi-am install-exec install-exec-am \
-	install-html install-html-am install-info install-info-am \
-	install-man install-pdf install-pdf-am install-ps \
-	install-ps-am install-strip installcheck installcheck-am \
-	installdirs installdirs-am maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-compile \
-	mostlyclean-generic pdf pdf-am ps ps-am tags tags-am uninstall \
-	uninstall-am
+	install-dist_polkitactionsDATA install-dvi install-dvi-am \
+	install-exec install-exec-am install-html install-html-am \
+	install-info install-info-am install-man install-pdf \
+	install-pdf-am install-ps install-ps-am install-strip \
+	installcheck installcheck-am installdirs installdirs-am \
+	maintainer-clean maintainer-clean-generic mostlyclean \
+	mostlyclean-compile mostlyclean-generic pdf pdf-am ps ps-am \
+	tags tags-am uninstall uninstall-am \
+	uninstall-dist_polkitactionsDATA
 
 .PRECIOUS: Makefile
 

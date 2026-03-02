@@ -593,9 +593,20 @@ static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 	force_update_check = FALSE;
 	/* Also check for DBX revocation database updates */
 	CheckForDBXUpdates();
-	update_check_thread = NULL;
+	/* Note: update_check_thread is cleared by net_join_update_thread() */
 	ExitThread(0);
 	return 0;
+}
+
+/* net_join_update_thread — wait for any running update check to finish.
+ * Call this before process exit in tests to avoid ASAN leak reports. */
+void net_join_update_thread(void)
+{
+	HANDLE h = update_check_thread;
+	if (!h) return;
+	WaitForSingleObject(h, INFINITE);
+	CloseHandle(h);
+	update_check_thread = NULL;
 }
 
 /*
@@ -785,8 +796,15 @@ BOOL CheckForUpdates(BOOL force)
 	force_update_check = force;
 
 	/* Do not start a second check if one is already in progress */
-	if (update_check_thread != NULL)
-		return FALSE;
+	if (update_check_thread != NULL) {
+		/* Check if the previous thread has already finished */
+		if (WaitForSingleObject(update_check_thread, 0) == WAIT_OBJECT_0) {
+			CloseHandle(update_check_thread);
+			update_check_thread = NULL;
+		} else {
+			return FALSE;
+		}
+	}
 
 	/* Unless forced, respect the update interval */
 	if (!force) {

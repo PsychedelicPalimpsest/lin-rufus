@@ -642,6 +642,7 @@ int main(void)
     RUN(uefi_ntfs_written_after_partition);
     RUN(uefi_ntfs_does_not_overlap_main_partition);
 
+    drive_linux_reset_drives();
     TEST_RESULTS();
 }
 

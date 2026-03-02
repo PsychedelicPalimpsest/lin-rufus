@@ -45,6 +45,15 @@ static int _hwnd_b_storage;
 #define FAKE_HWND_A  ((HWND)&_hwnd_a_storage)
 #define FAKE_HWND_B  ((HWND)&_hwnd_b_storage)
 
+/* File-scope statics used by post_multiple_messages_in_order */
+static int s_order[4];
+static int s_order_idx = 0;
+static LRESULT order_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
+    (void)hwnd; (void)l;
+    if (s_order_idx < 4) s_order[s_order_idx++] = (int)w;
+    return (LRESULT)msg;
+}
+
 /* ===========================================================================
  * Synchronous test scheduler
  * Runs the callback immediately in the calling thread — deterministic.
@@ -299,15 +308,7 @@ TEST(post_multiple_messages_in_order) {
     msg_dispatch_set_scheduler(sync_scheduler);
 
     /* Use a counter handler to verify ordering */
-    static int order[4];
-    static int order_idx = 0;
-    order_idx = 0;
-
-    LRESULT order_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
-        (void)hwnd; (void)l;
-        if (order_idx < 4) order[order_idx++] = (int)w;
-        return (LRESULT)msg;
-    }
+    s_order_idx = 0;
 
     msg_dispatch_register(FAKE_HWND_A, order_handler);
 
@@ -315,10 +316,10 @@ TEST(post_multiple_messages_in_order) {
     msg_post(FAKE_HWND_A, WM_USER, 2, 0);
     msg_post(FAKE_HWND_A, WM_USER, 3, 0);
 
-    CHECK_INT_EQ(3, order_idx);
-    CHECK_INT_EQ(1, order[0]);
-    CHECK_INT_EQ(2, order[1]);
-    CHECK_INT_EQ(3, order[2]);
+    CHECK_INT_EQ(3, s_order_idx);
+    CHECK_INT_EQ(1, s_order[0]);
+    CHECK_INT_EQ(2, s_order[1]);
+    CHECK_INT_EQ(3, s_order[2]);
 
     msg_dispatch_unregister(FAKE_HWND_A);
 }

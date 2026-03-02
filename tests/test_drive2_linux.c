@@ -631,5 +631,6 @@ int main(void)
     RUN_TEST(get_drive_label_temp_file_no_fs);
 
     PRINT_RESULTS();
+    drive_linux_reset_drives();  /* free any drives added by the last test */
     return (g_failed == 0) ? 0 : 1;
 }

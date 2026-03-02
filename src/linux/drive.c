@@ -174,8 +174,10 @@ void drive_linux_reset_drives(void)
 {
     for (int i = 0; i < MAX_DRIVES; i++) {
         if (rufus_drive[i].id == NULL) break;
-        /* Free only if it looks like it was malloc'd (non-const pointer).
-         * In test_format_linux.c the pointer is a local string — don't free. */
+        free((void *)rufus_drive[i].id);
+        free((void *)rufus_drive[i].name);
+        free((void *)rufus_drive[i].display_name);
+        free((void *)rufus_drive[i].label);
         rufus_drive[i].id = NULL;
         rufus_drive[i].name = NULL;
         rufus_drive[i].display_name = NULL;

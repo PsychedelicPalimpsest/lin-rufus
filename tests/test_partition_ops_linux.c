@@ -670,6 +670,7 @@ int main(void)
 	RUN_TEST(toggle_esp_mbr_signature_preserved);
 
 	PRINT_RESULTS();
+	drive_linux_reset_drives();
 	return (g_failed == 0) ? 0 : 1;
 }
 

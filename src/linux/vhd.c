@@ -143,6 +143,10 @@ int8_t IsBootableImage(const char* path)
 	int8_t is_bootable_img;
 
 	uprintf("Disk image analysis:");
+	if (!path) {
+		uprintf("  Could not open image: path is NULL");
+		return -1;
+	}
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
 		uprintf_errno("  Could not open image '%s'", path);

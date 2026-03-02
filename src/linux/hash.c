@@ -914,8 +914,10 @@ DWORD WINAPI HashThread(void* param)
 
 out:
 	for (i = 0; i < num_hashes; i++) {
-		if (hash_thread[i] != NULL)
+		if (hash_thread[i] != NULL) {
 			TerminateThread(hash_thread[i], 1);
+			CloseHandle(hash_thread[i]);
+		}
 		safe_closehandle(data_ready[i]);
 		safe_closehandle(thread_ready[i]);
 	}

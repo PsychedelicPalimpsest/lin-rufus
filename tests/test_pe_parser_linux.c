@@ -347,13 +347,16 @@ TEST(get_pe_sig_with_valid_certificate)
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, ".text", 0x1000, text, 1, 1);
     CHECK(p.buf != NULL);
 
-    /* Step 2: append WIN_CERTIFICATE at the end of the image buffer */
-    size_t cert_offset = p.total;
+    /* Step 2: append WIN_CERTIFICATE at the end of the image buffer,
+     * aligned to 4 bytes as required by WIN_CERTIFICATE. */
+    size_t cert_offset = (p.total + 3) & ~(size_t)3;  /* 4-byte align */
+    size_t padding     = cert_offset - p.total;
     size_t cert_size   = sizeof(WIN_CERTIFICATE);
-    uint8_t* newbuf = (uint8_t*)realloc(p.buf, p.total + cert_size + 4);
+    uint8_t* newbuf = (uint8_t*)realloc(p.buf, cert_offset + cert_size + 4);
     CHECK(newbuf != NULL);
     p.buf   = newbuf;
-    p.total += cert_size + 4;
+    if (padding) memset(p.buf + p.total, 0, padding);
+    p.total = cert_offset + cert_size + 4;
 
     WIN_CERTIFICATE* cert = (WIN_CERTIFICATE*)(p.buf + cert_offset);
     cert->dwLength          = (DWORD)(cert_size + 4);
@@ -380,12 +383,14 @@ TEST(get_pe_sig_wrong_cert_type)
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, ".text", 0x1000, text, 1, 1);
     CHECK(p.buf != NULL);
 
-    size_t cert_offset = p.total;
+    size_t cert_offset = (p.total + 3) & ~(size_t)3;  /* 4-byte align */
+    size_t padding     = cert_offset - p.total;
     size_t cert_size   = sizeof(WIN_CERTIFICATE);
-    uint8_t* newbuf    = (uint8_t*)realloc(p.buf, p.total + cert_size);
+    uint8_t* newbuf    = (uint8_t*)realloc(p.buf, cert_offset + cert_size);
     CHECK(newbuf != NULL);
     p.buf   = newbuf;
-    p.total += cert_size;
+    if (padding) memset(p.buf + p.total, 0, padding);
+    p.total = cert_offset + cert_size;
 
     WIN_CERTIFICATE* cert = (WIN_CERTIFICATE*)(p.buf + cert_offset);
     cert->dwLength         = (DWORD)cert_size;
@@ -408,12 +413,14 @@ TEST(get_pe_sig_zero_length_cert)
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, ".text", 0x1000, text, 1, 1);
     CHECK(p.buf != NULL);
 
-    size_t cert_offset = p.total;
+    size_t cert_offset = (p.total + 3) & ~(size_t)3;  /* 4-byte align */
+    size_t padding     = cert_offset - p.total;
     size_t cert_size   = sizeof(WIN_CERTIFICATE);
-    uint8_t* newbuf    = (uint8_t*)realloc(p.buf, p.total + cert_size);
+    uint8_t* newbuf    = (uint8_t*)realloc(p.buf, cert_offset + cert_size);
     CHECK(newbuf != NULL);
     p.buf   = newbuf;
-    p.total += cert_size;
+    if (padding) memset(p.buf + p.total, 0, padding);
+    p.total = cert_offset + cert_size;
 
     WIN_CERTIFICATE* cert = (WIN_CERTIFICATE*)(p.buf + cert_offset);
     cert->dwLength         = 0; /* zero length */

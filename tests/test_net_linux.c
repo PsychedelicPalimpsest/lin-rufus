@@ -1171,6 +1171,7 @@ TEST(set_fido_check_no_crash)
 /* Functions from net.c that we test */
 extern BOOL is_network_available(void);
 extern void set_test_no_network(int no_network);
+extern void net_join_update_thread(void);
 
 /* is_network_available returns a valid BOOL (smoke test — reflects real machine state) */
 TEST(network_available_returns_bool)
@@ -1354,6 +1355,7 @@ int main(void)
 	RUN(download_no_network_multiple_calls);
 
 	/* Teardown */
+	net_join_update_thread();  /* wait for any running update check to avoid leaks */
 	stop_http_server();
 
 	TEST_RESULTS();

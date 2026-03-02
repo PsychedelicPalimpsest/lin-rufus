@@ -1005,7 +1005,8 @@ typedef struct _win_handle_s {
         struct {
             pthread_t tid;
             DWORD     exit_code;
-            int       joined;   /* 1 after pthread_join completes */
+            int       joined;    /* 1 after pthread_join completes */
+            int       detached;  /* 1 if CloseHandle called before join */
         } thread;
         /* --- Event (auto-reset or manual-reset) --- */
         struct {
@@ -1063,7 +1064,13 @@ _wh_thread_wrapper(void *raw)
     LPVOID param = a->param;
     free(a);
     DWORD ec = fn(param);
-    h->u.thread.exit_code = ec;
+    if (h->u.thread.detached) {
+        /* CloseHandle was called before the thread finished; free the handle now */
+        h->magic = 0;
+        free(h);
+    } else {
+        h->u.thread.exit_code = ec;
+    }
     return (void *)(uintptr_t)ec;
 }
 
@@ -1117,9 +1124,16 @@ static inline BOOL CloseHandle(HANDLE h)
         switch (wh->type) {
         case WH_THREAD:
             if (!wh->u.thread.joined) {
+                if (pthread_equal(wh->u.thread.tid, pthread_self())) {
+                    /* Thread closing its own handle: detach and let wrapper free it */
+                    wh->u.thread.detached = 1;
+                    pthread_detach(wh->u.thread.tid);
+                    return TRUE;
+                }
                 void *_rv = NULL;
                 pthread_join(wh->u.thread.tid, &_rv);
                 wh->u.thread.exit_code = (DWORD)(uintptr_t)_rv;
+                wh->u.thread.joined = 1;
             }
             break;
         case WH_EVENT:
@@ -1355,6 +1369,7 @@ static inline HANDLE CreateThread(LPSECURITY_ATTRIBUTES sa, SIZE_T stack,
     wh->type               = WH_THREAD;
     wh->u.thread.exit_code = 0;
     wh->u.thread.joined    = 0;
+    wh->u.thread.detached  = 0;
 
     _wh_thread_args_t *a = (_wh_thread_args_t *)malloc(sizeof(_wh_thread_args_t));
     if (!a) { free(wh); return NULL; }

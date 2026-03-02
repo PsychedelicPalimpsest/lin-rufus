@@ -787,6 +787,7 @@ TEST(update_md5sum_updates_hash)
 	const char *got = read_str(md5path);
 	CHECK(strstr(got, "900150983cd24fb0d6963f7d28e17f72") != NULL);
 
+	StrArrayDestroy(&modified_files);
 	unlink(data_path);
 	unlink(md5path);
 	{
@@ -824,6 +825,7 @@ TEST(update_md5sum_skips_unlisted_file)
 	/* The boot/grub.cfg entry must be unchanged */
 	CHECK(strstr(got, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") != NULL);
 
+	StrArrayDestroy(&modified_files);
 	unlink(data_path);
 	unlink(md5path);
 	rmdir(dir);
