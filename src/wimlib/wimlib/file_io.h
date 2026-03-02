@@ -10,6 +10,10 @@
 #ifdef WITH_LIBCDIO
 #  undef PRAGMA_BEGIN_PACKED
 #  undef PRAGMA_END_PACKED
+/* Ensure struct iso9660_stat_s layout matches the compiled libcdio (no legacy size/secsize fields) */
+#  ifndef DO_NOT_WANT_COMPATIBILITY
+#    define DO_NOT_WANT_COMPATIBILITY
+#  endif
 #  include <cdio/udf.h>
 #  include <cdio/iso9660.h>
 #endif
