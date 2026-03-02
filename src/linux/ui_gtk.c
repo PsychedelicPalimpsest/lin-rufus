@@ -48,6 +48,7 @@
 #include "darkmode.h"
 #include "wue.h"
 #include "polkit.h"
+#include "hyperlink.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -1013,6 +1014,67 @@ void SetAccessibleName(HWND hCtrl, const char *name)
 	}
 }
 
+/*
+ * GTK activate-link signal handler: open URL via GLib default app.
+ * Returns TRUE to signal that we handled the link (prevents GTK from
+ * trying to open it a second time with its own handler).
+ */
+static gboolean gtk_show_uri_on_window_open_handler(GtkLabel *label,
+    gchar *uri, gpointer data)
+{
+#ifdef USE_GTK
+	(void)label; (void)data;
+	GError *err = NULL;
+	g_app_info_launch_default_for_uri(uri, NULL, &err);
+	if (err) {
+		uprintf("set_hyperlink_label: failed to open '%s': %s", uri, err->message);
+		g_error_free(err);
+	}
+	return TRUE; /* handled */
+#else
+	(void)label; (void)uri; (void)data;
+	return FALSE;
+#endif
+}
+
+/*
+ * set_hyperlink_label — make a GtkLabel display a clickable hyperlink.
+ *
+ *  widget  — a GtkLabel widget (must be non-NULL and a GtkLabel)
+ *  url     — the URL to open when clicked (must be non-NULL)
+ *  text    — the display text; if NULL or empty, `url` is used as the label
+ *
+ * The label text is set as Pango markup `<a href="URL">TEXT</a>`.
+ * The `activate-link` signal is connected so that clicking opens the URL
+ * via GLib's default URI handler (`g_app_info_launch_default_for_uri()`),
+ * which delegates to `xdg-open` on most Linux desktops.
+ *
+ * Calling with a NULL widget or NULL url is a safe no-op.
+ */
+void set_hyperlink_label(GtkWidget *widget, const char *url, const char *text)
+{
+#ifdef USE_GTK
+	char markup[4096];
+
+	if (widget == NULL || !GTK_IS_LABEL(widget) || url == NULL)
+		return;
+	if (hyperlink_build_markup(url, text, markup, sizeof(markup)) <= 0)
+		return;
+
+	gtk_label_set_markup(GTK_LABEL(widget), markup);
+	gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
+	/* Allow the label to track cursor changes for the hyperlink. */
+	gtk_label_set_track_visited_links(GTK_LABEL(widget), FALSE);
+
+	/* Connect activate-link to open the URL via GLib's default handler.
+	 * Return TRUE to suppress GTK's built-in URI handling (avoid double-open). */
+	g_signal_connect(widget, "activate-link",
+	    G_CALLBACK(gtk_show_uri_on_window_open_handler), NULL);
+#else
+	(void)widget; (void)url; (void)text;
+#endif
+}
+
 void SetComboEntry(HWND hDlg, int data)
 {
 	GtkWidget *w = (GtkWidget *)hDlg;
@@ -1476,6 +1538,17 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		 * On Linux we reveal a dedicated "Download ISO" button that was hidden at start. */
 		if (rw.download_iso_btn)
 			gtk_widget_set_visible(rw.download_iso_btn, TRUE);
+		break;
+
+	case UM_DOWNLOAD_PROGRESS:
+		/* Download progress update from DownloadToFileOrBufferEx().
+		 * WPARAM carries the integer percent (0-100).  Update the
+		 * main progress bar so the user sees download progress. */
+		if (rw.progress_bar) {
+			int pct = (int)w;
+			gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(rw.progress_bar),
+				CLAMP(pct / 100.0, 0.0, 1.0));
+		}
 		break;
 
 	case UM_MEDIA_CHANGE:

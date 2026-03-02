@@ -233,7 +233,8 @@ CFLAGS_LINUX_test_ui_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linu
                                $(FONTCONFIG_CFLAGS)
 LDFLAGS_LINUX_test_ui_linux := $(FONTCONFIG_LIBS)
 EXTRA_SRC_LINUX_test_ui_linux := $(SRC_DIR)/linux/globals.c \
-                                  $(SRC_DIR)/linux/device_combo.c
+                                  $(SRC_DIR)/linux/device_combo.c \
+                                  $(SRC_DIR)/linux/hyperlink.c
 
 # notify_linux tests: desktop notification bridge (notify_build_cmd, rufus_notify, notify_format_message)
 CFLAGS_LINUX_test_notify_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
@@ -302,6 +303,23 @@ CFLAGS_LINUX_test_iso_save_linux := \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_iso_save_linux := -lcdio -liso9660 -ludf $(SRC_DIR)/syslinux/libfat/libfat.a
 EXTRA_SRC_LINUX_test_iso_save_linux := $(ISO_SAVE_LINUX_SRC) $(BLED_LIB) iso_save_linux_glue.c
+
+# iso_scan_common tests: portable GetGrubVersion / GetGrubFs / GetEfiBootInfo
+# No OS I/O — the test file provides all stubs (uprintf, StrArray*, sanitize_label).
+CFLAGS_LINUX_test_iso_scan_common := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_iso_scan_common := $(SRC_DIR)/common/iso_scan.c
+
+CFLAGS_WIN_test_iso_scan_common := \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_iso_scan_common := $(SRC_DIR)/common/iso_scan.c
 
 # HashThread/IndividualHashThread tests additionally need:
 #   - stdio.c (uprintf), stdfn.c (safe_* helpers), ui.c (UpdateProgress stubs),

@@ -28,7 +28,7 @@ windows/%_rc.o: windows/%.rc ../res/loc/embedded.loc
 endif
 
 COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c \
-	common/localization.c common/parser.c
+	common/localization.c common/parser.c common/iso_scan.c
 
 if TARGET_WINDOWS
 OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
@@ -49,7 +49,7 @@ OS_SOURCES = linux/compat/msg_dispatch.c \
 	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
 	linux/hash.c linux/icon.c linux/image_scan.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c
+	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c
 endif
 
 rufus_SOURCES = $(COMMON_SOURCES) $(OS_SOURCES)

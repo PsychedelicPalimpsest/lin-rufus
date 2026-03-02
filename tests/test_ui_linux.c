@@ -2,6 +2,7 @@
 #include "../src/windows/rufus.h"
 #include "../src/linux/version.h"
 #include "../src/linux/device_combo.h"
+#include "../src/linux/hyperlink.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -110,6 +111,90 @@ TEST(device_open_in_fm_build_cmd_nvme)
               "should produce correct command for nvme path");
 }
 
+/* ---- hyperlink_build_markup tests ---- */
+
+TEST(hyperlink_basic_url_and_text)
+{
+    char buf[256];
+    int r = hyperlink_build_markup("https://example.com", "Click here", buf, sizeof(buf));
+    CHECK_MSG(r > 0, "should return positive length");
+    CHECK_MSG(strstr(buf, "<a href=\"https://example.com\">") != NULL,
+              "markup must contain the href");
+    CHECK_MSG(strstr(buf, "Click here") != NULL,
+              "markup must contain the display text");
+    CHECK_MSG(strstr(buf, "</a>") != NULL,
+              "markup must contain closing tag");
+}
+
+TEST(hyperlink_null_text_uses_url)
+{
+    char buf[256];
+    int r = hyperlink_build_markup("https://rufus.ie", NULL, buf, sizeof(buf));
+    CHECK_MSG(r > 0, "should return positive length");
+    /* When text is NULL the URL itself is used as display text */
+    CHECK_MSG(strstr(buf, "https://rufus.ie") != NULL,
+              "markup must contain the URL as display text");
+    CHECK_MSG(strstr(buf, "<a href=") != NULL, "must have opening anchor tag");
+    CHECK_MSG(strstr(buf, "</a>") != NULL, "must have closing anchor tag");
+}
+
+TEST(hyperlink_xml_special_chars_escaped)
+{
+    char buf[512];
+    int r = hyperlink_build_markup("https://x.com/?a=1&b=2", "A&B <Test>", buf, sizeof(buf));
+    CHECK_MSG(r > 0, "should return positive length");
+    /* & in URL and text must be escaped */
+    CHECK_MSG(strstr(buf, "&amp;") != NULL, "ampersand must be escaped to &amp;");
+    /* < and > must be escaped */
+    CHECK_MSG(strstr(buf, "&lt;") != NULL, "less-than must be escaped");
+    CHECK_MSG(strstr(buf, "&gt;") != NULL, "greater-than must be escaped");
+    /* Raw & must not appear outside of entity sequences */
+    /* Count occurrences of bare & (not part of &xxx;) */
+    int bare_amp = 0;
+    const char *p = buf;
+    while ((p = strchr(p, '&')) != NULL) {
+        /* Look for at least 2 chars after & — if next 3 chars are not alpha it's bare */
+        if (strncmp(p, "&amp;", 5) != 0 &&
+            strncmp(p, "&lt;",  4) != 0 &&
+            strncmp(p, "&gt;",  4) != 0 &&
+            strncmp(p, "&quot;",6) != 0 &&
+            strncmp(p, "&apos;",6) != 0)
+            bare_amp++;
+        p++;
+    }
+    CHECK_MSG(bare_amp == 0, "no bare ampersands should appear in markup");
+}
+
+TEST(hyperlink_null_url_returns_error)
+{
+    char buf[256] = "untouched";
+    int r = hyperlink_build_markup(NULL, "text", buf, sizeof(buf));
+    CHECK_MSG(r == -1, "null url must return -1");
+}
+
+TEST(hyperlink_null_buf_returns_error)
+{
+    int r = hyperlink_build_markup("https://x.com", "x", NULL, 128);
+    CHECK_MSG(r == -1, "null buf must return -1");
+}
+
+TEST(hyperlink_zero_bufsz_returns_error)
+{
+    char buf[4] = "xxx";
+    int r = hyperlink_build_markup("https://x.com", "x", buf, 0);
+    CHECK_MSG(r == -1, "zero bufsz must return -1");
+}
+
+TEST(hyperlink_empty_text_uses_url)
+{
+    char buf[256];
+    int r = hyperlink_build_markup("https://rufus.ie", "", buf, sizeof(buf));
+    CHECK_MSG(r > 0, "should return positive length for empty text");
+    /* Empty text → url used as display */
+    char *second_rufus = strstr(buf, "rufus.ie");
+    CHECK_MSG(second_rufus != NULL, "URL should appear as display text too");
+}
+
 int main(void)
 {
     printf("=== version tests ===\n");
@@ -127,6 +212,15 @@ int main(void)
     RUN(device_open_in_fm_build_cmd_buffer_too_small);
     RUN(device_open_in_fm_build_cmd_null_out);
     RUN(device_open_in_fm_build_cmd_nvme);
+
+    printf("\n=== hyperlink_build_markup tests ===\n");
+    RUN(hyperlink_basic_url_and_text);
+    RUN(hyperlink_null_text_uses_url);
+    RUN(hyperlink_xml_special_chars_escaped);
+    RUN(hyperlink_null_url_returns_error);
+    RUN(hyperlink_null_buf_returns_error);
+    RUN(hyperlink_zero_bufsz_returns_error);
+    RUN(hyperlink_empty_text_uses_url);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;

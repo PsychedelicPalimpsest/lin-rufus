@@ -52,6 +52,7 @@
 #include "msapi_utf8.h"
 #include "localization.h"
 #include "bled/bled.h"
+#include "iso_scan.h"
 
 // How often should we update the progress bar, as updating the
 // progress bar too frequently will bring extraction to a crawl
@@ -1070,145 +1071,6 @@ out:
 	return r;
 }
 
-void GetGrubVersion(char* buf, size_t buf_size, const char* source)
-{
-	// In typical "I'll make my own Open Source... with blackjack and hookers!" fashion,
-	// IBM/Red-Hat/Fedora took it upon themselves to "fix" the double space typo from the
-	// GRUB version string. But of course, just like their introduction of GRUB calls like
-	// 'grub_debug_is_enabled', they didn't want to bother upstreaming their changes...
-	// On the other hand, boy do they want to leech of FSF/GNU developed software, while
-	// not having it mention GNU anywhere. See:
-	// https://src.fedoraproject.org/rpms/grub2/blob/rawhide/f/0024-Don-t-say-GNU-Linux-in-generated-menus.patch
-	const char* grub_version_str[] = { "GRUB  version %s", "GRUB version %s" };
-	const char* grub_debug_is_enabled_str = "grub_debug_is_enabled";
-	const size_t max_string_size = 32;	// The strings above *MUST* be no longer than this value
-	char grub_version[192] = { 0 };
-	size_t i, j;
-	BOOL has_grub_debug_is_enabled = FALSE;
-
-	// Make sure we don't overflow our buffer
-	if (buf_size > max_string_size) {
-		for (i = 0; i < buf_size - max_string_size; i++) {
-			for (j = 0; j < ARRAYSIZE(grub_version_str); j++) {
-				if (memcmp(&buf[i], grub_version_str[j], strlen(grub_version_str[j])) == 0) {
-					// For CentOS, who decided to add a '\n' after "GRUB  version %s"
-					if (buf[i + strlen(grub_version_str[j]) + 1] == '\0')
-						i++;
-					static_strcpy(grub_version, &buf[i + strlen(grub_version_str[j]) + 1]);
-				}
-			}
-			if (memcmp(&buf[i], grub_debug_is_enabled_str, strlen(grub_debug_is_enabled_str)) == 0)
-				has_grub_debug_is_enabled = TRUE;
-		}
-	}
-
-	uprintf("  Detected GRUB version: %s (from '%s')", grub_version, source);
-
-	if (img_report.grub2_version[0] != 0)
-		return;
-
-	static_strcpy(img_report.grub2_version, grub_version);
-
-	// <Shakes fist angrily> "KASPERSKYYYYYY!!!..." (https://github.com/pbatard/rufus/issues/467)
-	// But seriously, these guys should know better than "security" through obscurity...
-	if (img_report.grub2_version[0] == '0')
-		img_report.grub2_version[0] = 0;
-
-	// For some obscure reason, openSUSE have decided that their Live images should
-	// use /boot/grub2/ as their prefix directory instead of the standard /boot/grub/
-	// This creates a MAJOR issue because the prefix directory is hardcoded in
-	// 'core.img', and Rufus must install a 'core.img', that is not provided by the
-	// ISO, for the USB to boot (since even trying to pick the one from ISOHybrid
-	// does usually not guarantees the presence of the FAT driver which is mandatory
-	// for ISO boot).
-	// Therefore, when *someone* uses a nonstandard GRUB prefix directory, our base
-	// 'core.img' can't work with their image, since it isn't able to load modules
-	// like 'normal.mod', that are required to access the configuration files. Oh and
-	// you can forget about direct editing the prefix string inside 'core.img' since
-	// GRUB are forcing LZMA compression for BIOS payloads. And it gets even better,
-	// because even if you're trying to be smart and use GRUB's earlyconfig features
-	// to do something like:
-	//   if [ -e /boot/grub2/i386-pc/normal.mod ]; then set prefix = ...
-	// you still must embed 'configfile.mod' and 'normal.mod' in 'core.img' in order
-	// to do that, which ends up tripling the file size...
-	// Also, as mentioned above, Fedora, Ubuntu and others have started applying
-	// *BREAKING* patches willy-nilly, without bothering to alter the GRUB version
-	// string. And it gets worse with 2.06 since there are patches we can't detect
-	// that will produce "452: out of range pointer" whether they are applied OR NOT
-	// (meaning that if you use a patched GRUB 2.06 with unpatched GRUB 2.06 modules
-	// you will get the error, and if you use unpatched with patched modules, you
-	// will also get the error).
-	// Soooo, since the universe, and project maintainers who do not REALISE that
-	// NOT RELEASING IN A TIMELY MANNER *DOES* HAVE VERY NEGATIVE CONSEQUENCES FOR
-	// END USERS, are conspiring against us, and since we already have a facility
-	// for it, we'll use it to dowload the relevant 'core.img' by appending a missing
-	// version suffix as needed. Especially, if GRUB only identifies itself as '2.06'
-	// we'll append a sanitized version of the ISO label to try to differentiate
-	// between GRUB 2.06 incompatible versions...
-	if (img_report.grub2_version[0] != 0) {
-		// Make sure we append '-nonstandard' and '-gdie' before the sanitized label.
-		BOOL append_label = (safe_strcmp(img_report.grub2_version, "2.06") == 0);
-		// Must be in the same order as we have on the server
-		if ((img_report.has_grub2 & 0x7f) > 1)
-			safe_strcat(img_report.grub2_version, sizeof(img_report.grub2_version), "-nonstandard");
-		if (has_grub_debug_is_enabled)
-			safe_strcat(img_report.grub2_version, sizeof(img_report.grub2_version), "-gdie");
-		if (append_label) {
-			safe_strcat(img_report.grub2_version, sizeof(img_report.grub2_version), "-");
-			safe_strcat(img_report.grub2_version, sizeof(img_report.grub2_version), img_report.label);
-		}
-		sanitize_label(img_report.grub2_version);
-	}
-}
-
-void GetGrubFs(char* buf, size_t buf_size)
-{
-	const char* grub_fshelp_str = "fshelp";
-	const size_t max_string_size = 32;
-	size_t i;
-
-	if (buf_size > max_string_size) {
-		for (i = 0; i < buf_size - max_string_size; i++) {
-			if (memcmp(&buf[i], grub_fshelp_str, strlen(grub_fshelp_str) + 1) == 0) {
-				if (buf[i + strlen(grub_fshelp_str) + 1] != 0 && strlen(&buf[i + strlen(grub_fshelp_str) + 1]) < 12) {
-					StrArrayAddUnique(&grub_filesystems, &buf[i + strlen(grub_fshelp_str) + 1], TRUE);
-				}
-			}
-		}
-	}
-}
-
-void GetEfiBootInfo(char* buf, size_t buf_size, const char* source)
-{
-	// Data to help us identify the EFI bootloader type
-	const struct {
-		const char* label;
-		const char* search_string;
-	} boot_info[] = {
-		{ "Shim", "UEFI SHIM\n$Version: "},
-		// NB: There's also an ID=systemd-boot\nVERSION="x.y.z" footer
-		// in the Arch systemd-boot EFI binary, but I'm not sure if we
-		// can count on this metadata footer to always be present...
-		{ "systemd-boot", "#### LoaderInfo: systemd-boot " },
-	};
-	const size_t max_string_size = 64;
-	size_t i, j, k;
-
-	if (buf_size > max_string_size) {
-		for (i = 0; i < buf_size - max_string_size; i++) {
-			for (j = 0; j < ARRAYSIZE(boot_info); j++) {
-				if (memcmp(&buf[i], boot_info[j].search_string, strlen(boot_info[j].search_string)) == 0) {
-					i += strlen(boot_info[j].search_string);
-					for (k = 0; k < 32 && i + k < buf_size - 1 && !isspace(buf[i + k]); k++);
-					buf[i + k] = '\0';
-					uprintf("  Detected %s version: %s (from '%s')", boot_info[j].label, &buf[i], source);
-					return;
-				}
-			}
-		}
-	}
-}
-
 BOOL ExtractISO(const char* src_iso, const char* dest_dir, BOOL scan)
 {
 	const char* basedir[] = { "i386", "amd64", "minint" };
@@ -1469,7 +1331,7 @@ out:
 				} else {
 					img_report.has_grub2 |= 0x80;
 					GetGrubVersion(buf, size, img_report.efi_boot_entry[j].path);
-					GetGrubFs(buf, size);
+					GetGrubFs(buf, size, &grub_filesystems);
 				}
 				safe_free(buf);
 			} else if (img_report.efi_boot_entry[j].type == EBT_MAIN) {

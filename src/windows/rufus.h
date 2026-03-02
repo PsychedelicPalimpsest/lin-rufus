@@ -261,6 +261,7 @@ enum user_message_type {
 	UM_IMAGE_SCANNED,	/* ImageScanThread completed — refresh UI from img_report */
 	UM_HASH_COMPLETED,	/* HashThread completed — show hash results dialog */
 	UM_ENABLE_DOWNLOAD_ISO,	/* Fido URL found — enable Download ISO UI button */
+	UM_DOWNLOAD_PROGRESS,	/* Download progress update — WPARAM = percent (0-100) */
 	// Start of the WM IDs for the language menu items
 	UM_LANGUAGE_MENU = WM_APP + 0x100
 };

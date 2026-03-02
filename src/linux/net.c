@@ -127,13 +127,34 @@ static size_t write_to_file(void *ptr, size_t sz, size_t nmemb, void *ud)
 
 /* ---- libcurl progress callback ---- */
 
+/*
+ * User-data struct passed to download_xferinfo_cb so it can post
+ * UM_DOWNLOAD_PROGRESS to a dialog window (hDlg) in addition to
+ * updating the main progress bar via UpdateProgress().
+ */
+typedef struct {
+	HWND hDlg;    /* optional dialog to receive UM_DOWNLOAD_PROGRESS, or NULL */
+	int  last_pct; /* last percent posted, to avoid duplicate messages */
+} xferinfo_ud_t;
+
 static int download_xferinfo_cb(void *ud, curl_off_t dltotal, curl_off_t dlnow,
                                  curl_off_t ultotal, curl_off_t ulnow)
 {
-	(void)ud; (void)ultotal; (void)ulnow;
+	xferinfo_ud_t *ctx = (xferinfo_ud_t *)ud;
+	(void)ultotal; (void)ulnow;
 	if (dltotal > 0) {
 		float pct = (float)((double)dlnow / (double)dltotal * 100.0);
 		UpdateProgress(OP_NOOP, pct);
+		/* When a progress dialog was provided, post UM_DOWNLOAD_PROGRESS
+		 * with the integer percent as WPARAM.  Suppress duplicate messages
+		 * for the same integer value to avoid flooding the message queue. */
+		if (ctx && ctx->hDlg != NULL) {
+			int ipct = (int)pct;
+			if (ipct != ctx->last_pct) {
+				ctx->last_pct = ipct;
+				PostMessage(ctx->hDlg, UM_DOWNLOAD_PROGRESS, (WPARAM)ipct, 0);
+			}
+		}
 	}
 	return 0; /* returning non-zero aborts the transfer */
 }
@@ -256,8 +277,7 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 	uint64_t resume_from = 0;
 	struct write_ctx_buf bctx = { NULL, 0 };
 	struct write_ctx_file fctx = { NULL, 0 };
-
-	(void)hDlg; /* progress dialog integration is a TODO */
+	xferinfo_ud_t xud = { hDlg, -1 };
 
 	ErrorStatus   = 0;
 	DownloadStatus = 404;
@@ -293,9 +313,10 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 	if (ua != NULL && *ua != '\0')
 		curl_easy_setopt(curl, CURLOPT_USERAGENT, ua);
 
-	/* Progress callback — reports download percentage via UpdateProgress */
+	/* Progress callback — reports download percentage via UpdateProgress
+	 * and also posts UM_DOWNLOAD_PROGRESS to hDlg when one is provided. */
 	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, download_xferinfo_cb);
-	curl_easy_setopt(curl, CURLOPT_XFERINFODATA,     NULL);
+	curl_easy_setopt(curl, CURLOPT_XFERINFODATA,     &xud);
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS,       0L);
 
 	/* Set write callback */
