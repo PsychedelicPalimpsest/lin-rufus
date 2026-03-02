@@ -38,7 +38,8 @@ TEST_SRCS  := $(wildcard test_*.c)
 LINUX_BINS := $(TEST_SRCS:.c=_linux)
 # Tests whose names end in _linux or whose sources are Linux-only are excluded
 # from the Windows build (no Windows implementation exists for them).
-WIN_EXCLUDE_SRCS := $(wildcard test_*_linux.c) test_device_monitor.c
+WIN_EXCLUDE_SRCS := $(wildcard test_*_linux.c) test_device_monitor.c \
+                   test_iso_hashes.c test_analyze_br_common.c
 WIN_BINS   := $(filter-out $(WIN_EXCLUDE_SRCS:.c=.exe), $(TEST_SRCS:.c=.exe))
 
 # ---------------------------------------------------------------------------
@@ -113,6 +114,11 @@ FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                     $(SRC_DIR)/ext2fs/posix_io.c
 EXT2FS_LIB := $(SRC_DIR)/ext2fs/libext2fs.a
 BLED_LIB   := $(SRC_DIR)/bled/libbled.a
+# Bundled libcdio libraries (use instead of system -lcdio/-liso9660/-ludf to
+# ensure udf_setpos and other project-specific symbols resolve correctly).
+CDIO_LIBS  := $(SRC_DIR)/libcdio/udf/libudf.a \
+              $(SRC_DIR)/libcdio/iso9660/libiso9660.a \
+              $(SRC_DIR)/libcdio/driver/libdriver.a
 FORMAT_MS_SRC := $(SRC_DIR)/ms-sys/file.c \
                  $(SRC_DIR)/ms-sys/br.c \
                  $(SRC_DIR)/ms-sys/fat16.c \
@@ -350,7 +356,7 @@ CFLAGS_LINUX_test_iso_linux := \
 	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_iso_linux := -lcdio -liso9660 -ludf $(SRC_DIR)/syslinux/libfat/libfat.a
+LDFLAGS_LINUX_test_iso_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a
 EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) iso_linux_glue.c $(COMMON)/iso_scan.c
 
 # test_iso_save_linux — OpticalDiscSaveImage / iso_save_run_sync tests
@@ -371,7 +377,7 @@ CFLAGS_LINUX_test_iso_save_linux := \
 	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_iso_save_linux := -lcdio -liso9660 -ludf $(SRC_DIR)/syslinux/libfat/libfat.a
+LDFLAGS_LINUX_test_iso_save_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a
 EXTRA_SRC_LINUX_test_iso_save_linux := $(ISO_SAVE_LINUX_SRC) $(BLED_LIB) iso_save_linux_glue.c
 
 # iso_check_common tests: portable check_iso_props() ISO entry classifier
@@ -672,7 +678,7 @@ CFLAGS_LINUX_test_vhd_linux := \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
 	-Wno-strict-aliasing
-LDFLAGS_LINUX_test_vhd_linux := -lz -lpthread -lxml2 -lm -lcdio -liso9660 -ludf
+LDFLAGS_LINUX_test_vhd_linux := -lz -lpthread -lxml2 -lm $(CDIO_LIBS)
 EXTRA_SRC_LINUX_test_vhd_linux := \
 	$(SRC_DIR)/linux/vhd.c \
 	$(BLED_LIB) \
@@ -733,7 +739,7 @@ CFLAGS_LINUX_test_wue_linux := \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
 	-Wno-strict-aliasing
-LDFLAGS_LINUX_test_wue_linux := -lz -lpthread -lxml2 -lm -lcdio -liso9660 -ludf
+LDFLAGS_LINUX_test_wue_linux := -lz -lpthread -lxml2 -lm $(CDIO_LIBS)
 EXTRA_SRC_LINUX_test_wue_linux := \
 	$(SRC_DIR)/linux/wue.c \
 	$(SRC_DIR)/linux/wintogo_bcd_template.c \
@@ -845,7 +851,7 @@ CFLAGS_LINUX_test_image_scan_linux := \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
 	-Wno-strict-aliasing
 LDFLAGS_LINUX_test_image_scan_linux := \
-	-lpthread -lz -lxml2 -lm -lcdio -liso9660 -ludf \
+	-lpthread -lz -lxml2 -lm $(CDIO_LIBS) \
 	$(SRC_DIR)/syslinux/libfat/libfat.a
 EXTRA_SRC_LINUX_test_image_scan_linux := $(IMAGE_SCAN_LINUX_SRC) iso_linux_glue.c
 

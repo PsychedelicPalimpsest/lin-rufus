@@ -116,6 +116,17 @@ uint64_t total_blocks = 0;
 BOOL has_ldlinux_c32 = FALSE;
 
 /* ------------------------------------------------------------------ */
+/* Windows-only stubs (for the #ifdef _WIN32 block in iso_check.c)    */
+/* ------------------------------------------------------------------ */
+
+#ifdef _WIN32
+int fs_type = 0;
+char *image_path = NULL;
+#define print_split_file(p, l) ((void)0)
+BOOL WimSplitFile(const char* src, const char* dst) { (void)src; (void)dst; return FALSE; }
+#endif
+
+/* ------------------------------------------------------------------ */
 /* Pull in the common implementation                                    */
 /* ------------------------------------------------------------------ */
 
@@ -414,8 +425,12 @@ TEST(scan_wininst_path)
 	check_iso_props("/sources", 1024*1024*1024LL, "install.wim",
 	                "/sources/install.wim", &p);
 	CHECK(img_report.wininst_index == 1);
-	/* On Linux the path is stored as-is (no "?:" prefix) */
+	/* On Linux the path is stored as-is; on Windows it has a "?:" prefix */
+#ifdef _WIN32
+	CHECK(strcmp(img_report.wininst_path[0], "?:/sources/install.wim") == 0);
+#else
 	CHECK(strcmp(img_report.wininst_path[0], "/sources/install.wim") == 0);
+#endif
 	teardown();
 }
 

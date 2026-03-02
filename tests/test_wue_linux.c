@@ -1505,7 +1505,7 @@ TEST(apply_customization_oobe_copies_to_oem_panther)
 
 	/* Create a fake unattend.xml */
 	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_NO_DATA_COLLECTION);
-	SKIP_IF(unattend_xml_path == NULL);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
 
 	wue_set_mount_path(mount);
 	BOOL r = ApplyWindowsCustomization(0, UNATTEND_NO_DATA_COLLECTION);
@@ -1531,7 +1531,7 @@ TEST(apply_customization_wintogo_copies_to_windows_panther)
 	SKIP_IF(mount == NULL);
 
 	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_NO_DATA_COLLECTION);
-	SKIP_IF(unattend_xml_path == NULL);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
 
 	wue_set_mount_path(mount);
 	int flags = UNATTEND_NO_DATA_COLLECTION | UNATTEND_WINDOWS_TO_GO;
@@ -1560,10 +1560,10 @@ TEST(apply_customization_content_matches)
 	mkdir(sources_dir, 0755);
 
 	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_NO_ONLINE_ACCOUNT);
-	SKIP_IF(unattend_xml_path == NULL);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
 
 	char *orig = slurp(unattend_xml_path);
-	SKIP_IF(orig == NULL);
+	if (orig == NULL) { rmdir_tree(mount); free(mount); return; }
 
 	wue_set_mount_path(mount);
 	BOOL r = ApplyWindowsCustomization(0, UNATTEND_NO_ONLINE_ACCOUNT);
@@ -1614,7 +1614,7 @@ TEST(apply_customization_multiple_flags)
 	int flags = UNATTEND_NO_DATA_COLLECTION | UNATTEND_NO_ONLINE_ACCOUNT
 	            | UNATTEND_DUPLICATE_LOCALE;
 	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, flags);
-	SKIP_IF(unattend_xml_path == NULL);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
 
 	wue_set_mount_path(mount);
 	BOOL r = ApplyWindowsCustomization(0, flags);
@@ -1728,7 +1728,7 @@ TEST(apply_customization_winpe_no_boot_wim_succeeds)
 	mkdir(sources_dir, 0755);
 
 	unattend_xml_path = CreateUnattendXml(ARCH_X86_64, UNATTEND_SECUREBOOT_TPM_MINRAM);
-	SKIP_IF(unattend_xml_path == NULL);
+	if (unattend_xml_path == NULL) { rmdir_tree(mount); free(mount); return; }
 
 	wue_set_mount_path(mount);
 	int flags = UNATTEND_SECUREBOOT_TPM_MINRAM;

@@ -6,13 +6,16 @@
 #   ./run_tests.sh [options]
 #
 # Options:
-#   --linux-only   Only run Linux (native) tests
-#   --wine-only    Only run Windows tests via Wine
-#   --no-wine      Skip Wine tests even if wine is available
-#   --root-only    Only run tests that require root (e.g. loopback)
-#   --container    Run root-requiring tests inside a privileged Docker/Podman
-#                  container (mirrors the GitHub CI environment: ubuntu:22.04)
-#   --help         Show this message
+#   --linux-only       Only run Linux (native) tests
+#   --wine-only        Only run Windows tests via Wine
+#   --no-wine          Skip Wine tests even if wine is available
+#   --root-only        Only run tests that require root (e.g. loopback)
+#   --container        Run root-requiring tests inside a privileged Docker/Podman
+#                      container (mirrors the GitHub CI environment: ubuntu:22.04)
+#   --full-container   Run the complete test suite (linux + ASAN + cppcheck + root)
+#                      inside a privileged Docker/Podman container.  Requires all
+#                      deps from tests/install-deps.sh to be baked into the image.
+#   --help             Show this message
 #
 # Toolchain overrides (environment variables):
 #   CC       - Linux C compiler          (default: gcc)
@@ -33,14 +36,16 @@ RUN_LINUX=1
 RUN_WINE=1
 RUN_ROOT=0
 RUN_CONTAINER=0
+RUN_FULL_CONTAINER=0
 
 for arg in "$@"; do
   case "$arg" in
-    --linux-only)  RUN_WINE=0 ;;
-    --wine-only)   RUN_LINUX=0; RUN_ROOT=0 ;;
-    --no-wine)     RUN_WINE=0 ;;
-    --root-only)   RUN_LINUX=0; RUN_WINE=0; RUN_ROOT=1 ;;
-    --container)   RUN_LINUX=0; RUN_WINE=0; RUN_ROOT=0; RUN_CONTAINER=1 ;;
+    --linux-only)       RUN_WINE=0 ;;
+    --wine-only)        RUN_LINUX=0; RUN_ROOT=0 ;;
+    --no-wine)          RUN_WINE=0 ;;
+    --root-only)        RUN_LINUX=0; RUN_WINE=0; RUN_ROOT=1 ;;
+    --container)        RUN_LINUX=0; RUN_WINE=0; RUN_ROOT=0; RUN_CONTAINER=1 ;;
+    --full-container)   RUN_LINUX=0; RUN_WINE=0; RUN_ROOT=0; RUN_FULL_CONTAINER=1 ;;
     --help)
       sed -n '2,/^$/p' "$0"
       exit 0
@@ -58,23 +63,29 @@ info() { printf '\n==> %s\n' "$*"; }
 [ -d "${TESTS_DIR}" ] || die "tests/ directory not found (expected: ${TESTS_DIR})"
 
 # ---------------------------------------------------------------------------
-# Container-based root tests
-# Uses tests/Dockerfile (ubuntu:22.04 + all deps pre-baked) so that
-# repeated runs skip the apt-install layer.  The source tree is bind-mounted
-# read-write so test binaries are built fresh inside the container but the
-# rest of the checkout remains on the host.  Supports docker and podman.
+# Container runtime detection (shared by --container and --full-container)
 # ---------------------------------------------------------------------------
-if [ "${RUN_CONTAINER}" -eq 1 ]; then
-  # Auto-detect container runtime
+_detect_container_runtime() {
   if [ -z "${CONTAINER_RUNTIME:-}" ]; then
     if command -v docker >/dev/null 2>&1; then
       CONTAINER_RUNTIME=docker
     elif command -v podman >/dev/null 2>&1; then
       CONTAINER_RUNTIME=podman
     else
-      die "No container runtime found. Install docker or podman, or run with --root-only as root."
+      die "No container runtime found. Install docker or podman."
     fi
   fi
+}
+
+# ---------------------------------------------------------------------------
+# --container: run root-requiring tests inside a privileged container.
+# Uses tests/Dockerfile (ubuntu:22.04 + all deps pre-baked) so that
+# repeated runs skip the apt-install layer.  The source tree is bind-mounted
+# read-write so test binaries are built fresh inside the container but the
+# rest of the checkout remains on the host.  Supports docker and podman.
+# ---------------------------------------------------------------------------
+if [ "${RUN_CONTAINER}" -eq 1 ]; then
+  _detect_container_runtime
   info "Building container image rufus-test-env (cached after first run) ..."
   "${CONTAINER_RUNTIME}" build -t rufus-test-env "${SCRIPT_DIR}/tests"
   info "Running root tests in privileged ${CONTAINER_RUNTIME} container ..."
@@ -91,6 +102,54 @@ if [ "${RUN_CONTAINER}" -eq 1 ]; then
       make -j\$(nproc) -C src/ext2fs
       make -C tests test_loopback_linux
       make -C tests run-root
+    "
+fi
+
+# ---------------------------------------------------------------------------
+# --full-container: build + run the complete test suite inside a privileged
+# container.  Runs Linux tests, ASAN+UBSan, cppcheck, and root tests.
+# Requires tests/Dockerfile with all deps from tests/install-deps.sh.
+# ---------------------------------------------------------------------------
+if [ "${RUN_FULL_CONTAINER}" -eq 1 ]; then
+  _detect_container_runtime
+  info "Building container image rufus-test-env (cached after first run) ..."
+  "${CONTAINER_RUNTIME}" build -t rufus-test-env "${SCRIPT_DIR}/tests"
+  info "Running full test suite in privileged ${CONTAINER_RUNTIME} container ..."
+  exec "${CONTAINER_RUNTIME}" run --rm --privileged \
+    -v "${SCRIPT_DIR}:/src" \
+    -w /src \
+    rufus-test-env \
+    bash -c "
+      set -euo pipefail
+
+      echo '--- Configure ---'
+      ./configure --with-os=linux
+      find . -name 'Makefile.in' -o -name 'aclocal.m4' -o -name 'configure' | xargs touch
+
+      echo '--- Build ---'
+      make clean
+      make -j\$(nproc)
+
+      echo '--- Build sub-libraries ---'
+      make -j\$(nproc) -C src/bled
+      make -j\$(nproc) -C src/ext2fs
+
+      echo '--- Linux tests ---'
+      make -j\$(nproc) -C tests linux
+      make -C tests run-linux
+
+      echo '--- ASAN + UBSan tests ---'
+      make -j\$(nproc) -C tests check-asan
+
+      echo '--- cppcheck static analysis ---'
+      make -C tests check-cppcheck || echo 'cppcheck: warnings found (non-fatal)'
+
+      echo '--- Root-requiring tests ---'
+      rm -f tests/test_loopback_linux
+      make -C tests test_loopback_linux
+      make -C tests run-root
+
+      echo '--- All tests complete ---'
     "
 fi
 
