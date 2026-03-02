@@ -15,6 +15,7 @@
  * 11. SizeToHumanReadable — basic unit formatting
  * 12. WindowsErrorString — returns non-NULL
  * 13. TimestampToHumanReadable — UTC timestamp formatting
+ * 14. GuidToString / StringToGuid — common/stdio.c GUID helpers
  */
 
 #include "framework.h"
@@ -1499,6 +1500,101 @@ TEST(timestamp_different_calls_give_different_results)
 }
 
 /* ===========================================================================
+ * 14. GuidToString / StringToGuid — common/stdio.c GUID helpers
+ *
+ * These functions live in src/common/stdio.c and are included into
+ * linux/stdio.c.  These tests verify the common implementation works
+ * correctly on this platform.
+ * =========================================================================*/
+
+extern char *GuidToString(const GUID *guid, BOOL bDecorated);
+extern GUID *StringToGuid(const char *str);
+
+TEST(guid_to_string_common_null_returns_null)
+{
+    CHECK(GuidToString(NULL, TRUE) == NULL);
+    CHECK(GuidToString(NULL, FALSE) == NULL);
+}
+
+TEST(guid_to_string_common_zero_guid_decorated)
+{
+    GUID g = { 0, 0, 0, { 0, 0, 0, 0, 0, 0, 0, 0 } };
+    char *s = GuidToString(&g, TRUE);
+    CHECK(s != NULL);
+    CHECK_STR_EQ(s, "{00000000-0000-0000-0000-000000000000}");
+}
+
+TEST(guid_to_string_common_known_guid)
+{
+    /* EFI System Partition GUID: C12A7328-F81F-11D2-BA4B-00A0C93EC93B */
+    GUID efi = { 0xC12A7328, 0xF81F, 0x11D2,
+                 { 0xBA, 0x4B, 0x00, 0xA0, 0xC9, 0x3E, 0xC9, 0x3B } };
+    char *s = GuidToString(&efi, TRUE);
+    CHECK(s != NULL);
+    CHECK_STR_EQ(s, "{C12A7328-F81F-11D2-BA4B-00A0C93EC93B}");
+}
+
+TEST(guid_to_string_common_undecorated_format)
+{
+    char decorated_copy[40];
+    GUID g = { 0xAABBCCDD, 0x1122, 0x3344,
+               { 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC } };
+    /* Copy first result because GuidToString uses a static buffer */
+    char *tmp = GuidToString(&g, TRUE);
+    CHECK(tmp != NULL);
+    strncpy(decorated_copy, tmp, sizeof(decorated_copy) - 1);
+    decorated_copy[sizeof(decorated_copy) - 1] = '\0';
+
+    char *plain = GuidToString(&g, FALSE);
+    CHECK(plain != NULL);
+    /* Decorated starts/ends with braces; undecorated does not */
+    CHECK(decorated_copy[0] == '{');
+    CHECK(plain[0] != '{');
+    CHECK_INT_EQ((int)strlen(decorated_copy), 38);
+    /* Undecorated: no dashes, no braces, just hex digits — 32 chars */
+    CHECK((int)strlen(plain) == 32);
+}
+
+TEST(string_to_guid_common_null_returns_null)
+{
+    CHECK(StringToGuid(NULL) == NULL);
+}
+
+TEST(string_to_guid_common_bad_format_returns_null)
+{
+    CHECK(StringToGuid("not-a-guid") == NULL);
+    CHECK(StringToGuid("{ZZZZZZZZ-0000-0000-0000-000000000000}") == NULL);
+}
+
+TEST(string_to_guid_common_round_trip)
+{
+    /* Parse a well-known GUID string and verify the values */
+    GUID *g = StringToGuid("{C12A7328-F81F-11D2-BA4B-00A0C93EC93B}");
+    CHECK(g != NULL);
+    CHECK_INT_EQ((int)g->Data1, (int)0xC12A7328);
+    CHECK_INT_EQ((int)g->Data2, (int)0xF81F);
+    CHECK_INT_EQ((int)g->Data3, (int)0x11D2);
+    CHECK_INT_EQ((int)g->Data4[0], (int)0xBA);
+    CHECK_INT_EQ((int)g->Data4[1], (int)0x4B);
+}
+
+TEST(guid_string_round_trip_common)
+{
+    /* Encode then decode; CompareGUID must match */
+    GUID original = { 0xDEADBEEF, 0xCAFE, 0xBABE,
+                      { 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF } };
+    char *s = GuidToString(&original, TRUE);
+    CHECK(s != NULL);
+    GUID *decoded = StringToGuid(s);
+    CHECK(decoded != NULL);
+    CHECK_INT_EQ((int)original.Data1, (int)decoded->Data1);
+    CHECK_INT_EQ((int)original.Data2, (int)decoded->Data2);
+    CHECK_INT_EQ((int)original.Data3, (int)decoded->Data3);
+    CHECK_INT_EQ((int)original.Data4[0], (int)decoded->Data4[0]);
+    CHECK_INT_EQ((int)original.Data4[7], (int)decoded->Data4[7]);
+}
+
+/* ===========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -1651,6 +1747,16 @@ int main(void)
     RUN(timestamp_length_correct);
     RUN(timestamp_max_values);
     RUN(timestamp_different_calls_give_different_results);
+
+    printf("\n  GuidToString / StringToGuid — common/stdio.c GUID helpers\n");
+    RUN(guid_to_string_common_null_returns_null);
+    RUN(guid_to_string_common_zero_guid_decorated);
+    RUN(guid_to_string_common_known_guid);
+    RUN(guid_to_string_common_undecorated_format);
+    RUN(string_to_guid_common_null_returns_null);
+    RUN(string_to_guid_common_bad_format_returns_null);
+    RUN(string_to_guid_common_round_trip);
+    RUN(guid_string_round_trip_common);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;

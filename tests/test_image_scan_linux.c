@@ -167,7 +167,11 @@ void SetPartitionSchemeAndTargetSystem(BOOL b)   { (void)b; }
 void SetFileSystemAndClusterSize(const char* s)  { (void)s; }
 void DisplayISOProps(void)                       {}
 BOOL PopulateWindowsVersion(void)                { return FALSE; }
-void GetBootladerInfo(void)                      {}
+/* GetBootladerInfo is defined in image_scan.c; provide its dependencies */
+BOOL IsSignedBySecureBootAuthority(uint8_t* buf, uint32_t len)
+{ (void)buf; (void)len; return FALSE; }
+int  IsBootloaderRevoked(uint8_t* buf, uint32_t len)
+{ (void)buf; (void)len; return 0; }
 
 int NotificationEx(int t, const char* s, const notification_info* i,
                    const char* title, const char* fmt, ...)

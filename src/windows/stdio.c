@@ -352,32 +352,8 @@ retry:
 	return err_string;
 }
 
-char* GuidToString(const GUID* guid, BOOL bDecorated)
-{
-	static char guid_string[MAX_GUID_STRING_LENGTH];
-
-	if (guid == NULL) return NULL;
-	sprintf(guid_string, bDecorated ? "{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}" :
-		"%08X%04X%04X%02X%02X%02X%02X%02X%02X%02X%02X",
-		(uint32_t)guid->Data1, guid->Data2, guid->Data3,
-		guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
-		guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
-	return guid_string;
-}
-
-GUID* StringToGuid(const char* str)
-{
-	static GUID guid;
-
-	if (str == NULL) return NULL;
-	if (sscanf(str, "{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}",
-		(uint32_t*)&guid.Data1, (uint32_t*)&guid.Data2, (uint32_t*)&guid.Data3,
-		(uint32_t*)&guid.Data4[0], (uint32_t*)&guid.Data4[1], (uint32_t*)&guid.Data4[2],
-		(uint32_t*)&guid.Data4[3], (uint32_t*)&guid.Data4[4], (uint32_t*)&guid.Data4[5],
-		(uint32_t*)&guid.Data4[6], (uint32_t*)&guid.Data4[7]) != 11)
-		return NULL;
-	return &guid;
-}
+// GuidToString, StringToGuid, TimestampToHumanReadable — portable; from common/stdio.c
+#include "../common/stdio.c"
 
 // Find upper power of 2
 static __inline uint16_t upo2(uint16_t v)
@@ -424,23 +400,6 @@ char* SizeToHumanReadable(uint64_t size, BOOL copy_to_log, BOOL fake_units)
 			"%s%0.0f%s %s":"%s%0.1f%s %s", dir, hr_size, dir, _msg_table[MSG_020 + suffix - MSG_000]);
 	}
 	return str_size;
-}
-
-// Convert a YYYYMMDDHHMMSS UTC timestamp to a more human readable version
-char* TimestampToHumanReadable(uint64_t ts)
-{
-	uint64_t rem = ts, divisor = 10000000000ULL;
-	uint16_t data[6];
-	int i;
-	static char str[64];
-
-	for (i = 0; i < 6; i++) {
-		data[i] = (uint16_t) ((divisor == 0)?rem:(rem / divisor));
-		rem %= divisor;
-		divisor /= 100ULL;
-	}
-	static_sprintf(str, "%04d.%02d.%02d %02d:%02d:%02d (UTC)", data[0], data[1], data[2], data[3], data[4], data[5]);
-	return str;
 }
 
 // Convert custom error code to messages
