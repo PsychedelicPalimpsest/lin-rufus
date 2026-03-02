@@ -349,6 +349,19 @@ CFLAGS_WIN_test_iso_scan_common := \
 	-Wno-missing-field-initializers
 EXTRA_SRC_WIN_test_iso_scan_common := $(SRC_DIR)/common/iso_scan.c
 
+# fat32_common tests: portable fat32_default_cluster_size()
+# No OS I/O — the test file is self-contained; only common/format_fat32.c needed.
+CFLAGS_LINUX_test_fat32_common := \
+	-DRUFUS_TEST \
+	-I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-sign-compare
+EXTRA_SRC_LINUX_test_fat32_common := $(SRC_DIR)/common/format_fat32.c
+
+CFLAGS_WIN_test_fat32_common := \
+	-I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-sign-compare
+EXTRA_SRC_WIN_test_fat32_common := $(SRC_DIR)/common/format_fat32.c
+
 # HashThread/IndividualHashThread tests additionally need:
 #   - stdio.c (uprintf), stdfn.c (safe_* helpers), ui.c (UpdateProgress stubs),
 #     stdlg.c (MyDialogBox stub), msg_dispatch.c (PostMessage compat bridge)

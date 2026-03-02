@@ -106,7 +106,8 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 	common/rufus-cregex_parse.$(OBJEXT) \
 	common/rufus-cregex_vm.$(OBJEXT) common/rufus-xml.$(OBJEXT) \
 	common/rufus-localization.$(OBJEXT) \
-	common/rufus-parser.$(OBJEXT) common/rufus-iso_scan.$(OBJEXT)
+	common/rufus-parser.$(OBJEXT) common/rufus-iso_scan.$(OBJEXT) \
+	common/rufus-format_fat32.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@am__objects_2 =  \
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	linux/rufus-ui.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@am__objects_2 = linux/rufus-ui_gtk.$(OBJEXT)
@@ -128,6 +129,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-hash.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-icon.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-image_scan.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-img_info.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-iso.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-localization.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-net.$(OBJEXT) \
@@ -453,13 +455,13 @@ top_srcdir = @top_srcdir@
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES_ = $(AM_V_WINDRES_$(AM_DEFAULT_VERBOSITY))
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES = $(AM_V_WINDRES_$(V))
 COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c \
-	common/localization.c common/parser.c common/iso_scan.c
+	common/localization.c common/parser.c common/iso_scan.c common/format_fat32.c
 
 @TARGET_WINDOWS_FALSE@OS_SOURCES = linux/compat/msg_dispatch.c \
 @TARGET_WINDOWS_FALSE@	linux/badblocks.c linux/combo_bridge.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
 @TARGET_WINDOWS_FALSE@	linux/dos.c linux/dos_locale.c linux/freedos_data.c \
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
-@TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
+@TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/img_info.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
 @TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c
 
@@ -542,6 +544,7 @@ common/rufus-xml.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-localization.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-parser.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-iso_scan.$(OBJEXT): common/$(am__dirstamp)
+common/rufus-format_fat32.$(OBJEXT): common/$(am__dirstamp)
 linux/compat/$(am__dirstamp):
 	@$(MKDIR_P) linux/compat
 	@: >>linux/compat/$(am__dirstamp)
@@ -567,6 +570,7 @@ linux/rufus-globals.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-hash.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-icon.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-image_scan.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-img_info.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-iso.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-localization.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-net.$(OBJEXT): linux/$(am__dirstamp)
@@ -688,6 +692,12 @@ common/rufus-iso_scan.o: common/iso_scan.c
 common/rufus-iso_scan.obj: common/iso_scan.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-iso_scan.obj `if test -f 'common/iso_scan.c'; then $(CYGPATH_W) 'common/iso_scan.c'; else $(CYGPATH_W) '$(srcdir)/common/iso_scan.c'; fi`
 
+common/rufus-format_fat32.o: common/format_fat32.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-format_fat32.o `test -f 'common/format_fat32.c' || echo '$(srcdir)/'`common/format_fat32.c
+
+common/rufus-format_fat32.obj: common/format_fat32.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-format_fat32.obj `if test -f 'common/format_fat32.c'; then $(CYGPATH_W) 'common/format_fat32.c'; else $(CYGPATH_W) '$(srcdir)/common/format_fat32.c'; fi`
+
 linux/compat/rufus-msg_dispatch.o: linux/compat/msg_dispatch.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/compat/rufus-msg_dispatch.o `test -f 'linux/compat/msg_dispatch.c' || echo '$(srcdir)/'`linux/compat/msg_dispatch.c
 
@@ -795,6 +805,12 @@ linux/rufus-image_scan.o: linux/image_scan.c
 
 linux/rufus-image_scan.obj: linux/image_scan.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-image_scan.obj `if test -f 'linux/image_scan.c'; then $(CYGPATH_W) 'linux/image_scan.c'; else $(CYGPATH_W) '$(srcdir)/linux/image_scan.c'; fi`
+
+linux/rufus-img_info.o: linux/img_info.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-img_info.o `test -f 'linux/img_info.c' || echo '$(srcdir)/'`linux/img_info.c
+
+linux/rufus-img_info.obj: linux/img_info.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-img_info.obj `if test -f 'linux/img_info.c'; then $(CYGPATH_W) 'linux/img_info.c'; else $(CYGPATH_W) '$(srcdir)/linux/img_info.c'; fi`
 
 linux/rufus-iso.o: linux/iso.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-iso.o `test -f 'linux/iso.c' || echo '$(srcdir)/'`linux/iso.c

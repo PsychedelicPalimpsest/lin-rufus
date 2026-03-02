@@ -1516,4 +1516,3 @@ out:
     CloseHandle(hPhysical);
     return r;
 }
-int  IsHDD(DWORD di, uint16_t vid, uint16_t pid, const char* strid) { (void)di;(void)vid;(void)pid;(void)strid; return 0; }

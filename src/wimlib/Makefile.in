@@ -136,7 +136,7 @@ am_libwim_a_OBJECTS = libwim_a-avl_tree.$(OBJEXT) \
 	libwim_a-threads.$(OBJEXT) libwim_a-timestamp.$(OBJEXT) \
 	libwim_a-update_image.$(OBJEXT) libwim_a-util.$(OBJEXT) \
 	libwim_a-wim.$(OBJEXT) libwim_a-wimboot.$(OBJEXT) \
-	libwim_a-win32_apply.$(OBJEXT) \
+	libwim_a-unix_apply.$(OBJEXT) libwim_a-win32_apply.$(OBJEXT) \
 	libwim_a-win32_capture.$(OBJEXT) \
 	libwim_a-win32_common.$(OBJEXT) \
 	libwim_a-win32_replacements.$(OBJEXT) \
@@ -320,7 +320,7 @@ libwim_a_SOURCES = avl_tree.c blob_table.c compress.c compress_common.c compress
 	lzms_decompress.c lzx_common.c lzx_compress.c lzx_decompress.c metadata_resource.c \
 	pathlist.c paths.c pattern.c progress.c registry.c reparse.c resource.c scan.c security.c \
 	sha1.c solid.c split.c tagged_items.c textfile.c threads.c timestamp.c update_image.c \
-	util.c wim.c wimboot.c win32_apply.c win32_capture.c win32_common.c win32_replacements.c \
+	util.c wim.c wimboot.c unix_apply.c win32_apply.c win32_capture.c win32_common.c win32_replacements.c \
 	win32_vss.c write.c xml.c xmlproc.c xml_windows.c xpress_compress.c xpress_decompress.c
 
 libwim_a_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/.. -I$(srcdir)/../windows -I$(srcdir)/../libcdio -DHAVE_CONFIG_H -D_RUFUS -D__SSE2__ -D_POSIX -D_POSIX_THREAD_SAFE_FUNCTIONS -DUNICODE -D_UNICODE -D__MINGW_USE_VC2005_COMPAT -Wno-undef -Wno-strict-aliasing -Wno-shadow -Wno-incompatible-pointer-types -Wno-sequence-point
@@ -677,6 +677,12 @@ libwim_a-wimboot.o: wimboot.c
 
 libwim_a-wimboot.obj: wimboot.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libwim_a_CFLAGS) $(CFLAGS) -c -o libwim_a-wimboot.obj `if test -f 'wimboot.c'; then $(CYGPATH_W) 'wimboot.c'; else $(CYGPATH_W) '$(srcdir)/wimboot.c'; fi`
+
+libwim_a-unix_apply.o: unix_apply.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libwim_a_CFLAGS) $(CFLAGS) -c -o libwim_a-unix_apply.o `test -f 'unix_apply.c' || echo '$(srcdir)/'`unix_apply.c
+
+libwim_a-unix_apply.obj: unix_apply.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libwim_a_CFLAGS) $(CFLAGS) -c -o libwim_a-unix_apply.obj `if test -f 'unix_apply.c'; then $(CYGPATH_W) 'unix_apply.c'; else $(CYGPATH_W) '$(srcdir)/unix_apply.c'; fi`
 
 libwim_a-win32_apply.o: win32_apply.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libwim_a_CFLAGS) $(CFLAGS) -c -o libwim_a-win32_apply.o `test -f 'win32_apply.c' || echo '$(srcdir)/'`win32_apply.c

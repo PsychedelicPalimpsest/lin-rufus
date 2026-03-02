@@ -141,7 +141,9 @@
 /* Define to 1 if you have the `strdup' function. */
 #define HAVE_STRDUP 1
 /* The equivalent of strdup on MSVC is _strdup */
+#if defined(_MSC_VER) || defined(__MINGW32__)
 #define strdup _strdup
+#endif
 
 /* Define to 1 if you have the <strings.h> header file. */
 /* #undef HAVE_STRINGS_H */

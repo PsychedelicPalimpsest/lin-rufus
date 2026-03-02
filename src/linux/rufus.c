@@ -55,8 +55,6 @@ enum ArchType MachineToArch(WORD machine) {
     }
 }
 
-void GetBootladerInfo(void) {}
-/* ImageScanThread is in src/linux/image_scan.c */
 void ClrAlertPromptHook(void) {}
 /* UI combo-population stubs — to be implemented as part of combo population feature */
 void SetFSFromISO(void)                                    {}

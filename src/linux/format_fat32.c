@@ -36,6 +36,7 @@
 #include "file.h"
 #include "resource.h"
 #include "localization.h"
+#include "../common/format_fat32.h"
 
 #define die(msg, err) \
 	do { uprintf(msg); ErrorStatus = RUFUS_ERROR(err); goto out; } while(0)
@@ -232,15 +233,8 @@ BOOL FormatLargeFAT32(DWORD DriveIndex, uint64_t PartitionOffset,
 		    APPERR(ERROR_INVALID_VOLUME_SIZE));
 
 	/* Default cluster size (matches Windows behaviour) */
-	if (ClusterSize == 0) {
-		if (PartitionBytes < 64 * MB)          ClusterSize = 512;
-		else if (PartitionBytes < 128 * MB)    ClusterSize = 1 * KB;
-		else if (PartitionBytes < 256 * MB)    ClusterSize = 2 * KB;
-		else if (PartitionBytes < 8ULL * GB)   ClusterSize = 4 * KB;
-		else if (PartitionBytes < 16ULL * GB)  ClusterSize = 8 * KB;
-		else if (PartitionBytes < 32ULL * GB)  ClusterSize = 16 * KB;
-		else                                    ClusterSize = 32 * KB;
-	}
+	if (ClusterSize == 0)
+		ClusterSize = fat32_default_cluster_size(PartitionBytes);
 
 	pFAT32BootSect  = (FAT_BOOTSECTOR32*)calloc(BytesPerSect, 1);
 	pFAT32FsInfo    = (FAT_FSINFO*)calloc(BytesPerSect, 1);

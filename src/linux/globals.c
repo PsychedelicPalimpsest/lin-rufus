@@ -48,7 +48,6 @@ uint8_t image_options = 0, *pe256ssp = NULL;
 uint16_t rufus_version[3], embedded_sl_version[2];
 uint32_t pe256ssp_size = 0;
 uint64_t persistence_size = 0;
-int64_t iso_blocking_status = -1;
 float fScale = 1.0f;
 int dialog_showing = 0, force_update = 0, fs_type = 0, boot_type = 0;
 int partition_type = 0, target_type = 0, selection_default = 0;
@@ -92,6 +91,7 @@ int default_fs = 0, default_thread_priority = 0;
 size_t ubuffer_pos = 0;
 
 /* ---- From iso.c ---- */
+/* iso_blocking_status is defined in linux/iso.c */
 RUFUS_IMG_REPORT img_report = { 0 };
 
 /* ---- SelectedDrive is defined in drive.c (Windows) or linux/drive.c (Linux) ---- */
@@ -111,11 +111,8 @@ const char *sfd_name = NULL;
 const char *flash_type[BADLOCKS_PATTERN_TYPES] = { 0 };
 
 /* ---- From localization.c ---- */
-int loc_line_nr = 0;
-char *loc_filename = NULL, *embedded_loc_filename = "embedded.loc";
-char *default_msg_table[MSG_MAX] = { 0 };
-char *current_msg_table[MSG_MAX] = { 0 };
-char **msg_table = NULL;
+/* Variables defined in common/localization.c: loc_filename, embedded_loc_filename,
+ * default_msg_table, current_msg_table, msg_table, locale_list, parse_cmd, loc_line_nr */
 BOOL en_msg_mode = FALSE;
 
 /*
@@ -131,9 +128,8 @@ char * __attribute__((weak)) lmprintf(uint32_t msg_id, ...)
 }
 
 /* ---- From wue.c ---- */
-int unattend_xml_flags = 0, wintogo_index = -1, wininst_index = 0;
-int unattend_xml_mask = 0;
-char *unattend_xml_path = NULL;
+/* unattend_xml_flags, wintogo_index, wininst_index, unattend_xml_mask, unattend_xml_path
+ * are all defined in linux/wue.c */
 
 /* ---- From hash.c ---- */
 char hash_str[HASH_MAX][150];
@@ -148,10 +144,6 @@ StrArray modified_files = { 0 };
 
 /* ---- From net.c ---- */
 /* DownloadStatus already defined above */
-
-/* ---- From localization.c - struct list heads ---- */
-struct list_head locale_list = { &locale_list, &locale_list };
-const loc_parse parse_cmd[7] = { 0 };
 
 /* ---- nb_steps from format.c ---- */
 const int nb_steps[FS_MAX] = { 0 };

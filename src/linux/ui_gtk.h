@@ -19,6 +19,7 @@
 #pragma once
 
 #include <gtk/gtk.h>
+#include "rufus.h"
 
 /* ---- Main window widget registry ---- */
 typedef struct {
