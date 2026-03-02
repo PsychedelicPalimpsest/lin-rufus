@@ -44,3 +44,5 @@ void uprintf(const char *fmt, ...) { (void)fmt; }
 /* alert hook stubs — cli.c calls these when --no-prompt is set */
 void alert_set_hook(BOOL (*hook)(int type)) { (void)hook; }
 void alert_clear_hook(void) { }
+
+void set_preselected_fs(int fs) { (void)fs; }

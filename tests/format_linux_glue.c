@@ -85,3 +85,5 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 { (void)drive_letter; (void)flags; return FALSE; }
 BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
 { (void)di; (void)dn; (void)use_esp; return TRUE; }
+
+BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }

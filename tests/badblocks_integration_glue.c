@@ -50,3 +50,5 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 {
     (void)drive_letter; (void)flags; return TRUE;
 }
+
+BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }

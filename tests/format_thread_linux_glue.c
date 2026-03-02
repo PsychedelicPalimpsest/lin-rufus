@@ -140,3 +140,8 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 
 BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
 { (void)di; (void)dn; (void)use_esp; return TRUE; }
+
+/* ExtractDOS is provided by dos.c which is only in DOS_LINUX_SRC / E2E tests.
+ * For format_thread tests, use a no-op stub so the format path compiles and
+ * returns success without actually extracting any files. */
+BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }

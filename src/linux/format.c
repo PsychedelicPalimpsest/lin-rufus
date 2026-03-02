@@ -44,6 +44,7 @@
 #include "settings.h"
 #include "verify.h"
 #include "wue.h"
+#include "dos.h"
 #include "ms-sys/inc/file.h"
 #include "ms-sys/inc/br.h"
 #include "ms-sys/inc/fat32.h"
@@ -726,6 +727,15 @@ DWORD WINAPI FormatThread(void* param)
 	/* Refresh kernel's view of the partition table */
 	RefreshDriveLayout(hPhysicalDrive);
 
+	/* Wait for the partition device node to appear (needed for loopback
+	 * devices where udev creates /dev/loopNp1 asynchronously). */
+	uint64_t main_part_off = SelectedDrive.Partition[partition_index[PI_MAIN]].Offset;
+	if (main_part_off == 0) {
+		uint32_t sec = SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512;
+		main_part_off = 2048ULL * sec;
+	}
+	WaitForLogical(DriveIndex, main_part_off);
+
 	/* Re-read partition data so SelectedDrive.Partition[] is up to date */
 	GetDrivePartitionData(DriveIndex, fs_name, sizeof(fs_name), TRUE);
 
@@ -874,6 +884,28 @@ DWORD WINAPI FormatThread(void* param)
 		} else {
 			uprintf("WARNING: Could not mount partition for Grub4DOS grldr installation");
 		}
+	}
+	CHECK_FOR_USER_CANCEL;
+
+	/* Extract DOS boot files for FreeDOS / MS-DOS boot types */
+	if ((boot_type == BT_FREEDOS) || (boot_type == BT_MSDOS)) {
+		UpdateProgress(OP_FILE_COPY, -1.0f);
+		char *mount_dir = AltMountVolume(DriveIndex, part_offset, FALSE);
+		if (mount_dir != NULL) {
+			if (!ExtractDOS(mount_dir)) {
+				uprintf("ERROR: Could not extract DOS boot files");
+				if (!IS_ERROR(ErrorStatus))
+					ErrorStatus = RUFUS_ERROR(ERROR_CANNOT_COPY);
+			}
+			AltUnmountVolume(mount_dir, FALSE);
+			free(mount_dir);
+		} else {
+			uprintf("WARNING: Could not mount partition for DOS extraction");
+			if (!IS_ERROR(ErrorStatus))
+				ErrorStatus = RUFUS_ERROR(ERROR_CANNOT_COPY);
+		}
+		if (IS_ERROR(ErrorStatus))
+			goto out;
 	}
 	CHECK_FOR_USER_CANCEL;
 

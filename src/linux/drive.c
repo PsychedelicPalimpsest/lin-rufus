@@ -419,7 +419,23 @@ BOOL RefreshDriveLayout(HANDLE hDrive)
 {
     if (!hDrive || hDrive == INVALID_HANDLE_VALUE) return FALSE;
     int fd = (int)(intptr_t)hDrive;
-    ioctl(fd, BLKRRPART);  /* non-fatal on regular files */
+    int r = ioctl(fd, BLKRRPART);
+    if (r != 0) {
+        /* BLKRRPART fails on loop devices (EINVAL) and regular files.
+         * Resolve the path via /proc/self/fd and call partx -u as fallback. */
+        char proc_path[64], dev_path[256];
+        snprintf(proc_path, sizeof(proc_path), "/proc/self/fd/%d", fd);
+        ssize_t n = readlink(proc_path, dev_path, sizeof(dev_path) - 1);
+        if (n > 0) {
+            dev_path[n] = '\0';
+            struct stat st;
+            if (stat(dev_path, &st) == 0 && S_ISBLK(st.st_mode)) {
+                char cmd[320];
+                snprintf(cmd, sizeof(cmd), "partx -u %s 2>/dev/null", dev_path);
+                system(cmd);
+            }
+        }
+    }
     return TRUE;
 }
 
@@ -816,10 +832,28 @@ char *GetExtPartitionName(DWORD DriveIndex, uint64_t PartitionOffset)
 
 BOOL WaitForLogical(DWORD DriveIndex, uint64_t PartitionOffset)
 {
-    char *name = GetLogicalName(DriveIndex, PartitionOffset, FALSE, TRUE);
-    if (!name) return FALSE;
-    free(name);
-    return TRUE;
+    /* For non-block-device paths (temp files, image files) there is no sysfs
+     * partition node to wait for — return immediately. */
+    RUFUS_DRIVE *e = get_entry(DriveIndex);
+    if (e && e->id) {
+        struct stat st;
+        if (stat(e->id, &st) == 0 && !S_ISBLK(st.st_mode))
+            return TRUE;
+    }
+
+    /* For real block devices, settle udev events first then poll for the
+     * partition node.  This mirrors the Windows retry loop. */
+    system("udevadm settle 2>/dev/null");
+
+    for (int i = 0; i < DRIVE_ACCESS_RETRIES; i++) {
+        char *name = GetLogicalName(DriveIndex, PartitionOffset, FALSE, TRUE);
+        if (name) { free(name); return TRUE; }
+        if (IS_ERROR(ErrorStatus)) return FALSE;          /* user cancel */
+        struct timespec ts = { 0, (DRIVE_ACCESS_TIMEOUT / DRIVE_ACCESS_RETRIES) * 1000000LL };
+        nanosleep(&ts, NULL);
+    }
+    uprintf("Timeout waiting for partition device to appear");
+    return FALSE;
 }
 
 HANDLE GetLogicalHandle(DWORD DriveIndex, uint64_t PartitionOffset,
@@ -1278,7 +1312,23 @@ char* AltMountVolume(DWORD di, uint64_t off, BOOL s)
         return NULL;
     }
 
+    uprintf("AltMountVolume: mounted at '%s'", mount_point);
     free(dev_path);
+    dev_path = NULL;
+
+    /* Append a trailing '/' so callers can use snprintf(dst, "%s%s", path, name)
+     * consistently with the Windows drive-letter convention ("E:" + "FILE" = "E:FILE"
+     * which resolves relative to the root). */
+    size_t len = strlen(mount_point);
+    char *with_slash = (char *)malloc(len + 2);
+    if (with_slash) {
+        memcpy(with_slash, mount_point, len);
+        with_slash[len]     = '/';
+        with_slash[len + 1] = '\0';
+        free(mount_point);
+        mount_point = with_slash;
+    }
+
     return mount_point;
 }
 

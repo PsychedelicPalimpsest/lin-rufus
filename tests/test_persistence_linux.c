@@ -267,6 +267,8 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
     (void)drive_letter; (void)flags; return TRUE;
 }
 
+BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }
+
 #include "../src/windows/badblocks.h"
 BOOL BadBlocks(HANDLE hPhysicalDrive, ULONGLONG disk_size, int nb_passes,
                int flash_type, badblocks_report *report, FILE *fd)

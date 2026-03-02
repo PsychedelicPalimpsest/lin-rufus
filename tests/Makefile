@@ -948,6 +948,22 @@ CFLAGS_LINUX_test_dos_linux := \
 LDFLAGS_LINUX_test_dos_linux := $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_dos_linux := $(DOS_LINUX_SRC) $(SRC_DIR)/linux/freedos_data.c dos_linux_glue.c
 
+# e2e_linux tests: end-to-end FormatThread tests (FreeDOS + ISO DD copy).
+# Combines FORMAT_THREAD_LINUX_SRC + DOS_LINUX_SRC so both real format and
+# real FreeDOS extraction are exercised.  globals.c is included via DOS_LINUX_SRC
+# so the test file must NOT define globals inline.
+E2E_LINUX_SRC := $(FORMAT_THREAD_LINUX_SRC) \
+                 $(DOS_LINUX_SRC) \
+                 $(SRC_DIR)/linux/freedos_data.c
+CFLAGS_LINUX_test_e2e_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_e2e_linux := -lpthread -lblkid
+EXTRA_SRC_LINUX_test_e2e_linux := \
+	$(E2E_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) e2e_linux_glue.c
+
 # syslinux_linux tests: GetSyslinuxVersion, libfat_readfile, InstallSyslinux
 LIBFAT_LIB       := $(SRC_DIR)/syslinux/libfat/libfat.a
 LIBINSTALLER_LIB := $(SRC_DIR)/syslinux/libinstaller/libinstaller.a
@@ -971,7 +987,7 @@ EXTRA_SRC_LINUX_test_syslinux_linux := \
 # Run via:  make run-root          (must already be root)
 #           ./run_tests.sh --root-only   (same)
 #           ./run_tests.sh --container   (auto-launches privileged Docker/Podman)
-ROOT_BINS := test_loopback_linux
+ROOT_BINS := test_loopback_linux test_e2e_linux_linux
 
 .PHONY: all linux windows run-linux run-wine run-root clean
 
