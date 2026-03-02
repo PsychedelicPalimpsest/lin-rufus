@@ -124,6 +124,18 @@ CFLAGS_LINUX_test_format_linux := \
 LDFLAGS_LINUX_test_format_linux := -lblkid
 EXTRA_SRC_LINUX_test_format_linux := $(FORMAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB) $(BLED_LIB) format_linux_glue.c
 
+# ext_error_linux tests: error_message() and ext2fs_print_progress() from format_ext.c
+# drive.c is NOT linked — GetExtPartitionName is stubbed in the test file.
+EXT_ERROR_LINUX_SRC := $(SRC_DIR)/linux/format_ext.c \
+                       $(SRC_DIR)/ext2fs/posix_io.c
+CFLAGS_LINUX_test_ext_error_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_ext_error_linux := -lblkid
+EXTRA_SRC_LINUX_test_ext_error_linux := $(EXT_ERROR_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB)
+
 # format_ntfs_exfat_linux tests: NTFS and exFAT formatting via mkntfs/mkfs.exfat
 FORMAT_NTFS_EXFAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                                 $(SRC_DIR)/linux/format_fat32.c \
