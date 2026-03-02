@@ -673,5 +673,8 @@ This is the most structurally significant porting gap.
 
 
 
-121. Windows + Linux => common merger. Minimize feature duplication between OSes by abstracting OS specific stuff, while keeping core logic in common.  
+121. Windows + Linux => common merger. Minimize feature duplication between OSes by abstracting OS specific stuff, while keeping core logic in common. Add a seperate TODO list while working on this for organization  
 122. ~~**Ensure consistent copyright headers**~~ ✅ **DONE** — GPL-3.0 headers added to all 30 Linux source files/headers that were missing them; ported files use Pete Batard's copyright with matching years from the Windows counterpart; new Linux-only files use "2025 Rufus contributors"; `drive_linux.h` skipped (root-owned, requires separate commit)
+123. Full end to end iso flashing testing using virtual/emulated devices. Then compare to windows version
+124. For FOSS and publically avalible operating systems (linux and freedos), use emulation to test flashed device drivers (such as qemu in docker container)
+125. End to end testing of mocked UI/CLI to ensure functionality (with emulated devices)
