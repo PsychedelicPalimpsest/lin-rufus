@@ -126,6 +126,7 @@ int NotificationEx(int type, const char *dont_display_setting,
  * so simple no-ops are sufficient. */
 char *unattend_xml_path = NULL;
 int   unattend_xml_flags = 0;
+int   wintogo_index = -1;
 
 void wue_set_mount_path(const char *path) { (void)path; }
 
@@ -136,3 +137,6 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 {
     (void)drive_letter; (void)flags; return TRUE;
 }
+
+BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
+{ (void)di; (void)dn; (void)use_esp; return TRUE; }

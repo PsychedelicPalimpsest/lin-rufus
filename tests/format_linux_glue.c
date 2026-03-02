@@ -76,9 +76,12 @@ BOOL verify_write_pass(const char *source_path, int device_fd, uint64_t written_
 
 /* ---- wue.c globals / functions ---- */
 int  unattend_xml_flags = 0;
+int  wintogo_index = -1;
 char *unattend_xml_path = NULL;
 void wue_set_mount_path(const char *path) { (void)path; }
 BOOL SetupWinPE(char drive_letter)
 { (void)drive_letter; return TRUE; }
 BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 { (void)drive_letter; (void)flags; return FALSE; }
+BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
+{ (void)di; (void)dn; (void)use_esp; return TRUE; }

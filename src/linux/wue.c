@@ -27,9 +27,13 @@
 #include "wue.h"
 #include "wimlib.h"
 #include "timezone.h"
+#include "wintogo_bcd.h"
 
 /* bypass registry key names (same as Windows) */
 const char* bypass_name[] = { "BypassTPMCheck", "BypassSecureBootCheck", "BypassRAMCheck" };
+
+/* Forward declarations */
+static BOOL mkdir_all(const char *path);
 
 int  unattend_xml_flags = 0, wintogo_index = -1, wininst_index = 0;
 int  unattend_xml_mask  = UNATTEND_DEFAULT_SELECTION_MASK;
@@ -492,8 +496,106 @@ out:
 
 BOOL SetupWinToGo(DWORD di, const char* dn, BOOL use_esp)
 {
-	(void)di; (void)dn; (void)use_esp;
-	return FALSE;
+	char wim_path[4 * MAX_PATH];
+	char path[MAX_PATH];
+	FILE *fh;
+	BOOL r = FALSE;
+
+	(void)di; (void)use_esp;
+
+	if (dn == NULL) {
+		uprintf("SetupWinToGo: no drive path specified");
+		return FALSE;
+	}
+
+	if (wintogo_index < 0) {
+		uprintf("SetupWinToGo: no WIM index selected");
+		return FALSE;
+	}
+
+	/* Build the WIM path (image_path, optionally with wininst sub-path) */
+	assert(safe_strlen(image_path) < ARRAYSIZE(wim_path));
+	static_strcpy(wim_path, image_path);
+	if (!img_report.is_windows_img) {
+		assert(safe_strlen(image_path) + safe_strlen(&img_report.wininst_path[wininst_index][3]) + 1 < ARRAYSIZE(wim_path));
+		static_strcat(wim_path, "|");
+		static_strcat(wim_path, &img_report.wininst_path[wininst_index][3]);
+	}
+
+	uprintf("Windows To Go: applying WIM '%s' (index %d) to '%s'", wim_path, wintogo_index, dn);
+	if (!WimApplyImage(wim_path, wintogo_index, dn)) {
+		uprintf("Windows To Go: WimApplyImage failed");
+		if (!IS_ERROR(ErrorStatus))
+			ErrorStatus = RUFUS_ERROR(APPERR(ERROR_ISO_EXTRACT));
+		return FALSE;
+	}
+
+	/* Create EFI/Microsoft/Boot/ directory */
+	snprintf(path, sizeof(path), "%s/EFI/Microsoft/Boot", dn);
+	if (!mkdir_all(path)) {
+		uprintf("Windows To Go: failed to create %s: %s", path, strerror(errno));
+		return FALSE;
+	}
+
+	/* Write the BCD template */
+	snprintf(path, sizeof(path), "%s/EFI/Microsoft/Boot/BCD", dn);
+	fh = fopen(path, "wb");
+	if (fh == NULL) {
+		uprintf("Windows To Go: cannot create BCD: %s", strerror(errno));
+		return FALSE;
+	}
+	if (fwrite(wintogo_bcd_template, 1, wintogo_bcd_template_len, fh) != wintogo_bcd_template_len) {
+		uprintf("Windows To Go: failed to write BCD");
+		fclose(fh);
+		return FALSE;
+	}
+	fclose(fh);
+	uprintf("Windows To Go: wrote BCD store (%zu bytes)", wintogo_bcd_template_len);
+
+	/* Copy bootmgfw.efi from the applied Windows tree to EFI/Microsoft/Boot/ */
+	char src_efi[MAX_PATH], dst_efi[MAX_PATH];
+	snprintf(src_efi, sizeof(src_efi), "%s/Windows/Boot/EFI/bootmgfw.efi", dn);
+	snprintf(dst_efi, sizeof(dst_efi), "%s/EFI/Microsoft/Boot/bootmgfw.efi", dn);
+
+	FILE *src_fh = fopen(src_efi, "rb");
+	if (src_fh != NULL) {
+		fh = fopen(dst_efi, "wb");
+		if (fh != NULL) {
+			char buf[4096];
+			size_t n;
+			while ((n = fread(buf, 1, sizeof(buf), src_fh)) > 0)
+				fwrite(buf, 1, n, fh);
+			fclose(fh);
+			uprintf("Windows To Go: copied bootmgfw.efi to EFI/Microsoft/Boot/");
+
+			/* Also create EFI/BOOT/ with BOOTX64.EFI fallback */
+			snprintf(path, sizeof(path), "%s/EFI/BOOT", dn);
+			mkdir_all(path);
+			snprintf(path, sizeof(path), "%s/EFI/BOOT/BOOTX64.EFI", dn);
+			fh = fopen(path, "wb");
+			if (fh != NULL) {
+				rewind(src_fh);
+				/* Re-open source since we rewound */
+				fclose(src_fh);
+				src_fh = fopen(src_efi, "rb");
+				if (src_fh != NULL) {
+					while ((n = fread(buf, 1, sizeof(buf), src_fh)) > 0)
+						fwrite(buf, 1, n, fh);
+				}
+				fclose(fh);
+			}
+		} else {
+			uprintf("Windows To Go: cannot create %s: %s", dst_efi, strerror(errno));
+		}
+	} else {
+		uprintf("Windows To Go: bootmgfw.efi not found at %s (non-fatal)", src_efi);
+	}
+	if (src_fh != NULL)
+		fclose(src_fh);
+
+	UpdateProgressWithInfo(OP_FILE_COPY, MSG_267, 100, 100);
+	r = TRUE;
+	return r;
 }
 
 BOOL CopySKUSiPolicy(const char* drive_name)

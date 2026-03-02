@@ -61,6 +61,10 @@ RUFUS_IMG_REPORT img_report = { 0 };
  * Stubs
  * ================================================================ */
 
+/* Forward declarations for helpers used in mocks */
+static int mkdir_p(const char *path);
+static char *read_file_contents(const char *path, size_t *out_len);
+
 void uprintf(const char *fmt, ...)
 {
 	va_list ap;
@@ -89,8 +93,21 @@ void    VhdUnmountImage(void)                       {}
 BOOL    WimExtractFile(const char* a, int b, const char* c, const char* d)
 	{ (void)a;(void)b;(void)c;(void)d; return FALSE; }
 BOOL    WimSplitFile(const char* a, const char* b)  { (void)a;(void)b; return FALSE; }
+static BOOL _mock_wim_apply_ok = FALSE;
 BOOL    WimApplyImage(const char* a, int b, const char* c)
-	{ (void)a;(void)b;(void)c; return FALSE; }
+{
+	(void)a; (void)b;
+	if (_mock_wim_apply_ok && c != NULL) {
+		/* Simulate WIM apply: create Windows/Boot/EFI/bootmgfw.efi */
+		char path[512];
+		snprintf(path, sizeof(path), "%s/Windows/Boot/EFI", c);
+		mkdir_p(path);
+		snprintf(path, sizeof(path), "%s/Windows/Boot/EFI/bootmgfw.efi", c);
+		FILE *f = fopen(path, "wb");
+		if (f) { fwrite("MZfake", 1, 6, f); fclose(f); }
+	}
+	return _mock_wim_apply_ok;
+}
 
 /* parser.c stubs (parse_update uses these globals) */
 RUFUS_UPDATE update = {0};
@@ -698,9 +715,157 @@ TEST(stub_setup_winpe_returns_false)
 	CHECK(SetupWinPE('C') == FALSE);
 }
 
-TEST(stub_setup_wintogo_returns_false)
+TEST(setup_wintogo_null_drive_returns_false)
 {
-	CHECK(SetupWinToGo(0, "/dev/sda", FALSE) == FALSE);
+	/* NULL drive_name must return FALSE immediately */
+	CHECK(SetupWinToGo(0, NULL, FALSE) == FALSE);
+}
+
+TEST(setup_wintogo_wim_apply_fails_returns_false)
+{
+	/* When WimApplyImage fails, SetupWinToGo must return FALSE */
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	image_path = (char *)"/tmp/rufus-test-fake.wim";
+	wintogo_index = 1;
+	_mock_wim_apply_ok = FALSE;
+
+	BOOL r = SetupWinToGo(0, mount, FALSE);
+	CHECK_MSG(r == FALSE, "Must return FALSE when WimApplyImage fails");
+
+	image_path = NULL;
+	wintogo_index = -1;
+	rmdir_tree(mount);
+	free(mount);
+}
+
+TEST(setup_wintogo_creates_bcd_dir)
+{
+	/* On success, EFI/Microsoft/Boot/ directory must be created */
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	image_path = (char *)"/tmp/rufus-test-fake.wim";
+	wintogo_index = 1;
+	_mock_wim_apply_ok = TRUE;
+
+	BOOL r = SetupWinToGo(0, mount, FALSE);
+	CHECK_MSG(r == TRUE, "SetupWinToGo must succeed");
+
+	char bcd_dir[512];
+	snprintf(bcd_dir, sizeof(bcd_dir), "%s/EFI/Microsoft/Boot", mount);
+	struct stat st;
+	CHECK_MSG(stat(bcd_dir, &st) == 0 && S_ISDIR(st.st_mode),
+	          "EFI/Microsoft/Boot/ must be created");
+
+	image_path = NULL;
+	wintogo_index = -1;
+	_mock_wim_apply_ok = FALSE;
+	rmdir_tree(mount);
+	free(mount);
+}
+
+TEST(setup_wintogo_writes_bcd_file)
+{
+	/* BCD file must be written to EFI/Microsoft/Boot/BCD */
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	image_path = (char *)"/tmp/rufus-test-fake.wim";
+	wintogo_index = 1;
+	_mock_wim_apply_ok = TRUE;
+
+	BOOL r = SetupWinToGo(0, mount, FALSE);
+	CHECK_MSG(r == TRUE, "SetupWinToGo must succeed");
+
+	char bcd_path[512];
+	snprintf(bcd_path, sizeof(bcd_path), "%s/EFI/Microsoft/Boot/BCD", mount);
+	CHECK_MSG(file_exists(bcd_path), "BCD file must exist");
+
+	/* Verify BCD starts with 'regf' magic */
+	size_t len = 0;
+	char *content = read_file_contents(bcd_path, &len);
+	CHECK_MSG(content != NULL && len >= 4, "BCD file must be readable");
+	if (content != NULL) {
+		CHECK_MSG(memcmp(content, "regf", 4) == 0, "BCD must start with 'regf' magic");
+		free(content);
+	}
+
+	image_path = NULL;
+	wintogo_index = -1;
+	_mock_wim_apply_ok = FALSE;
+	rmdir_tree(mount);
+	free(mount);
+}
+
+TEST(setup_wintogo_bcd_correct_size)
+{
+	/* BCD file must have the expected template size (4604 bytes) */
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	image_path = (char *)"/tmp/rufus-test-fake.wim";
+	wintogo_index = 1;
+	_mock_wim_apply_ok = TRUE;
+
+	SetupWinToGo(0, mount, FALSE);
+
+	char bcd_path[512];
+	snprintf(bcd_path, sizeof(bcd_path), "%s/EFI/Microsoft/Boot/BCD", mount);
+	struct stat st;
+	if (stat(bcd_path, &st) == 0) {
+		CHECK_MSG(st.st_size == 4604, "BCD file must be 4604 bytes");
+	}
+
+	image_path = NULL;
+	wintogo_index = -1;
+	_mock_wim_apply_ok = FALSE;
+	rmdir_tree(mount);
+	free(mount);
+}
+
+TEST(setup_wintogo_copies_efi_bootloader)
+{
+	/* bootmgfw.efi must be copied to EFI/Microsoft/Boot/ */
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	image_path = (char *)"/tmp/rufus-test-fake.wim";
+	wintogo_index = 1;
+	_mock_wim_apply_ok = TRUE;
+
+	BOOL r = SetupWinToGo(0, mount, FALSE);
+	CHECK_MSG(r == TRUE, "SetupWinToGo must succeed");
+
+	char efi_path[512];
+	snprintf(efi_path, sizeof(efi_path), "%s/EFI/Microsoft/Boot/bootmgfw.efi", mount);
+	CHECK_MSG(file_exists(efi_path), "bootmgfw.efi must be in EFI/Microsoft/Boot/");
+
+	image_path = NULL;
+	wintogo_index = -1;
+	_mock_wim_apply_ok = FALSE;
+	rmdir_tree(mount);
+	free(mount);
+}
+
+TEST(setup_wintogo_invalid_index_returns_false)
+{
+	/* wintogo_index == -1 (not set) must return FALSE */
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	image_path = (char *)"/tmp/rufus-test-fake.wim";
+	wintogo_index = -1;
+	_mock_wim_apply_ok = TRUE;  /* even if WIM mock succeeds, index check fails first */
+
+	BOOL r = SetupWinToGo(0, mount, FALSE);
+	CHECK_MSG(r == FALSE, "Must return FALSE when wintogo_index is -1");
+
+	image_path = NULL;
+	_mock_wim_apply_ok = FALSE;
+	rmdir_tree(mount);
+	free(mount);
 }
 
 TEST(stub_copy_sku_returns_false)
@@ -1574,7 +1739,13 @@ int main(void)
 	RUN(populate_wv_wim_in_iso);
 	RUN(populate_wv_wim_in_iso_wrong_offset_fails);
 	RUN(stub_setup_winpe_returns_false);
-	RUN(stub_setup_wintogo_returns_false);
+	RUN(setup_wintogo_null_drive_returns_false);
+	RUN(setup_wintogo_invalid_index_returns_false);
+	RUN(setup_wintogo_wim_apply_fails_returns_false);
+	RUN(setup_wintogo_creates_bcd_dir);
+	RUN(setup_wintogo_writes_bcd_file);
+	RUN(setup_wintogo_bcd_correct_size);
+	RUN(setup_wintogo_copies_efi_bootloader);
 	RUN(stub_copy_sku_returns_false);
 	RUN(wintogo_not_ntfs_returns_neg1);
 
