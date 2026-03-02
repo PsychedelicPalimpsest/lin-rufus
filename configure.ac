@@ -137,16 +137,16 @@ if test "x$ui_backend" = "xgtk"; then
       PKG_CONFIG_PATH=""
       export PKG_CONFIG_LIBDIR PKG_CONFIG_PATH
     fi
-    PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.18],
+    PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.20],
       [AC_MSG_NOTICE([MinGW GTK3 found: building GTK UI for Windows])],
-      [AC_MSG_ERROR([MinGW-targeted GTK3 >= 3.18 not found.
+      [AC_MSG_ERROR([MinGW-targeted GTK3 >= 3.20 not found.
   Install mingw-w64-gtk3 (AUR) or set PKG_CONFIG_LIBDIR to a MinGW GTK pkg-config directory.
   On Arch Linux: yay -S mingw-w64-gtk3
   On MSYS2/mingw64: pacman -S mingw-w64-x86_64-gtk3])])
   else
-    PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.18],
+    PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.20],
       [AC_MSG_NOTICE([GTK3 found: building GTK UI])],
-      [AC_MSG_ERROR([GTK3 >= 3.18 required for --with-ui=gtk])])
+      [AC_MSG_ERROR([GTK3 >= 3.20 required for --with-ui=gtk])])
   fi
   AM_CFLAGS="$AM_CFLAGS $GTK_CFLAGS -DUSE_GTK"
   AM_LDFLAGS="$AM_LDFLAGS $GTK_LIBS"

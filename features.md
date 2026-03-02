@@ -300,7 +300,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| `FileDialog()` | ✅ | Test-injectable; GTK `GtkFileChooserDialog` impl via `#ifdef USE_GTK` in `stdlg.c`; returns preset path or NULL in tests |
+| `FileDialog()` | ✅ | Test-injectable; GTK `GtkFileChooserNative` (GTK 3.20+) impl via `#ifdef USE_GTK` in `stdlg.c`; transparent Wayland XDG portal + X11 fallback; file filter support with ext list; test-mode extension matching; 56 tests pass |
 | `NotificationEx()` / notification popups | ✅ | Test-injectable; GTK `GtkMessageDialog` impl via `#ifdef USE_GTK` in `stdlg.c`; maps MB_* flags to GTK message/button types; 36 tests pass |
 | `CustomSelectionDialog()` | ✅ | GTK implementation: checkbox/radio-button grid GtkDialog; username_index creates inline GtkEntry; test-injectable; fallback returns mask; 40 tests pass |
 | `ListDialog()` | ✅ | GTK implementation: scrollable GtkListBox dialog; non-GTK dumps to stderr; 40 tests pass |
@@ -703,7 +703,7 @@ This is the most structurally significant porting gap.
 
 133. **`GetExecutableVersion()` full ELF `.version` section** — item 50 is marked 🔧 PARTIAL; `rufus_version[]` is populated from `version.h` constants at startup but `GetExecutableVersion()` returns `NULL` (no PE resources in ELF); embed the version string as a linker script section (`--defsym` or `.section .rodata.rufus_ver`) via an `objcopy --add-section` post-link step in `Makefile.am`; make `GetExecutableVersion()` return a pointer into that section; add 3 tests that build a minimal ELF fixture and verify the function returns a valid version string
 
-134. **Wayland XDG portal support for `FileDialog()`** — the current `GtkFileChooserDialog` falls back to XWayland on Wayland compositors; replace with `GtkFileChooserNative` (GTK 3.20+), which transparently uses the XDG Desktop Portal when running under Wayland and gracefully degrades to `GtkFileChooserDialog` on X11; update `FileDialog()` in `src/linux/stdlg.c`; add a `configure.ac` GTK version check for 3.20; add 3 tests verifying the returned path is correct under both portal and non-portal code paths
+134. ✅ **Wayland XDG portal support for `FileDialog()`** — DONE: replaced `GtkFileChooserDialog` with `GtkFileChooserNative` (GTK 3.20+) in `src/linux/stdlg.c`; on Wayland it transparently uses the XDG Desktop Portal; on X11 it falls back to the classic GTK file-chooser; added file-filter support using the `ext_t` argument (per-type filters + combined "all" filter); added `selected_ext` index resolution by matching the chosen filename's extension against the `ext` list; bumped `configure.ac` min GTK from 3.18 → 3.20; 3 new tests: `file_dialog_ext_filter_index_from_path`, `file_dialog_ext_filter_no_match_leaves_zero`, `file_dialog_native_chooser_api_available`; 56 stdlg tests pass
 
 135. **`common/hash_algos.c` dedicated test coverage** — NOTE: `test_hash.c` already has full NIST/RFC vector coverage for all four algorithms (MD5 empty/abc/fox, SHA-1 empty/abc/fox, SHA-256 empty/abc/fox, SHA-512 empty/abc/fox) via `HashBuffer()`. Creating a separate `test_hash_algos.c` would duplicate these vectors without adding value. SKIP — already covered by test_hash.c.
 

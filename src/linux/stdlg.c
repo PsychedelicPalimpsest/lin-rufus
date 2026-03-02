@@ -195,31 +195,45 @@ int NotificationEx(int type, const char* dont_display_setting,
 
 char* FileDialog(BOOL save, char* path, const ext_t* ext, UINT* selected_ext)
 {
-    (void)ext; (void)selected_ext;
-
     if (_test_active) {
         /* One-shot: clear test mode after use so a single
          * stdlg_set_test_response() call only affects one FileDialog. */
         _test_active = 0;
 
-        if (_test_file_path[0] != '\0')
-            return strdup(_test_file_path);
-        return NULL; /* IDCANCEL or empty path → no selection */
+        if (_test_file_path[0] == '\0')
+            return NULL; /* IDCANCEL or empty path → no selection */
+
+        /* Determine which filter was "selected" by matching the preset path's
+         * extension against the ext list. */
+        if (ext && selected_ext) {
+            const char *dot = strrchr(_test_file_path, '.');
+            if (dot) {
+                for (size_t i = 0; i < ext->count; i++) {
+                    if (ext->extension[i] && strcmp(dot, ext->extension[i]) == 0) {
+                        *selected_ext = (UINT)i;
+                        break;
+                    }
+                }
+            }
+        }
+        return strdup(_test_file_path);
     }
 
 #ifdef USE_GTK
     {
         GtkFileChooserAction action = save ?
             GTK_FILE_CHOOSER_ACTION_SAVE : GTK_FILE_CHOOSER_ACTION_OPEN;
-        GtkWidget *dlg = gtk_file_chooser_dialog_new(
+        /* Use GtkFileChooserNative (GTK 3.20+) for transparent Wayland/X11 support.
+         * On Wayland it uses the XDG Desktop Portal; on X11 it falls back to the
+         * classic GTK file-chooser dialog — all without any compositor-specific code. */
+        GtkFileChooserNative *native = gtk_file_chooser_native_new(
             save ? "Save file" : "Open file",
             hMainDialog ? GTK_WINDOW((GtkWidget*)hMainDialog) : NULL,
             action,
-            "Cancel", GTK_RESPONSE_CANCEL,
-            save ? "Save" : "Open", GTK_RESPONSE_ACCEPT,
-            NULL);
+            save ? "_Save" : "_Open",
+            "_Cancel");
         if (path && path[0]) {
-            gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dlg), path);
+            gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(native), path);
         } else {
             /* Default to the user's Downloads folder when no path is given */
             char dl_dir[4096];
@@ -232,13 +246,48 @@ char* FileDialog(BOOL save, char* path, const ext_t* ext, UINT* selected_ext)
                     dl_dir[0] = '\0';
             }
             if (dl_dir[0])
-                gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dlg), dl_dir);
+                gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(native), dl_dir);
+        }
+
+        /* Add per-extension filters so the native portal surfaces them */
+        if (ext && ext->count > 0) {
+            /* Combined "all supported" filter */
+            GtkFileFilter *all_filter = gtk_file_filter_new();
+            gtk_file_filter_set_name(all_filter, ext->filename ? ext->filename : "All files");
+            for (size_t i = 0; i < ext->count; i++) {
+                if (ext->extension[i]) {
+                    char pattern[32];
+                    snprintf(pattern, sizeof(pattern), "*%s", ext->extension[i]);
+                    gtk_file_filter_add_pattern(all_filter, pattern);
+                    /* Individual per-type filter for finer portal granularity */
+                    if (ext->description && ext->description[i]) {
+                        GtkFileFilter *f = gtk_file_filter_new();
+                        gtk_file_filter_set_name(f, ext->description[i]);
+                        gtk_file_filter_add_pattern(f, pattern);
+                        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(native), f);
+                    }
+                }
+            }
+            gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(native), all_filter);
         }
 
         char *result = NULL;
-        if (gtk_dialog_run(GTK_DIALOG(dlg)) == GTK_RESPONSE_ACCEPT)
-            result = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dlg));
-        gtk_widget_destroy(dlg);
+        if (gtk_native_dialog_run(GTK_NATIVE_DIALOG(native)) == GTK_RESPONSE_ACCEPT) {
+            result = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(native));
+            /* Match the selected file's extension against the ext list */
+            if (selected_ext && ext && ext->count > 0 && result) {
+                const char *dot = strrchr(result, '.');
+                if (dot) {
+                    for (size_t i = 0; i < ext->count; i++) {
+                        if (ext->extension[i] && strcmp(dot, ext->extension[i]) == 0) {
+                            *selected_ext = (UINT)i;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        g_object_unref(native);
         return result;  /* caller must g_free() — but rufus uses free(), which works
                          * with glib's g_malloc on Linux */
     }

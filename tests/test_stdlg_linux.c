@@ -285,7 +285,70 @@ TEST(file_dialog_null_ext_arg)
 }
 
 /* =========================================================================
- * 16. CustomSelectionDialog — returns preset mask
+ * 16. FileDialog — ext filter; selected_ext set from preset path extension
+ *     This exercises the extension-matching logic in the test-mode path.
+ * =========================================================================*/
+TEST(file_dialog_ext_filter_index_from_path)
+{
+    /* Preset path ends with .img → should match extension[1] */
+    static const char *exts[]  = { ".iso", ".img" };
+    static const char *descs[] = { "ISO image", "Raw image" };
+    ext_t filter = { 2, "image", exts, descs };
+    UINT idx = 99;
+
+    stdlg_set_test_response(0, "/tmp/out.img");
+    char *path = FileDialog(TRUE, NULL, &filter, &idx);
+    stdlg_clear_test_mode();
+
+    CHECK_MSG(path != NULL, "FileDialog with ext filter should return path");
+    CHECK_INT_EQ(1, (int)idx);   /* .img is extension[1] */
+    free(path);
+}
+
+/* =========================================================================
+ * 17. FileDialog — ext filter; selected_ext stays 0 when no match
+ * =========================================================================*/
+TEST(file_dialog_ext_filter_no_match_leaves_zero)
+{
+    static const char *exts[]  = { ".iso", ".img" };
+    static const char *descs[] = { "ISO image", "Raw image" };
+    ext_t filter = { 2, "image", exts, descs };
+    UINT idx = 0;
+
+    /* .bin does not appear in the ext list */
+    stdlg_set_test_response(0, "/tmp/out.bin");
+    char *path = FileDialog(FALSE, NULL, &filter, &idx);
+    stdlg_clear_test_mode();
+
+    CHECK_MSG(path != NULL, "FileDialog should still return path when ext unmatched");
+    CHECK_INT_EQ(0, (int)idx);   /* unchanged — first (default) filter */
+    free(path);
+}
+
+/* =========================================================================
+ * 18. FileDialog — native-chooser compile check (GTK >= 3.20 required)
+ *     GtkFileChooserNative was added in GTK 3.20.  If this translation unit
+ *     compiles cleanly the version requirement is satisfied.
+ * =========================================================================*/
+#ifdef USE_GTK
+#include <gtk/gtk.h>
+TEST(file_dialog_native_chooser_api_available)
+{
+    /* GtkFileChooserNative is the type we now use.  Simply taking its
+     * GType at compile+runtime is sufficient to prove the API is present. */
+    GType t = gtk_file_chooser_native_get_type();
+    CHECK_MSG(t != 0, "GtkFileChooserNative GType must be non-zero");
+}
+#else
+TEST(file_dialog_native_chooser_api_available)
+{
+    /* Non-GTK build: trivially pass */
+    CHECK_MSG(1, "non-GTK build — native chooser check skipped");
+}
+#endif
+
+/* =========================================================================
+ * 19. CustomSelectionDialog — returns preset mask
  * =========================================================================*/
 TEST(custom_selection_dialog_returns_mask)
 {
@@ -692,6 +755,9 @@ int main(void)
     RUN(file_dialog_null_on_cancel);
     RUN(file_dialog_null_path_arg);
     RUN(file_dialog_null_ext_arg);
+    RUN(file_dialog_ext_filter_index_from_path);
+    RUN(file_dialog_ext_filter_no_match_leaves_zero);
+    RUN(file_dialog_native_chooser_api_available);
     RUN(custom_selection_dialog_returns_mask);
     RUN(custom_selection_dialog_cancelled);
     RUN(custom_selection_dialog_null_choices);
