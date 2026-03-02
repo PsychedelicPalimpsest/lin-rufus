@@ -33,4 +33,5 @@ BOOL SetupWinToGo(DWORD DriveIndex, const char* drive_name, BOOL use_esp);
 BOOL PopulateWindowsVersion(void);
 #ifdef __linux__
 void wue_set_mount_path(const char *path);
+int  wue_compute_option_flags(const RUFUS_IMG_REPORT *ir, BOOL exp_mode);
 #endif

@@ -48,6 +48,7 @@ BOOL   detect_fakes       = FALSE;
 BOOL   allow_dual_uefi_bios = FALSE;
 BOOL   ignore_boot_marker = FALSE;
 BOOL   has_ffu_support    = FALSE;
+BOOL   expert_mode        = FALSE;
 
 HWND   hMainDialog = NULL;
 
@@ -325,9 +326,106 @@ TEST(create_unattend_force_smode)
 	}
 }
 
+TEST(create_unattend_ms2023_bootloaders)
+{
+	/* UNATTEND_USE_MS2023_BOOTLOADERS just logs — no XML change,
+	 * but CreateUnattendXml must still succeed and produce valid XML. */
+	char* p = CreateUnattendXml(ARCH_X86_64,
+	              UNATTEND_USE_MS2023_BOOTLOADERS | UNATTEND_SECUREBOOT_TPM_MINRAM);
+	SKIP_IF(p == NULL);
+	char* content = slurp(p);
+	unlink(p);
+	CHECK(content != NULL);
+	if (content) {
+		/* Outer <unattend> element must be present */
+		CHECK(strstr(content, "<unattend") != NULL);
+		/* SECUREBOOT_TPM_MINRAM bypass keys must still be present */
+		CHECK(strstr(content, "BypassTPMCheck") != NULL);
+		free(content);
+	}
+}
+
 /* ================================================================
- * Helpers: WIM-in-ISO fixture creation
+ * WUE option flags helper tests
  * ================================================================ */
+
+TEST(wue_option_flags_base_options)
+{
+	/* For any Win10 image, these flags must always be present */
+	RUFUS_IMG_REPORT ir = { 0 };
+	ir.has_bootmgr_efi = TRUE;
+	ir.win_version.major = 10;
+	ir.win_version.build = 19041; /* Win10 21H1 */
+	int flags = wue_compute_option_flags(&ir, FALSE);
+	CHECK(flags & UNATTEND_SET_USER);
+	CHECK(flags & UNATTEND_DUPLICATE_LOCALE);
+	CHECK(flags & UNATTEND_NO_DATA_COLLECTION);
+	CHECK(flags & UNATTEND_DISABLE_BITLOCKER);
+}
+
+TEST(wue_option_flags_win11_adds_secureboot)
+{
+	RUFUS_IMG_REPORT ir = { 0 };
+	ir.has_bootmgr_efi = TRUE;
+	ir.win_version.major = 11;
+	ir.win_version.build = 22000;
+	int flags = wue_compute_option_flags(&ir, FALSE);
+	CHECK(flags & UNATTEND_SECUREBOOT_TPM_MINRAM);
+}
+
+TEST(wue_option_flags_win10_no_secureboot)
+{
+	/* Win10 should NOT get the secureboot/TPM bypass option */
+	RUFUS_IMG_REPORT ir = { 0 };
+	ir.has_bootmgr_efi = TRUE;
+	ir.win_version.major = 10;
+	ir.win_version.build = 19041;
+	int flags = wue_compute_option_flags(&ir, FALSE);
+	CHECK(!(flags & UNATTEND_SECUREBOOT_TPM_MINRAM));
+}
+
+TEST(wue_option_flags_expert_mode_adds_smode)
+{
+	RUFUS_IMG_REPORT ir = { 0 };
+	ir.has_bootmgr_efi = TRUE;
+	ir.win_version.major = 10;
+	ir.win_version.build = 19041;
+	int flags_normal = wue_compute_option_flags(&ir, FALSE);
+	int flags_expert = wue_compute_option_flags(&ir, TRUE);
+	CHECK(!(flags_normal & UNATTEND_FORCE_S_MODE));
+	CHECK(flags_expert & UNATTEND_FORCE_S_MODE);
+}
+
+TEST(wue_option_flags_ms2023_build_gate)
+{
+	/* Only builds >= 26200 get USE_MS2023_BOOTLOADERS */
+	RUFUS_IMG_REPORT ir = { 0 };
+	ir.has_bootmgr_efi = TRUE;
+	ir.win_version.major = 11;
+
+	ir.win_version.build = 26199;
+	int flags_old = wue_compute_option_flags(&ir, FALSE);
+	CHECK(!(flags_old & UNATTEND_USE_MS2023_BOOTLOADERS));
+
+	ir.win_version.build = 26200;
+	int flags_new = wue_compute_option_flags(&ir, FALSE);
+	CHECK(flags_new & UNATTEND_USE_MS2023_BOOTLOADERS);
+}
+
+TEST(wue_option_flags_build22500_adds_no_online_account)
+{
+	RUFUS_IMG_REPORT ir = { 0 };
+	ir.has_bootmgr_efi = TRUE;
+	ir.win_version.major = 10;
+
+	ir.win_version.build = 22499;
+	int flags_old = wue_compute_option_flags(&ir, FALSE);
+	CHECK(!(flags_old & UNATTEND_NO_ONLINE_ACCOUNT));
+
+	ir.win_version.build = 22500;
+	int flags_new = wue_compute_option_flags(&ir, FALSE);
+	CHECK(flags_new & UNATTEND_NO_ONLINE_ACCOUNT);
+}
 
 /*
  * Create a minimal WIM at dest_path with a single empty image and
@@ -1734,6 +1832,15 @@ int main(void)
 	RUN(create_unattend_temp_in_tmp);
 	RUN(create_unattend_disable_bitlocker);
 	RUN(create_unattend_force_smode);
+	RUN(create_unattend_ms2023_bootloaders);
+
+	printf("\n=== WUE option flags tests ===\n");
+	RUN(wue_option_flags_base_options);
+	RUN(wue_option_flags_win11_adds_secureboot);
+	RUN(wue_option_flags_win10_no_secureboot);
+	RUN(wue_option_flags_expert_mode_adds_smode);
+	RUN(wue_option_flags_ms2023_build_gate);
+	RUN(wue_option_flags_build22500_adds_no_online_account);
 	RUN(populate_wv_no_image_path);
 	RUN(populate_wv_real_wim_if_available);
 	RUN(populate_wv_wim_in_iso);

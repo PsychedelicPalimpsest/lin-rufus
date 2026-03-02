@@ -93,6 +93,10 @@ extern const char* FileSystemLabel[FS_MAX];
 extern char hash_str[HASH_MAX][150];
 extern BOOL enable_extra_hashes;
 extern char *image_path;
+extern BOOL expert_mode;        /* globals.c */
+extern BOOL enable_HDDs;        /* globals.c */
+extern BOOL enable_joliet;      /* iso.c */
+extern BOOL enable_rockridge;   /* iso.c */
 
 #include "ui_combo_logic.h"   /* populate_fs_combo, populate_cluster_combo,
                                 * SetFSFromISO, SetPartitionSchemeAndTargetSystem */
@@ -129,6 +133,10 @@ static void on_target_changed(GtkComboBox *combo, gpointer data);
 static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 static void on_toggle_dark_mode(GtkWidget *w, gpointer data);
+static void on_toggle_expert_mode(GtkWidget *w, gpointer data);
+static void on_toggle_joliet(GtkWidget *w, gpointer data);
+static void on_toggle_rockridge(GtkWidget *w, gpointer data);
+static void on_toggle_usb_hdd(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
 static void on_save_clicked(GtkButton *btn, gpointer data);
 static void on_persistence_changed(GtkWidget *w, gpointer data);
@@ -675,6 +683,22 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_d,
 	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_toggle_dark_mode), NULL, NULL));
+	/* Ctrl+Alt+E: toggle expert mode */
+	gtk_accel_group_connect(accel, GDK_KEY_e,
+	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_expert_mode), NULL, NULL));
+	/* Alt+J: toggle Joliet (ISO) support */
+	gtk_accel_group_connect(accel, GDK_KEY_j,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_joliet), NULL, NULL));
+	/* Alt+K: toggle Rock Ridge (ISO) support */
+	gtk_accel_group_connect(accel, GDK_KEY_k,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_rockridge), NULL, NULL));
+	/* Alt+F: toggle USB HDD detection */
+	gtk_accel_group_connect(accel, GDK_KEY_f,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_usb_hdd), NULL, NULL));
 
 	gtk_widget_show_all(win);
 
@@ -785,6 +809,14 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 			MAP_BIT(UNATTEND_NO_DATA_COLLECTION);
 			StrArrayAdd(&options, lmprintf(MSG_335), TRUE);
 			MAP_BIT(UNATTEND_DISABLE_BITLOCKER);
+			if (img_report.win_version.build >= 26200) {
+				StrArrayAdd(&options, lmprintf(MSG_350), TRUE);
+				MAP_BIT(UNATTEND_USE_MS2023_BOOTLOADERS);
+			}
+			if (expert_mode) {
+				StrArrayAdd(&options, lmprintf(MSG_346), TRUE);
+				MAP_BIT(UNATTEND_FORCE_S_MODE);
+			}
 
 			int i = CustomSelectionDialog(BS_AUTOCHECKBOX, lmprintf(MSG_327), lmprintf(MSG_328),
 			        options.String, options.Index, remap16(unattend_xml_mask, map, FALSE),
@@ -1051,6 +1083,36 @@ static void on_toggle_dark_mode(GtkWidget *w, gpointer data)
 	/* Save explicit user preference: 1=light, 2=dark */
 	WriteSetting32(SETTING_DARK_MODE, next ? 2 : 1);
 	is_darkmode_enabled = next ? TRUE : FALSE;
+}
+
+static void on_toggle_expert_mode(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	expert_mode = !expert_mode;
+	WriteSettingBool(SETTING_EXPERT_MODE, expert_mode);
+	uprintf("Expert mode: %s", expert_mode ? "enabled" : "disabled");
+}
+
+static void on_toggle_joliet(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	enable_joliet = !enable_joliet;
+	uprintf("Joliet support: %s", enable_joliet ? "enabled" : "disabled");
+}
+
+static void on_toggle_rockridge(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	enable_rockridge = !enable_rockridge;
+	uprintf("Rock Ridge support: %s", enable_rockridge ? "enabled" : "disabled");
+}
+
+static void on_toggle_usb_hdd(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	enable_HDDs = !enable_HDDs;
+	uprintf("USB HDD detection: %s", enable_HDDs ? "enabled" : "disabled");
+	GetDevices(0);
 }
 
 /* Callback invoked when the GTK dark-theme preference changes (either by the
@@ -1811,6 +1873,7 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 
 	/* Apply saved dark mode preference (0=system, 1=light, 2=dark) */
 	{
+		expert_mode = ReadSettingBool(SETTING_EXPERT_MODE);
 		int dark_pref = ReadSetting32(SETTING_DARK_MODE);
 		GtkSettings *gsettings = gtk_settings_get_default();
 		if (dark_pref == 2) {

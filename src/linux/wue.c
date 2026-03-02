@@ -262,6 +262,29 @@ char* CreateUnattendXml(int arch, int flags)
 }
 
 /* -----------------------------------------------------------------------
+ * wue_compute_option_flags
+ *   Return a bitmask of UNATTEND_* flags that should be presented to the
+ *   user in the WUE dialog, based on the Windows image version and whether
+ *   expert mode is active.  Extracted here so it can be unit-tested without
+ *   any UI dependency.
+ * ----------------------------------------------------------------------- */
+int wue_compute_option_flags(const RUFUS_IMG_REPORT *ir, BOOL exp_mode)
+{
+	const RUFUS_IMG_REPORT r = *ir;
+	int flags = UNATTEND_SET_USER | UNATTEND_DUPLICATE_LOCALE |
+	            UNATTEND_NO_DATA_COLLECTION | UNATTEND_DISABLE_BITLOCKER;
+	if (IS_WINDOWS_11(r))
+		flags |= UNATTEND_SECUREBOOT_TPM_MINRAM;
+	if (r.win_version.build >= 22500)
+		flags |= UNATTEND_NO_ONLINE_ACCOUNT;
+	if (r.win_version.build >= 26200)
+		flags |= UNATTEND_USE_MS2023_BOOTLOADERS;
+	if (exp_mode)
+		flags |= UNATTEND_FORCE_S_MODE;
+	return flags;
+}
+
+/* -----------------------------------------------------------------------
  * PopulateWindowsVersionFromXml  (static helper)
  * ----------------------------------------------------------------------- */
 static void PopulateWindowsVersionFromXml(const char* xml, size_t xml_len, int index)
