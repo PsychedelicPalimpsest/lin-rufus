@@ -940,6 +940,22 @@ _test_name = $(patsubst %_linux,%,$(notdir $@))
 	$(CC) $(CFLAGS_LINUX) $(CFLAGS_LINUX_$(_test_name)) -o $@ $< $(CREGEX_SRC) \
 	    $(EXTRA_SRC_LINUX_$(_test_name)) $(LDFLAGS_LINUX_$(_test_name)) $(FONTCONFIG_LIBS)
 
+# Explicit extra-source dependencies so incremental builds work correctly.
+# The pattern rule above uses $(_test_name) only at recipe time, not for deps.
+test_wue_linux_linux: $(EXTRA_SRC_LINUX_test_wue_linux)
+test_dev_linux_linux: $(EXTRA_SRC_LINUX_test_dev_linux)
+test_format_linux_linux: $(EXTRA_SRC_LINUX_test_format_linux)
+test_format_thread_linux_linux: $(EXTRA_SRC_LINUX_test_format_thread_linux)
+test_drive_linux_linux: $(EXTRA_SRC_LINUX_test_drive_linux)
+test_drive2_linux_linux: $(EXTRA_SRC_LINUX_test_drive2_linux)
+test_stdio_linux_linux: $(EXTRA_SRC_LINUX_test_stdio_linux)
+test_img_info_linux_linux: $(EXTRA_SRC_LINUX_test_img_info_linux)
+test_iso_linux_linux: $(EXTRA_SRC_LINUX_test_iso_linux)
+test_parser_linux: $(EXTRA_SRC_LINUX_test_parser)
+test_hash_linux: $(EXTRA_SRC_LINUX_test_hash_linux)
+test_net_linux_linux: $(EXTRA_SRC_LINUX_test_net_linux)
+test_settings_linux_linux: $(EXTRA_SRC_LINUX_test_settings_linux)
+
 # Pattern rules for Windows binaries
 _win_test_name = $(patsubst %.exe,%,$(notdir $@))
 
