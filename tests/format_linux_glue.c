@@ -69,3 +69,14 @@ int NotificationEx(int type, const char *setting, const notification_info *info,
 /* ---- syslinux.c ---- */
 BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
 { (void)drive_index; (void)drive_letter; (void)file_system; return TRUE; }
+
+/* ---- verify.c ---- */
+BOOL verify_write_pass(const char *source_path, int device_fd, uint64_t written_size)
+{ (void)source_path; (void)device_fd; (void)written_size; return TRUE; }
+
+/* ---- wue.c globals / functions ---- */
+int  unattend_xml_flags = 0;
+char *unattend_xml_path = NULL;
+void wue_set_mount_path(const char *path) { (void)path; }
+BOOL ApplyWindowsCustomization(char drive_letter, int flags)
+{ (void)drive_letter; (void)flags; return FALSE; }

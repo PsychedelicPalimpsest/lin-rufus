@@ -57,3 +57,14 @@ char *get_token_data_file_indexed(const char *token, const char *filename,
                                    int index)
 { (void)token; (void)filename; (void)index; return NULL; }
 GUID *StringToGuid(const char *str) { (void)str; return NULL; }
+
+/* ---- verify.c / wue.c stubs ---- */
+BOOL enable_verify_write = FALSE;
+uint64_t persistence_size = 0;
+BOOL verify_write_pass(const char *source_path, int device_fd, uint64_t written_size)
+{ (void)source_path; (void)device_fd; (void)written_size; return TRUE; }
+int  unattend_xml_flags = 0;
+char *unattend_xml_path = NULL;
+void wue_set_mount_path(const char *path) { (void)path; }
+BOOL ApplyWindowsCustomization(char drive_letter, int flags)
+{ (void)drive_letter; (void)flags; return FALSE; }

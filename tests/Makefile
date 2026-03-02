@@ -677,14 +677,15 @@ IMAGE_SCAN_LINUX_SRC := \
 CFLAGS_LINUX_test_image_scan_linux := \
 	-D_RUFUS -DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
-	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-I$(SRC_DIR)/bled -I$(SRC_DIR)/wimlib -I$(COMMON) \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
 	-Wno-strict-aliasing
 LDFLAGS_LINUX_test_image_scan_linux := \
-	-lpthread -lz -lxml2 -lm -lcdio -liso9660 -ludf
-EXTRA_SRC_LINUX_test_image_scan_linux := $(IMAGE_SCAN_LINUX_SRC)
+	-lpthread -lz -lxml2 -lm -lcdio -liso9660 -ludf \
+	$(SRC_DIR)/syslinux/libfat/libfat.a
+EXTRA_SRC_LINUX_test_image_scan_linux := $(IMAGE_SCAN_LINUX_SRC) iso_linux_glue.c
 
 # dos_linux tests: ExtractFreeDOS, SetDOSLocale, ExtractDOS
 DOS_LINUX_SRC := $(SRC_DIR)/linux/dos.c \

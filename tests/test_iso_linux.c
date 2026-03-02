@@ -107,6 +107,13 @@ RUFUS_DRIVE rufus_drive[MAX_DRIVES];
 /* grub_filesystems, config_path, isolinux_path are defined in iso.c */
 extern StrArray grub_filesystems;
 
+/* Stubs for OpticalDiscSaveImage() — ui.c / msg_dispatch symbols */
+BOOL PostMessageA(HWND h, UINT m, WPARAM w, LPARAM l)
+{ (void)h; (void)m; (void)w; (void)l; return TRUE; }
+LRESULT SendMessageA(HWND h, UINT m, WPARAM w, LPARAM l)
+{ (void)h; (void)m; (void)w; (void)l; return 0; }
+void EnableControls(BOOL e, BOOL r) { (void)e; (void)r; }
+
 /* PrintStatusInfo and uprintfs are provided by localization.c and stdio.c respectively */
 
 /* enable_iso / enable_joliet / enable_rockridge are defined in linux/iso.c */

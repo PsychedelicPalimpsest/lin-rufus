@@ -46,6 +46,9 @@ extern void rufus_init_paths(void);
 /* SetUpdateCheck() is compiled in via stdlg.c */
 extern BOOL SetUpdateCheck(void);
 
+/* Test injection for NotificationEx (defined in stdlg.c) */
+extern void stdlg_set_test_response(int response, const char *file_path);
+
 /* ===================================================================
  * Helpers
  * =================================================================== */
@@ -531,6 +534,8 @@ TEST(set_update_check_first_run_sets_interval)
 	settings_setup();
 	/* First run: SETTING_UPDATE_INTERVAL is 0 (not set) */
 	WriteSetting32(SETTING_UPDATE_INTERVAL, 0);
+	/* Inject IDYES so the consent dialog "Yes" is chosen without GUI */
+	stdlg_set_test_response(IDYES, NULL);
 	BOOL r = SetUpdateCheck();
 	CHECK(r == TRUE);
 	/* Default interval (86400) should have been written */
