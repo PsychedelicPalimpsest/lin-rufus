@@ -48,6 +48,7 @@
 #include "ms-sys/inc/fat32.h"
 #include "ms-sys/inc/partition_info.h"
 #include "../../res/grub/grub_version.h"
+#include "drive_linux.h"
 
 extern const char* FileSystemLabel[FS_MAX];
 extern BOOL force_large_fat32, enable_ntfs_compression, lock_drive, zero_drive, fast_zeroing;
@@ -707,6 +708,9 @@ DWORD WINAPI FormatThread(void* param)
 	if (boot_type == BT_IMAGE && !write_as_image &&
 	    HAS_PERSISTENCE(img_report) && persistence_size > 0)
 		extra_partitions |= XP_PERSISTENCE;
+	if (!write_as_image &&
+	    uefi_ntfs_needs_extra_partition(boot_type, fs_type, target_type, &img_report))
+		extra_partitions |= XP_UEFI_NTFS;
 	if (!CreatePartition(hPhysicalDrive, partition_type, fs_type,
 	                     mbr_is_bootable, extra_partitions)) {
 		ErrorStatus = RUFUS_ERROR(ERROR_PARTITION_FAILURE);
@@ -727,18 +731,27 @@ DWORD WINAPI FormatThread(void* param)
 	if (SelectedDrive.nPartitions == 0 && partition_type == PARTITION_STYLE_MBR) {
 		/* Fallback: manually set the partition offset to LBA 2048 */
 		uint32_t sec = SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512;
-		uint32_t pers_sects = (extra_partitions & XP_PERSISTENCE) ?
-		                      (uint32_t)(persistence_size / sec) : 0;
+		uint32_t pers_sects  = (extra_partitions & XP_PERSISTENCE) ?
+		                       (uint32_t)(persistence_size / sec) : 0;
+		uint32_t uefi_sects  = (extra_partitions & XP_UEFI_NTFS) ?
+		                       (uint32_t)(1048576ULL / sec) : 0;
 		uint64_t total_sects = (uint64_t)SelectedDrive.DiskSize / sec;
-		uint32_t main_sects = (uint32_t)(total_sects - 2048 - pers_sects);
+		uint32_t main_sects  = (uint32_t)(total_sects - 2048 - pers_sects - uefi_sects);
 		SelectedDrive.Partition[0].Offset = 2048ULL * sec;
 		SelectedDrive.Partition[0].Size   = (uint64_t)main_sects * sec;
 		SelectedDrive.nPartitions = 1;
+		int next_slot = 1;
 		if (extra_partitions & XP_PERSISTENCE) {
-			SelectedDrive.Partition[1].Offset = SelectedDrive.Partition[0].Offset +
-			                                    SelectedDrive.Partition[0].Size;
-			SelectedDrive.Partition[1].Size   = persistence_size;
-			SelectedDrive.nPartitions = 2;
+			SelectedDrive.Partition[next_slot].Offset = SelectedDrive.Partition[0].Offset +
+			                                            SelectedDrive.Partition[0].Size;
+			SelectedDrive.Partition[next_slot].Size   = persistence_size;
+			SelectedDrive.nPartitions++;
+			next_slot++;
+		}
+		if (extra_partitions & XP_UEFI_NTFS) {
+			SelectedDrive.Partition[PI_UEFI_NTFS].Offset = (total_sects - uefi_sects) * sec;
+			SelectedDrive.Partition[PI_UEFI_NTFS].Size   = (uint64_t)uefi_sects * sec;
+			SelectedDrive.nPartitions++;
 		}
 	}
 
@@ -868,6 +881,21 @@ DWORD WINAPI FormatThread(void* param)
 			pers_flags |= FP_CREATE_PERSISTENCE_CONF;
 		if (!FormatPartition(DriveIndex, pers_offset, 0, pers_fs, pers_label, pers_flags))
 			uprintf("WARNING: Persistence partition format failed: %s", WindowsErrorString());
+	}
+
+	/* Write UEFI:NTFS bridge partition if one was allocated */
+	if (extra_partitions & XP_UEFI_NTFS) {
+		size_t   uefi_sz   = 0;
+		uint8_t *uefi_data = load_uefi_ntfs_data(&uefi_sz);
+		if (uefi_data == NULL) {
+			uprintf("Could not load uefi-ntfs.img; UEFI:NTFS boot bridge unavailable");
+		} else {
+			uint64_t uefi_off = SelectedDrive.Partition[PI_UEFI_NTFS].Offset;
+			if (!write_uefi_ntfs_partition(hPhysicalDrive, uefi_off, uefi_data, uefi_sz))
+				uprintf("WARNING: Failed to write UEFI:NTFS partition: %s",
+				        WindowsErrorString());
+			free(uefi_data);
+		}
 	}
 
 	/* Install Syslinux bootloader when applicable */

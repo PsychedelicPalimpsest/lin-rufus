@@ -37,16 +37,30 @@ char *get_token_data_file_indexed(const char *token, const char *filename,
 }
 
 /*
- * RunCommandWithProgress stub — format_ext_tools.c (FormatNTFS/FormatExFAT)
- * calls this for external formatters.  In the format-thread tests we don't
- * need real NTFS/exFAT output, so just return failure so the test can
- * observe that the function was reachable.
+ * RunCommandWithProgress — execute the command in a child process and wait
+ * for it to finish.  In tests the real stdio.c is not linked, so we provide
+ * a lightweight version here that actually runs the tool (needed so that
+ * FormatNTFS / FormatExFAT can succeed on systems where mkntfs/mkfs.exfat
+ * are installed, which is required for UEFI:NTFS partition tests).
  */
+#include <unistd.h>
+#include <sys/wait.h>
+#include <errno.h>
 DWORD RunCommandWithProgress(const char *cmd, const char *dir,
                               BOOL log, int msg, const char *pattern)
 {
-    (void)cmd; (void)dir; (void)log; (void)msg; (void)pattern;
-    return 1; /* simulate "tool not found / failed" */
+    (void)log; (void)msg; (void)pattern;
+    if (!cmd) return ERROR_INVALID_PARAMETER;
+    pid_t pid = fork();
+    if (pid < 0) return (DWORD)errno;
+    if (pid == 0) {
+        if (dir != NULL && chdir(dir) != 0) _exit(127);
+        execl("/bin/sh", "sh", "-c", cmd, (char*)NULL);
+        _exit(127);
+    }
+    int status;
+    if (waitpid(pid, &status, 0) < 0) return (DWORD)errno;
+    return WIFEXITED(status) ? (DWORD)WEXITSTATUS(status) : 1;
 }
 
 /*

@@ -23,3 +23,6 @@ void bled_init(void *a, void *b, void *c, void *d, void *e, void *f, void *g)
 int  bled_uncompress_to_dir(const char *a, const char *b, int c)
 { (void)a; (void)b; (void)c; return -1; }
 void bled_exit(void) {}
+
+/* ---- iso_report.c → old_c32_name (defined in iso.c, not linked here) ---- */
+const char* old_c32_name[NB_OLD_C32] = { NULL };

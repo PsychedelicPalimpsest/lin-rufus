@@ -45,12 +45,11 @@ void EnableControls(BOOL enable, BOOL remove_checkboxes)
 (void)enable; (void)remove_checkboxes;
 }
 
-/* get_token_data_file_indexed: used by IsFilteredDrive / settings paths */
-char* get_token_data_file_indexed(const char* token, const char* filename, int index)
-{
-	(void)token; (void)filename; (void)index;
-	return NULL;
-}
-
 /* img_report is normally defined in globals.c but iso tests don't link it */
 RUFUS_IMG_REPORT img_report = { 0 };
+
+/* persistence_size is defined in globals.c; needed by fix_config() in iso.c */
+uint64_t persistence_size = 0;
+
+/* update is defined in globals.c; needed by parse_update() in parser.c */
+RUFUS_UPDATE update = { {0,0,0}, {0,0}, NULL, NULL };

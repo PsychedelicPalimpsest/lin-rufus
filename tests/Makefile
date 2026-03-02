@@ -831,6 +831,7 @@ IMAGE_SCAN_LINUX_SRC := \
 	$(COMMON)/localization.c \
 	$(COMMON)/iso_config.c \
 	$(COMMON)/bootloader_scan.c \
+	$(COMMON)/iso_report.c \
 	$(BLED_LIB) \
 	$(WIM_LIB) \
 	$(XML_SRC)
@@ -863,6 +864,8 @@ EXTRA_SRC_LINUX_test_bootloader_scan_linux := \
 	$(COMMON)/parser.c \
 	$(COMMON)/localization.c \
 	$(SRC_DIR)/linux/localization.c \
+	$(COMMON)/bootloader_scan.c \
+	$(COMMON)/iso_report.c \
 	bootloader_scan_linux_glue.c
 # bootloader_scan_common tests: GetBootladerInfo() from common/bootloader_scan.c
 # Cross-platform: runs on both Linux (native) and Windows (Wine/MinGW).

@@ -1343,6 +1343,178 @@ TEST(format_thread_image_grub4dos_writes_grub4dos_mbr)
 }
 
 /* ================================================================
+ * FormatThread UEFI:NTFS partition tests
+ *
+ * uefi_ntfs_needs_extra_partition() must return TRUE for BT_UEFI_NTFS, and
+ * for BT_IMAGE + has_efi + (NTFS or exFAT).  FormatThread must honour that
+ * by allocating an EFI System partition at the end of the drive and writing
+ * the uefi-ntfs.img bridge into it.
+ * ================================================================ */
+
+/* Helper: verify that uefi-ntfs.img data was written at offset 'off' in
+ * the image file at 'path'.  The FAT filesystem image always has the
+ * 0x55 0xAA boot signature at bytes 510-511 of sector 0. */
+static int uefi_ntfs_data_written(const char *path, uint64_t off)
+{
+	uint8_t sig[2];
+	if (read_at(path, (off_t)(off + 510), sig, 2) != 0)
+		return 0;
+	return (sig[0] == 0x55 && sig[1] == 0xAA);
+}
+
+/* BT_UEFI_NTFS standalone: a dedicated UEFI:NTFS-only boot type should
+ * cause FormatThread to create a UEFI:NTFS EFI System partition at the end
+ * of the drive and write the uefi-ntfs.img bridge image into it. */
+TEST(format_thread_uefi_ntfs_standalone_creates_uefi_ntfs_partition)
+{
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type      = BT_UEFI_NTFS;
+	partition_type = PARTITION_STYLE_MBR;
+	fs_type        = FS_NTFS;
+	target_type    = TT_UEFI;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	/* CreatePartition must have recorded the UEFI:NTFS partition offset */
+	CHECK(SelectedDrive.Partition[PI_UEFI_NTFS].Offset != 0);
+
+	/* The uefi-ntfs.img must have been written: check FAT signature at the
+	 * start of the partition (bytes 510-511 of sector 0). */
+	CHECK(uefi_ntfs_data_written(path, SelectedDrive.Partition[PI_UEFI_NTFS].Offset));
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+/* BT_IMAGE + has_efi + NTFS: an EFI-bootable ISO formatted as NTFS cannot
+ * be booted from UEFI directly, so a UEFI:NTFS bridge partition is required. */
+TEST(format_thread_image_efi_ntfs_creates_uefi_ntfs_partition)
+{
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type           = BT_IMAGE;
+	partition_type      = PARTITION_STYLE_MBR;
+	fs_type             = FS_NTFS;
+	target_type         = TT_UEFI;
+	img_report.has_efi  = 1;
+	img_report.is_iso   = 0;   /* skip ISO extraction in this test */
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	CHECK(SelectedDrive.Partition[PI_UEFI_NTFS].Offset != 0);
+	CHECK(uefi_ntfs_data_written(path, SelectedDrive.Partition[PI_UEFI_NTFS].Offset));
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+/* BT_IMAGE + has_efi + exFAT: same as NTFS — UEFI:NTFS bridge required. */
+TEST(format_thread_image_efi_exfat_creates_uefi_ntfs_partition)
+{
+	/* Skip if mkfs.exfat is not installed */
+	SKIP_IF(access("/usr/bin/mkfs.exfat", X_OK) != 0 &&
+	        access("/sbin/mkfs.exfat", X_OK) != 0 &&
+	        access("/usr/bin/mkexfatfs", X_OK) != 0 &&
+	        access("/sbin/mkexfatfs", X_OK) != 0);
+
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type           = BT_IMAGE;
+	partition_type      = PARTITION_STYLE_MBR;
+	fs_type             = FS_EXFAT;
+	target_type         = TT_UEFI;
+	img_report.has_efi  = 1;
+	img_report.is_iso   = 0;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	CHECK(SelectedDrive.Partition[PI_UEFI_NTFS].Offset != 0);
+	CHECK(uefi_ntfs_data_written(path, SelectedDrive.Partition[PI_UEFI_NTFS].Offset));
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+/* BT_IMAGE + has_efi + FAT32: FAT32 is natively UEFI-bootable, so no
+ * UEFI:NTFS partition should be created. */
+TEST(format_thread_image_efi_fat32_no_uefi_ntfs_partition)
+{
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type           = BT_IMAGE;
+	partition_type      = PARTITION_STYLE_MBR;
+	fs_type             = FS_FAT32;
+	target_type         = TT_UEFI;
+	img_report.has_efi  = 1;
+	img_report.is_iso   = 0;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	/* No UEFI:NTFS partition should have been allocated */
+	CHECK(SelectedDrive.Partition[PI_UEFI_NTFS].Offset == 0);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+/* write_as_image=TRUE copies an ISO verbatim and must not create extra
+ * partitions (including UEFI:NTFS). */
+TEST(format_thread_uefi_ntfs_write_as_image_skips_uefi_ntfs)
+{
+	/* Create a tiny ISO-like source image */
+	char *src = create_temp_image(IMG_4MB);
+	CHECK(src != NULL);
+	char *dst = create_temp_image(IMG_512MB);
+	CHECK(dst != NULL);
+
+	/* Write a recognisable byte to the source so we know it was copied */
+	int sfd = open(src, O_WRONLY);
+	CHECK(sfd >= 0);
+	uint8_t marker = 0xAB;
+	pwrite(sfd, &marker, 1, 0);
+	close(sfd);
+
+	setup_drive(dst, IMG_512MB);
+	reset_globals();
+	boot_type           = BT_IMAGE;
+	partition_type      = PARTITION_STYLE_MBR;
+	fs_type             = FS_NTFS;
+	target_type         = TT_UEFI;
+	img_report.has_efi  = 1;
+	img_report.is_iso   = 0;
+	write_as_image      = TRUE;
+	image_path          = src;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	/* write_as_image must not create a UEFI:NTFS extra partition */
+	CHECK(SelectedDrive.Partition[PI_UEFI_NTFS].Offset == 0);
+
+	teardown_drive();
+	unlink(src); free(src);
+	unlink(dst); free(dst);
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 int main(void)
@@ -1397,6 +1569,13 @@ int main(void)
 	printf("\n=== FormatThread GRUB4DOS integration tests ===\n");
 	RUN(format_thread_grub4dos_standalone_writes_grub4dos_mbr);
 	RUN(format_thread_image_grub4dos_writes_grub4dos_mbr);
+
+	printf("\n=== FormatThread UEFI:NTFS partition tests ===\n");
+	RUN(format_thread_uefi_ntfs_standalone_creates_uefi_ntfs_partition);
+	RUN(format_thread_image_efi_ntfs_creates_uefi_ntfs_partition);
+	RUN(format_thread_image_efi_exfat_creates_uefi_ntfs_partition);
+	RUN(format_thread_image_efi_fat32_no_uefi_ntfs_partition);
+	RUN(format_thread_uefi_ntfs_write_as_image_skips_uefi_ntfs);
 
 	TEST_RESULTS();
 }
