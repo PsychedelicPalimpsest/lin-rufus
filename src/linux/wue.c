@@ -19,6 +19,9 @@
 #include <errno.h>
 
 #include "rufus.h"
+#include "localization.h"
+#include "missing.h"
+#include "resource.h"
 #include "vhd.h"
 #include "xml.h"
 #include "wue.h"
@@ -501,7 +504,115 @@ BOOL CopySKUSiPolicy(const char* drive_name)
 
 int SetWinToGoIndex(void)
 {
-	return -1;
+	int i, r;
+	WIMStruct *wim = NULL;
+	char wim_path[4 * MAX_PATH] = "";
+	char *xml = NULL;
+	size_t xml_len;
+	StrArray version_name = { 0 }, version_index = { 0 };
+	BOOL bNonStandard = FALSE;
+	ezxml_t index_xml = NULL, image = NULL;
+
+	wintogo_index = -1;
+	wininst_index = 0;
+
+	if (fs_type != FS_NTFS)
+		return -1;
+
+	if (!image_path || !image_path[0])
+		return -1;
+
+	/* If multiple Windows install images, ask user which to use */
+	if (img_report.wininst_index > 1) {
+		char *install_names[MAX_WININST];
+		for (i = 0; i < img_report.wininst_index; i++)
+			install_names[i] = &img_report.wininst_path[i][1];
+		wininst_index = _log2(SelectionDialog(lmprintf(MSG_130), lmprintf(MSG_131),
+		                                      install_names, img_report.wininst_index));
+		if (wininst_index < 0)
+			return -2;
+		if (wininst_index >= MAX_WININST)
+			wininst_index = 0;
+	}
+
+	/* Build WIM path: either direct WIM or ISO|relative/wim/path */
+	assert(safe_strlen(image_path) + 1 < ARRAYSIZE(wim_path));
+	static_strcpy(wim_path, image_path);
+	if (!img_report.is_windows_img) {
+		/* wininst_path on Linux starts with '/', strip it for wimlib pipe syntax */
+		assert(safe_strlen(image_path) +
+		       safe_strlen(&img_report.wininst_path[wininst_index][1]) + 1
+		       < ARRAYSIZE(wim_path));
+		static_strcat(wim_path, "|");
+		static_strcat(wim_path, &img_report.wininst_path[wininst_index][1]);
+	}
+
+	r = wimlib_open_wimU(wim_path, 0, &wim);
+	if (r != 0) {
+		uprintf("Could not open WIM: Error %d", r);
+		goto out;
+	}
+
+	r = wimlib_get_xml_data(wim, (void **)&xml, &xml_len);
+	if (r != 0) {
+		uprintf("Could not read WIM XML: Error %d", r);
+		goto out;
+	}
+
+	StrArrayCreate(&version_name, 16);
+	StrArrayCreate(&version_index, 16);
+	index_xml = ezxml_parse_str(xml, xml_len);
+	if (index_xml == NULL) {
+		uprintf("Could not parse WIM XML");
+		goto out;
+	}
+
+	for (i = 0, image = ezxml_child(index_xml, "IMAGE");
+	     image != NULL && StrArrayAdd(&version_index, ezxml_attr(image, "INDEX"), TRUE) >= 0;
+	     image = image->next, i++) {
+		const char *dn = ezxml_child_val(image, "DISPLAYNAME");
+		if (!dn || !dn[0])
+			dn = ezxml_child_val(image, "DESCRIPTION");
+		if (!dn || !dn[0]) {
+			uprintf("WARNING: Could not find description for image index %d", i + 1);
+			dn = "Unknown Windows Version";
+			bNonStandard = TRUE;
+		}
+		StrArrayAdd(&version_name, dn, TRUE);
+	}
+
+	if (bNonStandard)
+		uprintf("WARNING: Nonstandard Windows image (missing <DISPLAYNAME> entries)");
+
+	if (i > 1)
+		/* NB: _log2 returns -2 if SelectionDialog returns negative (user cancelled) */
+		i = _log2(SelectionDialog(lmprintf(MSG_291), lmprintf(MSG_292),
+		                          version_name.String, i)) + 1;
+	if (i < 0)
+		wintogo_index = -2;
+	else if (i == 0)
+		wintogo_index = 1;
+	else
+		wintogo_index = atoi(version_index.String[i - 1]);
+
+	if (i > 0) {
+		PopulateWindowsVersionFromXml(xml, xml_len, i - 1);
+		if (img_report.win_version.major == 0 || img_report.win_version.build == 0)
+			uprintf("WARNING: Could not get version info from WIM XML (nonstandard image?)");
+		if (i > 0 && (size_t)i <= version_name.Index)
+			uprintf("Will use '%s' (Index %s) for Windows To Go",
+			        version_name.String[i - 1], version_index.String[i - 1]);
+	}
+
+out:
+	StrArrayDestroy(&version_name);
+	StrArrayDestroy(&version_index);
+	free(xml);
+	if (index_xml)
+		ezxml_free(index_xml);
+	if (wim)
+		wimlib_free(wim);
+	return wintogo_index;
 }
 
 /* Module-level mount path set by the caller before ApplyWindowsCustomization */

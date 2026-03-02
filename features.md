@@ -389,7 +389,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `SetupWinPE()` | ✅ | POSIX file copy + binary patching (CRC/path/rdisk patches) |
 | `PopulateWindowsVersion()` | ✅ | wimlib + ezxml (cross-platform) |
 | `CopySKUSiPolicy()` | 🚫 | Windows-only WDAC policy; stub returns FALSE |
-| `SetWinToGoIndex()` / `SetupWinToGo()` | 🚫 | Windows-only; stubs return -1/FALSE |
+| `SetWinToGoIndex()` / `SetupWinToGo()` | 🔶 | `SetWinToGoIndex()` ✅ — wimlib + ezxml + `CustomSelectionDialog` for WIM edition selection; `SetupWinToGo()` still Windows-only (stub returns FALSE) |
 | `ApplyWindowsCustomization()` | ✅ | POSIX file copy to Panther/OEM paths; boot.wim patching via wimlib_update_image + wimlib_overwrite; appraiserres.dll rename + empty placeholder |
 
 ### 3o. S.M.A.R.T. (`smart.c`)
@@ -559,7 +559,7 @@ This is the most structurally significant porting gap.
 54. **`oleacc.h` / MSAA → ATK/AT-SPI2** — map the MSAA `IAccessible` stubs in `oleacc.h` to ATK object creation so screen readers (Orca, etc.) receive meaningful role/name/description information from Rufus controls; prerequisite for proper GNOME a11y compliance (pairs with item 40)
 55. ~~**`uxtheme.h` / `dwmapi.h` theme-change notifications → GTK**~~ ✅ **DONE** — `on_gtk_dark_theme_changed()` callback in `ui_gtk.c` responds to `notify::gtk-application-prefer-dark-theme` signal on `GtkSettings`; connected in `on_app_activate()` so Rufus follows the system dark-mode preference at runtime; Ctrl+Alt+D toggle also updates `is_darkmode_enabled` via the same signal path
 56. ~~**`timezoneapi.h` → `localtime`/`tzset`**~~ ✅ **DONE** — `src/linux/timezone.c`: `IanaToWindowsTimezone()` resolves `/etc/timezone`, `/etc/localtime` symlink against zoneinfo root, or `$TZ`; embedded CLDR-derived IANA→Windows table (450+ canonical entries, binary search); test injection via `timezone_set_*()` functions in RUFUS_TEST builds; wired into `CreateUnattendXml()` for `UNATTEND_DUPLICATE_LOCALE`; 280 tests pass (`test_timezone_linux`)
-57. **`commctrl.h` `LVM_*` / `TVN_*` → GTK TreeView/ListStore** — the Windows UI uses `ListView` and `TreeView` controls for the hash-results and WIM-edition selection dialogs; map the remaining `LVM_INSERTITEM`, `LVM_SETITEM`, `LVM_GETITEM`, `TVN_*` messages to `GtkTreeView` + `GtkListStore` operations in `combo_bridge.c` or a new `listview_bridge.c`
+57. ~~**`commctrl.h` `LVM_*` / `TVN_*` → GTK TreeView/ListStore**~~ 🔶 **PARTIAL** — `SetWinToGoIndex()` ✅ implemented on Linux: opens WIM via wimlib, parses edition XML, shows `CustomSelectionDialog` for multi-edition selection, sets `wintogo_index` global (8 tests pass); hash-results `ListView` mapping (`LVM_INSERTITEM`, etc.) not yet needed (hash dialog uses `UM_HASH_COMPLETED` / direct GTK update)
 58. **`psapi.h` process memory info → `/proc`** — `GetProcessMemoryInfo` and `EnumProcessModules` stubs are no-ops; implement lightweight versions via `/proc/self/status` (`VmRSS`) and `/proc/self/maps` so any diagnostic or resource-tracking code that calls them gets real data
 
 ---

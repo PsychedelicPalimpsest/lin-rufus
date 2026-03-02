@@ -724,6 +724,7 @@ EXTRA_SRC_LINUX_test_wue_linux := \
 	$(SRC_DIR)/linux/wue.c \
 	$(SRC_DIR)/linux/parser.c \
 	$(SRC_DIR)/linux/timezone.c \
+	$(SRC_DIR)/common/stdfn.c \
 	$(WIM_LIB) \
 	$(XML_SRC)
 

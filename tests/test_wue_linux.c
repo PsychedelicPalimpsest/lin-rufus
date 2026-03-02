@@ -53,6 +53,7 @@ HWND   hMainDialog = NULL;
 
 char   temp_dir[MAX_PATH]  = "/tmp";
 char   *image_path         = NULL;
+int    fs_type             = 0;
 
 RUFUS_IMG_REPORT img_report = { 0 };
 
@@ -94,6 +95,24 @@ BOOL    WimApplyImage(const char* a, int b, const char* c)
 /* parser.c stubs (parse_update uses these globals) */
 RUFUS_UPDATE update = {0};
 windows_version_t WindowsVersion = {0};
+
+/* CustomSelectionDialog mock — test_set_wintogo_index tests inject a response
+ * by setting _mock_dialog_response before calling SetWinToGoIndex().
+ *   -1 = not set (cancel / not called expectation)
+ *    0 = IDCANCEL equivalent (no option selected → SelectionDialog path returns -1)
+ *   positive bitmask = which radio button is selected (bit 0 = first, etc.)
+ * One-shot: _mock_dialog_response is reset to -1 after each call. */
+static int _mock_dialog_response = -1;
+
+int CustomSelectionDialog(int style, char *title, char *msg,
+                          char **choices, int sz, int mask, int username_index)
+{
+	(void)style; (void)title; (void)msg; (void)choices; (void)sz;
+	(void)mask; (void)username_index;
+	int r = _mock_dialog_response;
+	_mock_dialog_response = -1;
+	return r;
+}
 
 /* ================================================================
  * Helpers
@@ -404,6 +423,40 @@ static int create_minimal_wim_with_version(const char *dest_path)
 }
 
 /*
+ * Create a WIM with N images using wimlib's API.
+ * Each image gets the provided display name set as both DISPLAYNAME and NAME.
+ * Returns 0 on success, wimlib error code on failure.
+ */
+static int create_multi_edition_wim(const char *dest, const char **names, int n)
+{
+	/* Use the existing minimal-WIM builder as the image source, then
+	 * export it N times into a new WIM (bundled libwim lacks add_empty_image). */
+	char tmp[512];
+	snprintf(tmp, sizeof(tmp), "%s.src.wim", dest);
+	int ret = create_minimal_wim_with_version(tmp);
+	if (ret) return ret;
+
+	WIMStruct *src = NULL, *out = NULL;
+	ret = wimlib_open_wim(tmp, 0, &src);
+	unlink(tmp);
+	if (ret) return ret;
+
+	ret = wimlib_create_new_wim(WIMLIB_COMPRESSION_TYPE_NONE, &out);
+	if (ret) { wimlib_free(src); return ret; }
+
+	for (int i = 0; i < n; i++) {
+		ret = wimlib_export_image(src, 1, out, names[i], NULL, 0);
+		if (!ret)
+			ret = wimlib_set_image_property(out, i + 1, "DISPLAYNAME", names[i]);
+		if (ret) { wimlib_free(src); wimlib_free(out); return ret; }
+	}
+	ret = wimlib_write(out, dest, WIMLIB_ALL_IMAGES, 0, 0);
+	wimlib_free(src);
+	wimlib_free(out);
+	return ret;
+}
+
+/*
  * Create an ISO9660 image at iso_path containing a single file src_file
  * placed at dest_dir/filename within the ISO (e.g. sources/install.wim).
  * dest_dir must be a relative path (no leading '/').
@@ -655,10 +708,172 @@ TEST(stub_copy_sku_returns_false)
 	CHECK(CopySKUSiPolicy("/mnt") == FALSE);
 }
 
-TEST(stub_set_wintogo_index_returns_neg1)
+TEST(wintogo_not_ntfs_returns_neg1)
 {
+	/* When filesystem is not NTFS, SetWinToGoIndex() must return -1 */
+	fs_type = FS_FAT32;
 	CHECK(SetWinToGoIndex() == -1);
+	fs_type = 0;
 }
+
+/* ================================================================
+ * Tests: SetWinToGoIndex — real implementation
+ * ================================================================ */
+
+TEST(wintogo_null_image_path_returns_neg1)
+{
+	/* NTFS selected but no image path set */
+	fs_type = FS_NTFS;
+	image_path = NULL;
+	CHECK(SetWinToGoIndex() == -1);
+	fs_type = 0;
+}
+
+TEST(wintogo_invalid_wim_returns_neg1)
+{
+	/* NTFS selected, is_windows_img, but WIM path doesn't exist */
+	fs_type = FS_NTFS;
+	image_path = (char *)"/tmp/rufus-test-nonexistent-wintogo.wim";
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_windows_img = TRUE;
+	int r = SetWinToGoIndex();
+	CHECK(r == -1);
+	image_path = NULL;
+	fs_type = 0;
+}
+
+TEST(wintogo_single_edition_returns_idx1)
+{
+	/* WIM with one image: no dialog shown, index = 1 returned */
+	const char *wim_path = "/tmp/rufus-test-wintogo-single.wim";
+	const char *names[] = { "Windows 11 Home" };
+	int r = create_multi_edition_wim(wim_path, names, 1);
+	if (r != 0) {
+		fprintf(stderr, "  SKIP: could not create test WIM (%d)\n", r);
+		unlink(wim_path);
+		return;
+	}
+
+	fs_type = FS_NTFS;
+	image_path = (char *)wim_path;
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_windows_img = TRUE;
+	_mock_dialog_response = -1;  /* must NOT be consumed */
+
+	r = SetWinToGoIndex();
+	CHECK(r == 1);
+	CHECK(_mock_dialog_response == -1);  /* dialog was not called */
+
+	image_path = NULL;
+	fs_type = 0;
+	unlink(wim_path);
+}
+
+TEST(wintogo_multi_edition_pick_first)
+{
+	/* WIM with 3 images: user picks first → index 1 */
+	const char *wim_path = "/tmp/rufus-test-wintogo-multi.wim";
+	const char *names[] = { "Windows 11 Home", "Windows 11 Pro", "Windows 11 Pro N" };
+	int r = create_multi_edition_wim(wim_path, names, 3);
+	if (r != 0) {
+		fprintf(stderr, "  SKIP: could not create test WIM (%d)\n", r);
+		unlink(wim_path);
+		return;
+	}
+
+	fs_type = FS_NTFS;
+	image_path = (char *)wim_path;
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_windows_img = TRUE;
+	_mock_dialog_response = 1;  /* bitmask: bit 0 = first option selected */
+
+	r = SetWinToGoIndex();
+	CHECK(r == 1);  /* first image INDEX="1" */
+
+	image_path = NULL;
+	fs_type = 0;
+	unlink(wim_path);
+}
+
+TEST(wintogo_multi_edition_pick_second)
+{
+	/* WIM with 3 images: user picks second → index 2 */
+	const char *wim_path = "/tmp/rufus-test-wintogo-multi2.wim";
+	const char *names[] = { "Windows 11 Home", "Windows 11 Pro", "Windows 11 Pro N" };
+	int r = create_multi_edition_wim(wim_path, names, 3);
+	if (r != 0) {
+		fprintf(stderr, "  SKIP: could not create test WIM (%d)\n", r);
+		unlink(wim_path);
+		return;
+	}
+
+	fs_type = FS_NTFS;
+	image_path = (char *)wim_path;
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_windows_img = TRUE;
+	_mock_dialog_response = 2;  /* bitmask: bit 1 = second option */
+
+	r = SetWinToGoIndex();
+	CHECK(r == 2);  /* second image INDEX="2" */
+
+	image_path = NULL;
+	fs_type = 0;
+	unlink(wim_path);
+}
+
+TEST(wintogo_multi_edition_cancel)
+{
+	/* WIM with 3 images: user cancels → returns -2 */
+	const char *wim_path = "/tmp/rufus-test-wintogo-cancel.wim";
+	const char *names[] = { "Windows 11 Home", "Windows 11 Pro", "Windows 11 Pro N" };
+	int r = create_multi_edition_wim(wim_path, names, 3);
+	if (r != 0) {
+		fprintf(stderr, "  SKIP: could not create test WIM (%d)\n", r);
+		unlink(wim_path);
+		return;
+	}
+
+	fs_type = FS_NTFS;
+	image_path = (char *)wim_path;
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_windows_img = TRUE;
+	_mock_dialog_response = -1;  /* cancel */
+
+	r = SetWinToGoIndex();
+	CHECK(r == -2);
+
+	image_path = NULL;
+	fs_type = 0;
+	unlink(wim_path);
+}
+
+TEST(wintogo_multi_edition_sets_wintogo_global)
+{
+	/* After picking edition, wintogo_index global is updated */
+	const char *wim_path = "/tmp/rufus-test-wintogo-global.wim";
+	const char *names[] = { "Windows 11 Home", "Windows 11 Pro" };
+	int r = create_multi_edition_wim(wim_path, names, 2);
+	if (r != 0) {
+		fprintf(stderr, "  SKIP: could not create test WIM (%d)\n", r);
+		unlink(wim_path);
+		return;
+	}
+
+	fs_type = FS_NTFS;
+	image_path = (char *)wim_path;
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_windows_img = TRUE;
+	_mock_dialog_response = 2;  /* second option */
+
+	r = SetWinToGoIndex();
+	CHECK(r == 2);
+	CHECK(wintogo_index == 2);  /* global matches return value */
+
+	image_path = NULL;
+	fs_type = 0;
+	unlink(wim_path);
+}
+
 
 /* ================================================================
  * Tests: SetupWinPE (real implementation)
@@ -1361,7 +1576,16 @@ int main(void)
 	RUN(stub_setup_winpe_returns_false);
 	RUN(stub_setup_wintogo_returns_false);
 	RUN(stub_copy_sku_returns_false);
-	RUN(stub_set_wintogo_index_returns_neg1);
+	RUN(wintogo_not_ntfs_returns_neg1);
+
+	printf("\n=== SetWinToGoIndex tests ===\n");
+	RUN(wintogo_null_image_path_returns_neg1);
+	RUN(wintogo_invalid_wim_returns_neg1);
+	RUN(wintogo_single_edition_returns_idx1);
+	RUN(wintogo_multi_edition_pick_first);
+	RUN(wintogo_multi_edition_pick_second);
+	RUN(wintogo_multi_edition_cancel);
+	RUN(wintogo_multi_edition_sets_wintogo_global);
 
 	printf("\n=== SetupWinPE tests ===\n");
 	RUN(winpe_null_mount_returns_false);
