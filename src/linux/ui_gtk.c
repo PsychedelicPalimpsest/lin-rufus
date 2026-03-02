@@ -92,13 +92,13 @@ extern char hash_str[HASH_MAX][150];
 extern BOOL enable_extra_hashes;
 extern char *image_path;
 
+#include "ui_combo_logic.h"   /* populate_fs_combo, populate_cluster_combo,
+                                * SetFSFromISO, SetPartitionSchemeAndTargetSystem */
+
 /* Forward declaration for combo registration helper */
 static void combo_register_all(void);
 /* Forward declaration for initial combo population */
 static void populate_boot_combo(void);
-static void populate_partition_combos(void);
-static void populate_fs_combo(void);
-static void populate_cluster_combo(int fs);
 /* Forward declaration for EnableControls (defined later in this file) */
 void EnableControls(BOOL enable, BOOL remove_checkboxes);
 
@@ -136,8 +136,6 @@ extern DWORD WINAPI ImageScanThread(LPVOID param); /* image_scan.c */
 extern void SetFidoCheck(void);                    /* net.c */
 extern BOOL DownloadISO(void);                     /* net.c */
 void init_rufus_version(void);                     /* rufus.c */
-extern void SetFSFromISO(void);                    /* rufus.c stubs */
-extern void SetPartitionSchemeAndTargetSystem(BOOL only_target);
 static GtkWidget *build_toolbar(void);
 static GtkWidget *build_device_row(void);
 static void on_device_combo_right_click(GtkWidget *widget, GdkEventButton *event, gpointer data);
@@ -872,11 +870,12 @@ static void on_device_changed(GtkComboBox *combo, gpointer data)
 	char fs_name[32] = "";
 	GetDrivePartitionData(di, fs_name, sizeof(fs_name), TRUE);
 
-	/* Refresh partition scheme + target system combos */
-	populate_partition_combos();
+	/* Smart refresh: partition scheme + target system based on boot type */
+	SetPartitionSchemeAndTargetSystem(FALSE);
 
-	/* Refresh FS and cluster size combos */
+	/* Repopulate FS combo and apply smart default for the current image */
 	populate_fs_combo();
+	SetFSFromISO();
 }
 
 static void on_boot_changed(GtkComboBox *combo, gpointer data)
@@ -889,9 +888,12 @@ static void on_boot_changed(GtkComboBox *combo, gpointer data)
 	if (sel >= 0)
 		boot_type = (int)ComboBox_GetItemData(hBootType, sel);
 
-	/* Partition / FS combos may need to change depending on boot type */
-	populate_partition_combos();
+	/* Smart refresh of partition scheme + target system */
+	SetPartitionSchemeAndTargetSystem(FALSE);
+
+	/* Repopulate FS combo and apply smart default for the current image */
 	populate_fs_combo();
+	SetFSFromISO();
 }
 
 static void on_fs_changed(GtkComboBox *combo, gpointer data)
@@ -1087,9 +1089,22 @@ void set_hyperlink_label(GtkWidget *widget, const char *url, const char *text)
 
 void SetComboEntry(HWND hDlg, int data)
 {
+	int i, nb_entries;
 	GtkWidget *w = (GtkWidget *)hDlg;
-	if (w && GTK_IS_COMBO_BOX(w))
-		gtk_combo_box_set_active(GTK_COMBO_BOX(w), data);
+	if (!w || !GTK_IS_COMBO_BOX(w))
+		return;
+	nb_entries = gtk_tree_model_iter_n_children(
+		gtk_combo_box_get_model(GTK_COMBO_BOX(w)), NULL);
+	/* Search for the item whose HWND-level data value matches `data` */
+	for (i = 0; i < nb_entries; i++) {
+		if ((int)ComboBox_GetItemData(hDlg, i) == data) {
+			gtk_combo_box_set_active(GTK_COMBO_BOX(w), i);
+			return;
+		}
+	}
+	/* Fallback: select first item */
+	if (nb_entries > 0)
+		gtk_combo_box_set_active(GTK_COMBO_BOX(w), 0);
 }
 
 /* Layout helpers — GTK manages its own layout so most of these are no-ops. */
@@ -1412,6 +1427,7 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		 * to reflect the scanned image content. */
 		uprintf("Image scan complete (is_iso=%d, is_bootable=%d)",
 		        (int)img_report.is_iso, (int)img_report.is_bootable_img);
+		populate_fs_combo();
 		SetFSFromISO();
 		SetPartitionSchemeAndTargetSystem(FALSE);
 		TogglePersistenceControls(HAS_PERSISTENCE(img_report));
@@ -1643,141 +1659,6 @@ static void populate_boot_combo(void)
 	boot_type = BT_NON_BOOTABLE;
 }
 
-/*
- * populate_partition_combos — fill Partition Scheme and Target System dropdowns
- * based on the current boot_type.
- */
-static void populate_partition_combos(void)
-{
-	IGNORE_RETVAL(ComboBox_ResetContent(hPartitionScheme));
-	IGNORE_RETVAL(ComboBox_SetItemData(hPartitionScheme,
-	    ComboBox_AddString(hPartitionScheme, "MBR"), PARTITION_STYLE_MBR));
-	IGNORE_RETVAL(ComboBox_SetItemData(hPartitionScheme,
-	    ComboBox_AddString(hPartitionScheme, "GPT"), PARTITION_STYLE_GPT));
-	IGNORE_RETVAL(ComboBox_SetCurSel(hPartitionScheme, 0));
-	partition_type = PARTITION_STYLE_MBR;
-
-	IGNORE_RETVAL(ComboBox_ResetContent(hTargetSystem));
-	IGNORE_RETVAL(ComboBox_SetItemData(hTargetSystem,
-	    ComboBox_AddString(hTargetSystem, "BIOS (or UEFI-CSM)"), TT_BIOS));
-	IGNORE_RETVAL(ComboBox_SetItemData(hTargetSystem,
-	    ComboBox_AddString(hTargetSystem, "UEFI (non-CSM)"), TT_UEFI));
-	IGNORE_RETVAL(ComboBox_SetCurSel(hTargetSystem, 0));
-	target_type = TT_BIOS;
-}
-
-/*
- * populate_fs_combo — fill the File System dropdown.
- *
- * Populates FAT32, NTFS (if mkntfs is installed), exFAT (if mkfs.exfat is
- * installed), UDF (if mkudffs is installed), and ext2/ext3/ext4.
- * External formatter entries are only shown when the respective tool is present.
- */
-static void populate_fs_combo(void)
-{
-	IGNORE_RETVAL(ComboBox_ResetContent(hFileSystem));
-	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
-	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_FAT32]), FS_FAT32));
-
-	/* Add NTFS only if mkntfs is available */
-	{
-		static const char * const ntfs_candidates[] = {
-			"/sbin/mkntfs", "/usr/sbin/mkntfs", "/bin/mkntfs", "/usr/bin/mkntfs",
-			"/usr/local/sbin/mkntfs", "/usr/local/bin/mkntfs",
-			"/sbin/mkfs.ntfs", "/usr/sbin/mkfs.ntfs", NULL
-		};
-		for (int i = 0; ntfs_candidates[i]; i++) {
-			if (access(ntfs_candidates[i], X_OK) == 0) {
-				IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
-				    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_NTFS]), FS_NTFS));
-				break;
-			}
-		}
-	}
-
-	/* Add exFAT only if mkfs.exfat (exfatprogs) or mkexfatfs (exfat-utils) is available */
-	{
-		static const char * const exfat_candidates[] = {
-			"/sbin/mkfs.exfat", "/usr/sbin/mkfs.exfat", "/bin/mkfs.exfat", "/usr/bin/mkfs.exfat",
-			"/usr/local/sbin/mkfs.exfat", "/usr/local/bin/mkfs.exfat",
-			"/sbin/mkexfatfs", "/usr/sbin/mkexfatfs", NULL
-		};
-		for (int i = 0; exfat_candidates[i]; i++) {
-			if (access(exfat_candidates[i], X_OK) == 0) {
-				IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
-				    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXFAT]), FS_EXFAT));
-				break;
-			}
-		}
-	}
-
-	/* Add UDF only if mkudffs (udftools) is available */
-	{
-		static const char * const udf_candidates[] = {
-			"/sbin/mkudffs", "/usr/sbin/mkudffs", "/bin/mkudffs", "/usr/bin/mkudffs",
-			"/usr/local/sbin/mkudffs", "/usr/local/bin/mkudffs", NULL
-		};
-		for (int i = 0; udf_candidates[i]; i++) {
-			if (access(udf_candidates[i], X_OK) == 0) {
-				IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
-				    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_UDF]), FS_UDF));
-				break;
-			}
-		}
-	}
-
-	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
-	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXT2]),  FS_EXT2));
-	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
-	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXT3]),  FS_EXT3));
-	IGNORE_RETVAL(ComboBox_SetItemData(hFileSystem,
-	    ComboBox_AddString(hFileSystem, FileSystemLabel[FS_EXT4]),  FS_EXT4));
-
-	/* Default to FAT32 */
-	IGNORE_RETVAL(ComboBox_SetCurSel(hFileSystem, 0));
-	fs_type = FS_FAT32;
-
-	populate_cluster_combo(FS_FAT32);
-}
-
-/*
- * populate_cluster_combo — fill Cluster Size dropdown for the given FS type.
- *
- * For FAT32 and NTFS we offer common cluster sizes.
- * For ext* and exFAT the cluster size is typically chosen by the formatter.
- */
-static void populate_cluster_combo(int fs)
-{
-	IGNORE_RETVAL(ComboBox_ResetContent(hClusterSize));
-
-	if (IS_EXT(fs) || fs == FS_EXFAT) {
-		IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
-		    ComboBox_AddString(hClusterSize, "4096 bytes (Default)"), 4096));
-		IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, 0));
-		return;
-	}
-
-	/* FAT32 and NTFS common cluster sizes */
-	static const struct { const char *label; DWORD size; } clusters[] = {
-		{ "512 bytes",   512   },
-		{ "1024 bytes",  1024  },
-		{ "2048 bytes",  2048  },
-		{ "4096 bytes",  4096  },
-		{ "8192 bytes",  8192  },
-		{ "16384 bytes", 16384 },
-		{ "32768 bytes", 32768 },
-		{ "65536 bytes", 65536 },
-		{ NULL, 0 }
-	};
-	int def = 3; /* 4096 bytes default */
-	for (int i = 0; clusters[i].label; i++) {
-		IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
-		    ComboBox_AddString(hClusterSize, clusters[i].label),
-		    clusters[i].size));
-	}
-	IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, def));
-}
-
 /* ======================================================================
  * Combo-state registration
  * ====================================================================== */
@@ -1828,7 +1709,7 @@ static void combo_register_all(void)
 
 	/* Initial population */
 	populate_boot_combo();
-	populate_partition_combos();
+	SetPartitionSchemeAndTargetSystem(FALSE);
 	populate_fs_combo();
 }
 

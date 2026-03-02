@@ -56,9 +56,12 @@ enum ArchType MachineToArch(WORD machine) {
 }
 
 void ClrAlertPromptHook(void) {}
-/* UI combo-population stubs — to be implemented as part of combo population feature */
+/* SetFSFromISO / SetPartitionSchemeAndTargetSystem are provided by
+ * ui_combo_logic.c in GTK builds; we only need stubs for CLI/test builds. */
+#ifndef USE_GTK
 void SetFSFromISO(void)                                    {}
 void SetPartitionSchemeAndTargetSystem(BOOL b)             { (void)b; }
+#endif
 HANDLE CreatePreallocatedFile(const char* path, DWORD access, DWORD share,
     LPSECURITY_ATTRIBUTES sa, DWORD disp, DWORD flags, LONGLONG size)
     { (void)path;(void)access;(void)share;(void)sa;(void)disp;(void)flags;(void)size; return INVALID_HANDLE_VALUE; }
