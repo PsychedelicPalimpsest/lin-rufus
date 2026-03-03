@@ -142,6 +142,18 @@ LDFLAGS_LINUX_test_format_linux := -lblkid -lz -lxml2 -lm \
 	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group
 EXTRA_SRC_LINUX_test_format_linux := $(FORMAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB) $(BLED_LIB) $(XML_SRC_EARLY) format_linux_glue.c
 
+# write_drive_linux tests: compressed image writing via bled (gz/bz2/xz paths)
+CFLAGS_LINUX_test_write_drive_linux := \
+	-D_RUFUS \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-I$(SRC_DIR)/wimlib \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_write_drive_linux := -lblkid -lz -lxml2 -lm \
+	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group
+EXTRA_SRC_LINUX_test_write_drive_linux := $(FORMAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB) $(BLED_LIB) $(XML_SRC_EARLY)
+
 # ext_error_linux tests: error_message() and ext2fs_print_progress() from format_ext.c
 # drive.c is NOT linked — GetExtPartitionName is stubbed in the test file.
 EXT_ERROR_LINUX_SRC := $(SRC_DIR)/linux/format_ext.c \
@@ -657,11 +669,14 @@ EXTRA_SRC_LINUX_test_badblocks_linux := $(BADBLOCKS_LINUX_SRC)
 # Uses the same source set as format_thread_linux but with a stub BadBlocks
 # (in the test file itself) rather than the real badblocks.c.
 CFLAGS_LINUX_test_badblocks_integration_linux := \
+	-D_RUFUS \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-I$(SRC_DIR)/wimlib \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_badblocks_integration_linux := -lpthread -lblkid
+LDFLAGS_LINUX_test_badblocks_integration_linux := -lpthread -lblkid -lz -lm \
+	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group
 EXTRA_SRC_LINUX_test_badblocks_integration_linux := \
 	$(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) \
 	badblocks_integration_glue.c

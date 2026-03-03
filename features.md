@@ -911,3 +911,9 @@ This is the most structurally significant porting gap.
       disk type, size fields, checksum, file size, round-trip) + 2 integration tests
       in `test_iso_save_linux.c` (`iso_save_vhd_appends_footer`, `iso_save_raw_no_footer`).
       All 31 VHD format tests and 44 iso_save tests pass.
+
+174. ✅ DONE **Compressed image writing (bled gz/bz2/xz) in `format_linux_write_drive()`** —
+    - **Parity gap**: Windows `WriteDrive()` has always supported writing compressed images (gz/bz2/xz/zip/zst) via bled decompression. The Linux `format_linux_write_drive()` only handled raw copy and zero-fill — opening a `.img.gz` file in DD mode would write the compressed bytes directly to the target.
+    - **Fix**: Added compressed image path in `format_linux_write_drive()`. When `img_report.compression_type != BLED_COMPRESSION_NONE && < BLED_COMPRESSION_MAX`, the function opens the source fd, seeks the destination fd to offset 0, calls `bled_init()` + `bled_uncompress_with_handles()` + `bled_exit()`, and returns FALSE only on bled error (not on user cancel). bled IS already compiled for Linux; its POSIX compat stubs (`_open_osfhandle` returns fd directly, `_openU = open`, `_close = close`) make it work transparently.
+    - **Root cause of test flakiness**: `ErrorStatus` carries over between tests. bled checks `*cancel_request != 0` at the start of decompression; a non-zero `ErrorStatus` from a prior test causes bled to treat the operation as cancelled and return immediately. Fixed by resetting `ErrorStatus = 0` before each compressed-path test.
+    - **Tests**: 11 tests in `tests/test_write_drive_linux.c`: null/invalid handle → FALSE, null path → FALSE + ErrorStatus, uncompressed copy, missing source → FALSE, gz/bz2/xz decompress + byte-exact verify, seek-to-zero behaviour (dst pre-filled with 0xFF), corrupt gz → FALSE, missing gz → FALSE. 41 checks all pass.

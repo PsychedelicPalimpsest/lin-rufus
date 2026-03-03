@@ -422,6 +422,38 @@ BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive)
 		return FALSE;
 	}
 
+	/* Handle bled-compressed images (gz, bz2, xz, zip, etc.).
+	 * bled writes sequentially via write(dst_fd, ...) starting at the
+	 * current position, so we seek dst to offset 0 first. */
+	if (img_report.compression_type != BLED_COMPRESSION_NONE &&
+	    img_report.compression_type < BLED_COMPRESSION_MAX) {
+		int src_fd = open(image_path, O_RDONLY | O_CLOEXEC);
+		if (src_fd < 0) {
+			uprintf_errno("Could not open compressed image '%s'", image_path);
+			ErrorStatus = RUFUS_ERROR(ERROR_FILE_NOT_FOUND);
+			return FALSE;
+		}
+		if (lseek(dst_fd, 0, SEEK_SET) < 0) {
+			uprintf_errno("Could not seek drive to offset 0");
+			close(src_fd);
+			ErrorStatus = RUFUS_ERROR(ERROR_SEEK);
+			return FALSE;
+		}
+		uprintf("Writing compressed image (type %d):", img_report.compression_type);
+		bled_init(256 * KB, uprintf, NULL, NULL, NULL, NULL,
+		          (unsigned long *)&ErrorStatus);
+		int64_t bled_ret = bled_uncompress_with_handles(
+		    (HANDLE)(intptr_t)src_fd, hDrive, img_report.compression_type);
+		bled_exit();
+		close(src_fd);
+		if (bled_ret < 0 && SCODE_CODE(ErrorStatus) != ERROR_CANCELLED) {
+			uprintf("Could not write compressed image: %lld", (long long)bled_ret);
+			ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
+			return FALSE;
+		}
+		return (SCODE_CODE(ErrorStatus) != ERROR_CANCELLED);
+	}
+
 	int src_fd = open(image_path, O_RDONLY | O_CLOEXEC);
 	if (src_fd < 0) {
 		ErrorStatus = RUFUS_ERROR(ERROR_FILE_NOT_FOUND);
