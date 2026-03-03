@@ -1052,7 +1052,10 @@ static void on_close_clicked(GtkButton *btn, gpointer data)
 	} else {
 		device_monitor_stop();
 		rufus_set_log_handler(NULL);
-		gtk_main_quit();
+		GtkApplication *gtkapplication = gtk_window_get_application(
+			GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(btn))));
+		if (gtkapplication)
+			g_application_quit(G_APPLICATION(gtkapplication));
 	}
 }
 
