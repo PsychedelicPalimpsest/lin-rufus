@@ -90,6 +90,9 @@ extern uint16_t    embedded_sl_version[2];
 extern BOOL GetOpticalMedia(IMG_SAVE* img_save);
 extern void EnableControls(BOOL enable, BOOL remove_checkboxes);
 extern uint16_t GetSyslinuxVersion(char *buf, size_t buf_size, char **ext);
+extern void GetGrubVersion(char *buf, size_t buf_size, const char *source);
+extern void GetGrubFs(char *buf, size_t buf_size, StrArray *filesystems);
+extern void GetEfiBootInfo(char *buf, size_t buf_size, const char *source);
 
 /* ---- file-static state ---- */
 static BOOL         scan_only          = FALSE;
@@ -926,6 +929,56 @@ out:
 				uprintf("  Warning: Could not detect Isolinux version - "
 				        "Forcing to %s (embedded)", img_report.sl_version_str);
 			}
+		}
+
+		/* GRUB2 version detection — mirrors Windows iso.c post-scan block */
+		if (img_report.has_grub2) {
+			char grub_path[128];
+			uint8_t *gbuf = NULL;
+			snprintf(grub_path, sizeof(grub_path), "/%s/normal.mod",
+			         &grub_dirname[img_report.has_grub2 - 1][1]);
+			uint32_t gsz = ReadISOFileToBuffer(src_iso, grub_path, &gbuf);
+			if (gsz == 0) {
+				uprintf("  Could not read Grub version from '%s'", grub_path);
+			} else {
+				img_report.grub2_version[0] = 0;
+				GetGrubVersion((char *)gbuf, gsz, grub_path);
+				safe_free(gbuf);
+			}
+			if (img_report.grub2_version[0] == 0) {
+				uprintf("  Could not detect Grub version");
+				img_report.has_grub2 &= 0x80;
+			}
+		}
+
+		/* EFI boot entry post-processing */
+		{
+			size_t dir_prefix_len = (psz_extract_dir != NULL) ? strlen(psz_extract_dir) : 0;
+			for (int j = 0; j < ARRAYSIZE(img_report.efi_boot_entry); j++) {
+				if (!img_report.efi_boot_entry[j].path[0]) continue;
+				const char *iso_rel = img_report.efi_boot_entry[j].path + dir_prefix_len;
+				uint8_t *ebuf = NULL;
+				uint32_t esz = ReadISOFileToBuffer(src_iso, iso_rel, &ebuf);
+				if (esz > 0) {
+					if (img_report.efi_boot_entry[j].type == EBT_GRUB) {
+						img_report.has_grub2 |= 0x80;
+						GetGrubVersion((char *)ebuf, esz, iso_rel);
+						GetGrubFs((char *)ebuf, esz, &grub_filesystems);
+					} else if (img_report.efi_boot_entry[j].type == EBT_MAIN) {
+						GetEfiBootInfo((char *)ebuf, esz, iso_rel);
+					}
+					safe_free(ebuf);
+				}
+			}
+		}
+
+		/* Compute has_grub2_fs bitmask from grub_filesystems */
+		{
+			static const char *fs_names[] = { "fat", "exfat", "ntfs" };
+			for (int j = 0; j < grub_filesystems.Index; j++)
+				for (int k = 0; k < ARRAYSIZE(fs_names); k++)
+					if (strcasecmp(grub_filesystems.String[j], fs_names[k]) == 0)
+						img_report.has_grub2_fs |= (1 << k);
 		}
 
 		StrArrayDestroy(&config_path);

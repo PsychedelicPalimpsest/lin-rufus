@@ -206,6 +206,49 @@ static void cleanup_syslinux_iso(void)
 }
 
 /* ================================================================
+ * GRUB2 ISO test (normal.mod with embedded GRUB version string)
+ * ================================================================ */
+
+#define GRUB2_ISO_PATH "/tmp/test_rufus_grub2.iso"
+static int grub2_iso_available = 0;
+
+static void setup_grub2_iso(void)
+{
+    /*
+     * Create an ISO9660 image containing:
+     *   /boot/grub/i386-pc/normal.mod  — fake module with "GRUB  version 2.06\0"
+     *       This triggers:
+     *         (a) has_grub2 = 1 (directory match for "/boot/grub/i386-pc")
+     *         (b) post-scan ReadISOFileToBuffer + GetGrubVersion sets grub2_version
+     *
+     * GetGrubVersion searches for "GRUB  version " (two spaces) in the buffer.
+     * The buffer must be > 32 bytes (max_string_size check).
+     */
+    const char *script =
+        "python3 -c \""
+        "import pycdlib, io\n"
+        "iso = pycdlib.PyCdlib()\n"
+        "iso.new(interchange_level=1, joliet=3, rock_ridge='1.09', vol_ident='GRUB2TEST')\n"
+        "iso.add_directory('/BOOT', joliet_path='/boot', rr_name='boot')\n"
+        "iso.add_directory('/BOOT/GRUB', joliet_path='/boot/grub', rr_name='grub')\n"
+        "iso.add_directory('/BOOT/GRUB/I386_PC', joliet_path='/boot/grub/i386-pc', rr_name='i386-pc')\n"
+        "content = b'A' * 64 + b'GRUB  version 2.06\\x00' + b'B' * 64\n"
+        "iso.add_fp(io.BytesIO(content), len(content), '/BOOT/GRUB/I386_PC/NORMAL.MOD;1', "
+            "joliet_path='/boot/grub/i386-pc/normal.mod', rr_name='normal.mod')\n"
+        "iso.write('" GRUB2_ISO_PATH "')\n"
+        "iso.close()\n"
+        "\"";
+    struct stat st;
+    if (system(script) == 0 && stat(GRUB2_ISO_PATH, &st) == 0 && st.st_size > 0)
+        grub2_iso_available = 1;
+}
+
+static void cleanup_grub2_iso(void)
+{
+    unlink(GRUB2_ISO_PATH);
+}
+
+/* ================================================================
  * GetGrubVersion tests (pure buffer scan — no ISO needed)
  * ================================================================ */
 
@@ -637,6 +680,55 @@ TEST(extract_iso_no_syslinux_version_is_zero)
               "sl_version must remain 0 for non-Syslinux ISO");
 }
 
+/* ================================================================
+ * GRUB2 version detection tests
+ * ================================================================ */
+
+TEST(extract_iso_scan_detects_grub2_version)
+{
+    /*
+     * When scanning an ISO containing /boot/grub/i386-pc/normal.mod with
+     * "GRUB  version 2.06" embedded, ExtractISO must:
+     *   1. Set has_grub2 = 1 (from directory scan)
+     *   2. Read normal.mod post-scan and call GetGrubVersion
+     *   3. Set img_report.grub2_version = "2.06" (or "2.06-<label>")
+     *
+     * This was previously broken on Linux — grub2_version was always empty.
+     */
+    if (!grub2_iso_available) { printf("  (skipped: no GRUB2 test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    BOOL r = ExtractISO(GRUB2_ISO_PATH, TEST_EXTRACT_DIR, TRUE);
+    CHECK(r == TRUE);
+    CHECK_MSG(img_report.has_grub2 != 0,
+              "has_grub2 must be non-zero for GRUB2 ISO");
+    /* grub2_version must start with "2.06" (may have label suffix) */
+    CHECK_MSG(strncmp(img_report.grub2_version, "2.06", 4) == 0,
+              "grub2_version must start with '2.06'");
+}
+
+TEST(extract_iso_scan_grub2_version_non_grub_iso_stays_empty)
+{
+    /* A non-GRUB2 ISO must have grub2_version[0] == 0 */
+    if (!test_iso_available) { printf("  (skipped: no test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    ExtractISO(TEST_ISO_PATH, TEST_EXTRACT_DIR, TRUE);
+    CHECK_MSG(img_report.grub2_version[0] == 0,
+              "grub2_version must remain empty for non-GRUB2 ISO");
+}
+
+TEST(extract_iso_scan_grub2_has_grub2_set)
+{
+    /* has_grub2 must be set to 1 for the grub-boot ISO */
+    if (!grub2_iso_available) { printf("  (skipped: no GRUB2 test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    ExtractISO(GRUB2_ISO_PATH, TEST_EXTRACT_DIR, TRUE);
+    /* has_grub2 = 1 means "/boot/grub/i386-pc" (index 0 + 1) */
+    CHECK_MSG(img_report.has_grub2 == 1,
+              "has_grub2 must be 1 for /boot/grub/i386-pc");
+}
 
 
 TEST(has_efi_img_false)
@@ -1207,6 +1299,10 @@ int main(void)
     if (!syslinux_iso_available)
         printf("  NOTE: syslinux test ISO not available (pycdlib not installed?); Syslinux version tests skipped\n\n");
 
+    setup_grub2_iso();
+    if (!grub2_iso_available)
+        printf("  NOTE: GRUB2 test ISO not available (pycdlib not installed?); GRUB2 version tests skipped\n\n");
+
     StrArrayCreate(&modified_files, 8);
 
     printf("  GetGrubVersion\n");
@@ -1254,6 +1350,11 @@ int main(void)
     RUN(extract_iso_scan_detects_syslinux_version_str);
     RUN(extract_iso_no_syslinux_version_is_zero);
 
+    printf("\n  GRUB2 version detection\n");
+    RUN(extract_iso_scan_detects_grub2_version);
+    RUN(extract_iso_scan_grub2_version_non_grub_iso_stays_empty);
+    RUN(extract_iso_scan_grub2_has_grub2_set);
+
     printf("\n  HasEfiImgBootLoaders\n");
     RUN(has_efi_img_false);
     RUN(has_efi_img_true);
@@ -1290,6 +1391,7 @@ int main(void)
     cleanup_fat_iso();
     cleanup_md5_iso();
     cleanup_syslinux_iso();
+    cleanup_grub2_iso();
 
     TEST_RESULTS();
 }
