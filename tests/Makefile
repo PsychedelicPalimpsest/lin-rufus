@@ -383,7 +383,7 @@ CFLAGS_LINUX_test_iso_linux := \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_iso_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a
-EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) iso_linux_glue.c $(COMMON)/iso_scan.c
+EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) iso_linux_glue.c $(COMMON)/iso_scan.c $(SRC_DIR)/linux/sl_version.c
 
 # test_iso_save_linux — OpticalDiscSaveImage / iso_save_run_sync tests
 # Uses ISO_SAVE_LINUX_SRC (same as ISO_LINUX_SRC, minus ui.c) so the test
@@ -1091,6 +1091,7 @@ LIBFAT_LIB       := $(SRC_DIR)/syslinux/libfat/libfat.a
 LIBINSTALLER_LIB := $(SRC_DIR)/syslinux/libinstaller/libinstaller.a
 SYSLINUX_LINUX_SRC := \
 	$(SRC_DIR)/linux/syslinux.c \
+	$(SRC_DIR)/linux/sl_version.c \
 	$(SRC_DIR)/linux/stdfn.c \
 	$(SRC_DIR)/linux/drive.c \
 	$(COMMON)/drive.c \

@@ -164,6 +164,48 @@ static void cleanup_test_iso(void)
 }
 
 /* ================================================================
+ * Syslinux ISO test (isolinux.bin with embedded version string)
+ * ================================================================ */
+
+#define SYSLINUX_ISO_PATH "/tmp/test_rufus_syslinux.iso"
+static int syslinux_iso_available = 0;
+
+static void setup_syslinux_iso(void)
+{
+    /*
+     * Create an ISO9660 image containing:
+     *   /isolinux/isolinux.bin   — fake binary with "ISOLINUX 6.03" at offset 64
+     *   /isolinux/isolinux.cfg   — triggers config_path detection (syslinux_cfg[])
+     *
+     * The "ISOLINUX 6.03" pattern matches GetSyslinuxVersion:
+     *   searches for "LINUX " preceded by "ISO" from offset 64 onward.
+     *
+     * The binary is 512 bytes: 64 zero-bytes, then the version string, then zeros.
+     */
+    const char *script =
+        "python3 -c \""
+        "import pycdlib, io\n"
+        "iso = pycdlib.PyCdlib()\n"
+        "iso.new(interchange_level=1, joliet=3, rock_ridge='1.09', vol_ident='SYSLINUX')\n"
+        "iso.add_directory('/ISOLINUX', joliet_path='/isolinux', rr_name='isolinux')\n"
+        "ver = b'\\x00'*64 + b'ISOLINUX 6.03 extra\\x00' + b'\\x00'*(512-64-20)\n"
+        "iso.add_fp(io.BytesIO(ver), len(ver), '/ISOLINUX/ISOLINUX.BIN;1', joliet_path='/isolinux/isolinux.bin', rr_name='isolinux.bin')\n"
+        "cfg = b'default linux\\n'\n"
+        "iso.add_fp(io.BytesIO(cfg), len(cfg), '/ISOLINUX/ISOLINUX.CFG;1', joliet_path='/isolinux/isolinux.cfg', rr_name='isolinux.cfg')\n"
+        "iso.write('" SYSLINUX_ISO_PATH "')\n"
+        "iso.close()\n"
+        "\"";
+    struct stat st;
+    if (system(script) == 0 && stat(SYSLINUX_ISO_PATH, &st) == 0 && st.st_size > 0)
+        syslinux_iso_available = 1;
+}
+
+static void cleanup_syslinux_iso(void)
+{
+    unlink(SYSLINUX_ISO_PATH);
+}
+
+/* ================================================================
  * GetGrubVersion tests (pure buffer scan — no ISO needed)
  * ================================================================ */
 
@@ -550,8 +592,52 @@ TEST(extract_iso_full_extract)
 }
 
 /* ================================================================
- * HasEfiImgBootLoaders test
+ * Syslinux version detection tests
  * ================================================================ */
+
+TEST(extract_iso_scan_detects_syslinux_version)
+{
+    /*
+     * When scanning an ISO that contains isolinux/isolinux.bin with a
+     * version string "ISOLINUX 6.03", ExtractISO (scan mode) must call
+     * GetSyslinuxVersion and set img_report.sl_version = 0x0603.
+     *
+     * This test exercises the Linux iso.c Syslinux version detection
+     * code path that was previously missing (sl_version was always 0).
+     */
+    if (!syslinux_iso_available) { printf("  (skipped: no syslinux test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    BOOL r = ExtractISO(SYSLINUX_ISO_PATH, TEST_EXTRACT_DIR, TRUE);
+    CHECK(r == TRUE);
+    /* Version 6.03 → 0x0603 */
+    CHECK_MSG(img_report.sl_version == 0x0603,
+              "sl_version must be 0x0603 after scanning Syslinux 6.03 ISO");
+}
+
+TEST(extract_iso_scan_detects_syslinux_version_str)
+{
+    /* After Syslinux version detection, sl_version_str should be "6.03" */
+    if (!syslinux_iso_available) { printf("  (skipped: no syslinux test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    ExtractISO(SYSLINUX_ISO_PATH, TEST_EXTRACT_DIR, TRUE);
+    CHECK_MSG(strcmp(img_report.sl_version_str, "6.03") == 0,
+              "sl_version_str must be '6.03'");
+}
+
+TEST(extract_iso_no_syslinux_version_is_zero)
+{
+    /* A non-syslinux ISO must have sl_version == 0 */
+    if (!test_iso_available) { printf("  (skipped: no test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    ExtractISO(TEST_ISO_PATH, TEST_EXTRACT_DIR, TRUE);
+    CHECK_MSG(img_report.sl_version == 0,
+              "sl_version must remain 0 for non-Syslinux ISO");
+}
+
+
 
 TEST(has_efi_img_false)
 {
@@ -1117,6 +1203,10 @@ int main(void)
     if (!md5_iso_available)
         printf("  NOTE: md5sum test ISO not available (pycdlib not installed?); md5sum tracking tests skipped\n\n");
 
+    setup_syslinux_iso();
+    if (!syslinux_iso_available)
+        printf("  NOTE: syslinux test ISO not available (pycdlib not installed?); Syslinux version tests skipped\n\n");
+
     StrArrayCreate(&modified_files, 8);
 
     printf("  GetGrubVersion\n");
@@ -1159,6 +1249,11 @@ int main(void)
     RUN(extract_iso_scan_counts_blocks);
     RUN(extract_iso_full_extract);
 
+    printf("\n  Syslinux version detection\n");
+    RUN(extract_iso_scan_detects_syslinux_version);
+    RUN(extract_iso_scan_detects_syslinux_version_str);
+    RUN(extract_iso_no_syslinux_version_is_zero);
+
     printf("\n  HasEfiImgBootLoaders\n");
     RUN(has_efi_img_false);
     RUN(has_efi_img_true);
@@ -1194,6 +1289,7 @@ int main(void)
     cleanup_test_iso();
     cleanup_fat_iso();
     cleanup_md5_iso();
+    cleanup_syslinux_iso();
 
     TEST_RESULTS();
 }

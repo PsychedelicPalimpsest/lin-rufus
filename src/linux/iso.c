@@ -84,10 +84,12 @@ extern uint64_t    md5sum_totalbytes;
 extern BOOL        preserve_timestamps, enable_ntfs_compression, validate_md5sum;
 extern HANDLE      format_thread;
 extern StrArray    modified_files;
+extern uint16_t    embedded_sl_version[2];
 
 /* extern declarations for functions defined in other TUs */
 extern BOOL GetOpticalMedia(IMG_SAVE* img_save);
 extern void EnableControls(BOOL enable, BOOL remove_checkboxes);
+extern uint16_t GetSyslinuxVersion(char *buf, size_t buf_size, char **ext);
 
 /* ---- file-static state ---- */
 static BOOL         scan_only          = FALSE;
@@ -882,6 +884,47 @@ out:
 					safe_strcpy(img_report.cfg_path,
 					            sizeof(img_report.cfg_path),
 					            config_path.String[j]);
+			}
+		}
+
+		/* Detect Syslinux/Isolinux version from isolinux.bin — mirrors Windows iso.c */
+		if (!IsStrArrayEmpty(isolinux_path)) {
+			size_t j;
+			size_t dir_prefix_len = psz_extract_dir ? strlen(psz_extract_dir) : 0;
+			for (j = 0; j < isolinux_path.Index; j++) {
+				uint8_t *slbuf = NULL;
+				/* isolinux_path stores absolute paths (psz_extract_dir + iso-path);
+				 * ReadISOFileToBuffer needs ISO-relative paths, so strip the prefix. */
+				const char *iso_rel = isolinux_path.String[j] + dir_prefix_len;
+				uint32_t slsz = ReadISOFileToBuffer(src_iso, iso_rel, &slbuf);
+				if (slsz > 0) {
+					char *ext = NULL;
+					uint16_t ver = GetSyslinuxVersion((char *)slbuf, slsz, &ext);
+					if (img_report.sl_version == 0 && ver != 0) {
+						safe_strcpy(img_report.sl_version_ext,
+						            sizeof(img_report.sl_version_ext), ext);
+						img_report.sl_version = ver;
+					}
+					safe_free(slbuf);
+				}
+			}
+			if (img_report.sl_version != 0) {
+				snprintf(img_report.sl_version_str,
+				         sizeof(img_report.sl_version_str),
+				         "%d.%02d",
+				         SL_MAJOR(img_report.sl_version),
+				         SL_MINOR(img_report.sl_version));
+				uprintf("  Detected Syslinux version: %s%s",
+				        img_report.sl_version_str, img_report.sl_version_ext);
+			} else {
+				img_report.sl_version = embedded_sl_version[has_ldlinux_c32 ? 1 : 0];
+				snprintf(img_report.sl_version_str,
+				         sizeof(img_report.sl_version_str),
+				         "%d.%02d",
+				         SL_MAJOR(img_report.sl_version),
+				         SL_MINOR(img_report.sl_version));
+				uprintf("  Warning: Could not detect Isolinux version - "
+				        "Forcing to %s (embedded)", img_report.sl_version_str);
 			}
 		}
 
