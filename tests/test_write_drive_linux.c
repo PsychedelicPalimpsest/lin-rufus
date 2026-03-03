@@ -600,6 +600,45 @@ TEST(write_drive_missing_gz_source_returns_false)
 	close(dst);
 }
 
+/* Non-sector-aligned compressed image: uncompressed size not a multiple of 512.
+ * sector_write() must buffer the partial final sector and flush it correctly. */
+TEST(write_drive_gz_non_sector_aligned)
+{
+	/* 500 bytes — NOT a multiple of 512 */
+	uint8_t raw[500];
+	for (int i = 0; i < 500; i++) raw[i] = (uint8_t)(i & 0xFF);
+
+	char *src = make_named_tmpfile(raw, sizeof(raw));
+	CHECK(src != NULL);
+	char *gz = compress_file(src, "gzip", ".gz");
+	unlink(src); free(src);
+	CHECK(gz != NULL);
+
+	int dst = make_dst_fd(4096);
+	CHECK(dst >= 0);
+
+	image_path = gz;
+	img_report.compression_type = BLED_COMPRESSION_GZIP;
+	SelectedDrive.SectorSize = 512;
+	ErrorStatus = 0;
+
+	BOOL ret = format_linux_write_drive((HANDLE)(intptr_t)dst, FALSE);
+	CHECK(ret == TRUE);
+
+	/* Verify the first 500 bytes match the original */
+	uint8_t out[500];
+	ssize_t rd = pread(dst, out, sizeof(out), 0);
+	CHECK(rd == 500);
+	int mismatch = 0;
+	for (int i = 0; i < 500; i++) {
+		if (out[i] != raw[i]) { mismatch++; break; }
+	}
+	CHECK(mismatch == 0);
+
+	close(dst);
+	unlink(gz); free(gz);
+}
+
 /* ================================================================
  * Fast-zeroing tests
  * ================================================================ */
@@ -765,6 +804,7 @@ int main(void)
 	RUN(write_drive_gz_writes_from_offset_zero);
 	RUN(write_drive_corrupt_gz_returns_false);
 	RUN(write_drive_missing_gz_source_returns_false);
+	RUN(write_drive_gz_non_sector_aligned);
 	RUN(zero_drive_fills_with_zeros);
 	RUN(fast_zero_drive_fills_with_0xff);
 	RUN(fast_zero_skips_already_ff_blocks);

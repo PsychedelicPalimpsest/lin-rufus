@@ -376,6 +376,61 @@ BOOL format_linux_write_sbr(HANDLE hDrive)
 }
 
 /*
+ * sector_write - sector-aligned write for bled (compressed image decompression).
+ *
+ * Some compressed images have uncompressed sizes that are not a multiple of
+ * the sector size.  Block devices reject non-aligned writes with EINVAL.
+ * This function buffers partial-sector data and only issues writes on full
+ * sector boundaries, matching the Windows sector_write() behaviour.
+ *
+ * Passed to bled_init() as the write_function callback.
+ */
+static uint8_t  sec_buf[4096];   /* max sector size supported */
+static unsigned sec_buf_pos = 0;
+
+static int sector_write(int fd, const void *_buf, unsigned int count)
+{
+	const uint8_t *buf = (const uint8_t *)_buf;
+	unsigned sec_size  = SelectedDrive.SectorSize ? (unsigned)SelectedDrive.SectorSize : 512U;
+	int written, fill_size = 0;
+
+	if (sec_size > sizeof(sec_buf)) sec_size = 512U;
+
+	/* Fast path: already sector-aligned and count is a multiple */
+	if (sec_buf_pos == 0 && count % sec_size == 0)
+		return (int)write(fd, buf, count);
+
+	/* Fill the existing partial-sector buffer first */
+	if (sec_buf_pos > 0) {
+		fill_size = (int)min(sec_size - sec_buf_pos, count);
+		memcpy(&sec_buf[sec_buf_pos], buf, (size_t)fill_size);
+		sec_buf_pos += (unsigned)fill_size;
+		if (sec_buf_pos < sec_size)
+			return (int)count;          /* still not full, buffer and return */
+		sec_buf_pos = 0;
+		written = (int)write(fd, sec_buf, sec_size);
+		if (written != (int)sec_size)
+			return written;
+	}
+
+	/* Write as many full sectors as possible */
+	unsigned sec_num = (count - (unsigned)fill_size) / sec_size;
+	if (sec_num > 0) {
+		written = (int)write(fd, &buf[fill_size], sec_num * sec_size);
+		if (written < 0)
+			return written;
+		if (written != (int)(sec_num * sec_size))
+			return fill_size + written;
+	}
+
+	/* Buffer any remaining partial sector */
+	sec_buf_pos = count - (unsigned)fill_size - sec_num * sec_size;
+	if (sec_buf_pos > 0)
+		memcpy(sec_buf, &buf[fill_size + sec_num * sec_size], sec_buf_pos);
+	return (int)count;
+}
+
+/*
  * format_linux_write_drive - raw image write or zero-drive.
  *
  * If bZeroDrive is TRUE, writes zeros across the entire SelectedDrive.DiskSize.
@@ -488,12 +543,18 @@ BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive)
 			return FALSE;
 		}
 		uprintf("Writing compressed image (type %d):", img_report.compression_type);
-		bled_init(256 * KB, uprintf, NULL, NULL, NULL, NULL,
+		sec_buf_pos = 0;  /* reset sector-alignment buffer */
+		bled_init(256 * KB, uprintf, NULL, sector_write, NULL, NULL,
 		          (unsigned long *)&ErrorStatus);
 		int64_t bled_ret = bled_uncompress_with_handles(
 		    (HANDLE)(intptr_t)src_fd, hDrive, img_report.compression_type);
 		bled_exit();
 		close(src_fd);
+		/* Flush any partial sector buffered by sector_write() */
+		if (bled_ret >= 0 && sec_buf_pos > 0) {
+			uprintf("Notice: Compressed image data didn't end on block boundary.");
+			write(dst_fd, sec_buf, SelectedDrive.SectorSize ? SelectedDrive.SectorSize : 512);
+		}
 		if (bled_ret < 0 && SCODE_CODE(ErrorStatus) != ERROR_CANCELLED) {
 			uprintf("Could not write compressed image: %lld", (long long)bled_ret);
 			ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
