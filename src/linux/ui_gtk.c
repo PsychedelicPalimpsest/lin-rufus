@@ -113,6 +113,7 @@ extern const char* FileSystemLabel[FS_MAX];
 extern char hash_str[HASH_MAX][150];
 extern BOOL enable_extra_hashes;
 extern char *image_path;
+extern char *archive_path;      /* globals.c */
 extern BOOL expert_mode;        /* globals.c */
 extern BOOL enable_HDDs;        /* globals.c */
 extern BOOL enable_joliet;      /* iso.c */
@@ -163,6 +164,8 @@ static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 static void on_settings_clicked(GtkButton *btn, gpointer data);
 static void on_toggle_dark_mode(GtkWidget *w, gpointer data);
+static void SetProposedLabel(void);
+void ToggleImageOptions(void);
 static void on_toggle_expert_mode(GtkWidget *w, gpointer data);
 static void on_toggle_joliet(GtkWidget *w, gpointer data);
 static void on_toggle_rockridge(GtkWidget *w, gpointer data);
@@ -1048,48 +1051,38 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 static void on_select_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
+	extern BOOL has_ffu_support;
 
-	GtkWidget *dlg = gtk_file_chooser_dialog_new(
-		"Select image file", GTK_WINDOW(rw.window),
-		GTK_FILE_CHOOSER_ACTION_OPEN,
-		"Cancel", GTK_RESPONSE_CANCEL,
-		"Open",   GTK_RESPONSE_ACCEPT,
-		NULL);
+	/* Build the extension string, matching Windows rufus.c */
+	char extensions[160] = "*.iso;*.img;*.vhd;*.vhdx;*.usb;*.bz2;*.bzip2;*.gz;*.lzma;*.xz;*.Z;*.zip;*.zst;*.wic;*.wim;*.esd;*.vtsi";
+	if (has_ffu_support)
+		strcat(extensions, ";*.ffu");
 
-	/* Common image file filters */
-	GtkFileFilter *ff_img = gtk_file_filter_new();
-	gtk_file_filter_set_name(ff_img, "Disk images (*.iso, *.img, *.vhd, *.wim, *.esd, *.ffu)");
-	gtk_file_filter_add_pattern(ff_img, "*.iso");
-	gtk_file_filter_add_pattern(ff_img, "*.img");
-	gtk_file_filter_add_pattern(ff_img, "*.vhd");
-	gtk_file_filter_add_pattern(ff_img, "*.vhdx");
-	gtk_file_filter_add_pattern(ff_img, "*.wim");
-	gtk_file_filter_add_pattern(ff_img, "*.esd");
-	gtk_file_filter_add_pattern(ff_img, "*.ffu");
-	gtk_file_filter_add_pattern(ff_img, "*.zip");
-	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dlg), ff_img);
+	EXT_DECL(img_ext, NULL, __VA_GROUP__(extensions),
+	         __VA_GROUP__(lmprintf(MSG_280)));
 
-	GtkFileFilter *ff_all = gtk_file_filter_new();
-	gtk_file_filter_set_name(ff_all, "All files (*.*)");
-	gtk_file_filter_add_pattern(ff_all, "*");
-	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dlg), ff_all);
-
-	if (gtk_dialog_run(GTK_DIALOG(dlg)) == GTK_RESPONSE_ACCEPT) {
-		char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dlg));
-		free(image_path);
-		image_path = strdup(filename);
-		g_free(filename);
-		/* Reset DD/ESP mode on each new image selection */
-		write_as_image = FALSE;
-		write_as_esp   = FALSE;
-		uprintf("Image selected: %s", image_path);
-		/* Launch ImageScanThread to populate img_report; it posts
-		 * UM_IMAGE_SCANNED when done so the UI can refresh. */
-		HANDLE scan_thr = CreateThread(NULL, 0, ImageScanThread, NULL, 0, NULL);
-		safe_closehandle(scan_thr);
-		rufus_gtk_update_status(image_path);
+	char *old_image_path = image_path;
+	char *new_path = FileDialog(FALSE, NULL, &img_ext, NULL);
+	if (new_path == NULL) {
+		if (old_image_path != NULL) {
+			/* User cancelled — keep the previously selected image */
+			image_path = old_image_path;
+		}
+		return;
 	}
-	gtk_widget_destroy(dlg);
+	free(old_image_path);
+	image_path = new_path;
+
+	/* Reset DD/ESP mode on each new image selection */
+	write_as_image = FALSE;
+	write_as_esp   = FALSE;
+	safe_free(archive_path);
+	uprintf("Image selected: %s", image_path);
+	/* Launch ImageScanThread to populate img_report; it posts
+	 * UM_IMAGE_SCANNED when done so the UI can refresh. */
+	HANDLE scan_thr = CreateThread(NULL, 0, ImageScanThread, NULL, 0, NULL);
+	safe_closehandle(scan_thr);
+	rufus_gtk_update_status(image_path);
 }
 
 static void on_download_iso_clicked(GtkButton *btn, gpointer data)
@@ -1380,6 +1373,9 @@ static void on_device_changed(GtkComboBox *combo, gpointer data)
 	/* Repopulate FS combo and apply smart default for the current image */
 	populate_fs_combo();
 	SetFSFromISO();
+
+	/* Propose a label for the label entry based on current state */
+	SetProposedLabel();
 }
 
 static void on_boot_changed(GtkComboBox *combo, gpointer data)
@@ -1398,6 +1394,10 @@ static void on_boot_changed(GtkComboBox *combo, gpointer data)
 	/* Repopulate FS combo and apply smart default for the current image */
 	populate_fs_combo();
 	SetFSFromISO();
+	ToggleImageOptions();
+
+	/* Propose a label appropriate for the new boot type */
+	SetProposedLabel();
 
 	/* Update advanced-options checkbox sensitivity */
 	update_advanced_controls();
@@ -2454,6 +2454,7 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		SetFSFromISO();
 		SetPartitionSchemeAndTargetSystem(FALSE);
 		TogglePersistenceControls(HAS_PERSISTENCE(img_report));
+		ToggleImageOptions();
 
 		/* Populate the label entry with the ISO volume label.
 		 * A fresh scan always overrides any previous auto-fill; only a
