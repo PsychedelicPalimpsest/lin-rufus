@@ -1509,6 +1509,108 @@ static void test_advanced_format_default_is_off(void)
     CHECK(opts.advanced_format == 0);
 }
 
+/* ---- Integration tests: cli_apply_options + cli_print_devices (Feature 200) ----
+ *
+ * These tests verify that the full pipeline (parse → apply → list) works
+ * correctly together.  They document Bug 1 from QA Session 2026-03-03:
+ * cli_apply_options() was not called before cli_print_devices(), so
+ * --include-hdds had no effect on the listed devices.
+ *
+ * The GetDevices mock in cli_linux_glue.c injects a fake HDD only when
+ * enable_HDDs is TRUE, making this bug detectable in a unit test.
+ */
+
+/* enable_HDDs is defined in cli_linux_glue.c and modified by
+ * cli_apply_options().  Declare it here so the tests can read / reset it. */
+extern BOOL enable_HDDs;
+
+static void test_apply_sets_enable_hdds_on_include_hdds(void)
+{
+    enable_HDDs = FALSE;
+
+    cli_options_t opts;
+    int r = parse("rufus --include-hdds --list-devices", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+    CHECK(opts.include_hdds != 0);
+
+    /* Applying options must propagate include_hdds → enable_HDDs global */
+    cli_apply_options(&opts);
+    CHECK(enable_HDDs == TRUE);
+
+    enable_HDDs = FALSE; /* reset for next test */
+}
+
+static void test_apply_does_not_set_enable_hdds_without_flag(void)
+{
+    enable_HDDs = FALSE;
+
+    cli_options_t opts;
+    int r = parse("rufus --list-devices", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+
+    cli_apply_options(&opts);
+    CHECK(enable_HDDs == FALSE);
+}
+
+static void test_list_devices_with_include_hdds_finds_drive(void)
+{
+    /* Simulates the correct call sequence:
+     *   cli_parse_args(--include-hdds --list-devices, &opts)
+     *   cli_apply_options(&opts)          ← must happen before cli_print_devices
+     *   cli_print_devices(opts.json)
+     *
+     * Before Bug 1 was fixed, cli_apply_options was missing; enable_HDDs
+     * stayed FALSE; the mock GetDevices returned no drives; cli_print_devices
+     * returned 1 (not found).
+     */
+    enable_HDDs = FALSE;
+
+    cli_options_t opts;
+    int r = parse("rufus --include-hdds --list-devices", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+
+    /* Without apply: GetDevices mock injects nothing → no drives */
+    int before = cli_print_devices(0);
+    CHECK(before != 0);  /* 0 means success/found, non-zero means no drives */
+
+    /* With apply: enable_HDDs = TRUE → mock injects fake HDD */
+    cli_apply_options(&opts);
+    int after = cli_print_devices(0);
+    CHECK(after == 0);   /* drive found */
+
+    enable_HDDs = FALSE;
+}
+
+static void test_list_devices_without_include_hdds_finds_nothing(void)
+{
+    enable_HDDs = FALSE;
+
+    cli_options_t opts;
+    int r = parse("rufus --list-devices", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+
+    cli_apply_options(&opts);
+    /* enable_HDDs still FALSE → mock returns no drives */
+    int found = cli_print_devices(0);
+    CHECK(found != 0);
+
+    enable_HDDs = FALSE;
+}
+
+static void test_include_hdds_short_form_applies_correctly(void)
+{
+    enable_HDDs = FALSE;
+
+    cli_options_t opts;
+    int r = parse("rufus -H --list-devices", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+
+    cli_apply_options(&opts);
+    CHECK(enable_HDDs == TRUE);
+
+    enable_HDDs = FALSE;
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1760,6 +1862,13 @@ int main(void)
     RUN_TEST(test_advanced_format_long_flag);
     RUN_TEST(test_advanced_format_short_flag);
     RUN_TEST(test_advanced_format_default_is_off);
+
+    /* Integration tests: cli_apply_options + cli_print_devices (Feature 200) */
+    RUN_TEST(test_apply_sets_enable_hdds_on_include_hdds);
+    RUN_TEST(test_apply_does_not_set_enable_hdds_without_flag);
+    RUN_TEST(test_list_devices_with_include_hdds_finds_drive);
+    RUN_TEST(test_list_devices_without_include_hdds_finds_nothing);
+    RUN_TEST(test_include_hdds_short_form_applies_correctly);
 
     TEST_RESULTS();
 }

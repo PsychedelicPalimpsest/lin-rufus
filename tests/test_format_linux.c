@@ -720,6 +720,204 @@ TEST(fat32_volume_label_truncated_to_11)
 }
 
 /* ================================================================
+ * FAT32 root directory volume label entry tests (Feature 199)
+ *
+ * The FAT spec requires a volume label directory entry (ATTR_VOLUME_ID
+ * = 0x08) in the root cluster.  Many Linux tools (fatlabel, mount -L)
+ * read this entry rather than the BPB label field.  These tests verify
+ * that FormatLargeFAT32 writes the entry correctly.
+ * ================================================================ */
+
+/* A FAT32 directory entry — 32 bytes, packed. */
+#pragma pack(push,1)
+typedef struct {
+	uint8_t  name[8];         /* short name (space-padded) */
+	uint8_t  ext[3];          /* extension (space-padded) */
+	uint8_t  attr;            /* file attribute flags */
+	uint8_t  ntres;           /* reserved (NT) */
+	uint8_t  crttimetenth;    /* create time 0.1s */
+	uint16_t crttime;
+	uint16_t crtdate;
+	uint16_t lstacc;
+	uint16_t fstclushi;
+	uint16_t wrttime;
+	uint16_t wrtdate;
+	uint16_t fstcluslo;
+	uint32_t filesize;
+} FAT32_DIRENT;
+#pragma pack(pop)
+
+#define ATTR_VOLUME_ID  0x08
+
+/* Return the byte offset of the root directory cluster start for an
+ * already-formatted FAT32 image at `path`. */
+static off_t fat32_root_dir_offset(const char* path)
+{
+	FAT32_BS bs;
+	if (read_at(path, 0, &bs, sizeof(bs)) != 0) return -1;
+	uint32_t data_start = bs.wRsvdSecCnt + bs.bNumFATs * bs.dFATSz32;
+	return (off_t)data_start * bs.wBytsPerSec;
+}
+
+TEST(fat32_root_dir_label_entry_exists)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	BOOL r = FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", "MYLABEL", FP_NO_PROGRESS | FP_NO_BOOT);
+	CHECK(r == TRUE);
+
+	off_t root_off = fat32_root_dir_offset(path);
+	CHECK(root_off > 0);
+
+	FAT32_DIRENT de;
+	CHECK(read_at(path, root_off, &de, sizeof(de)) == 0);
+
+	/* First entry must be the volume label */
+	CHECK(de.attr == ATTR_VOLUME_ID);
+	/* name+ext together hold the 11-char padded label */
+	CHECK(memcmp(de.name, "MYLABEL    ", 8) == 0);
+	CHECK(memcmp(de.ext,  "   ",         3) == 0);
+	/* Cluster and size fields must be zero */
+	CHECK(de.fstclushi == 0);
+	CHECK(de.fstcluslo == 0);
+	CHECK(de.filesize  == 0);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(fat32_root_dir_label_entry_lowercase_uppercased)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", "mytest", FP_NO_PROGRESS | FP_NO_BOOT);
+
+	off_t root_off = fat32_root_dir_offset(path);
+	CHECK(root_off > 0);
+
+	FAT32_DIRENT de;
+	CHECK(read_at(path, root_off, &de, sizeof(de)) == 0);
+
+	CHECK(de.attr == ATTR_VOLUME_ID);
+	CHECK(memcmp(de.name, "MYTEST  ", 8) == 0);
+	CHECK(memcmp(de.ext,  "   ",      3) == 0);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(fat32_root_dir_label_entry_truncated_to_11)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", "VERYLONGLABELNAME", FP_NO_PROGRESS | FP_NO_BOOT);
+
+	off_t root_off = fat32_root_dir_offset(path);
+	CHECK(root_off > 0);
+
+	FAT32_DIRENT de;
+	CHECK(read_at(path, root_off, &de, sizeof(de)) == 0);
+
+	CHECK(de.attr == ATTR_VOLUME_ID);
+	/* "VERYLONGLAB" — name has first 8, ext has next 3 */
+	CHECK(memcmp(de.name, "VERYLONGLAB"    , 8) == 0);
+	CHECK(memcmp(de.ext,  "LAB"            , 3) == 0);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(fat32_root_dir_label_entry_empty_no_entry)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", "", FP_NO_PROGRESS | FP_NO_BOOT);
+
+	off_t root_off = fat32_root_dir_offset(path);
+	CHECK(root_off > 0);
+
+	FAT32_DIRENT de;
+	CHECK(read_at(path, root_off, &de, sizeof(de)) == 0);
+
+	/* First byte 0x00 means "no more entries" — root dir is empty */
+	CHECK(de.name[0] == 0x00);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(fat32_root_dir_label_entry_null_no_entry)
+{
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", NULL, FP_NO_PROGRESS | FP_NO_BOOT);
+
+	off_t root_off = fat32_root_dir_offset(path);
+	CHECK(root_off > 0);
+
+	FAT32_DIRENT de;
+	CHECK(read_at(path, root_off, &de, sizeof(de)) == 0);
+
+	CHECK(de.name[0] == 0x00);
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+/* fatlabel must be able to read back the label we set */
+TEST(fat32_fatlabel_reads_correct_label)
+{
+	/* Skip if fatlabel is not installed */
+	if (system("which fatlabel >/dev/null 2>&1") != 0) {
+		printf("  SKIP: fatlabel not found\n");
+		return;
+	}
+
+	char* path = create_temp_image(TEST_IMG_SIZE);
+	CHECK(path != NULL);
+	setup_drive(path, TEST_IMG_SIZE);
+
+	ErrorStatus = 0;
+	BOOL r = FormatLargeFAT32(DRIVE_INDEX_MIN, 0, 0, "FAT32", "TESTLABEL", FP_NO_PROGRESS | FP_NO_BOOT);
+	CHECK(r == TRUE);
+
+	/* Run fatlabel and capture output */
+	char cmd[512];
+	snprintf(cmd, sizeof(cmd), "fatlabel %s 2>/dev/null", path);
+	FILE* fp = popen(cmd, "r");
+	CHECK(fp != NULL);
+
+	char label_out[64] = {0};
+	if (fp) {
+		fgets(label_out, sizeof(label_out), fp);
+		pclose(fp);
+	}
+
+	/* fatlabel prints "TESTLABEL\n" */
+	/* strip trailing newline */
+	label_out[strcspn(label_out, "\r\n")] = '\0';
+	CHECK_STR_EQ(label_out, "TESTLABEL");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+/* ================================================================
  * ext2 / ext3 tests
  * ================================================================ */
 
@@ -1083,6 +1281,13 @@ int main(void)
 	RUN(fat32_volume_label_empty_uses_no_name);
 	RUN(fat32_volume_label_null_uses_no_name);
 	RUN(fat32_volume_label_truncated_to_11);
+	/* Feature 199: root dir volume label entry */
+	RUN(fat32_root_dir_label_entry_exists);
+	RUN(fat32_root_dir_label_entry_lowercase_uppercased);
+	RUN(fat32_root_dir_label_entry_truncated_to_11);
+	RUN(fat32_root_dir_label_entry_empty_no_entry);
+	RUN(fat32_root_dir_label_entry_null_no_entry);
+	RUN(fat32_fatlabel_reads_correct_label);
 
 	printf("\n=== format_ext tests ===\n");
 	RUN(ext2_format_returns_true);

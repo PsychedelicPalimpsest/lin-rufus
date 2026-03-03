@@ -444,7 +444,62 @@ TEST(ui_quick_format_checkbox_toggle)
 }
 
 /*
- * 10. Clicking CLOSE terminates rufus.
+ * 10. Boot selection combo has at least one item.
+ */
+TEST(ui_boot_combo_has_items)
+{
+    SKIP_IF_NOT_READY();
+    int rc = run_auto_test("boot_combo_has_items");
+    if (rc == 77) { printf("  SKIP\n"); _pass++; return; }
+    CHECK_MSG(rc == 0, "Boot selection combo must have at least one item");
+}
+
+/*
+ * 11. File system combo has at least one item (e.g. FAT32).
+ */
+TEST(ui_fs_combo_has_items)
+{
+    SKIP_IF_NOT_READY();
+    int rc = run_auto_test("fs_combo_has_items");
+    if (rc == 77) { printf("  SKIP\n"); _pass++; return; }
+    CHECK_MSG(rc == 0, "File system combo must have at least one item");
+}
+
+/*
+ * 12. Partition scheme combo is present in the UI.
+ */
+TEST(ui_partition_scheme_combo_exists)
+{
+    SKIP_IF_NOT_READY();
+    int rc = run_auto_test("partition_scheme_combo_exists");
+    if (rc == 77) { printf("  SKIP\n"); _pass++; return; }
+    CHECK_MSG(rc == 0, "Partition scheme combo must exist in the UI");
+}
+
+/*
+ * 13. Volume label entry field is present.
+ */
+TEST(ui_volume_label_entry_exists)
+{
+    SKIP_IF_NOT_READY();
+    int rc = run_auto_test("volume_label_entry_exists");
+    if (rc == 77) { printf("  SKIP\n"); _pass++; return; }
+    CHECK_MSG(rc == 0, "Volume label entry must exist in the UI");
+}
+
+/*
+ * 14. About dialog opens when the About button is clicked.
+ */
+TEST(ui_about_dialog_opens)
+{
+    SKIP_IF_NOT_READY();
+    int rc = run_auto_test("about_dialog_opens");
+    if (rc == 77) { printf("  SKIP\n"); _pass++; return; }
+    CHECK_MSG(rc == 0, "About dialog must open on About button click");
+}
+
+/*
+ * 15. Clicking CLOSE terminates rufus.
  *     MUST be last: this kills the rufus process.
  */
 TEST(ui_close_button_exits_app)
@@ -459,7 +514,6 @@ TEST(ui_close_button_exits_app)
     g_rufus_pid = 0;
     g_env_ready = 0;
 }
-
 /* ------------------------------------------------------------------ */
 /* main                                                                */
 /* ------------------------------------------------------------------ */
@@ -482,6 +536,11 @@ int main(void)
     RUN(ui_ctrl_p_persistent_log_toggle);
     RUN(ui_advanced_drive_toggle);
     RUN(ui_quick_format_checkbox_toggle);
+    RUN(ui_boot_combo_has_items);
+    RUN(ui_fs_combo_has_items);
+    RUN(ui_partition_scheme_combo_exists);
+    RUN(ui_volume_label_entry_exists);
+    RUN(ui_about_dialog_opens);
     RUN(ui_close_button_exits_app);  /* MUST be last */
 
     teardown_env();

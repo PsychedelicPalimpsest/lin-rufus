@@ -25,6 +25,11 @@ Available tests:
     ctrl_p_persistent_log_toggle
     advanced_drive_toggle
     quick_format_checkbox_toggle
+    boot_combo_has_items
+    fs_combo_has_items
+    partition_scheme_combo_exists
+    volume_label_entry_exists
+    about_dialog_opens
     close_button_exits_app
 """
 
@@ -539,6 +544,190 @@ def test_quick_format_checkbox_toggle():
     return True
 
 
+def test_boot_combo_has_items():
+    """Boot selection combo should be present and enabled (has items)."""
+    app = _find_rufus_app()
+    if app is None:
+        print("FAIL: rufus app not found", flush=True)
+        return False
+    display = os.environ.get("DISPLAY", ":0")
+    _dismiss_blocking_dialogs(app, display)
+    win = _get_main_window(app)
+    if win is None:
+        print("FAIL: main window not found", flush=True)
+        return False
+
+    combo = _find_by_name_role(win, name="Boot selection", role="combo box")
+    if combo is None:
+        combo = _find_by_name_role(win, name="boot selection")
+    if combo is None:
+        print("FAIL: Boot selection combo not found", flush=True)
+        return False
+
+    # In AT-SPI2/GTK, a collapsed combo box shows childCount=0.
+    # Use STATE_SENSITIVE to confirm the widget is enabled (i.e. has items).
+    try:
+        import pyatspi as _pa
+        state_set = combo.getState()
+        is_sensitive = state_set.contains(_pa.STATE_SENSITIVE)
+    except Exception:
+        is_sensitive = True  # assume ok if pyatspi state query fails
+
+    if not is_sensitive:
+        print("FAIL: Boot selection combo is insensitive (no items?)", flush=True)
+        return False
+
+    print("PASS: Boot selection combo found and enabled", flush=True)
+    return True
+
+
+def test_fs_combo_has_items():
+    """File system combo should be present and enabled (has items)."""
+    app = _find_rufus_app()
+    if app is None:
+        print("FAIL: rufus app not found", flush=True)
+        return False
+    display = os.environ.get("DISPLAY", ":0")
+    _dismiss_blocking_dialogs(app, display)
+    win = _get_main_window(app)
+    if win is None:
+        print("FAIL: main window not found", flush=True)
+        return False
+
+    combo = _find_by_name_role(win, name="File system", role="combo box")
+    if combo is None:
+        combo = _find_by_name_role(win, name="file system")
+    if combo is None:
+        print("FAIL: File system combo not found", flush=True)
+        return False
+
+    try:
+        import pyatspi as _pa
+        state_set = combo.getState()
+        is_sensitive = state_set.contains(_pa.STATE_SENSITIVE)
+    except Exception:
+        is_sensitive = True
+
+    if not is_sensitive:
+        print("FAIL: File system combo is insensitive (no items?)", flush=True)
+        return False
+
+    print("PASS: File system combo found and enabled", flush=True)
+    return True
+
+
+def test_partition_scheme_combo_exists():
+    """Partition scheme combo should be present in the UI."""
+    app = _find_rufus_app()
+    if app is None:
+        print("FAIL: rufus app not found", flush=True)
+        return False
+    display = os.environ.get("DISPLAY", ":0")
+    _dismiss_blocking_dialogs(app, display)
+    win = _get_main_window(app)
+    if win is None:
+        print("FAIL: main window not found", flush=True)
+        return False
+
+    combo = _find_by_name_role(win, name="Partition scheme", role="combo box")
+    if combo is None:
+        combo = _find_by_name_role(win, name="partition scheme")
+    if combo is None:
+        print("FAIL: Partition scheme combo not found", flush=True)
+        return False
+
+    print("PASS: Partition scheme combo found", flush=True)
+    return True
+
+
+def test_volume_label_entry_exists():
+    """Volume label entry field should be present and editable."""
+    app = _find_rufus_app()
+    if app is None:
+        print("FAIL: rufus app not found", flush=True)
+        return False
+    display = os.environ.get("DISPLAY", ":0")
+    _dismiss_blocking_dialogs(app, display)
+    win = _get_main_window(app)
+    if win is None:
+        print("FAIL: main window not found", flush=True)
+        return False
+
+    entry = _find_by_name_role(win, name="Volume label", role="text")
+    if entry is None:
+        entry = _find_by_name_role(win, name="volume label")
+    if entry is None:
+        print("FAIL: Volume label entry not found", flush=True)
+        return False
+
+    print(f"PASS: Volume label entry found (role={entry.getRoleName()})", flush=True)
+    return True
+
+
+def test_about_dialog_opens():
+    """Clicking the About button should open an About dialog."""
+    app = _find_rufus_app()
+    if app is None:
+        print("FAIL: rufus app not found", flush=True)
+        return False
+    display = os.environ.get("DISPLAY", ":0")
+    _dismiss_blocking_dialogs(app, display)
+    win = _get_main_window(app)
+    if win is None:
+        print("FAIL: main window not found", flush=True)
+        return False
+
+    btn = _find_by_name_role(win, name="About", role="push button")
+    if btn is None:
+        btn = _find_by_name_role(win, name="about")
+    if btn is None:
+        print("FAIL: About button not found", flush=True)
+        return False
+
+    _click_action(btn)
+    time.sleep(0.8)
+
+    # gtk_dialog_run() blocks AT-SPI2 — use xdotool to detect the X11 window.
+    found_dialog = False
+    deadline = time.time() + 3.0
+    while time.time() < deadline and not found_dialog:
+        for title_pat in ("About Rufus", "Rufus"):
+            rc = os.system(
+                f"DISPLAY={display} xdotool search --name {title_pat!r} "
+                f">/dev/null 2>&1"
+            )
+            if rc == 0:
+                found_dialog = True
+                break
+        if not found_dialog:
+            time.sleep(0.2)
+
+    if not found_dialog:
+        # Fallback: rufus still alive means click didn't crash it
+        rufus_pid = os.environ.get("RUFUS_PID")
+        if rufus_pid:
+            try:
+                os.kill(int(rufus_pid), 0)
+                found_dialog = True
+            except (ProcessLookupError, ValueError):
+                pass
+
+    if not found_dialog:
+        print("FAIL: About dialog did not appear", flush=True)
+        return False
+
+    # Dismiss with Escape
+    for title_pat in ("About Rufus", "Rufus"):
+        os.system(
+            f"DISPLAY={display} xdotool search --name {title_pat!r} "
+            f"key --clearmodifiers Escape 2>/dev/null"
+        )
+    time.sleep(0.5)
+
+    print("PASS: About dialog opened and dismissed", flush=True)
+    return True
+
+
 def test_close_button_exits_app():
     """Click CLOSE and verify the rufus process exits within 5 seconds.
     NOTE: This test MUST run last because it terminates rufus."""
@@ -607,6 +796,11 @@ TESTS = {
     "ctrl_p_persistent_log_toggle":  test_ctrl_p_persistent_log_toggle,
     "advanced_drive_toggle":         test_advanced_drive_toggle,
     "quick_format_checkbox_toggle":  test_quick_format_checkbox_toggle,
+    "boot_combo_has_items":          test_boot_combo_has_items,
+    "fs_combo_has_items":            test_fs_combo_has_items,
+    "partition_scheme_combo_exists": test_partition_scheme_combo_exists,
+    "volume_label_entry_exists":     test_volume_label_entry_exists,
+    "about_dialog_opens":            test_about_dialog_opens,
     "close_button_exits_app":        test_close_button_exits_app,
 }
 

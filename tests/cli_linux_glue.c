@@ -60,7 +60,30 @@ void drive_linux_reset_drives(void) { }
 void drive_linux_add_drive(const char *id, const char *name,
                            const char *display_name, uint64_t size)
 { (void)id; (void)name; (void)display_name; (void)size; }
-BOOL GetDevices(DWORD devnum) { (void)devnum; return FALSE; }
+
+/*
+ * GetDevices mock for integration tests (Feature 200).
+ *
+ * When enable_HDDs is TRUE, inject a fake HDD so that cli_print_devices()
+ * has something to list.  This lets integration tests verify that
+ * cli_apply_options() (which sets enable_HDDs) must be called before
+ * cli_print_devices().
+ */
+BOOL GetDevices(DWORD devnum)
+{
+    (void)devnum;
+    memset(rufus_drive, 0, sizeof(rufus_drive));
+    if (enable_HDDs) {
+        rufus_drive[0].id           = "/dev/sda";
+        rufus_drive[0].name         = "Mock HDD";
+        rufus_drive[0].display_name = "Mock HDD (500 GB)";
+        rufus_drive[0].index        = DRIVE_INDEX_MIN;
+        rufus_drive[0].size         = 500ULL * 1024 * 1024 * 1024;
+        /* rufus_drive[1].id is NULL (terminator) */
+        return TRUE;
+    }
+    return FALSE;
+}
 
 /* FormatThread stub */
 DWORD FormatThread(void *param) { (void)param; return 0; }
@@ -73,3 +96,8 @@ void alert_set_hook(BOOL (*hook)(int type)) { (void)hook; }
 void alert_clear_hook(void) { }
 
 void set_preselected_fs(int fs) { (void)fs; }
+
+/* window_text_bridge stubs — needed by cli_apply_options() for --label */
+HWND hLabel = NULL;
+void window_text_register(HWND hwnd) { (void)hwnd; }
+BOOL SetWindowTextA(HWND hwnd, const char *text) { (void)hwnd; (void)text; return TRUE; }

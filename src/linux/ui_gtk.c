@@ -3822,6 +3822,14 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	SetAccessibleName((HWND)rw.select_btn,   lmprintf(MSG_165));
 	SetAccessibleName((HWND)rw.start_btn,    lmprintf(MSG_171));
 	SetAccessibleName((HWND)rw.close_btn,    "Close");
+	/* Combo boxes and text entry — needed for screen readers and automation */
+	SetAccessibleName((HWND)rw.device_combo,      "Device");
+	SetAccessibleName((HWND)rw.boot_combo,        "Boot selection");
+	SetAccessibleName((HWND)rw.partition_combo,   "Partition scheme");
+	SetAccessibleName((HWND)rw.target_combo,      "Target system");
+	SetAccessibleName((HWND)rw.filesystem_combo,  "File system");
+	SetAccessibleName((HWND)rw.cluster_combo,     "Cluster size");
+	SetAccessibleName((HWND)rw.label_entry,       "Volume label");
 
 	/* Restore advanced expander state (mirrors Windows SETTING_ADVANCED_MODE_*) */
 	{

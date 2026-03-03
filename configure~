@@ -729,6 +729,7 @@ ac_user_opts='
 enable_option_checking
 enable_silent_rules
 with_os
+with_arch
 enable_debug
 enable_alpha
 enable_beta
@@ -1390,6 +1391,8 @@ Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-os=OS            target OS: linux or windows (default=windows)
+  --with-arch=ARCH        cross-compile for ARCH (e.g. aarch64); Linux only;
+                          sets CC to ARCH-linux-gnu-gcc
   --with-ui=BACKEND       UI backend: gtk or win (default: gtk on Linux, win
                           on Windows)
 
@@ -3115,6 +3118,21 @@ esac
 fi
 
 
+# Architecture / cross-compile support for Linux targets.
+# Pass --with-arch=aarch64 (or any GNU arch prefix like aarch64-linux-gnu) to
+# cross-compile for a non-native architecture.  When --with-arch is given and
+# CC is not already set, the toolchain is derived as <arch>-linux-gnu-gcc.
+
+# Check whether --with-arch was given.
+if test ${with_arch+y}
+then :
+  withval=$with_arch; target_arch=$withval
+else case e in #(
+  e) target_arch='' ;;
+esac
+fi
+
+
 if test "x$target_os" = "xwindows"; then
   # Default to MinGW cross-compiler when targeting Windows and CC is not set
   if test "x${CC+set}" != "xset"; then
@@ -3130,8 +3148,19 @@ if test "x$target_os" = "xwindows"; then
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: Targeting Windows; CC=${CC}" >&5
 printf "%s\n" "$as_me: Targeting Windows; CC=${CC}" >&6;}
 else
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: Targeting Linux" >&5
+  if test "x$target_arch" != "x"; then
+    # Normalise: strip any trailing "-linux-gnu" that the user may have supplied
+    _arch_base=$(echo "$target_arch" | sed 's/-linux-gnu.*//')
+    _cross_prefix="${_arch_base}-linux-gnu"
+    if test "x${CC+set}" != "xset"; then
+      CC="${_cross_prefix}-gcc"
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: Targeting Linux/${_arch_base} (cross); CC=${CC}" >&5
+printf "%s\n" "$as_me: Targeting Linux/${_arch_base} (cross); CC=${CC}" >&6;}
+  else
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: Targeting Linux" >&5
 printf "%s\n" "$as_me: Targeting Linux" >&6;}
+  fi
 fi
 
 
@@ -5119,7 +5148,52 @@ fi
 printf "%s\n" "enabling Large File Support (ISO support)" >&6; }
 AM_CFLAGS="$AM_CFLAGS -D_FILE_OFFSET_BITS=64 -D_OFF_T_ -D_off_t=off64_t -Doff_t=off64_t -Doff32_t=long"
 
-# Check for -Wno-pointer-sign compiler support (GCC >= 4)
+# Reproducible builds: strip build-path prefixes and honour SOURCE_DATE_EPOCH
+# -fmacro-prefix-map=OLD=NEW rewrites __FILE__ and related macros so that paths
+# relative to the source tree do not leak into the binary.
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for -fmacro-prefix-map support" >&5
+printf %s "checking for -fmacro-prefix-map support... " >&6; }
+saved_CFLAGS="${CFLAGS}"
+CFLAGS="$CFLAGS -fmacro-prefix-map=./=./"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  macro_prefix_map="-fmacro-prefix-map=\$(abs_top_srcdir)/="
+else case e in #(
+  e) macro_prefix_map="" ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+CFLAGS="${saved_CFLAGS}"
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: ${macro_prefix_map:-no}" >&5
+printf "%s\n" "${macro_prefix_map:-no}" >&6; }
+AM_CFLAGS="$AM_CFLAGS $macro_prefix_map"
+
+# Propagate SOURCE_DATE_EPOCH into the binary as RUFUS_BUILD_EPOCH so the
+# --version output can be reproduced exactly.  Falls back to 0 when not set.
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for SOURCE_DATE_EPOCH in environment" >&5
+printf %s "checking for SOURCE_DATE_EPOCH in environment... " >&6; }
+if test -n "${SOURCE_DATE_EPOCH+x}"; then
+  AM_CFLAGS="$AM_CFLAGS -DRUFUS_BUILD_EPOCH=${SOURCE_DATE_EPOCH}ULL"
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: ${SOURCE_DATE_EPOCH}" >&5
+printf "%s\n" "${SOURCE_DATE_EPOCH}" >&6; }
+else
+  AM_CFLAGS="$AM_CFLAGS -DRUFUS_BUILD_EPOCH=0ULL"
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: not set; using 0" >&5
+printf "%s\n" "not set; using 0" >&6; }
+fi
+
+
 saved_CFLAGS="${CFLAGS}"
 CFLAGS="$CFLAGS -Wno-pointer-sign"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -5148,7 +5222,7 @@ CFLAGS="${saved_CFLAGS}"
 if test "x$target_os" = "xwindows"; then
   AM_CFLAGS="$AM_CFLAGS -DUNICODE -D_UNICODE -UNDEBUG -DCOBJMACROS -D__USE_MINGW_ANSI_STDIO=0 -UDECLSPEC_IMPORT -DDECLSPEC_IMPORT=__attribute__\(\(visibility\(\\\"hidden\\\"\)\)\) -std=gnu11 -Wshadow -Wall -Wformat-security -Wundef -Wunused -Wstrict-prototypes -Wno-restrict -Wno-array-bounds -Werror-implicit-function-declaration -Wbidi-chars=none $nopointersign_cflags"
 else
-  AM_CFLAGS="$AM_CFLAGS -I\$(top_srcdir)/src/linux/compat -I\$(top_srcdir)/src/windows -UNDEBUG -std=gnu11 -Wshadow -Wall -Wformat-security -Wundef -Wunused -Wstrict-prototypes -Wno-restrict -Wno-array-bounds -Werror-implicit-function-declaration -Wbidi-chars=none $nopointersign_cflags"
+  AM_CFLAGS="$AM_CFLAGS -DDO_NOT_WANT_COMPATIBILITY -I\$(top_srcdir)/src/linux/compat -I\$(top_srcdir)/src/windows -UNDEBUG -std=gnu11 -Wshadow -Wall -Wformat-security -Wundef -Wunused -Wstrict-prototypes -Wno-restrict -Wno-array-bounds -Werror-implicit-function-declaration -Wbidi-chars=none $nopointersign_cflags"
 fi
 
  if test "x$target_os" = "xwindows"; then

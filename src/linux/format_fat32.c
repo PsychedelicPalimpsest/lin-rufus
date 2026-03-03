@@ -373,8 +373,38 @@ BOOL FormatLargeFAT32(DWORD DriveIndex, uint64_t PartitionOffset,
 			uprintf("Could not write PBR — drive may not boot");
 	}
 
-	/* On Linux we cannot call SetVolumeLabel, but the volume name is
-	 * already encoded in the FAT boot sector's sVolLab field. */
+	/* Write the root-directory volume label entry (FAT spec §6.1).
+	 *
+	 * The BPB sVolLab field is read by blkid/mtools, but many Linux tools
+	 * (fatlabel, mount -L, dosfstools) use the 32-byte directory entry with
+	 * ATTR_VOLUME_ID (0x08) that lives in the root cluster.  Write it now
+	 * when the caller supplied a non-empty label.
+	 *
+	 * Layout of the 32-byte FAT directory entry used as a volume label:
+	 *   Bytes  0– 7  : Name field  (first 8 chars of the 11-char label)
+	 *   Bytes  8–10  : Ext field   (last  3 chars of the 11-char label)
+	 *   Byte  11     : Attributes = 0x08 (ATTR_VOLUME_ID)
+	 *   Bytes 12–31  : Zero (cluster lo/hi, size, timestamps all zero)
+	 *
+	 * VolId[0..10] already holds the space-padded, uppercased 11-char label
+	 * (set above, defaulting to "NO NAME    ").  We only write the entry
+	 * when the caller supplied a non-empty label (skip for "NO NAME    ").
+	 */
+	if (Label && Label[0] != '\0') {
+		uint8_t* pDirSect = (uint8_t*)calloc(BytesPerSect, 1);
+		if (pDirSect) {
+			/* Copy the 11-char padded label into name[8] + ext[3] */
+			memcpy(pDirSect,     VolId,     8);  /* name */
+			memcpy(pDirSect + 8, VolId + 8, 3);  /* ext  */
+			pDirSect[11] = 0x08;                  /* ATTR_VOLUME_ID */
+			/* All other bytes (timestamps, cluster, size) remain zero */
+
+			uint32_t RootClusterSector = ReservedSectCount + NumFATs * FatSize;
+			write_sectors(hLogicalVolume, BytesPerSect, RootClusterSector, 1, pDirSect);
+			safe_free(pDirSect);
+			uprintf("Volume label directory entry written at sector %lu", RootClusterSector);
+		}
+	}
 
 	uprintf("FAT32 format completed.");
 	r = TRUE;

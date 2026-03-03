@@ -1136,7 +1136,7 @@ linux/rufus-drag_drop.o: linux/drag_drop.c
 linux/rufus-drag_drop.obj: linux/drag_drop.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-drag_drop.obj `if test -f 'linux/drag_drop.c'; then $(CYGPATH_W) 'linux/drag_drop.c'; else $(CYGPATH_W) '$(srcdir)/linux/drag_drop.c'; fi`
 
-: windows/badblocks.c
+windows/rufus-badblocks.o: windows/badblocks.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-badblocks.o `test -f 'windows/badblocks.c' || echo '$(srcdir)/'`windows/badblocks.c
 
 windows/rufus-badblocks.obj: windows/badblocks.c
