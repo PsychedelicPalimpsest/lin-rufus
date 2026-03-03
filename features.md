@@ -679,3 +679,25 @@ CLI mode. Fixed by calling `rufus_init_paths()` before `cli_parse_args()`.
 
 * ~~207~~: **RESOLVED** — `rufus_init_paths()` now called in non-GTK `main()` before arg parsing.
 
+
+### Feature 208: Persistent log auto-save to file
+
+On Windows, when the app closes (WM_DESTROY), it reads the log text from the rich-text
+control and writes it to `<app_data_dir>/rufus.log` (overwrite) or appends (if
+`persistent_log=TRUE`). A timestamp separator is printed at startup when `persistent_log`
+is enabled.
+
+Linux implementation:
+- Added `rufus_log_write(text, append, dir)` to `src/linux/stdfn.c`: creates `<dir>` if
+  needed, writes/appends `text` to `<dir>/rufus.log` via `FileIO()`
+- Declared `rufus_log_write` in `src/windows/rufus.h`
+- Hooked into `on_close_clicked()` in `ui_gtk.c`: extracts text from `rw.log_textbuf`
+  (GtkTextBuffer) and calls `rufus_log_write(text, persistent_log, app_data_dir)`
+- Added startup timestamp in `on_app_activate()` when `persistent_log=TRUE`, placed just
+  before `"*** Rufus GTK UI started ***"` message
+- 9 TDD tests in `tests/test_log_save_linux.c`: null guards, file creation, contents
+  correctness, overwrite mode, append mode, auto-mkdir, empty string, multi-line
+
+* ~~208~~: **RESOLVED** — Log auto-saved on exit; persistent log appends with timestamp.
+  9 new tests pass. Full test suite: all tests pass.
+

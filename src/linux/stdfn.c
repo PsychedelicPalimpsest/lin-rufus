@@ -210,6 +210,34 @@ out:
 		fclose(f);
 	return ret;
 }
+
+/*
+ * rufus_log_write — save or append log text to <dir>/rufus.log.
+ *
+ * Creates <dir> if it does not exist.  When append is FALSE the file is
+ * overwritten; when TRUE the text is appended to any existing content.
+ *
+ * Returns TRUE on success, FALSE on any error.
+ */
+BOOL rufus_log_write(const char *text, BOOL append, const char *dir)
+{
+	char path[MAX_PATH];
+	DWORD len;
+	char *buf;
+
+	if (text == NULL || dir == NULL)
+		return FALSE;
+
+	/* Create the directory if it doesn't exist */
+	if (mkdir(dir, 0755) != 0 && errno != EEXIST)
+		return FALSE;
+
+	snprintf(path, sizeof(path), "%s/rufus.log", dir);
+	len = (DWORD)strlen(text);
+	buf = (char *)text;
+	return FileIO(append ? FILE_IO_APPEND : FILE_IO_WRITE, path, &buf, &len);
+}
+
 uint8_t* GetResource(HMODULE m, char* n, char* t, const char* d, DWORD* l, BOOL dup)
 {
     (void)m; (void)t; (void)d;

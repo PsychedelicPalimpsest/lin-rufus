@@ -1055,6 +1055,20 @@ static void on_close_clicked(GtkButton *btn, gpointer data)
 	} else {
 		device_monitor_stop();
 		rufus_set_log_handler(NULL);
+
+		/* Save log to <app_data_dir>/rufus.log on exit — mirrors Windows WM_DESTROY.
+		 * If persistent_log is TRUE, append to any existing file; otherwise overwrite. */
+		extern char app_data_dir[];
+		extern BOOL persistent_log;
+		if (rw.log_textbuf) {
+			GtkTextIter s, e;
+			gtk_text_buffer_get_bounds(rw.log_textbuf, &s, &e);
+			gchar *log_text = gtk_text_buffer_get_text(rw.log_textbuf, &s, &e, FALSE);
+			if (log_text && *log_text)
+				rufus_log_write(log_text, persistent_log, app_data_dir);
+			g_free(log_text);
+		}
+
 		GtkApplication *gtkapplication = gtk_window_get_application(
 			GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(btn))));
 		if (gtkapplication)
@@ -3853,6 +3867,27 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	device_monitor_start(on_device_change, NULL);
 
 	rufus_gtk_update_status(lmprintf(MSG_210));
+
+	/* Add a timestamp separator in the log if persistent_log is enabled
+	 * so each session is clearly marked — mirrors Windows WM_INITDIALOG. */
+	{
+		extern BOOL persistent_log;
+		if (persistent_log) {
+			time_t ltime;
+			char timestamp[64];
+			time(&ltime);
+			char *ts = ctime(&ltime);
+			if (ts) {
+				/* ctime() adds a trailing newline — strip it */
+				snprintf(timestamp, sizeof(timestamp), "[%s", ts);
+				size_t tlen = strlen(timestamp);
+				if (tlen > 1 && timestamp[tlen - 1] == '\n')
+					timestamp[tlen - 1] = ']';
+				uprintf("%s", timestamp);
+			}
+		}
+	}
+
 	uprintf("*** Rufus GTK UI started ***");
 
 	/* Run update check in background (SetUpdateCheck configures the interval,

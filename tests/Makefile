@@ -994,6 +994,15 @@ CFLAGS_LINUX_test_psapi_linux := \
 	-Wno-implicit-function-declaration -Wno-sign-compare
 WIN_EXCLUDE_SRCS += test_psapi_linux.c
 
+# log_save_linux: tests for rufus_log_write() — Feature 208 (persistent log auto-save)
+CFLAGS_LINUX_test_log_save_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter \
+	-Wno-implicit-function-declaration -Wno-sign-compare
+EXTRA_SRC_LINUX_test_log_save_linux := \
+	$(SRC_DIR)/linux/stdfn.c
+WIN_EXCLUDE_SRCS += test_log_save_linux.c
+
 # reproducible_builds_linux: tests for SOURCE_DATE_EPOCH and -fmacro-prefix-map
 CFLAGS_LINUX_test_reproducible_builds_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
