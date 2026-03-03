@@ -14,10 +14,13 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-fs\fR \fIFILESYSTEM\fR]
 [\fB\-\-partition\-scheme\fR \fISCHEME\fR]
 [\fB\-\-target\fR \fITARGET\fR]
+[\fB\-\-boot\-type\fR \fITYPE\fR]
+[\fB\-\-cluster\-size\fR \fIN\fR]
 [\fB\-\-label\fR \fILABEL\fR]
 [\fB\-\-quick\fR|\fB\-\-no\-quick\fR]
 [\fB\-\-verify\fR]
 [\fB\-\-no\-prompt\fR]
+[\fB\-\-version\fR]
 .SH DESCRIPTION
 .B rufus
 creates bootable USB drives and formats removable media.  It supports a
@@ -94,6 +97,27 @@ Target legacy BIOS / CSM boot.
 Target UEFI boot.
 .RE
 .TP
+.BR \-b ", " \-\-boot\-type " " \fITYPE\fR
+Boot type to install on the device.  Supported values:
+.RS
+.IP \fBnon-bootable\fR
+Do not install any boot code; format the device as a data drive only.
+.IP \fBimage\fR
+Write the image supplied via \fB\-\-image\fR (or detect automatically when
+\fB\-\-image\fR is given without \fB\-\-boot\-type\fR).
+.IP \fBfreedos\fR
+Install FreeDOS boot files from the embedded resources.
+.IP \fBmsdos\fR
+Install MS-DOS boot files from the embedded resources.
+.RE
+If omitted the boot type is inferred: \fBimage\fR when \fB\-\-image\fR is
+given, otherwise \fBnon-bootable\fR.
+.TP
+.BR \-c ", " \-\-cluster\-size " " \fIN\fR
+Cluster (allocation unit) size in bytes for the formatted filesystem.
+Must be a power of two in the range 512–2097152.  Defaults to 0, meaning
+the filesystem formatter chooses the optimal cluster size for the volume.
+.TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length
 depends on the filesystem: 11 characters for FAT/FAT32, 32 for NTFS, 30
@@ -116,6 +140,9 @@ device and comparing checksums.  Adds time proportional to the image size.
 Suppress all interactive confirmation dialogs and automatically accept
 them.  Useful for scripting.  Use with care: this will proceed through all
 warnings, including the "all data will be destroyed" prompt.
+.TP
+.B \-\-version
+Print the Rufus version string (e.g.\& \fB4.13.0\fR) and exit with status 0.
 .TP
 .BR \-h ", " \-\-help
 Print a brief usage summary and exit.
