@@ -257,7 +257,7 @@ BOOL FormatLargeFAT32(DWORD DriveIndex, uint64_t PartitionOffset,
 	pFAT32BootSect->wFATSz16     = 0;
 	pFAT32BootSect->wSecPerTrk   = 63;    /* typical USB geometry */
 	pFAT32BootSect->wNumHeads    = 255;
-	pFAT32BootSect->dHiddSec     = 0;
+	pFAT32BootSect->dHiddSec     = (uint32_t)(PartitionOffset / BytesPerSect);
 	TotalSectors                  = (uint32_t)qTotalSectors;
 	pFAT32BootSect->dTotSec32    = TotalSectors;
 

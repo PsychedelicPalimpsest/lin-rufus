@@ -954,7 +954,8 @@ EXTRA_SRC_LINUX_test_dos_linux := $(DOS_LINUX_SRC) $(SRC_DIR)/linux/freedos_data
 # so the test file must NOT define globals inline.
 E2E_LINUX_SRC := $(FORMAT_THREAD_LINUX_SRC) \
                  $(DOS_LINUX_SRC) \
-                 $(SRC_DIR)/linux/freedos_data.c
+                 $(SRC_DIR)/linux/freedos_data.c \
+                 $(SRC_DIR)/linux/cli.c
 CFLAGS_LINUX_test_e2e_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(COMMON) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
@@ -983,11 +984,17 @@ LDFLAGS_LINUX_test_syslinux_linux := -lblkid
 EXTRA_SRC_LINUX_test_syslinux_linux := \
 	$(SYSLINUX_LINUX_SRC) $(LIBFAT_LIB) $(LIBINSTALLER_LIB) $(BLED_LIB) syslinux_linux_glue.c
 
+# qemu_boot_linux tests: QEMU boot verification (FreeDOS boots in qemu-system-i386).
+# Shares the same source list as e2e_linux since it also runs FormatThread + DOS code.
+CFLAGS_LINUX_test_qemu_boot_linux  := $(CFLAGS_LINUX_test_e2e_linux)
+LDFLAGS_LINUX_test_qemu_boot_linux := $(LDFLAGS_LINUX_test_e2e_linux)
+EXTRA_SRC_LINUX_test_qemu_boot_linux := $(EXTRA_SRC_LINUX_test_e2e_linux)
+
 # Tests that require root / a privileged container (e.g. /dev/loop* access).
 # Run via:  make run-root          (must already be root)
 #           ./run_tests.sh --root-only   (same)
 #           ./run_tests.sh --container   (auto-launches privileged Docker/Podman)
-ROOT_BINS := test_loopback_linux test_e2e_linux_linux
+ROOT_BINS := test_loopback_linux test_e2e_linux_linux test_qemu_boot_linux_linux
 
 .PHONY: all linux windows run-linux run-wine run-root clean
 

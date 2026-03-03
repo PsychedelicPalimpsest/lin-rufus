@@ -98,6 +98,7 @@ void cli_options_init(cli_options_t *opts)
 	opts->part_scheme = -1;
 	opts->target      = -1;
 	opts->quick       = -1; /* means "use default" (quick format on) */
+	opts->boot_type   = -1; /* auto: BT_IMAGE if image set, else BT_NON_BOOTABLE */
 }
 
 void cli_print_usage(const char *prog)
@@ -265,6 +266,11 @@ void cli_apply_options(const cli_options_t *opts)
 		image_path = _image_path;
 		boot_type  = BT_IMAGE;
 	}
+
+	/* Explicit boot type (takes precedence over BT_IMAGE set above when both are
+	 * set, which callers should avoid; override only when opts->boot_type >= 0) */
+	if (opts->boot_type >= 0)
+		boot_type = opts->boot_type;
 }
 
 int cli_run(const cli_options_t *opts)

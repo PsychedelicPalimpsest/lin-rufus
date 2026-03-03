@@ -128,7 +128,12 @@ BOOL WritePBR_fs(HANDLE hLogicalVolume, int fs_type)
 				        i ? "secondary" : "primary");
 				return FALSE;
 			}
-			if (!write_fat_32_br(fp, 0)) return FALSE;
+			/* Choose VBR based on boot type, matching Windows format.c logic */
+			if (boot_type == BT_FREEDOS) {
+				if (!write_fat_32_fd_br(fp, 0)) return FALSE;
+			} else {
+				if (!write_fat_32_br(fp, 0)) return FALSE;
+			}
 			if (!write_partition_physical_disk_drive_id_fat32(fp)) return FALSE;
 			fake_fd._offset += 6 * sector_size;
 		}

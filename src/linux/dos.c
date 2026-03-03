@@ -34,6 +34,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/ioctl.h>
+#include <linux/msdos_fs.h>
 
 #include "rufus.h"
 #include "dos.h"
@@ -119,6 +121,21 @@ static char* get_freedos_source_dir(void)
 #endif
 
     return NULL;
+}
+
+/*
+ * set_fat_attributes — set FAT file attributes on a mounted FAT filesystem.
+ * Uses FAT_IOCTL_SET_ATTRIBUTES (Linux kernel 4.16+).
+ * Returns TRUE on success; non-fatal failure is silently ignored because
+ * older kernels lack the ioctl.
+ */
+static BOOL set_fat_attributes(const char *path, uint32_t attrs)
+{
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return FALSE;
+    int rc = ioctl(fd, FAT_IOCTL_SET_ATTRIBUTES, &attrs);
+    close(fd);
+    return rc == 0 ? TRUE : FALSE;
 }
 
 /*
@@ -256,6 +273,20 @@ BOOL ExtractFreeDOS(const char* path)
             } else {
                 uprintf("Extracted '%s' from disk", fd_files[i]);
             }
+        }
+
+        /*
+         * The FreeDOS VBR (write_fat_32_fd_br) scans the root directory
+         * for KERNEL.SYS with both the HIDDEN (0x02) and SYSTEM (0x04)
+         * attributes set.  Set those attributes on the root-directory
+         * files (COMMAND.COM and KERNEL.SYS) to match Windows behaviour
+         * and ensure the boot sector can find the kernel.
+         */
+        if (i < FD_ROOT_FILES) {
+            uint32_t attrs = ATTR_HIDDEN | ATTR_SYS;
+            if (!set_fat_attributes(dst, attrs))
+                uprintf("Warning: could not set hidden+system on '%s' (ioctl not supported?)",
+                        fd_files[i]);
         }
 
         if ((i == 3) || (i == 9) || (i == 15) || (i == FD_NFILES - 1))

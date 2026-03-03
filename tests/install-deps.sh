@@ -30,6 +30,8 @@ apt-get install -y --no-install-recommends \
   dosfstools ntfs-3g exfatprogs udftools \
   `# TEST: loop device support for loopback integration tests` \
   util-linux \
+  `# TEST: QEMU x86 emulation for boot-verification tests` \
+  qemu-system-x86 \
   `# ASAN: AddressSanitizer + Undefined Behaviour Sanitizer runtime` \
   libasan6 libubsan1 \
   `# STATIC: cppcheck static analysis` \

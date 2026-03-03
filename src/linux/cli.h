@@ -49,6 +49,7 @@ typedef struct {
     int  quick;             /* --quick / --no-quick: 1=yes, 0=no, -1=default(yes) */
     int  verify;            /* --verify: 1=yes, 0=no(default) */
     int  no_prompt;         /* --no-prompt: 1=auto-accept all dialogs, 0=interactive */
+    int  boot_type;         /* BT_* constant; -1 = auto (BT_IMAGE if image set, else BT_NON_BOOTABLE) */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */
