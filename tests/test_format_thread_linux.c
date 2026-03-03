@@ -29,6 +29,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include <sys/types.h>
 #include <assert.h>
 #include <errno.h>
+#include <linux/limits.h>
 
 /* ---- compat + rufus headers ---- */
 #include "windows.h"
@@ -171,6 +172,9 @@ extern int setup_wintogo_call_count;
 extern int64_t extract_iso_file_call_count;
 extern char    extract_iso_file_last_src[256];
 extern int     update_md5sum_call_count;
+extern int     wimextractfile_call_count;
+extern int     copy_sku_si_policy_call_count;
+extern char    g_test_mount_path[PATH_MAX];
 
 /* ================================================================
  * Stub functions
@@ -319,6 +323,9 @@ static void reset_globals(void)
 	extract_iso_file_call_count = 0;
 	extract_iso_file_last_src[0] = '\0';
 	update_md5sum_call_count    = 0;
+	wimextractfile_call_count   = 0;
+	copy_sku_si_policy_call_count = 0;
+	g_test_mount_path[0]        = '\0';
 	g_mock_image_option_data    = 0;
 	hImageOption                = NULL;
 }
@@ -1809,6 +1816,119 @@ TEST(format_thread_wintogo_skips_update_md5sum)
 	unlink(path); free(path);
 }
 
+TEST(format_thread_win7_efi_uefi_calls_wimextractfile)
+{
+	/*
+	 * When BT_IMAGE + is_iso + has_efi==1 + wininst_index>=1 + TT_UEFI,
+	 * FormatThread must call WimExtractFile to extract bootmgfw.efi for
+	 * Win7 EFI boot setup.  wimextractfile_call_count is tracked via the
+	 * --wrap=WimExtractFile linker stub in format_thread_linux_glue.c.
+	 *
+	 * A real tmpdir is injected via g_test_mount_path so that mkdir()
+	 * inside the Win7 EFI block succeeds and WimExtractFile is reached.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	/* Provide a real tmpdir as mount_path so mkdir() succeeds */
+	char mount_tmpl[] = "/tmp/rufus_win7efi_XXXXXX";
+	char *mnt = mkdtemp(mount_tmpl);
+	CHECK_MSG(mnt != NULL, "mkdtemp for mount_path must succeed");
+	snprintf(g_test_mount_path, sizeof(g_test_mount_path), "%s", mnt);
+
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	/* Restore g_test_mount_path after reset_globals clears it */
+	snprintf(g_test_mount_path, sizeof(g_test_mount_path), "%s", mnt);
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_NTFS;
+	target_type            = TT_UEFI;
+	img_report.is_iso      = 1;
+	img_report.has_efi     = 1;   /* HAS_WIN7_EFI: has_efi==1 && wininst_index>0 */
+	img_report.wininst_index = 1;
+	/* wininst_path[0] stores the relative ISO path; starts with '/' on Linux */
+	static_sprintf(img_report.wininst_path[0], "/sources/install.wim");
+	write_as_image         = FALSE;
+	image_path             = path;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(wimextractfile_call_count >= 1,
+	          "WimExtractFile must be called for Win7 EFI boot setup");
+
+	/* Cleanup tmpdir (recursive rm not needed since __wrap_WimExtractFile is a stub) */
+	rmdir(mnt);  /* may fail if subdirs created; ignore */
+	{
+		char efi_boot_dir[PATH_MAX];
+		snprintf(efi_boot_dir, sizeof(efi_boot_dir), "%s/efi/boot", mnt);
+		rmdir(efi_boot_dir);
+		char efi_dir[PATH_MAX];
+		snprintf(efi_dir, sizeof(efi_dir), "%s/efi", mnt);
+		rmdir(efi_dir);
+		rmdir(mnt);
+	}
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_non_win7_efi_skips_wimextractfile_for_efi)
+{
+	/*
+	 * When has_efi != 1 (e.g., has_efi==2 meaning full EFI, not Win7 EFI),
+	 * FormatThread must NOT call WimExtractFile for EFI boot setup.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_NTFS;
+	target_type            = TT_UEFI;
+	img_report.is_iso      = 1;
+	img_report.has_efi     = 2;   /* Full EFI — NOT Win7 EFI (needs has_efi==1) */
+	img_report.wininst_index = 1;
+	write_as_image         = FALSE;
+	image_path             = path;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(wimextractfile_call_count == 0,
+	          "WimExtractFile must NOT be called when has_efi != 1 (not Win7 EFI)");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_iso_calls_copy_sku_si_policy)
+{
+	/*
+	 * After ISO extraction (BT_IMAGE + is_iso), FormatThread must call
+	 * CopySKUSiPolicy (matches Windows format.c behaviour).
+	 * copy_sku_si_policy_call_count is tracked by the stub in
+	 * format_thread_linux_glue.c.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_NTFS;
+	target_type            = TT_UEFI;
+	img_report.is_iso      = 1;
+	write_as_image         = FALSE;
+	image_path             = path;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(copy_sku_si_policy_call_count >= 1,
+	          "CopySKUSiPolicy must be called after ISO extraction");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
 /* ================================================================
  * main
  * ================================================================ */
@@ -1885,6 +2005,11 @@ int main(void)
 	printf("\n=== FormatThread MD5 sum update tests ===\n");
 	RUN(format_thread_iso_calls_update_md5sum);
 	RUN(format_thread_wintogo_skips_update_md5sum);
+
+	printf("\n=== FormatThread Win7 EFI boot setup tests ===\n");
+	RUN(format_thread_win7_efi_uefi_calls_wimextractfile);
+	RUN(format_thread_non_win7_efi_skips_wimextractfile_for_efi);
+	RUN(format_thread_iso_calls_copy_sku_si_policy);
 
 	TEST_RESULTS();
 }

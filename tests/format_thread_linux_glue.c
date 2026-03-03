@@ -8,8 +8,26 @@
 #include "../src/linux/compat/windows.h"
 #include "../src/windows/rufus.h"
 #include "../src/windows/badblocks.h"
+#include <string.h>
 
 DWORD _win_last_error = 0;
+
+/* Optional mount-path override for tests that need a real tmpdir.
+ * When non-empty, __wrap_GetExtPartitionName returns this path instead
+ * of the real (annotation-path) result from drive.c.
+ * Tests that use this MUST clean up the directory themselves.       */
+#include <linux/limits.h>
+char g_test_mount_path[PATH_MAX] = "";
+
+/* Forward declaration for the real function (provided by drive.c). */
+char *__real_GetExtPartitionName(DWORD DriveIndex, uint64_t PartitionOffset);
+
+char *__wrap_GetExtPartitionName(DWORD DriveIndex, uint64_t PartitionOffset)
+{
+    if (g_test_mount_path[0] != '\0')
+        return strdup(g_test_mount_path);
+    return __real_GetExtPartitionName(DriveIndex, PartitionOffset);
+}
 
 char *GuidToString(const GUID *guid, BOOL bDecorated)
 {
@@ -181,6 +199,28 @@ void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg)
 {
     update_md5sum_call_count++;
     (void)dest_dir; (void)md5sum_name_arg;
+}
+
+/* WimExtractFile is the real function from vhd.c; use --wrap so tests can
+ * count calls without touching the real implementation. */
+int wimextractfile_call_count = 0;
+
+BOOL __wrap_WimExtractFile(const char *image, int index,
+                            const char *src, const char *dst)
+{
+    wimextractfile_call_count++;
+    (void)image; (void)index; (void)src; (void)dst;
+    return TRUE;
+}
+
+/* CopySKUSiPolicy is in wue.c which is not linked in format_thread tests. */
+int copy_sku_si_policy_call_count = 0;
+
+BOOL CopySKUSiPolicy(const char *drive_name)
+{
+    copy_sku_si_policy_call_count++;
+    (void)drive_name;
+    return TRUE;
 }
 
 /* ExtractISOFile is provided by iso.c which is not linked in format_thread

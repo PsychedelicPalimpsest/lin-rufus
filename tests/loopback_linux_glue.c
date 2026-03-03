@@ -121,3 +121,6 @@ int64_t ExtractISOFile(const char *iso, const char *iso_file,
 /* UpdateMD5Sum stub — hash.c is not linked in loopback tests. */
 void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg)
 { (void)dest_dir; (void)md5sum_name_arg; }
+
+/* CopySKUSiPolicy stub — wue.c is not linked in loopback tests. */
+BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return FALSE; }

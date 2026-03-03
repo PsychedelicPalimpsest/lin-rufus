@@ -69,6 +69,8 @@ extern int  nb_passes_sel;
 extern char *image_path;
 extern const char *md5sum_name[2];
 extern void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg);
+extern BOOL allow_dual_uefi_bios;
+extern BOOL CopySKUSiPolicy(const char *drive_name);
 
 /* Updated by FormatPartition so that WritePBR knows which FS was formatted */
 static int actual_fs_type = FS_FAT32;
@@ -975,6 +977,47 @@ DWORD WINAPI FormatThread(void* param)
 				                   kolibri_dst, 0) == 0)
 					uprintf("WARNING: Loader installation failed - KolibriOS will not boot!");
 			}
+
+			/* Win7 EFI boot setup: when no boot###.efi exists but Windows 7
+			 * x64's bootmgr.efi is present (has_efi == 1), extract
+			 * bootmgfw.efi from the WIM and place it as bootx64.efi. */
+			if (!IS_ERROR(ErrorStatus) &&
+			    ((target_type == TT_UEFI) || allow_dual_uefi_bios) &&
+			    HAS_WIN7_EFI(img_report)) {
+				char efi_parent[MAX_PATH], efi_dir[MAX_PATH], efi_dst[MAX_PATH];
+				char wim_path[4 * MAX_PATH];
+				PrintInfo(0, MSG_232, lmprintf(MSG_307));
+				uprintf("Win7 EFI boot setup");
+				snprintf(efi_parent, sizeof(efi_parent), "%s/efi", mount_path);
+				snprintf(efi_dir,    sizeof(efi_dir),    "%s/efi/boot", mount_path);
+				snprintf(efi_dst,    sizeof(efi_dst),    "%s/efi/boot/bootx64.efi", mount_path);
+				/* Build WIM path: image_path|sources/install.wim
+				 * wininst_path[0] starts with '/' on Linux; skip it */
+				snprintf(wim_path, sizeof(wim_path), "%s", image_path);
+				if (img_report.wininst_index >= 1) {
+					strncat(wim_path, "|",
+					        sizeof(wim_path) - strlen(wim_path) - 1);
+					strncat(wim_path, &img_report.wininst_path[0][1],
+					        sizeof(wim_path) - strlen(wim_path) - 1);
+				}
+				mkdir(efi_parent, 0755);
+				if (mkdir(efi_dir, 0755) != 0 && errno != EEXIST) {
+					uprintf("Could not create directory '%s': %s",
+					        efi_dir, strerror(errno));
+					ErrorStatus = RUFUS_ERROR(APPERR(ERROR_CANT_PATCH));
+				} else {
+					if (!WimExtractFile(wim_path, 1,
+					                    "Windows/Boot/EFI/bootmgfw.efi",
+					                    efi_dst)) {
+						uprintf("Failed to setup Win7 EFI boot");
+						ErrorStatus = RUFUS_ERROR(APPERR(ERROR_CANT_PATCH));
+					}
+				}
+			}
+
+			/* Copy SKU Si policy file if present */
+			if (!IS_ERROR(ErrorStatus))
+				CopySKUSiPolicy(mount_path);
 
 			/* Update MD5 sums for any modified files */
 			if (!IS_ERROR(ErrorStatus) && !windows_to_go)

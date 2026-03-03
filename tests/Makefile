@@ -198,7 +198,9 @@ CFLAGS_LINUX_test_format_thread_linux := \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_format_thread_linux := -lpthread -lblkid -lz -lxml2 -lm \
-	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group
+	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group \
+	-Wl,--wrap=WimExtractFile \
+	-Wl,--wrap=GetExtPartitionName
 EXTRA_SRC_LINUX_test_format_thread_linux := $(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) $(XML_SRC_EARLY) format_thread_linux_glue.c
 
 # pe_parser_linux tests: PE binary parsing (GetPeArch, GetPeSection, RvaToPhysical, etc.)
