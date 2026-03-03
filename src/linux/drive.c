@@ -47,6 +47,7 @@
 
 /* rufus_drive[] is defined in globals.c (production) or inline by tests */
 extern RUFUS_DRIVE rufus_drive[MAX_DRIVES];
+extern BOOL write_as_esp;
 
 /* -------------------------------------------------------------------------
  * Partition fd offset table — strong implementations for linux_get_fd_base_offset
@@ -550,7 +551,7 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         uint8_t *e = mbr + 446;
         e[0] = bMBRIsBootable ? 0x80 : 0x00;
         e[1] = 0xFE; e[2] = 0xFF; e[3] = 0xFF;
-        e[4] = 0x0C;
+        e[4] = write_as_esp ? 0xEF : 0x0C;
         e[5] = 0xFE; e[6] = 0xFF; e[7] = 0xFF;
         e[8]  = (lba_start)       & 0xFF;
         e[9]  = (lba_start >>  8) & 0xFF;
@@ -718,7 +719,7 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
 
         /* Build main data partition entry */
         uint8_t *pe = entries + 128 * entry_slot;
-        memcpy(pe + 0,  bd_type,   16);
+        memcpy(pe + 0,  write_as_esp ? esp_type : bd_type, 16);
         memcpy(pe + 16, part_guid, 16);
         for (int i = 0; i < 8; i++) pe[32 + i] = (main_first >> (8*i)) & 0xFF;
         for (int i = 0; i < 8; i++) pe[40 + i] = (main_last  >> (8*i)) & 0xFF;

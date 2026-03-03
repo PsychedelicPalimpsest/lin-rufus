@@ -36,6 +36,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 /* Re-use the externs from the test-support API */
 extern RUFUS_DRIVE_INFO SelectedDrive;
 extern int partition_index[];
+extern BOOL write_as_esp;
 
 /* Functions under test (declared in drive.h) */
 extern BOOL DeletePartition(DWORD DriveIndex, ULONGLONG PartitionOffset, BOOL bSilent);
@@ -941,6 +942,92 @@ TEST(create_partition_mbr_with_compat_main_contiguous)
 }
 
 /* ============================================================
+ * CreatePartition — write_as_esp partition type tests
+ * ============================================================ */
+
+/*
+ * When write_as_esp=TRUE and PARTITION_STYLE_MBR, CreatePartition must use
+ * partition type 0xEF (EFI System) instead of 0x0C (FAT32 LBA).
+ * This mirrors Windows format.c where write_as_esp causes the partition
+ * to be created with the EFI System type.
+ */
+TEST(create_partition_mbr_write_as_esp_sets_0xef_type)
+{
+	setup_image();
+	write_as_esp = TRUE;
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_MBR, FS_FAT32, TRUE, 0);
+	CloseHandle(h);
+	write_as_esp = FALSE;
+
+	uint8_t mbr[512];
+	pread(g_img_fd, mbr, 512, 0);
+	uint8_t type_byte = mbr[446 + 4];
+	CHECK_MSG(type_byte == 0xEF,
+	          "MBR partition type must be 0xEF (EFI System) when write_as_esp=TRUE");
+	teardown_image();
+}
+
+TEST(create_partition_mbr_normal_uses_fat32_type)
+{
+	/* Without write_as_esp, the normal FAT32 type 0x0C must be used */
+	setup_image();
+	write_as_esp = FALSE;
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_MBR, FS_FAT32, TRUE, 0);
+	CloseHandle(h);
+
+	uint8_t mbr[512];
+	pread(g_img_fd, mbr, 512, 0);
+	uint8_t type_byte = mbr[446 + 4];
+	CHECK_MSG(type_byte == 0x0C,
+	          "MBR partition type must be 0x0C (FAT32 LBA) when write_as_esp=FALSE");
+	teardown_image();
+}
+
+TEST(create_partition_gpt_write_as_esp_sets_esp_guid)
+{
+	/*
+	 * When write_as_esp=TRUE and PARTITION_STYLE_GPT, CreatePartition must
+	 * use the EFI System Partition GUID for the main partition type instead
+	 * of the MS Basic Data GUID.
+	 */
+	setup_image();
+	write_as_esp = TRUE;
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_GPT, FS_FAT32, FALSE, 0);
+	CloseHandle(h);
+	write_as_esp = FALSE;
+
+	/* Read first GPT partition entry type GUID (LBA 2, bytes 0..15) */
+	uint8_t entry[128];
+	pread(g_img_fd, entry, 128, 1024);
+	CHECK_MSG(memcmp(entry, ESP_GUID_LE, 16) == 0,
+	          "GPT main partition type must be ESP GUID when write_as_esp=TRUE");
+	teardown_image();
+}
+
+TEST(create_partition_gpt_normal_uses_basic_data_guid)
+{
+	/* Without write_as_esp, the MS Basic Data GUID must be used */
+	setup_image();
+	write_as_esp = FALSE;
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_GPT, FS_FAT32, FALSE, 0);
+	CloseHandle(h);
+
+	uint8_t entry[128];
+	pread(g_img_fd, entry, 128, 1024);
+	CHECK_MSG(memcmp(entry, MSBD_GUID_LE, 16) == 0,
+	          "GPT main partition type must be MS Basic Data GUID when write_as_esp=FALSE");
+	teardown_image();
+}
+
+/* ============================================================
  * main
  * ============================================================ */
 
@@ -1010,6 +1097,12 @@ int main(void)
 	RUN_TEST(create_partition_mbr_with_compat_partition_size);
 	RUN_TEST(create_partition_mbr_with_compat_custom_track_size);
 	RUN_TEST(create_partition_mbr_with_compat_main_contiguous);
+
+	printf("--- CreatePartition (write_as_esp) ---\n");
+	RUN_TEST(create_partition_mbr_write_as_esp_sets_0xef_type);
+	RUN_TEST(create_partition_mbr_normal_uses_fat32_type);
+	RUN_TEST(create_partition_gpt_write_as_esp_sets_esp_guid);
+	RUN_TEST(create_partition_gpt_normal_uses_basic_data_guid);
 
 	PRINT_RESULTS();
 	drive_linux_reset_drives();
