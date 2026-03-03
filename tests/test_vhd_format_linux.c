@@ -324,6 +324,190 @@ TEST(vhd_format_dd_write_to_loopback)
 }
 
 /* ------------------------------------------------------------------ */
+/* vhd_write_fixed_footer unit tests                                   */
+/* ------------------------------------------------------------------ */
+
+/* Helper: write |disk_size| bytes of zeros to a temp file, then call
+ * vhd_write_fixed_footer(fd, disk_size) and return the file path.
+ * Returns NULL on setup failure.  Caller must unlink + free. */
+static char *make_vhd_with_footer(uint64_t disk_size)
+{
+    char *path = strdup("/tmp/rufus_footer_XXXXXX");
+    int fd = mkstemp(path);
+    if (fd < 0) { free(path); return NULL; }
+
+    /* Write raw data (just zeros; we care about the footer) */
+    off_t off = 0;
+    uint64_t remaining = disk_size;
+    uint8_t zero_buf[4096];
+    memset(zero_buf, 0, sizeof(zero_buf));
+    while (remaining > 0) {
+        size_t to_write = (remaining > sizeof(zero_buf)) ? sizeof(zero_buf) : (size_t)remaining;
+        ssize_t n = write(fd, zero_buf, to_write);
+        if (n <= 0) { close(fd); unlink(path); free(path); return NULL; }
+        remaining -= (uint64_t)n;
+        off += n;
+    }
+
+    /* Append footer */
+    if (vhd_write_fixed_footer(fd, disk_size) != 0) {
+        close(fd); unlink(path); free(path); return NULL;
+    }
+    close(fd);
+    return path;
+}
+
+/* Read the VHD footer from the last 512 bytes of the file into buf. */
+static int read_vhd_footer(const char *path, uint8_t buf[512])
+{
+    struct stat st;
+    if (stat(path, &st) != 0 || st.st_size < 512) return -1;
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) return -1;
+    ssize_t n = pread(fd, buf, 512, st.st_size - 512);
+    close(fd);
+    return (n == 512) ? 0 : -1;
+}
+
+/* 1. The cookie must be "conectix" */
+TEST(vhd_footer_write_cookie)
+{
+    uint64_t sz = 1024 * 1024;
+    char *path = make_vhd_with_footer(sz);
+    CHECK(path != NULL);
+    if (!path) return;
+
+    uint8_t footer[512];
+    CHECK_INT_EQ(0, read_vhd_footer(path, footer));
+    CHECK_INT_EQ(0, memcmp(footer, "conectix", 8));
+
+    unlink(path); free(path);
+}
+
+/* 2. Disk type must be FIXED (2) at offset 60 big-endian */
+TEST(vhd_footer_write_disk_type_fixed)
+{
+    uint64_t sz = 1024 * 1024;
+    char *path = make_vhd_with_footer(sz);
+    CHECK(path != NULL);
+    if (!path) return;
+
+    uint8_t footer[512];
+    CHECK_INT_EQ(0, read_vhd_footer(path, footer));
+    uint32_t disk_type;
+    memcpy(&disk_type, footer + 60, 4);
+    disk_type = be32toh(disk_type);
+    CHECK_INT_EQ(2, (int)disk_type);
+
+    unlink(path); free(path);
+}
+
+/* 3. Original size (offset 40) and current size (offset 48) must equal disk_size */
+TEST(vhd_footer_write_disk_size_preserved)
+{
+    uint64_t sz = 8ULL * 1024 * 1024;  /* 8 MiB */
+    char *path = make_vhd_with_footer(sz);
+    CHECK(path != NULL);
+    if (!path) return;
+
+    uint8_t footer[512];
+    CHECK_INT_EQ(0, read_vhd_footer(path, footer));
+
+    uint64_t orig_size, curr_size;
+    memcpy(&orig_size, footer + 40, 8);
+    memcpy(&curr_size, footer + 48, 8);
+    orig_size = be64toh(orig_size);
+    curr_size = be64toh(curr_size);
+    CHECK(orig_size == sz);
+    CHECK(curr_size == sz);
+
+    unlink(path); free(path);
+}
+
+/* 4. The checksum must be valid (ones-complement of footer with checksum zeroed) */
+TEST(vhd_footer_checksum_valid)
+{
+    uint64_t sz = 2 * 1024 * 1024;
+    char *path = make_vhd_with_footer(sz);
+    CHECK(path != NULL);
+    if (!path) return;
+
+    uint8_t footer[512];
+    CHECK_INT_EQ(0, read_vhd_footer(path, footer));
+
+    /* Extract stored checksum */
+    uint32_t stored;
+    memcpy(&stored, footer + 64, 4);
+    stored = be32toh(stored);
+
+    /* Recompute: zero out checksum field, sum all bytes, ones-complement */
+    uint8_t tmp[512];
+    memcpy(tmp, footer, 512);
+    memset(tmp + 64, 0, 4);
+    uint32_t sum = 0;
+    for (int i = 0; i < 512; i++) sum += tmp[i];
+    uint32_t expected = ~sum;
+    CHECK(stored == expected);
+
+    unlink(path); free(path);
+}
+
+/* 5. Footer must be exactly 512 bytes; total file size must be disk_size + 512 */
+TEST(vhd_footer_write_file_size)
+{
+    uint64_t sz = 512 * 1024;  /* 512 KiB */
+    char *path = make_vhd_with_footer(sz);
+    CHECK(path != NULL);
+    if (!path) return;
+
+    struct stat st;
+    CHECK_INT_EQ(0, stat(path, &st));
+    CHECK((uint64_t)st.st_size == sz + 512);
+
+    unlink(path); free(path);
+}
+
+/* 6. vhd_get_fixed_disk_size must round-trip through vhd_write_fixed_footer */
+TEST(vhd_get_fixed_disk_size_round_trip)
+{
+    uint64_t sz = 4 * 1024 * 1024;  /* 4 MiB */
+    char *path = make_vhd_with_footer(sz);
+    CHECK(path != NULL);
+    if (!path) return;
+
+    uint64_t read_back = vhd_get_fixed_disk_size(path);
+    CHECK(read_back == sz);
+
+    unlink(path); free(path);
+}
+
+/* 7. Round-trip with a large (8 GiB) disk size — ensures 64-bit sizes work */
+TEST(vhd_footer_large_disk_size_round_trip)
+{
+    /* Don't allocate 8 GiB on disk — write only the footer to a 0-byte file,
+     * then seek to disk_size and write the footer. */
+    uint64_t sz = 8ULL * 1024 * 1024 * 1024;
+    char *path = strdup("/tmp/rufus_lg_XXXXXX");
+    int fd = mkstemp(path);
+    if (fd < 0) { free(path); return; }
+
+    /* Seek to disk_size and write footer (sparse file) */
+    if (lseek(fd, (off_t)sz, SEEK_SET) < 0) {
+        close(fd); unlink(path); free(path);
+        fprintf(stderr, "  SKIP (sparse file seek failed)\n");
+        _pass++;
+        return;
+    }
+    CHECK_INT_EQ(0, vhd_write_fixed_footer(fd, sz));
+    close(fd);
+
+    uint64_t read_back = vhd_get_fixed_disk_size(path);
+    CHECK(read_back == sz);
+
+    unlink(path); free(path);
+}
+
+/* ------------------------------------------------------------------ */
 
 int main(void)
 {
@@ -334,6 +518,13 @@ int main(void)
     RUN(vhd_no_mount_for_none);
     RUN(vhd_no_mount_for_gzip);
     RUN(vhd_no_mount_for_ffu);
+    RUN(vhd_footer_write_cookie);
+    RUN(vhd_footer_write_disk_type_fixed);
+    RUN(vhd_footer_write_disk_size_preserved);
+    RUN(vhd_footer_checksum_valid);
+    RUN(vhd_footer_write_file_size);
+    RUN(vhd_get_fixed_disk_size_round_trip);
+    RUN(vhd_footer_large_disk_size_round_trip);
     RUN(vhd_format_qemu_nbd_available);
     RUN(vhd_format_mount_read_verify);
     RUN(vhd_format_dd_write_to_loopback);

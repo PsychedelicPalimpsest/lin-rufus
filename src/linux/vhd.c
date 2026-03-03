@@ -99,6 +99,102 @@ uint64_t vhd_get_fixed_disk_size(const char *path)
 	return be64toh(current_size);
 }
 
+/*
+ * vhd_calc_geometry — compute a VHD-compatible CHS value for |disk_size| bytes.
+ * Uses LBA-style geometry (255 heads, 63 sectors/track) as most modern tools do.
+ * Returns the 4-byte geometry word: (cylinders<<16)|(heads<<8)|sectors_per_track.
+ */
+static uint32_t vhd_calc_geometry(uint64_t disk_size)
+{
+	uint64_t total_sectors = disk_size / 512;
+	uint32_t cylinders;
+	const uint32_t heads = 255;
+	const uint32_t spt   = 63;
+
+	cylinders = (uint32_t)(total_sectors / ((uint64_t)heads * spt));
+	if (cylinders < 1)     cylinders = 1;
+	if (cylinders > 65535) cylinders = 65535;
+
+	return (cylinders << 16) | (heads << 8) | spt;
+}
+
+/*
+ * vhd_write_fixed_footer — write a 512-byte VHD fixed-disk footer at the
+ * current file position of |fd|.  |disk_size| is the raw data size in bytes
+ * (the footer is appended *after* the data, so the total file size will be
+ * disk_size + 512).
+ *
+ * Returns 0 on success, -1 on write error.
+ */
+int vhd_write_fixed_footer(int fd, uint64_t disk_size)
+{
+	uint8_t  footer[VHD_FOOTER_SIZE];
+	uint32_t v32;
+	uint64_t v64;
+
+	memset(footer, 0, VHD_FOOTER_SIZE);
+
+	/* Cookie: "conectix" */
+	memcpy(footer + 0, VHD_COOKIE, 8);
+
+	/* Features: 0x00000002 (reserved bit always set) */
+	v32 = htobe32(0x00000002u);
+	memcpy(footer + 8, &v32, 4);
+
+	/* File format version: 1.0 */
+	v32 = htobe32(0x00010000u);
+	memcpy(footer + 12, &v32, 4);
+
+	/* Data offset: 0xFFFFFFFFFFFFFFFF (fixed disk — no dynamic metadata) */
+	v64 = 0xFFFFFFFFFFFFFFFFULL;
+	memcpy(footer + 16, &v64, 8);
+
+	/* Timestamp: seconds since 2000-01-01 00:00:00 UTC */
+	{
+		time_t now = time(NULL);
+		uint32_t ts = (uint32_t)(now - (time_t)946684800);
+		v32 = htobe32(ts);
+		memcpy(footer + 24, &v32, 4);
+	}
+
+	/* Creator application: "ru s" */
+	memcpy(footer + 28, "ru s", 4);
+
+	/* Creator version: 0x00050000 */
+	v32 = htobe32(0x00050000u);
+	memcpy(footer + 32, &v32, 4);
+
+	/* Creator host OS: "Lnx " */
+	memcpy(footer + 36, "Lnx ", 4);
+
+	/* Original size and current size */
+	v64 = htobe64(disk_size);
+	memcpy(footer + 40, &v64, 8);
+	memcpy(footer + 48, &v64, 8);
+
+	/* Disk geometry (CHS) */
+	v32 = htobe32(vhd_calc_geometry(disk_size));
+	memcpy(footer + 56, &v32, 4);
+
+	/* Disk type: 2 (fixed) */
+	v32 = htobe32((uint32_t)VHD_DISK_TYPE_FIXED);
+	memcpy(footer + 60, &v32, 4);
+
+	/* Checksum: ones-complement of sum of all footer bytes
+	 * (with the checksum field itself zeroed, which it already is) */
+	{
+		uint32_t sum = 0;
+		for (int i = 0; i < VHD_FOOTER_SIZE; i++)
+			sum += footer[i];
+		v32 = htobe32(~sum);
+		memcpy(footer + 64, &v32, 4);
+	}
+
+	/* UUID at [68..83]: leave as zeros (not required for basic compatibility) */
+
+	return (write(fd, footer, VHD_FOOTER_SIZE) == VHD_FOOTER_SIZE) ? 0 : -1;
+}
+
 /* NBD old-style handshake magic values */
 #define NBDMAGIC       0x4e42444d41474943ULL
 #define CLISERV_MAGIC  0x00420281861253ULL

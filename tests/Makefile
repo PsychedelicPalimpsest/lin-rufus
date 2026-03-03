@@ -375,6 +375,7 @@ EXTRA_SRC_LINUX_test_stdlg_linux := $(STDLG_LINUX_SRC)
 
 # iso_linux tests: ISO image scanning and extraction via system libcdio
 ISO_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
+                 $(SRC_DIR)/linux/vhd.c \
                  $(SRC_DIR)/linux/dump_fat.c \
                  $(SRC_DIR)/linux/stdfn.c \
                  $(SRC_DIR)/linux/stdio.c \
@@ -385,15 +386,17 @@ ISO_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
                  $(COMMON)/localization.c \
                  $(COMMON)/iso_config.c
 CFLAGS_LINUX_test_iso_linux := \
-	-DRUFUS_TEST \
+	-D_RUFUS -DRUFUS_TEST \
 	-DDO_NOT_WANT_COMPATIBILITY \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/libcdio -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
+	-I$(SRC_DIR)/wimlib \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_iso_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a \
-	-Wl,--wrap=DumpFatDir -Wl,--wrap=GetWimVersion
-EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) iso_linux_glue.c $(COMMON)/iso_scan.c $(SRC_DIR)/linux/sl_version.c
+	-Wl,--wrap=DumpFatDir -Wl,--wrap=GetWimVersion \
+	-lpthread -lz -lm
+EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) $(WIM_LIB_EARLY) iso_linux_glue.c $(COMMON)/iso_scan.c $(SRC_DIR)/linux/sl_version.c
 
 # test_iso_save_linux — OpticalDiscSaveImage / iso_save_run_sync tests
 # Uses ISO_SAVE_LINUX_SRC (same as ISO_LINUX_SRC, minus ui.c) so the test
@@ -409,13 +412,16 @@ ISO_SAVE_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
                       $(COMMON)/localization.c \
                       $(COMMON)/iso_config.c
 CFLAGS_LINUX_test_iso_save_linux := \
-	-DRUFUS_TEST \
+	-DRUFUS_TEST -D_RUFUS \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/libcdio -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
+	-I$(SRC_DIR)/wimlib \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_iso_save_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a
-EXTRA_SRC_LINUX_test_iso_save_linux := $(ISO_SAVE_LINUX_SRC) $(BLED_LIB) iso_save_linux_glue.c
+LDFLAGS_LINUX_test_iso_save_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a -lpthread -lz -lm
+EXTRA_SRC_LINUX_test_iso_save_linux := $(ISO_SAVE_LINUX_SRC) $(BLED_LIB) iso_save_linux_glue.c \
+	$(SRC_DIR)/linux/vhd.c \
+	$(WIM_LIB_EARLY)
 
 # iso_check_common tests: portable check_iso_props() ISO entry classifier
 # Uses the "include trick": the test defines all required statics/globals
@@ -988,6 +994,7 @@ IMAGE_SCAN_LINUX_SRC := \
 	$(SRC_DIR)/linux/image_scan.c \
 	$(SRC_DIR)/linux/iso.c \
 	$(SRC_DIR)/linux/vhd.c \
+	$(SRC_DIR)/linux/dump_fat.c \
 	$(SRC_DIR)/linux/stdfn.c \
 	$(SRC_DIR)/linux/stdio.c \
 	$(SRC_DIR)/linux/ui.c \
@@ -1011,7 +1018,8 @@ CFLAGS_LINUX_test_image_scan_linux := \
 	-Wno-strict-aliasing
 LDFLAGS_LINUX_test_image_scan_linux := \
 	-lpthread -lz -lxml2 -lm $(CDIO_LIBS) \
-	$(SRC_DIR)/syslinux/libfat/libfat.a
+	$(SRC_DIR)/syslinux/libfat/libfat.a \
+	-Wl,--wrap=DumpFatDir -Wl,--wrap=GetWimVersion
 EXTRA_SRC_LINUX_test_image_scan_linux := $(IMAGE_SCAN_LINUX_SRC) iso_linux_glue.c
 
 # bootloader_scan_linux tests: GetBootladerInfo() — EFI bootloader revocation check

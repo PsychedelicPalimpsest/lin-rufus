@@ -4,6 +4,7 @@ literalWithCharPtrCompare:src/common/iso_check.c
 literalWithCharPtrCompare:src/common/iso_config.c
 literalWithCharPtrCompare:src/common/iso_scan.c
 literalWithCharPtrCompare:src/linux/format_fat32.c
+literalWithCharPtrCompare:src/linux/iso.c
 literalWithCharPtrCompare:src/linux/net.c
 
 // False positive: if_assert_fails macro confuses cppcheck's syntax parser

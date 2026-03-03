@@ -45,6 +45,10 @@
 #include "missing.h"
 #include "virtdisk.h"
 #include "ui.h"
+#include "vhd.h"
+#include "settings.h"
+#include "drive.h"
+#include "windowsx.h"
 #include "syslinux/libfat/libfat.h"
 
 /* ---- constants ---- */
@@ -87,6 +91,8 @@ extern BOOL        preserve_timestamps, enable_ntfs_compression, validate_md5sum
 extern HANDLE      format_thread;
 extern StrArray    modified_files;
 extern uint16_t    embedded_sl_version[2];
+extern char       *save_image_type;
+extern HWND        hDeviceList;
 
 /* extern declarations for functions defined in other TUs */
 extern BOOL GetOpticalMedia(IMG_SAVE* img_save);
@@ -95,6 +101,7 @@ extern uint16_t GetSyslinuxVersion(char *buf, size_t buf_size, char **ext);
 extern void GetGrubVersion(char *buf, size_t buf_size, const char *source);
 extern void GetGrubFs(char *buf, size_t buf_size, StrArray *filesystems);
 extern void GetEfiBootInfo(char *buf, size_t buf_size, const char *source);
+extern char *GetPhysicalName(DWORD DriveIndex);
 
 /* ---- file-static state ---- */
 static BOOL         scan_only          = FALSE;
@@ -1301,6 +1308,15 @@ DWORD iso_save_run_sync(IMG_SAVE* img_save)
 
 	uprintf("Optical disc saved (%s).",
 	        SizeToHumanReadable(wb, FALSE, FALSE));
+
+	/* Append VHD footer when saving to VHD format */
+	if (img_save->Type == VIRTUAL_STORAGE_TYPE_DEVICE_VHD && dst_fd >= 0) {
+		if (vhd_write_fixed_footer(dst_fd, (uint64_t)img_save->DeviceSize) != 0)
+			uprintf("WARNING: Failed to write VHD footer");
+		else
+			uprintf("VHD footer appended.");
+	}
+
 	ret = 0;
 
 out:
@@ -1381,4 +1397,88 @@ void OpticalDiscSaveImage(void)
 
 DWORD WINAPI IsoSaveImageThread(void* param) { (void)param; return 0; }
 
-BOOL SaveImage(void) { return FALSE; }
+/* Static storage for the VHD/IMG save session */
+static IMG_SAVE s_vhd_save = { 0 };
+
+BOOL SaveImage(void)
+{
+	char filename[128] = "drive_image.vhd";
+	int  sel;
+	DWORD DeviceNum;
+	const char *ext;
+
+	EXT_DECL(img_ext, filename,
+	         __VA_GROUP__("*.vhd", "*.img"),
+	         __VA_GROUP__(lmprintf(MSG_343), "Raw Disk Image"));
+
+	if (op_in_progress || format_thread != NULL)
+		return FALSE;
+
+	sel = ComboBox_GetCurSel(hDeviceList);
+	if (sel < 0)
+		return FALSE;
+
+	DeviceNum = (DWORD)ComboBox_GetItemData(hDeviceList, sel);
+
+	if (save_image_type && save_image_type[0])
+		snprintf(filename, sizeof(filename), "drive_image.%s", save_image_type);
+	if (SelectedDrive.DiskSize == 0) {
+		uprintf("No drive size available; cannot save image");
+		return FALSE;
+	}
+
+	memset(&s_vhd_save, 0, sizeof(IMG_SAVE));
+	s_vhd_save.DeviceNum  = DeviceNum;
+	s_vhd_save.DeviceSize = SelectedDrive.DiskSize;
+	s_vhd_save.BufSize    = DD_BUFFER_SIZE;
+
+	s_vhd_save.DevicePath = GetPhysicalName(DeviceNum);
+	if (!s_vhd_save.DevicePath) {
+		uprintf("Unable to get device path for drive slot %d", sel);
+		return FALSE;
+	}
+
+	/* Prompt user for save path */
+	s_vhd_save.ImagePath = FileDialog(TRUE, NULL, &img_ext, 0);
+	if (!s_vhd_save.ImagePath) {
+		safe_free(s_vhd_save.DevicePath);
+		return FALSE;
+	}
+
+	/* Determine image type from extension */
+	ext = strrchr(s_vhd_save.ImagePath, '.');
+	if (ext && safe_stricmp(ext, ".vhd") == 0)
+		s_vhd_save.Type = VIRTUAL_STORAGE_TYPE_DEVICE_VHD;
+	else
+		s_vhd_save.Type = VIRTUAL_STORAGE_TYPE_DEVICE_UNKNOWN;  /* raw IMG */
+
+	/* Persist preferred type */
+	if (ext && ext[1]) {
+		safe_free(save_image_type);
+		save_image_type = strdup(ext + 1);
+		WriteSettingStr(SETTING_PREFERRED_SAVE_IMAGE_TYPE, ext + 1);
+	}
+
+	uprintf("\r\nSaving %s (%s) to '%s'…",
+	        s_vhd_save.DevicePath,
+	        SizeToHumanReadable((uint64_t)s_vhd_save.DeviceSize, FALSE, FALSE),
+	        s_vhd_save.ImagePath);
+
+	SendMessage(hMainDialog, UM_PROGRESS_INIT, 0, 0);
+	ErrorStatus = 0;
+	EnableControls(FALSE, FALSE);
+	InitProgress(TRUE);
+
+	format_thread = CreateThread(NULL, 0, OpticalDiscSaveImageThread,
+	                             &s_vhd_save, 0, NULL);
+	if (format_thread != NULL) {
+		PrintInfo(0, -1);
+	} else {
+		uprintf("Unable to start image save thread");
+		ErrorStatus = RUFUS_ERROR(APPERR(ERROR_CANT_START_THREAD));
+		safe_free(s_vhd_save.DevicePath);
+		safe_free(s_vhd_save.ImagePath);
+		PostMessage(hMainDialog, UM_FORMAT_COMPLETED, (WPARAM)FALSE, 0);
+	}
+	return (format_thread != NULL);
+}

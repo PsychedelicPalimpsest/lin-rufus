@@ -36,6 +36,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "rufus.h"
 #include "resource.h"
 #include "localization.h"
+#include "vhd.h"
 
 /* ================================================================
  * Required globals
@@ -385,6 +386,93 @@ TEST(optical_disc_save_busy)
 }
 
 /* ================================================================
+ * VHD footer tests: iso_save_run_sync with Type=VHD should append footer
+ * ================================================================ */
+
+/* 11. When Type == VIRTUAL_STORAGE_TYPE_DEVICE_VHD, iso_save_run_sync
+ *     appends a 512-byte VHD footer after the raw data. */
+TEST(iso_save_vhd_appends_footer)
+{
+	reset_state();
+	const size_t SZ = 512 * 1024;  /* 512 KiB source */
+	char *src = create_temp_file(SZ, 0xAB);
+	CHECK(src != NULL);
+	if (!src) return;
+
+	char dst_path[] = "/tmp/rufus_isosv_vhd_XXXXXX";
+	int dst_fd = mkstemp(dst_path);
+	CHECK(dst_fd >= 0);
+	if (dst_fd >= 0) close(dst_fd);
+
+	IMG_SAVE s = { 0 };
+	s.Type       = VIRTUAL_STORAGE_TYPE_DEVICE_VHD;
+	s.DevicePath = strdup(src);
+	s.ImagePath  = strdup(dst_path);
+	s.DeviceSize = (LONGLONG)SZ;
+	s.BufSize    = 64 * 1024;
+
+	DWORD r = iso_save_run_sync(&s);
+	CHECK_INT_EQ(0, (int)r);
+
+	/* File size must be disk_size + 512 (footer) */
+	struct stat st;
+	CHECK_INT_EQ(0, stat(dst_path, &st));
+	CHECK((uint64_t)st.st_size == (uint64_t)SZ + 512);
+
+	/* Footer cookie must be "conectix" */
+	uint8_t footer[512];
+	int fd = open(dst_path, O_RDONLY);
+	CHECK(fd >= 0);
+	if (fd >= 0) {
+		ssize_t n = pread(fd, footer, 512, (off_t)SZ);
+		CHECK_INT_EQ(512, (int)n);
+		if (n == 512)
+			CHECK_INT_EQ(0, memcmp(footer, "conectix", 8));
+		close(fd);
+	}
+
+	/* vhd_get_fixed_disk_size must return SZ */
+	uint64_t read_back = vhd_get_fixed_disk_size(dst_path);
+	CHECK(read_back == (uint64_t)SZ);
+
+	unlink(src); free(src);
+	unlink(dst_path);
+}
+
+/* 12. When Type == VIRTUAL_STORAGE_TYPE_DEVICE_ISO (raw copy), no footer
+ *     is appended — file size must equal disk_size exactly. */
+TEST(iso_save_raw_no_footer)
+{
+	reset_state();
+	const size_t SZ = 512 * 1024;
+	char *src = create_temp_file(SZ, 0xCC);
+	CHECK(src != NULL);
+	if (!src) return;
+
+	char dst_path[] = "/tmp/rufus_isosv_iso_XXXXXX";
+	int dst_fd = mkstemp(dst_path);
+	CHECK(dst_fd >= 0);
+	if (dst_fd >= 0) close(dst_fd);
+
+	IMG_SAVE s = { 0 };
+	s.Type       = VIRTUAL_STORAGE_TYPE_DEVICE_ISO;
+	s.DevicePath = strdup(src);
+	s.ImagePath  = strdup(dst_path);
+	s.DeviceSize = (LONGLONG)SZ;
+	s.BufSize    = 64 * 1024;
+
+	DWORD r = iso_save_run_sync(&s);
+	CHECK_INT_EQ(0, (int)r);
+
+	struct stat st;
+	CHECK_INT_EQ(0, stat(dst_path, &st));
+	CHECK((uint64_t)st.st_size == (uint64_t)SZ);
+
+	unlink(src); free(src);
+	unlink(dst_path);
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 int main(void)
@@ -404,6 +492,8 @@ int main(void)
 	RUN(iso_save_progress_max_correct);
 	RUN(iso_save_completion_posted_on_error);
 	RUN(optical_disc_save_busy);
+	RUN(iso_save_vhd_appends_footer);
+	RUN(iso_save_raw_no_footer);
 
 	StrArrayDestroy(&modified_files);
 	TEST_RESULTS();

@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include "../src/linux/compat/windows.h"
 #include "../src/windows/rufus.h"
+#include "../src/windows/drive.h"
 
 uint32_t LIBFAT_SECTOR_SHIFT = 9;
 uint32_t LIBFAT_SECTOR_SIZE  = 512;
@@ -57,3 +58,39 @@ uint32_t __wrap_GetWimVersion(const char* image)
                  "%s", image);
     return g_getwimversion_return_value;
 }
+
+/* Stubs for SaveImage() — globals.c / drive.c symbols */
+char *save_image_type = NULL;
+
+RUFUS_DRIVE_INFO SelectedDrive = { 0 };
+
+/* Weak so test files and ui.c can override these */
+__attribute__((weak)) HWND hDeviceList = NULL;
+__attribute__((weak)) void EnableControls(BOOL enable, BOOL remove_checkboxes)
+    { (void)enable; (void)remove_checkboxes; }
+__attribute__((weak)) void InitProgress(BOOL b) { (void)b; }
+__attribute__((weak)) void UpdateProgress(int op, float pct) { (void)op; (void)pct; }
+
+char *GetPhysicalName(DWORD DriveIndex)
+    { (void)DriveIndex; return NULL; }
+
+__attribute__((weak)) uint16_t GetSyslinuxVersion(char *buf, size_t buf_size, char **ext)
+    { (void)buf; (void)buf_size; (void)ext; return 0; }
+__attribute__((weak)) void GetGrubVersion(char *buf, size_t buf_size, const char *source)
+    { (void)buf; (void)buf_size; (void)source; }
+__attribute__((weak)) void GetGrubFs(char *buf, size_t buf_size, StrArray *fs)
+    { (void)buf; (void)buf_size; (void)fs; }
+__attribute__((weak)) void GetEfiBootInfo(char *buf, size_t buf_size, const char *source)
+    { (void)buf; (void)buf_size; (void)source; }
+
+/* ini_file needed by inline WriteIniKeyStr in settings.h */
+char *ini_file = NULL;
+
+/* Stubs for vhd.c symbols — image type detection */
+__attribute__((weak)) BOOL has_ffu_support   = FALSE;
+__attribute__((weak)) BOOL ignore_boot_marker = FALSE;
+
+__attribute__((weak)) BOOL AnalyzeMBR(HANDLE h, const char *name, BOOL s)
+    { (void)h; (void)name; (void)s; return FALSE; }
+__attribute__((weak)) BOOL HashFile(unsigned type, const char *path, uint8_t *sum)
+    { (void)type; (void)path; (void)sum; return FALSE; }

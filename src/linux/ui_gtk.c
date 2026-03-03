@@ -298,6 +298,7 @@ static void on_cycle_port(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
 void InitProgress(BOOL bOnlyFormat);
 static void on_save_clicked(GtkButton *btn, gpointer data);
+static void on_save_optical_clicked(GtkWidget *w, gpointer data);
 static void on_drag_data_received(GtkWidget *w, GdkDragContext *ctx,
                                   gint x, gint y, GtkSelectionData *sel,
                                   guint info, guint t, gpointer data);
@@ -936,7 +937,7 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	/* Alt+O: save optical disc to ISO image (mirrors Windows Alt+O → OpticalDiscSaveImage) */
 	gtk_accel_group_connect(accel, GDK_KEY_o,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
-	                        g_cclosure_new(G_CALLBACK(on_save_clicked), NULL, NULL));
+	                        g_cclosure_new(G_CALLBACK(on_save_optical_clicked), NULL, NULL));
 	/* Alt+L: force large FAT32 format */
 	gtk_accel_group_connect(accel, GDK_KEY_l,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
@@ -2141,6 +2142,21 @@ static void on_lang_clicked(GtkButton *btn, gpointer data)
 static void on_save_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
+	extern BOOL SaveImage(void);
+	extern BOOL save_image;
+	save_image = SaveImage();
+	if (!save_image) {
+		uprintf("Image save did not start");
+		if (!IS_ERROR(ErrorStatus))
+			ErrorStatus = RUFUS_ERROR(APPERR(ERROR_CANT_START_THREAD));
+		PostMessage(hMainDialog, UM_FORMAT_COMPLETED, (WPARAM)FALSE, 0);
+	}
+}
+
+/* on_save_optical_clicked — Alt+O: save optical disc (mirrors Windows Alt+O) */
+static void on_save_optical_clicked(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
 	extern void OpticalDiscSaveImage(void);
 	OpticalDiscSaveImage();
 }

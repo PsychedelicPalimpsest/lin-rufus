@@ -894,3 +894,20 @@ This is the most structurally significant porting gap.
     - `InitProgress()` calls `stop_marquee()` defensively (guard against re-entrant marquee state)
     - Linux `ExtractISO` scan path now sends `UM_PROGRESS_INIT, PBS_MARQUEE, 0` (mirrors Windows `iso.c:868`)
     - `PBS_MARQUEE = 0x08` added to `compat/commctrl.h` and `compat/windows.h` so all Linux source files see it
+
+173. ✅ DONE **`SaveImage()` — save device/drive image to VHD or IMG on Linux** —
+    - `vhd_write_fixed_footer(int fd, uint64_t disk_size)` in `src/linux/vhd.c`:
+      writes 512-byte VHD fixed-disk footer (cookie, features, timestamps, geometry CHS,
+      disk type=2, ones-complement checksum) in big-endian; creator is "ru s"/"Lnx ".
+    - `iso_save_run_sync()` in `src/linux/iso.c`: when `img_save->Type == VIRTUAL_STORAGE_TYPE_DEVICE_VHD`,
+      appends VHD footer after data copy succeeds (before `out:` label).
+    - `SaveImage()`: opens device via `hDeviceList` combo, gets size from `SelectedDrive.DiskSize`,
+      offers `.vhd`/`.img` extensions via `FileDialog`; detects type from extension;
+      persists preferred type via `WriteSettingStr("SaveImageType", ...)`; reuses
+      `OpticalDiscSaveImageThread` (footer logic is in `iso_save_run_sync`).
+    - `on_save_clicked()` in `ui_gtk.c`: now calls `SaveImage()` (mirrors IDC_SAVE on Windows);
+      Alt+O calls `OpticalDiscSaveImage()` via new `on_save_optical_clicked()`.
+    - Tests: 7 `vhd_write_fixed_footer` tests in `test_vhd_format_linux.c` (cookie,
+      disk type, size fields, checksum, file size, round-trip) + 2 integration tests
+      in `test_iso_save_linux.c` (`iso_save_vhd_appends_footer`, `iso_save_raw_no_footer`).
+      All 31 VHD format tests and 44 iso_save tests pass.
