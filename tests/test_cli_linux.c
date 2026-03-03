@@ -1047,6 +1047,72 @@ static void test_fast_zeroing_combined_with_zero_drive(void)
     CHECK(opts.fast_zeroing != 0);
 }
 
+/* ---- --old-bios-fixes tests ---- */
+
+static void test_init_old_bios_fixes_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.old_bios_fixes == 0);
+}
+
+static void test_old_bios_fixes_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --old-bios-fixes", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.old_bios_fixes != 0);
+}
+
+static void test_old_bios_fixes_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -o", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.old_bios_fixes != 0);
+}
+
+static void test_old_bios_fixes_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.old_bios_fixes == 0);
+}
+
+/* ---- --allow-dual-uefi-bios tests ---- */
+
+static void test_init_allow_dual_uefi_bios_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.allow_dual_uefi_bios == 0);
+}
+
+static void test_allow_dual_uefi_bios_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --allow-dual-uefi-bios", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.allow_dual_uefi_bios != 0);
+}
+
+static void test_allow_dual_uefi_bios_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -A", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.allow_dual_uefi_bios != 0);
+}
+
+static void test_allow_dual_uefi_bios_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.allow_dual_uefi_bios == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1214,6 +1280,18 @@ int main(void)
     RUN_TEST(test_fast_zeroing_short_flag);
     RUN_TEST(test_fast_zeroing_default_is_off);
     RUN_TEST(test_fast_zeroing_combined_with_zero_drive);
+
+    /* --old-bios-fixes tests */
+    RUN_TEST(test_init_old_bios_fixes_is_false);
+    RUN_TEST(test_old_bios_fixes_long_flag);
+    RUN_TEST(test_old_bios_fixes_short_flag);
+    RUN_TEST(test_old_bios_fixes_default_is_off);
+
+    /* --allow-dual-uefi-bios tests */
+    RUN_TEST(test_init_allow_dual_uefi_bios_is_false);
+    RUN_TEST(test_allow_dual_uefi_bios_long_flag);
+    RUN_TEST(test_allow_dual_uefi_bios_short_flag);
+    RUN_TEST(test_allow_dual_uefi_bios_default_is_off);
 
     TEST_RESULTS();
 }

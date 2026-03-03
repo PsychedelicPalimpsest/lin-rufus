@@ -66,6 +66,8 @@ typedef struct {
     int  win_to_go;         /* --win-to-go/-W: write Windows To Go (WTG) image */
     int  write_as_image;    /* --write-as-image/-w: write image as raw DD (no extraction) */
     int  fast_zeroing;      /* --fast-zeroing/-Z: with --zero-drive: 0xFF-fill and readback */
+    int  old_bios_fixes;    /* --old-bios-fixes/-o: add boot fixups for old/buggy BIOSes */
+    int  allow_dual_uefi_bios; /* --allow-dual-uefi-bios/-A: allow both UEFI and legacy BIOS boot */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

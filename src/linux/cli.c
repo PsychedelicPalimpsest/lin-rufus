@@ -66,6 +66,8 @@ extern BOOL enable_ntfs_compression;
 extern BOOL cli_win_to_go;
 extern BOOL write_as_image;
 extern BOOL fast_zeroing;
+extern BOOL use_old_bios_fixes;
+extern BOOL allow_dual_uefi_bios;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -163,6 +165,8 @@ void cli_print_usage(const char *prog)
 	       "  -W, --win-to-go           Write Windows To Go (WTG) bootable USB (requires Windows ISO)\n"
 	       "  -w, --write-as-image      Write image as raw DD (skip extraction; e.g. for .img files)\n"
 	       "  -Z, --fast-zeroing        With --zero-drive: 0xFF-fill + readback (bad-block detection)\n"
+	       "  -o, --old-bios-fixes      Add boot fixups for old/buggy BIOSes\n"
+	       "  -A, --allow-dual-uefi-bios  Allow both UEFI and legacy BIOS boot (dual-mode)\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "  -j, --json                Output --list-devices results as JSON\n"
@@ -201,7 +205,9 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "ntfs-compression", no_argument,       NULL, 'C' },
 		{ "win-to-go",        no_argument,       NULL, 'W' },
 		{ "write-as-image",   no_argument,       NULL, 'w' },
-		{ "fast-zeroing",     no_argument,       NULL, 'Z' },
+		{ "fast-zeroing",      no_argument,       NULL, 'Z' },
+		{ "old-bios-fixes",   no_argument,       NULL, 'o' },
+		{ "allow-dual-uefi-bios", no_argument,   NULL, 'A' },
 		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
@@ -218,7 +224,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZjL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAjL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -391,6 +397,14 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->fast_zeroing = 1;
 			break;
 
+		case 'o':
+			opts->old_bios_fixes = 1;
+			break;
+
+		case 'A':
+			opts->allow_dual_uefi_bios = 1;
+			break;
+
 		case 'j':
 			opts->json = 1;
 			break;
@@ -506,6 +520,12 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Fast-zeroing: 0xFF-fill + readback during --zero-drive */
 	if (opts->fast_zeroing)
 		fast_zeroing = TRUE;
+	/* Old BIOS boot fixups */
+	if (opts->old_bios_fixes)
+		use_old_bios_fixes = TRUE;
+	/* Allow both UEFI and legacy BIOS to boot from the same USB */
+	if (opts->allow_dual_uefi_bios)
+		allow_dual_uefi_bios = TRUE;
 }
 
 /*

@@ -364,6 +364,29 @@ TEST(man_page_documents_fast_zeroing_flag) {
     free(content);
 }
 
+TEST(man_page_documents_old_bios_fixes_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "old-bios-fixes") != NULL || strstr(content, "old.bios.fixes") != NULL
+       || strstr(content, "old\\-bios\\-fixes") != NULL);
+    free(content);
+}
+
+TEST(man_page_documents_allow_dual_uefi_bios_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "allow-dual-uefi-bios") != NULL
+       || strstr(content, "allow.dual.uefi.bios") != NULL
+       || strstr(content, "allow\\-dual\\-uefi\\-bios") != NULL
+       || strstr(content, "dual.uefi") != NULL
+       || strstr(content, "dual\\-uefi") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_json_flag) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -475,6 +498,8 @@ int main(void)
     RUN(man_page_documents_win_to_go_flag);
     RUN(man_page_documents_write_as_image_flag);
     RUN(man_page_documents_fast_zeroing_flag);
+    RUN(man_page_documents_old_bios_fixes_flag);
+    RUN(man_page_documents_allow_dual_uefi_bios_flag);
     RUN(man_page_documents_json_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);

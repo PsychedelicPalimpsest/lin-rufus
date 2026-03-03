@@ -27,6 +27,8 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-win\-to\-go\fR]
 [\fB\-\-write\-as\-image\fR]
 [\fB\-\-fast\-zeroing\fR]
+[\fB\-\-old\-bios\-fixes\fR]
+[\fB\-\-allow\-dual\-uefi\-bios\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-json\fR]
 [\fB\-\-label\fR \fILABEL\fR]
@@ -197,6 +199,18 @@ write \fB0xFF\fR bytes, then read back each block and mark blocks that
 return \fB0xFF\fR as good (skipping them on subsequent passes).  This is
 faster than writing all zeros on devices that preserve unprogrammed values.
 Without \fB\-\-zero\-drive\fR this flag has no effect.
+.TP
+.BR \-o ", " \-\-old\-bios\-fixes
+Install additional boot-code fixups that work around bugs in old or
+non-standard BIOS implementations.  This corresponds to the
+"Add fixes for old BIOSes" checkbox in the GUI.  Recommended for USB
+drives that will be booted on vintage hardware.
+.TP
+.BR \-A ", " \-\-allow\-dual\-uefi\-bios
+Create a USB that can boot in both UEFI and legacy BIOS mode from the same
+device.  Typically adds a UEFI:NTFS partition alongside the standard MBR
+boot code.  Recommended when the target hardware has mixed or unknown
+firmware type.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length
