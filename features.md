@@ -1029,3 +1029,8 @@ This is the most structurally significant porting gap.
   - UDF/ext2: single-default marker, advanced_mode_format gate
   - `SetClusterSizeLabels`: slot-0 non-empty, slot-1 "512" prefix, unit-transition check (byte→KB at index 6)
   - All 29 pass.
+
+* Feature 187: Ensure cli is as described in the man page, update `--help` to match
+* Feature 188: Test the cli directly by calling the rufus executable (both via wine and linux)
+
+

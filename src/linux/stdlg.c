@@ -256,16 +256,27 @@ char* FileDialog(BOOL save, char* path, const ext_t* ext, UINT* selected_ext)
             gtk_file_filter_set_name(all_filter, ext->filename ? ext->filename : "All files");
             for (size_t i = 0; i < ext->count; i++) {
                 if (ext->extension[i]) {
-                    char pattern[32];
-                    snprintf(pattern, sizeof(pattern), "*%s", ext->extension[i]);
-                    gtk_file_filter_add_pattern(all_filter, pattern);
-                    /* Individual per-type filter for finer portal granularity */
+                    /* ext->extension[i] may be a semicolon-separated list
+                     * (e.g. "*.iso;*.img;*.vhd;...").  GTK requires one glob
+                     * pattern per gtk_file_filter_add_pattern() call, so split
+                     * on ';'.  Each token already carries its own '*' prefix. */
+                    char ext_buf[512];
+                    snprintf(ext_buf, sizeof(ext_buf), "%s", ext->extension[i]);
+
+                    GtkFileFilter *f = NULL;
                     if (ext->description && ext->description[i]) {
-                        GtkFileFilter *f = gtk_file_filter_new();
+                        f = gtk_file_filter_new();
                         gtk_file_filter_set_name(f, ext->description[i]);
-                        gtk_file_filter_add_pattern(f, pattern);
-                        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(native), f);
                     }
+
+                    for (char *tok = strtok(ext_buf, ";"); tok; tok = strtok(NULL, ";")) {
+                        gtk_file_filter_add_pattern(all_filter, tok);
+                        if (f)
+                            gtk_file_filter_add_pattern(f, tok);
+                    }
+
+                    if (f)
+                        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(native), f);
                 }
             }
             gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(native), all_filter);
