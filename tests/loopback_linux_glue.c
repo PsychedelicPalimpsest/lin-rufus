@@ -63,7 +63,7 @@ DWORD selected_cluster_size = 0;
 BOOL use_old_bios_fixes = FALSE;
 BOOL use_extended_label = FALSE;
 int  nb_passes_sel     = 0;
-uint64_t persistence_size = 0;
+/* persistence_size is defined in test_loopback.c */
 
 BOOL BadBlocks(HANDLE hPhysicalDrive, ULONGLONG disk_size, int nb_passes,
                int flash_type, badblocks_report *report, FILE *fd)

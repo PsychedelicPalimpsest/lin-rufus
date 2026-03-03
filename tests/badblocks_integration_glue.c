@@ -42,8 +42,9 @@ char *unattend_xml_path = NULL;
 int   unattend_xml_flags = 0;
 
 /* Format-thread globals not defined in test_badblocks_integration_linux.c */
-BOOL use_old_bios_fixes = FALSE;
-BOOL use_extended_label = FALSE;
+BOOL  use_old_bios_fixes = FALSE;
+BOOL  use_extended_label = FALSE;
+DWORD selected_cluster_size = 0;
 
 void wue_set_mount_path(const char *path) { (void)path; }
 

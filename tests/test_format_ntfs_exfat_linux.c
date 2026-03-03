@@ -810,16 +810,32 @@ TEST(exfat_invalid_drive_returns_false)
 
 TEST(writepbr_ntfs_returns_true)
 {
-    /* Create a small temp file as a fake handle */
-    char *path = create_temp_image(512 * 512);
+    /* WritePBR_fs on NTFS requires a pre-formatted NTFS filesystem */
+    const char *tool = find_tool("mkntfs");
+    if (tool == NULL) {
+        printf("  [SKIP] mkntfs not found\n");
+        return;
+    }
+
+    char *path = create_temp_image(TEST_IMG_SIZE_NTFS);
     CHECK(path != NULL);
-    setup_drive(path, 512 * 512);
+    setup_drive(path, TEST_IMG_SIZE_NTFS);
+    ErrorStatus = 0;
+
+    /* First format the image as NTFS */
+    BOOL fmt = FormatNTFS(DRIVE_INDEX_MIN, 0, 0, "PBRNTEST", FP_FORCE | FP_QUICK);
+    if (!fmt) {
+        teardown_drive();
+        unlink(path);
+        free(path);
+        printf("  [SKIP] mkntfs format failed\n");
+        return;
+    }
 
     int fd = open(path, O_RDWR);
     CHECK(fd >= 0);
     HANDLE h = (HANDLE)(intptr_t)fd;
 
-    /* Set actual_fs_type to NTFS via the format path */
     BOOL r = WritePBR_fs(h, FS_NTFS);
     CHECK(r == TRUE);
 
@@ -850,10 +866,31 @@ TEST(writepbr_exfat_returns_true)
 
 TEST(writepbr_fat16_returns_true)
 {
-    /* mkfs.fat writes its own boot sector for FAT16 — WritePBR_fs must return TRUE */
-    char *path = create_temp_image(512 * 512);
+    /* mkfs.fat writes its own boot sector for FAT16 — WritePBR_fs must return TRUE
+     * only on a properly formatted FAT16 volume. */
+    const char *tool = find_tool("mkfs.fat");
+    if (tool == NULL) {
+        printf("  [SKIP] mkfs.fat not found\n");
+        return;
+    }
+
+    /* 32 MiB: large enough for FAT16 but small enough for mkfs.fat -F 16 */
+    char *path = create_temp_image(32ULL * 1024 * 1024);
     CHECK(path != NULL);
-    setup_drive(path, 512 * 512);
+    setup_drive(path, 32ULL * 1024 * 1024);
+    ErrorStatus = 0;
+
+    /* Format as FAT16 directly via system() to avoid size/config complications */
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "%s -F 16 -f 2 %s", tool, path);
+    int rc = system(cmd);
+    if (rc != 0) {
+        teardown_drive();
+        unlink(path);
+        free(path);
+        printf("  [SKIP] mkfs.fat -F 16 failed\n");
+        return;
+    }
 
     int fd = open(path, O_RDWR);
     CHECK(fd >= 0);

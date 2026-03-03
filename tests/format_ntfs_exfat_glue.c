@@ -81,6 +81,7 @@ BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent;
 
 /* Missing stubs for format.c features added in later items */
 BOOL allow_dual_uefi_bios = FALSE;
+BOOL advanced_mode_format = FALSE;
 HWND hImageOption = NULL;
 BOOL VhdMountImageAndGetSize(const char *path, uint64_t *size)
 { (void)path; (void)size; return FALSE; }

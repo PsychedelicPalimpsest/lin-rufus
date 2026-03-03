@@ -89,6 +89,7 @@ DWORD ErrorStatus          = 0;
 DWORD LastWriteError       = 0;
 DWORD MainThreadId         = 0;
 DWORD DownloadStatus       = 0;
+DWORD selected_cluster_size = 0;
 
 int fs_type                = 0;
 int boot_type              = 0;

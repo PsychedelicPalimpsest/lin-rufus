@@ -158,3 +158,7 @@ BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return FALSE; }
 
 /* md5sum_name global — defined in iso.c which is not linked in e2e tests. */
 const char *md5sum_name[2] = { "md5sum.txt", "md5sum.txt~rufus" };
+
+/* GetDevices stub — dev.c is not in E2E_LINUX_SRC but cli.c calls it for
+ * --list-devices.  rufus_drive[] comes from globals.c already. */
+BOOL GetDevices(DWORD devnum) { (void)devnum; return FALSE; }

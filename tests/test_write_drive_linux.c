@@ -85,6 +85,7 @@ DWORD LastWriteError = 0;
 DWORD MainThreadId   = 0;
 DWORD DownloadStatus = 0;
 DWORD _win_last_error= 0;
+DWORD selected_cluster_size = 0;
 
 /* FS / boot */
 int     fs_type      = 0;
@@ -142,6 +143,8 @@ BOOL     app_changed_size = FALSE;
 BOOL     list_non_usb_removable_drives = FALSE;
 BOOL     no_confirmation_on_cancel = FALSE;
 BOOL     advanced_mode_device = FALSE, advanced_mode_format = FALSE;
+BOOL     validate_md5sum = FALSE;
+BOOL     size_check = TRUE;
 unsigned long syslinux_ldlinux_len[2] = {0, 0};
 
 sbat_entry_t      *sbat_entries     = NULL;
