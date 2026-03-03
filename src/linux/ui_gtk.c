@@ -3167,7 +3167,7 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	 * and delivered to hMainDialog as UM_MEDIA_CHANGE via PostMessage. */
 	device_monitor_start(on_device_change, NULL);
 
-	rufus_gtk_update_status("Ready.");
+	rufus_gtk_update_status(lmprintf(MSG_210));
 	uprintf("*** Rufus GTK UI started ***");
 
 	/* Run update check in background (SetUpdateCheck configures the interval,
