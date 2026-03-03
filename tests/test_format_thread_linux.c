@@ -2529,6 +2529,147 @@ TEST(format_thread_non_image_ntfs_skips_ntfsfix)
 	teardown_drive();
 	unlink(path); free(path);
 }
+/* ================================================================
+ * FormatThread UEFI:NTFS BIOS exclusion tests
+ * ================================================================
+ * Windows format.c excludes the UEFI:NTFS extra partition for Windows
+ * installer images targeting BIOS-only (no dual UEFI/BIOS) because
+ * those images don't need a UEFI:NTFS bridge partition.
+ * ================================================================ */
+
+TEST(format_thread_windows_bios_ntfs_no_uefi_ntfs_partition)
+{
+	/*
+	 * BT_IMAGE + has_efi + has_bootmgr + NTFS + TT_BIOS + !allow_dual_uefi_bios
+	 * → UEFI:NTFS extra partition must NOT be created.
+	 * (Mirrors Windows format.c HAS_BOOTMGR_BIOS exclusion.)
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_NTFS;
+	target_type            = TT_BIOS;
+	allow_dual_uefi_bios   = FALSE;
+	img_report.has_efi     = 1;
+	img_report.has_bootmgr = 1;
+	img_report.is_iso      = 0;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	/* Must NOT have a UEFI:NTFS partition for BIOS-only Windows installs */
+	CHECK_MSG(SelectedDrive.Partition[PI_UEFI_NTFS].Offset == 0,
+	          "UEFI:NTFS partition must not be created for BIOS-only Windows installs");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_windows_bios_allow_dual_adds_uefi_ntfs)
+{
+	/*
+	 * BT_IMAGE + has_efi + has_bootmgr + NTFS + TT_BIOS + allow_dual_uefi_bios=TRUE
+	 * → UEFI:NTFS partition IS created (dual UEFI/BIOS mode).
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_NTFS;
+	target_type            = TT_BIOS;
+	allow_dual_uefi_bios   = TRUE;
+	img_report.has_efi     = 1;
+	img_report.has_bootmgr = 1;
+	img_report.is_iso      = 0;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	/* Must have a UEFI:NTFS partition in dual UEFI/BIOS mode */
+	CHECK_MSG(SelectedDrive.Partition[PI_UEFI_NTFS].Offset != 0,
+	          "UEFI:NTFS partition must be created for dual UEFI/BIOS Windows installs");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_windows_uefi_target_adds_uefi_ntfs)
+{
+	/*
+	 * BT_IMAGE + has_efi + has_bootmgr + NTFS + TT_UEFI
+	 * → UEFI:NTFS partition IS created (UEFI target, not excluded).
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_NTFS;
+	target_type            = TT_UEFI;
+	allow_dual_uefi_bios   = FALSE;
+	img_report.has_efi     = 1;
+	img_report.has_bootmgr = 1;
+	img_report.is_iso      = 0;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	/* Must have a UEFI:NTFS partition for UEFI target */
+	CHECK_MSG(SelectedDrive.Partition[PI_UEFI_NTFS].Offset != 0,
+	          "UEFI:NTFS partition must be created for UEFI target Windows installs");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+/* ================================================================
+ * FormatThread Syslinux HAS_WINDOWS exclusion tests
+ * ================================================================
+ * When a Windows image (has_bootmgr) is flashed with allow_dual_uefi_bios
+ * enabled, Syslinux must NOT be installed even if the image technically
+ * contains Syslinux files.  This mirrors Windows format.c:
+ *   (!HAS_WINDOWS(img_report) || !allow_dual_uefi_bios)
+ * ================================================================ */
+
+TEST(format_thread_windows_dual_bios_uefi_skips_syslinux)
+{
+	/*
+	 * BT_IMAGE + has_syslinux + has_bootmgr + allow_dual_uefi_bios=TRUE
+	 * → InstallSyslinux must NOT be called.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_FAT32;
+	target_type            = TT_BIOS;
+	allow_dual_uefi_bios   = TRUE;
+	img_report.sl_version  = 0x0600;  /* Syslinux 6.x present */
+	img_report.has_bootmgr = 1;       /* Windows image */
+	img_report.is_iso      = 0;
+
+	DWORD rc = run_format_thread(DRIVE_INDEX_MIN);
+	CHECK(rc == 0);
+	CHECK(!IS_ERROR(ErrorStatus));
+
+	CHECK_MSG(install_syslinux_call_count == 0,
+	          "Syslinux must NOT be installed for Windows image with allow_dual_uefi_bios");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
 int main(void)
 {
 	printf("=== ClearMBRGPT tests ===\n");
@@ -2637,6 +2778,14 @@ int main(void)
 	RUN(format_thread_non_ntfs_iso_skips_ntfsfix);
 	RUN(format_thread_non_iso_ntfs_skips_ntfsfix);
 	RUN(format_thread_non_image_ntfs_skips_ntfsfix);
+
+	printf("\n=== FormatThread UEFI:NTFS BIOS exclusion tests ===\n");
+	RUN(format_thread_windows_bios_ntfs_no_uefi_ntfs_partition);
+	RUN(format_thread_windows_bios_allow_dual_adds_uefi_ntfs);
+	RUN(format_thread_windows_uefi_target_adds_uefi_ntfs);
+
+	printf("\n=== FormatThread Syslinux HAS_WINDOWS exclusion tests ===\n");
+	RUN(format_thread_windows_dual_bios_uefi_skips_syslinux);
 
 	TEST_RESULTS();
 }

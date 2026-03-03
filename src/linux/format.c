@@ -842,8 +842,14 @@ DWORD WINAPI FormatThread(void* param)
 	if (windows_to_go && target_type == TT_UEFI && partition_type == PARTITION_STYLE_GPT)
 		extra_partitions |= XP_ESP | XP_MSR;
 	else if (!write_as_image &&
-	    uefi_ntfs_needs_extra_partition(boot_type, fs_type, target_type, &img_report))
+	    uefi_ntfs_needs_extra_partition(boot_type, fs_type, target_type, &img_report)) {
 		extra_partitions |= XP_UEFI_NTFS;
+		/* Don't add UEFI:NTFS for Windows images targeting BIOS-only without dual UEFI/BIOS.
+		 * Mirrors Windows format.c: HAS_BOOTMGR_BIOS exclusion. */
+		if ((boot_type == BT_IMAGE) && HAS_BOOTMGR_BIOS(img_report) && (!windows_to_go) &&
+		    (target_type == TT_BIOS) && (!allow_dual_uefi_bios))
+			extra_partitions &= ~XP_UEFI_NTFS;
+	}
 	if (IsChecked(IDC_OLD_BIOS_FIXES))
 		extra_partitions |= XP_COMPAT;
 	if (!CreatePartition(hPhysicalDrive, partition_type, fs_type,
@@ -1174,9 +1180,12 @@ DWORD WINAPI FormatThread(void* param)
 		}
 	}
 
-	/* Install Syslinux bootloader when applicable */
+	/* Install Syslinux bootloader when applicable.
+	 * For Windows images with allow_dual_uefi_bios, skip Syslinux even if the
+	 * image contains Syslinux files (mirrors Windows format.c condition). */
 	if ( (boot_type == BT_SYSLINUX_V4) || (boot_type == BT_SYSLINUX_V6) ||
-	     ((boot_type == BT_IMAGE) && (HAS_SYSLINUX(img_report) || HAS_REACTOS(img_report))) ) {
+	     ((boot_type == BT_IMAGE) && (HAS_SYSLINUX(img_report) || HAS_REACTOS(img_report)) &&
+	      (!HAS_WINDOWS(img_report) || !allow_dual_uefi_bios)) ) {
 		if (!InstallSyslinux(DriveIndex, 0, fs_type)) {
 			uprintf("Syslinux installation failed");
 			if (!IS_ERROR(ErrorStatus))
