@@ -67,6 +67,7 @@ extern BOOL enable_bad_blocks;
 extern BOOL enable_verify_write;
 extern int  nb_passes_sel;
 extern char *image_path;
+extern char *archive_path;
 extern const char *md5sum_name[2];
 extern void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg);
 extern BOOL allow_dual_uefi_bios;
@@ -1121,6 +1122,20 @@ DWORD WINAPI FormatThread(void* param)
 	}
 
 	UpdateProgress(OP_FINALIZE, -1.0f);
+
+	/* Extract any additional files from an optional ZIP archive */
+	if (!IS_ERROR(ErrorStatus) && archive_path != NULL && fs_type < FS_EXT2) {
+		UpdateProgress(OP_EXTRACT_ZIP, 0.0f);
+		char *zip_mount = AltMountVolume(DriveIndex, part_offset, FALSE);
+		if (zip_mount != NULL) {
+			if (!ExtractZip(archive_path, zip_mount))
+				uprintf("WARNING: Could not copy additional files from ZIP archive");
+			AltUnmountVolume(zip_mount, FALSE);
+			free(zip_mount);
+		} else {
+			uprintf("WARNING: Could not mount partition for ZIP extraction");
+		}
+	}
 
 out:
 	VhdUnmountImage();

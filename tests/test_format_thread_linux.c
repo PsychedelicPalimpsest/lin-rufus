@@ -175,6 +175,8 @@ extern int     update_md5sum_call_count;
 extern int     wimextractfile_call_count;
 extern int     copy_sku_si_policy_call_count;
 extern char    g_test_mount_path[PATH_MAX];
+extern int     extract_zip_call_count;
+extern char    extract_zip_last_dst[PATH_MAX];
 
 /* ================================================================
  * Stub functions
@@ -326,6 +328,8 @@ static void reset_globals(void)
 	wimextractfile_call_count   = 0;
 	copy_sku_si_policy_call_count = 0;
 	g_test_mount_path[0]        = '\0';
+	extract_zip_call_count      = 0;
+	extract_zip_last_dst[0]     = '\0';
 	g_mock_image_option_data    = 0;
 	hImageOption                = NULL;
 }
@@ -2031,6 +2035,90 @@ TEST(format_thread_winpe_nonminint_uses_rufus_mbr)
 }
 
 /* ================================================================
+ * ZIP extraction tests
+ * ================================================================ */
+
+/* Exposed by format_thread_linux_glue.c for test assertion */
+extern char *archive_path;
+
+TEST(format_thread_extracts_zip_when_archive_path_set)
+{
+	/*
+	 * When archive_path is non-NULL and fs_type < FS_EXT2, FormatThread must
+	 * call ExtractZip after OP_FINALIZE — feature parity with Windows format.c.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type         = BT_NON_BOOTABLE;
+	partition_type    = PARTITION_STYLE_MBR;
+	fs_type           = FS_FAT32;
+	write_as_image    = FALSE;
+	archive_path      = "/tmp/test.zip"; /* non-NULL trigger */
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(extract_zip_call_count >= 1,
+	          "ExtractZip must be called when archive_path is set");
+
+	archive_path = NULL;
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_skips_zip_when_archive_path_null)
+{
+	/*
+	 * When archive_path is NULL, FormatThread must NOT call ExtractZip.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type         = BT_NON_BOOTABLE;
+	partition_type    = PARTITION_STYLE_MBR;
+	fs_type           = FS_FAT32;
+	write_as_image    = FALSE;
+	archive_path      = NULL;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(extract_zip_call_count == 0,
+	          "ExtractZip must NOT be called when archive_path is NULL");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_skips_zip_for_ext_fs)
+{
+	/*
+	 * ZIP extraction is only for FAT/NTFS/exFAT (fs_type < FS_EXT2).
+	 * With fs_type == FS_EXT2, ExtractZip must NOT be called even if
+	 * archive_path is set — mirrors the Windows format.c guard.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type         = BT_NON_BOOTABLE;
+	partition_type    = PARTITION_STYLE_MBR;
+	fs_type           = FS_EXT2;
+	write_as_image    = FALSE;
+	archive_path      = "/tmp/test.zip";
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(extract_zip_call_count == 0,
+	          "ExtractZip must NOT be called for ext filesystems");
+
+	archive_path = NULL;
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 int main(void)
@@ -2116,6 +2204,11 @@ int main(void)
 	RUN(format_thread_winpe_nonminint_sets_masquerade_boot_indicator);
 	RUN(format_thread_winpe_minint_does_not_masquerade);
 	RUN(format_thread_winpe_nonminint_uses_rufus_mbr);
+
+	printf("\n=== FormatThread ZIP extraction tests ===\n");
+	RUN(format_thread_extracts_zip_when_archive_path_set);
+	RUN(format_thread_skips_zip_when_archive_path_null);
+	RUN(format_thread_skips_zip_for_ext_fs);
 
 	TEST_RESULTS();
 }

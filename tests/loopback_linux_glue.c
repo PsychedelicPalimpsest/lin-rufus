@@ -124,3 +124,6 @@ void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg)
 
 /* CopySKUSiPolicy stub — wue.c is not linked in loopback tests. */
 BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return FALSE; }
+/* ExtractZip stub — stdio.c is not linked in loopback tests. */
+BOOL ExtractZip(const char* src_zip, const char* dest_dir)
+{ (void)src_zip; (void)dest_dir; return TRUE; }

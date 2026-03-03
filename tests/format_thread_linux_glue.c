@@ -249,3 +249,19 @@ BOOL HashFile(unsigned type, const char* path, uint8_t* sum)
 { (void)type; (void)path; (void)sum; return FALSE; }
 
 void wuprintf(const wchar_t *fmt, ...) { (void)fmt; }
+
+/* ExtractZip is provided by stdio.c which is not in FORMAT_THREAD_LINUX_SRC.
+ * The stub records calls and returns TRUE (success) so the format thread
+ * continues normally. */
+int  extract_zip_call_count  = 0;
+char extract_zip_last_dst[PATH_MAX] = "";
+
+BOOL ExtractZip(const char* src_zip, const char* dest_dir)
+{
+    extract_zip_call_count++;
+    if (dest_dir)
+        snprintf(extract_zip_last_dst, sizeof(extract_zip_last_dst),
+                 "%s", dest_dir);
+    (void)src_zip;
+    return TRUE;
+}
