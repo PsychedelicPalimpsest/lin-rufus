@@ -331,6 +331,49 @@ BOOL format_linux_write_mbr(HANDLE hDrive, BOOL needs_masquerading)
 }
 
 /*
+ * format_linux_write_sbr - write Secondary Boot Record (SBR).
+ *
+ * For GRUB4DOS: writes the secondary sectors of grldr.mbr (bytes 512+)
+ * at disk offset 0x200.  This provides the chain-loader code that the
+ * sector-0 MBR stub needs.
+ *
+ * For GRUB2: no-op (grub-install writes core.img to the disk gap).
+ * For all other boot types: no-op.
+ *
+ * Mirrors Windows format.c WriteSBR().
+ */
+BOOL format_linux_write_sbr(HANDLE hDrive)
+{
+	if (!hDrive || hDrive == INVALID_HANDLE_VALUE) return FALSE;
+
+	int sub_type = boot_type;
+	/* Syslinux takes precedence over Grub for SBR too */
+	if (boot_type == BT_IMAGE && !HAS_SYSLINUX(img_report)) {
+		if (img_report.has_grub4dos)
+			sub_type = BT_GRUB4DOS;
+		if (img_report.has_grub2)
+			sub_type = BT_GRUB2;
+	}
+
+	if (sub_type == BT_GRUB4DOS) {
+		/* Write grldr.mbr secondary sectors (bytes 512+) at offset 0x200 */
+		#include "../ms-sys/inc/mbr_grub_secondary.h"
+		uprintf("Writing Grub4DOS SBR (%u bytes at 0x200)", mbr_grub_secondary_size);
+		ssize_t written = pwrite((int)(intptr_t)hDrive, mbr_grub_secondary,
+		                         mbr_grub_secondary_size, 0x200);
+		if (written != (ssize_t)mbr_grub_secondary_size) {
+			uprintf("Failed to write Grub4DOS SBR: %s", strerror(errno));
+			return FALSE;
+		}
+		return TRUE;
+	}
+
+	/* BT_GRUB2: grub-install handles core.img; no manual SBR needed */
+	/* All other types: no secondary block required */
+	return TRUE;
+}
+
+/*
  * format_linux_write_drive - raw image write or zero-drive.
  *
  * If bZeroDrive is TRUE, writes zeros across the entire SelectedDrive.DiskSize.
@@ -677,6 +720,10 @@ DWORD WINAPI FormatThread(void* param)
 		goto out;
 	}
 	PrintStatusInfo(FALSE, FALSE, 0, MSG_226);
+	/* Analyze existing MBR before clearing — diagnostic logging only */
+	if (!zero_drive && !write_as_image)
+		AnalyzeMBR(hPhysicalDrive, "Drive", FALSE);
+	UpdateProgress(OP_ANALYZE_MBR, -1.0f);
 
 	/* Clear MBR/GPT areas */
 	if (!format_linux_clear_mbr_gpt(hPhysicalDrive,
@@ -896,6 +943,12 @@ DWORD WINAPI FormatThread(void* param)
 
 	/* Write MBR boot code */
 	if (!format_linux_write_mbr(hPhysicalDrive, needs_masquerading)) {
+		if (!IS_ERROR(ErrorStatus))
+			ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
+		goto out;
+	}
+	/* Write SBR (secondary sectors) — GRUB4DOS chain-loader */
+	if (!format_linux_write_sbr(hPhysicalDrive)) {
 		if (!IS_ERROR(ErrorStatus))
 			ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
 		goto out;

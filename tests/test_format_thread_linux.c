@@ -751,6 +751,134 @@ TEST(write_mbr_image_kolibrios_ntfs_does_not_write_kolibri_code)
 }
 
 /* ================================================================
+ * WriteSBR tests
+ * ================================================================ */
+
+extern BOOL format_linux_write_sbr(HANDLE hDrive);
+
+/* Helper to read N bytes from file at offset, returning number of bytes read */
+static ssize_t read_at_raw(const char *path, off_t off, void *buf, size_t n)
+{
+	int fd = open(path, O_RDONLY);
+	if (fd < 0) return -1;
+	ssize_t r = pread(fd, buf, n, off);
+	close(fd);
+	return r;
+}
+
+TEST(write_sbr_bad_handle_fails)
+{
+	BOOL r = format_linux_write_sbr(INVALID_HANDLE_VALUE);
+	CHECK(r == FALSE);
+}
+
+TEST(write_sbr_non_bootable_is_noop)
+{
+	/* BT_NON_BOOTABLE → no secondary block needed → TRUE with no writes */
+	char *path = create_temp_image(4096);
+	CHECK(path != NULL);
+	int fd = open(path, O_RDWR);
+	CHECK(fd >= 0);
+	reset_globals();
+	boot_type = BT_NON_BOOTABLE;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = format_linux_write_sbr((HANDLE)(intptr_t)fd);
+	close(fd);
+	CHECK(r == TRUE);
+	/* File should remain all zeros */
+	uint8_t buf[512];
+	ssize_t nr = read_at_raw(path, 0, buf, sizeof(buf));
+	CHECK(nr == (ssize_t)sizeof(buf));
+	uint8_t zeros[512] = {0};
+	CHECK(memcmp(buf, zeros, sizeof(buf)) == 0);
+	unlink(path); free(path);
+}
+
+TEST(write_sbr_grub4dos_writes_secondary_block)
+{
+	/*
+	 * BT_GRUB4DOS → write secondary block of grldr.mbr (bytes 512+)
+	 * starting at offset 0x200 on the disk.
+	 * The first byte of the secondary block should be non-zero.
+	 */
+	char template[] = "/tmp/rufus_sbr_XXXXXX";
+	int fd = mkstemp(template);
+	CHECK(fd >= 0);
+	/* Need at least 8192 + 512 bytes for the secondary block */
+	uint8_t *zeros = calloc(0x2200, 1);
+	CHECK(zeros != NULL);
+	CHECK(write(fd, zeros, 0x2200) == 0x2200);
+	free(zeros);
+
+	reset_globals();
+	boot_type = BT_GRUB4DOS;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = format_linux_write_sbr((HANDLE)(intptr_t)fd);
+	close(fd);
+	CHECK(r == TRUE);
+
+	/* Read what was written at offset 0x200 (512 bytes in) */
+	uint8_t got[16];
+	ssize_t nr = read_at_raw(template, 0x200, got, sizeof(got));
+	CHECK(nr == (ssize_t)sizeof(got));
+	/* Secondary block must not be all zeros */
+	uint8_t allzero[16] = {0};
+	CHECK(memcmp(got, allzero, sizeof(got)) != 0);
+
+	unlink(template);
+}
+
+TEST(write_sbr_grub2_is_noop)
+{
+	/*
+	 * BT_GRUB2 → grub-install handles core.img; WriteSBR is a no-op.
+	 * Should return TRUE without modifying the disk.
+	 */
+	char *path = create_temp_image(4096);
+	CHECK(path != NULL);
+	int fd = open(path, O_RDWR);
+	CHECK(fd >= 0);
+	reset_globals();
+	boot_type = BT_GRUB2;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = format_linux_write_sbr((HANDLE)(intptr_t)fd);
+	close(fd);
+	CHECK(r == TRUE);
+	unlink(path); free(path);
+}
+
+TEST(write_sbr_image_grub4dos_writes_secondary_block)
+{
+	/*
+	 * BT_IMAGE + img_report.has_grub4dos → same as BT_GRUB4DOS.
+	 * Secondary block should be written at 0x200.
+	 */
+	char template[] = "/tmp/rufus_sbr2_XXXXXX";
+	int fd = mkstemp(template);
+	CHECK(fd >= 0);
+	uint8_t *zeros = calloc(0x2200, 1);
+	CHECK(zeros != NULL);
+	CHECK(write(fd, zeros, 0x2200) == 0x2200);
+	free(zeros);
+
+	reset_globals();
+	boot_type = BT_IMAGE;
+	img_report.has_grub4dos = 1;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = format_linux_write_sbr((HANDLE)(intptr_t)fd);
+	close(fd);
+	CHECK(r == TRUE);
+
+	uint8_t got[16];
+	ssize_t nr = read_at_raw(template, 0x200, got, sizeof(got));
+	CHECK(nr == (ssize_t)sizeof(got));
+	uint8_t allzero[16] = {0};
+	CHECK(memcmp(got, allzero, sizeof(got)) != 0);
+
+	unlink(template);
+}
+
+/* ================================================================
  * InstallGrub2 tests
  * ================================================================ */
 
@@ -2302,6 +2430,13 @@ int main(void)
 	RUN(write_mbr_preserves_partition_table);
 	RUN(write_mbr_image_kolibrios_fat_writes_kolibri_code);
 	RUN(write_mbr_image_kolibrios_ntfs_does_not_write_kolibri_code);
+
+	printf("\n=== WriteSBR tests ===\n");
+	RUN(write_sbr_bad_handle_fails);
+	RUN(write_sbr_non_bootable_is_noop);
+	RUN(write_sbr_grub4dos_writes_secondary_block);
+	RUN(write_sbr_grub2_is_noop);
+	RUN(write_sbr_image_grub4dos_writes_secondary_block);
 
 	printf("\n=== InstallGrub2 tests ===\n");
 	RUN(install_grub2_null_dev_returns_false);

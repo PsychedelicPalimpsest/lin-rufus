@@ -169,6 +169,20 @@ BOOL FormatUDF(DWORD DriveIndex, uint64_t PartitionOffset,
                DWORD UnitAllocationSize, LPCSTR Label, DWORD Flags);
 
 /*
+ * format_linux_write_sbr - write the Secondary Boot Record (SBR).
+ *
+ * For GRUB4DOS (BT_GRUB4DOS, or BT_IMAGE with has_grub4dos set): writes the
+ * secondary sectors of grldr.mbr (bytes 512+) at disk offset 0x200 so that
+ * the GRUB4DOS bootloader in sector 0 can chain-load the rest.
+ *
+ * For GRUB2: no-op (grub-install already writes core.img to the disk gap).
+ * For all other boot types: no-op.
+ *
+ * Mirrors Windows format.c WriteSBR(), called after format_linux_write_mbr().
+ */
+BOOL format_linux_write_sbr(HANDLE hDrive);
+
+/*
  * format_udf_build_cmd - build a mkudffs command string (testable helper).
  *
  *   tool         - absolute path to mkudffs binary
