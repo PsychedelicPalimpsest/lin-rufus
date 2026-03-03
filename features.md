@@ -654,7 +654,7 @@ This is the most structurally significant porting gap.
 102. ~~**Man page for CLI mode**~~ ✅ **DONE** — `doc/rufus.1` documents all CLI flags (`--device`, `--image`, `--fs`, `--partition-scheme`, `--target-sys`, `--cluster`, `--label`, `--quick`, `--verify`, `--bad-blocks`); installed via `man_MANS = doc/rufus.1` in `Makefile.am`; 11 tests in `test_man_page_linux_linux` verify structure, sections, and flag documentation
 103. ~~**CONTRIBUTING.md for the Linux port**~~ ✅ **DONE** — `CONTRIBUTING.md` documents porting conventions: compat-layer rules (no runtime no-ops without comments), test requirements (≥ 3 tests per new function), how to add new compat headers, how to run the full test suite (`./run_tests.sh`), Wine setup instructions for Windows API testing
 104. ~~**Architecture overview document**~~ ✅ **DONE** — `doc/linux-architecture.md` describes the layered architecture: compat headers → Linux implementation files → common/ portable code → GTK UI; includes dependency graph of major source files and their relationships; documents the abstraction strategy and platform-specific vs portable code boundaries
-105. Document the differences between this and the prefork repo. 
+105. ✅ DONE **Document the differences between this and the prefork repo** — `DIFFERENCES.md` documents: UI framework differences (Win32 vs GTK3), implemented features, behavioral differences (device refresh, GRUB2 core image, Syslinux download, process-hold check, extended label, autorun, WDAC, bad blocks), and features permanently N/A on Linux (WM_DEVICECHANGE, SetAlertPromptHook, GetProcessSearch, CopySKUSiPolicy, autorun.inf, IDD_FORMAT resources, Setup API, SBP2, UAC workarounds, registry HKLM, COM/WMI).
 ---
 
 ### Robustness & Diagnostics

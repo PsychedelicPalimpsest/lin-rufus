@@ -2504,6 +2504,20 @@ TEST(write_pbr_fat16_no_fat16_sig_fails)
 	unlink(template);
 }
 
+TEST(write_pbr_fat16_kolibrios_unsupported_fails)
+{
+	/* BT_IMAGE + HAS_KOLIBRIOS on FAT16 is unsupported — must return FALSE */
+	char *path = create_fat16_sector();
+	CHECK(path != NULL);
+	reset_globals();
+	boot_type = BT_IMAGE;
+	img_report.has_kolibrios = 1;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT16);
+	CHECK(r == FALSE);
+	unlink(path); free(path);
+}
+
 TEST(write_pbr_ntfs_no_ntfs_sig_fails)
 {
 	/* A file without the NTFS signature ("NTFS    " at 0x03) must fail */
@@ -3112,6 +3126,7 @@ int main(void)
 	RUN(write_pbr_fat16_freedos_matches_fd_vbr);
 	RUN(write_pbr_fat16_reactos_matches_ros_vbr);
 	RUN(write_pbr_fat16_no_fat16_sig_fails);
+	RUN(write_pbr_fat16_kolibrios_unsupported_fails);
 
 	printf("\n=== WritePBR_fs NTFS VBR tests ===\n");
 	RUN(write_pbr_ntfs_passes);

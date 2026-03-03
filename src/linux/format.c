@@ -178,6 +178,9 @@ BOOL WritePBR_fs(HANDLE hLogicalVolume, int fs_type)
 			if (!write_fat_16_fd_br(fp, 0)) return FALSE;
 		} else if (boot_type == BT_REACTOS) {
 			if (!write_fat_16_ros_br(fp, 0)) return FALSE;
+		} else if ((boot_type == BT_IMAGE) && HAS_KOLIBRIOS(img_report)) {
+			uprintf("FAT16 is not supported for KolibriOS");
+			return FALSE;
 		} else {
 			if (!write_fat_16_br(fp, 0)) return FALSE;
 		}
