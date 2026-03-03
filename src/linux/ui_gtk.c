@@ -1037,23 +1037,8 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	}
 
 	/* Show "WARNING: ALL DATA ON DEVICE WILL BE DESTROYED" confirmation */
+	/* Mirror Windows UM_FORMAT_START pre-format checks */
 	{
-		char dev_name[256] = "the selected device";
-		SendMessageA(hDeviceList, CB_GETLBTEXT, (WPARAM)sel, (LPARAM)dev_name);
-		if (Notification(MB_OKCANCEL | MB_ICONWARNING, APPLICATION_NAME,
-		                 lmprintf(MSG_003, dev_name)) != IDOK)
-			return;
-		/* Multiple partition warning — mirrors Windows UM_FORMAT_START */
-		if (SelectedDrive.nPartitions > 1
-		    && Notification(MB_OKCANCEL | MB_ICONWARNING, lmprintf(MSG_094),
-		                    lmprintf(MSG_093)) != IDOK)
-			return;
-		/* Non-512-byte sector warning */
-		if (!zero_drive && boot_type != BT_NON_BOOTABLE
-		    && SelectedDrive.SectorSize != 512
-		    && Notification(MB_OKCANCEL | MB_ICONWARNING, lmprintf(MSG_197),
-		                    lmprintf(MSG_196, SelectedDrive.SectorSize)) != IDOK)
-			return;
 		/* MBR on > 2 TB disk */
 		if (partition_type == PARTITION_STYLE_MBR
 		    && (uint64_t)SelectedDrive.DiskSize > 2ULL * TB
@@ -1076,6 +1061,24 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 				             lmprintf(MSG_112, dur_mins, dur_secs));
 			}
 		}
+		/* GetProcessSearch is Windows-only; on Linux skip straight to confirm */
+		PrintStatus(0, MSG_142);
+		char dev_name[256] = "the selected device";
+		SendMessageA(hDeviceList, CB_GETLBTEXT, (WPARAM)sel, (LPARAM)dev_name);
+		if (Notification(MB_OKCANCEL | MB_ICONWARNING, APPLICATION_NAME,
+		                 lmprintf(MSG_003, dev_name)) != IDOK)
+			return;
+		/* Multiple partition warning — mirrors Windows UM_FORMAT_START */
+		if (SelectedDrive.nPartitions > 1
+		    && Notification(MB_OKCANCEL | MB_ICONWARNING, lmprintf(MSG_094),
+		                    lmprintf(MSG_093)) != IDOK)
+			return;
+		/* Non-512-byte sector warning */
+		if (!zero_drive && boot_type != BT_NON_BOOTABLE
+		    && SelectedDrive.SectorSize != 512
+		    && Notification(MB_OKCANCEL | MB_ICONWARNING, lmprintf(MSG_197),
+		                    lmprintf(MSG_196, SelectedDrive.SectorSize)) != IDOK)
+			return;
 	}
 
 	/* Warn if any UEFI bootloader in the image has been revoked */
