@@ -73,6 +73,8 @@ typedef struct {
     int  no_rufus_mbr;      /* --no-rufus-mbr/-R: use standard MBR instead of Rufus's custom MBR */
     int  no_extended_label; /* --no-extended-label/-x: disable extended volume label on FAT */
     int  no_size_check;     /* --no-size-check/-s: skip image-larger-than-drive check */
+    int  ignore_boot_marker; /* --ignore-boot-marker/-I: skip boot signature validation in VHD/image */
+    int  file_indexing;     /* --file-indexing/-n: enable NTFS file indexing (Windows: avoid NOT_CONTENT_INDEXED) */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

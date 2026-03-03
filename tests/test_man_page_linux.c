@@ -446,6 +446,30 @@ TEST(man_page_documents_no_size_check_flag) {
     free(content);
 }
 
+TEST(man_page_documents_ignore_boot_marker_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "ignore-boot-marker") != NULL
+       || strstr(content, "ignore.boot.marker") != NULL
+       || strstr(content, "ignore\\-boot\\-marker") != NULL
+       || strstr(content, "boot.marker") != NULL);
+    free(content);
+}
+
+TEST(man_page_documents_file_indexing_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "file-indexing") != NULL
+       || strstr(content, "file.indexing") != NULL
+       || strstr(content, "file\\-indexing") != NULL
+       || strstr(content, "indexing") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_json_flag) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -564,6 +588,8 @@ int main(void)
     RUN(man_page_documents_no_rufus_mbr_flag);
     RUN(man_page_documents_no_extended_label_flag);
     RUN(man_page_documents_no_size_check_flag);
+    RUN(man_page_documents_ignore_boot_marker_flag);
+    RUN(man_page_documents_file_indexing_flag);
     RUN(man_page_documents_json_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);

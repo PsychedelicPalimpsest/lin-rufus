@@ -34,6 +34,8 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-no\-rufus\-mbr\fR]
 [\fB\-\-no\-extended\-label\fR]
 [\fB\-\-no\-size\-check\fR]
+[\fB\-\-ignore\-boot\-marker\fR]
+[\fB\-\-file\-indexing\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-json\fR]
 [\fB\-\-label\fR \fILABEL\fR]
@@ -242,6 +244,17 @@ label only.
 Skip the check that rejects images whose projected size exceeds the
 device capacity.  Use with caution: writing an oversized image will
 corrupt the device.
+.TP
+.BR \-I ", " \-\-ignore\-boot\-marker
+Ignore a missing or invalid boot signature when scanning VHD and raw
+image files.  By default Rufus rejects images that do not advertise a
+recognisable boot structure; this flag overrides that guard.
+.TP
+.BR \-n ", " \-\-file\-indexing
+Enable NTFS file indexing on the formatted volume.  By default Rufus
+sets the \fINOT_CONTENT_INDEXED\fR attribute on all extracted files to
+prevent Windows Search from indexing the bootable USB; this flag allows
+indexing instead.  Only affects NTFS and UDF volumes.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

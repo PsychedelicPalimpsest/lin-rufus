@@ -73,6 +73,8 @@ extern BOOL validate_md5sum;
 extern BOOL use_rufus_mbr;
 extern BOOL use_extended_label;
 extern BOOL size_check;
+extern BOOL ignore_boot_marker;
+extern BOOL enable_file_indexing;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -177,6 +179,8 @@ void cli_print_usage(const char *prog)
 	       "  -R, --no-rufus-mbr        Use standard MBR instead of Rufus's custom MBR\n"
 	       "  -x, --no-extended-label   Disable extended volume label on FAT filesystems\n"
 	       "  -s, --no-size-check       Skip image-larger-than-device size check\n"
+	       "  -I, --ignore-boot-marker  Ignore missing boot signature in VHD/image files\n"
+	       "  -n, --file-indexing       Enable NTFS file indexing on the formatted volume\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "  -j, --json                Output --list-devices results as JSON\n"
@@ -223,6 +227,8 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "no-rufus-mbr",    no_argument,       NULL, 'R' },
 		{ "no-extended-label", no_argument,     NULL, 'x' },
 		{ "no-size-check",   no_argument,       NULL, 's' },
+		{ "ignore-boot-marker", no_argument,   NULL, 'I' },
+		{ "file-indexing",   no_argument,       NULL, 'n' },
 		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
@@ -239,7 +245,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemRxsjL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemRxsInjL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -440,6 +446,14 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->no_size_check = 1;
 			break;
 
+		case 'I':
+			opts->ignore_boot_marker = 1;
+			break;
+
+		case 'n':
+			opts->file_indexing = 1;
+			break;
+
 		case 'j':
 			opts->json = 1;
 			break;
@@ -573,6 +587,12 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Skip image-larger-than-device size check */
 	if (opts->no_size_check)
 		size_check = FALSE;
+	/* Ignore boot marker in VHD/image files */
+	if (opts->ignore_boot_marker)
+		ignore_boot_marker = TRUE;
+	/* Enable NTFS file indexing */
+	if (opts->file_indexing)
+		enable_file_indexing = TRUE;
 }
 
 /*

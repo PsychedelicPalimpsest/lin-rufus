@@ -1278,6 +1278,72 @@ static void test_no_size_check_default_is_off(void)
     CHECK(opts.no_size_check == 0);
 }
 
+/* ---- --ignore-boot-marker tests ---- */
+
+static void test_init_ignore_boot_marker_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.ignore_boot_marker == 0);
+}
+
+static void test_ignore_boot_marker_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --ignore-boot-marker", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.ignore_boot_marker != 0);
+}
+
+static void test_ignore_boot_marker_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -I", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.ignore_boot_marker != 0);
+}
+
+static void test_ignore_boot_marker_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.ignore_boot_marker == 0);
+}
+
+/* ---- --file-indexing tests ---- */
+
+static void test_init_file_indexing_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.file_indexing == 0);
+}
+
+static void test_file_indexing_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --file-indexing", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.file_indexing != 0);
+}
+
+static void test_file_indexing_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -n", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.file_indexing != 0);
+}
+
+static void test_file_indexing_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.file_indexing == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1487,6 +1553,18 @@ int main(void)
     RUN_TEST(test_no_size_check_long_flag);
     RUN_TEST(test_no_size_check_short_flag);
     RUN_TEST(test_no_size_check_default_is_off);
+
+    /* --ignore-boot-marker tests */
+    RUN_TEST(test_init_ignore_boot_marker_is_false);
+    RUN_TEST(test_ignore_boot_marker_long_flag);
+    RUN_TEST(test_ignore_boot_marker_short_flag);
+    RUN_TEST(test_ignore_boot_marker_default_is_off);
+
+    /* --file-indexing tests */
+    RUN_TEST(test_init_file_indexing_is_false);
+    RUN_TEST(test_file_indexing_long_flag);
+    RUN_TEST(test_file_indexing_short_flag);
+    RUN_TEST(test_file_indexing_default_is_off);
 
     TEST_RESULTS();
 }
