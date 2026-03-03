@@ -150,6 +150,64 @@ kbdshortcut_result_t kbdshortcut_toggle_force_update(int *force_update)
 	return r;
 }
 
+/* Ctrl+Alt+Y — force update (strict: force_update = 2 ignores timestamp errors) */
+kbdshortcut_result_t kbdshortcut_toggle_force_update_strict(int *force_update)
+{
+	kbdshortcut_result_t r = { 0, 0, 0 };
+	*force_update = (*force_update > 0) ? 0 : 2;
+	r.new_value   = *force_update;
+	return r;
+}
+
+/* Alt+. (period) — toggle USB enumeration debug */
+kbdshortcut_result_t kbdshortcut_toggle_usb_debug(int *usb_debug)
+{
+	kbdshortcut_result_t r = { 0, 1, 0 };  /* refresh_devs=1 */
+	*usb_debug  = !*usb_debug;
+	r.new_value = *usb_debug;
+	return r;
+}
+
+/* Alt+, (comma) — toggle physical drive locking */
+kbdshortcut_result_t kbdshortcut_toggle_lock_drive(int *lock_drive)
+{
+	kbdshortcut_result_t r = { 0, 0, 0 };
+	*lock_drive = !*lock_drive;
+	r.new_value = *lock_drive;
+	return r;
+}
+
+/* Alt+Q — toggle file indexing (for file systems that support it) */
+kbdshortcut_result_t kbdshortcut_toggle_file_indexing(int *enable_file_indexing)
+{
+	kbdshortcut_result_t r = { 0, 0, 0 };
+	*enable_file_indexing = !*enable_file_indexing;
+	r.new_value           = *enable_file_indexing;
+	return r;
+}
+
+/*
+ * Ctrl+Alt+F — toggle listing of non-USB removable drives.
+ * When enabling:  saves current enable_hdds value, then forces enable_hdds=1.
+ * When disabling: restores the previously saved enable_hdds value.
+ * Returns refresh_devs=1 always.
+ */
+kbdshortcut_result_t kbdshortcut_toggle_non_usb_removable(int *list_non_usb_removable,
+                                                            int *enable_hdds,
+                                                            int *prev_enable_hdds)
+{
+	kbdshortcut_result_t r = { 0, 1, 0 };
+	*list_non_usb_removable = !*list_non_usb_removable;
+	if (*list_non_usb_removable) {
+		*prev_enable_hdds = *enable_hdds;
+		*enable_hdds      = 1;
+	} else {
+		*enable_hdds = *prev_enable_hdds;
+	}
+	r.new_value = *list_non_usb_removable;
+	return r;
+}
+
 /* --------------------------------------------------------------------- *
  * Zero-drive helpers                                                     *
  * --------------------------------------------------------------------- */

@@ -77,6 +77,11 @@ extern BOOL enable_vmdk;        /* globals.c */
 extern BOOL enable_ntfs_compression; /* globals.c */
 extern BOOL allow_dual_uefi_bios;    /* globals.c */
 extern BOOL enable_VHDs;        /* globals.c */
+extern BOOL lock_drive;         /* globals.c */
+extern BOOL user_deleted_rufus_dir;   /* globals.c */
+extern BOOL previous_enable_HDDs;     /* globals.c */
+extern BOOL list_non_usb_removable_drives; /* globals.c */
+extern BOOL enable_file_indexing; /* globals.c */
 
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
@@ -166,6 +171,12 @@ static void on_toggle_preserve_ts(GtkWidget *w, gpointer data);
 static void on_toggle_proper_units(GtkWidget *w, gpointer data);
 static void on_toggle_vmdk(GtkWidget *w, gpointer data);
 static void on_toggle_force_update(GtkWidget *w, gpointer data);
+static void on_toggle_force_update_strict(GtkWidget *w, gpointer data);
+static void on_toggle_usb_debug(GtkWidget *w, gpointer data);
+static void on_toggle_lock_drive(GtkWidget *w, gpointer data);
+static void on_toggle_file_indexing(GtkWidget *w, gpointer data);
+static void on_toggle_non_usb_removable(GtkWidget *w, gpointer data);
+static void on_delete_app_data_dir(GtkWidget *w, gpointer data);
 static void on_zero_drive(GtkWidget *w, gpointer data);
 static void on_fast_zero_drive(GtkWidget *w, gpointer data);
 static void on_cycle_port(GtkWidget *w, gpointer data);
@@ -801,6 +812,30 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_z,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_zero_drive), NULL, NULL));
+	/* Alt+. (period): toggle USB enumeration debug */
+	gtk_accel_group_connect(accel, GDK_KEY_period,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_usb_debug), NULL, NULL));
+	/* Alt+, (comma): toggle physical drive locking */
+	gtk_accel_group_connect(accel, GDK_KEY_comma,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_lock_drive), NULL, NULL));
+	/* Alt+D: delete app data files directory */
+	gtk_accel_group_connect(accel, GDK_KEY_d,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_delete_app_data_dir), NULL, NULL));
+	/* Alt+Q: toggle file indexing */
+	gtk_accel_group_connect(accel, GDK_KEY_q,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_file_indexing), NULL, NULL));
+	/* Ctrl+Alt+F: toggle listing of non-USB removable drives */
+	gtk_accel_group_connect(accel, GDK_KEY_f,
+	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_non_usb_removable), NULL, NULL));
+	/* Ctrl+Alt+Y: force update check (strict - ignores timestamp errors) */
+	gtk_accel_group_connect(accel, GDK_KEY_y,
+	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_force_update_strict), NULL, NULL));
 	/* Ctrl+Alt+Z: zero the drive with fast-zeroing (skip empty blocks) */
 	gtk_accel_group_connect(accel, GDK_KEY_z,
 	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
@@ -1790,6 +1825,68 @@ static void on_cycle_port(GtkWidget *w, gpointer data)
 	int index = ComboBox_GetCurSel(hDeviceList);
 	if (index >= 0)
 		CyclePort(index);
+}
+
+static void on_toggle_usb_debug(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	extern BOOL usb_debug;
+	kbdshortcut_result_t r = kbdshortcut_toggle_usb_debug((int*)&usb_debug);
+	WriteSettingBool(SETTING_ENABLE_USB_DEBUG, usb_debug);
+	uprintf("USB debug: %s", r.new_value ? "enabled" : "disabled");
+	if (r.refresh_devs)
+		GetDevices(0);
+}
+
+static void on_toggle_lock_drive(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_lock_drive((int*)&lock_drive);
+	uprintf("Exclusive USB drive locking: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_toggle_file_indexing(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_file_indexing((int*)&enable_file_indexing);
+	WriteSettingBool(SETTING_ENABLE_FILE_INDEXING, enable_file_indexing);
+	uprintf("File indexing: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_toggle_non_usb_removable(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_non_usb_removable(
+		(int*)&list_non_usb_removable_drives,
+		(int*)&enable_HDDs,
+		(int*)&previous_enable_HDDs);
+	if (list_non_usb_removable_drives)
+		uprintf("CAUTION: Listing of non-USB removable drives enabled — you may lose data!");
+	else
+		uprintf("Listing of non-USB removable drives disabled");
+	if (r.refresh_devs)
+		GetDevices(0);
+}
+
+static void on_toggle_force_update_strict(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_force_update_strict((int*)&force_update);
+	uprintf("Force update check (strict): %s (force_update=%d)",
+		r.new_value ? "enabled" : "disabled", r.new_value);
+}
+
+static void on_delete_app_data_dir(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	char path[MAX_PATH];
+	snprintf(path, sizeof(path), "%s/" FILES_DIR, app_data_dir);
+	uprintf("Deleting directory '%s'", path);
+	/* Recursively delete the directory using shell command */
+	char cmd[MAX_PATH + 32];
+	snprintf(cmd, sizeof(cmd), "rm -rf \"%s\"", path);
+	system(cmd);
+	user_deleted_rufus_dir = TRUE;
 }
 
 /* Callback invoked when the GTK dark-theme preference changes (either by the

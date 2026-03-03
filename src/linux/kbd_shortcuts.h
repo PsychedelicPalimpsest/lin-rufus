@@ -41,6 +41,26 @@ kbdshortcut_result_t kbdshortcut_toggle_proper_units     (int *use_fake_units);
 kbdshortcut_result_t kbdshortcut_toggle_vmdk             (int *enable_vmdk);
 kbdshortcut_result_t kbdshortcut_toggle_force_update     (int *force_update);
 
+/* Ctrl+Alt+Y — force update with strict mode (force_update=2 ignores timestamp errors) */
+kbdshortcut_result_t kbdshortcut_toggle_force_update_strict (int *force_update);
+
+/* Alt+. (period) — toggle USB enumeration debug (sets refresh_devs=1) */
+kbdshortcut_result_t kbdshortcut_toggle_usb_debug        (int *usb_debug);
+
+/* Alt+, (comma) — toggle physical drive locking */
+kbdshortcut_result_t kbdshortcut_toggle_lock_drive       (int *lock_drive);
+
+/* Alt+Q — toggle file indexing */
+kbdshortcut_result_t kbdshortcut_toggle_file_indexing    (int *enable_file_indexing);
+
+/*
+ * Ctrl+Alt+F — toggle listing of non-USB removable drives.
+ * Saves/restores enable_hdds as described; sets refresh_devs=1.
+ */
+kbdshortcut_result_t kbdshortcut_toggle_non_usb_removable(int *list_non_usb_removable,
+                                                            int *enable_hdds,
+                                                            int *prev_enable_hdds);
+
 /*
  * kbdshortcut_zero_drive - prepare for zero-drive operation.
  * Sets *zero_drive = 1, *fast_zeroing = 0 (Alt+Z).

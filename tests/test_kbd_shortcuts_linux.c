@@ -8,6 +8,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include "framework.h"
 
 /* Pull in the implementation directly (no separate compilation needed) */
@@ -361,6 +362,180 @@ TEST(toggle_force_update_double_returns_one)
 }
 
 /* ===================================================================== *
+ * Ctrl+Alt+Y — force_update strict (value = 2)                         *
+ * ===================================================================== */
+
+TEST(toggle_force_update_strict_zero_to_two)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_force_update_strict(&v);
+	CHECK_INT_EQ(2, v);
+	CHECK_INT_EQ(2, r.new_value);
+}
+
+TEST(toggle_force_update_strict_nonzero_to_zero)
+{
+	int v = 2;
+	kbdshortcut_result_t r = kbdshortcut_toggle_force_update_strict(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_force_update_strict_differs_from_normal)
+{
+	int vn = 0, vs = 0;
+	kbdshortcut_toggle_force_update(&vn);
+	kbdshortcut_toggle_force_update_strict(&vs);
+	assert(vn != vs);
+}
+
+/* ===================================================================== *
+ * Alt+. (period) — usb_debug                                           *
+ * ===================================================================== */
+
+TEST(toggle_usb_debug_off_to_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_usb_debug(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+	CHECK_INT_EQ(1, r.refresh_devs);
+}
+
+TEST(toggle_usb_debug_on_to_off)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_usb_debug(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+	CHECK_INT_EQ(1, r.refresh_devs);
+}
+
+TEST(toggle_usb_debug_no_partition_refresh)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_usb_debug(&v);
+	CHECK_INT_EQ(0, r.refresh_part);
+}
+
+/* ===================================================================== *
+ * Alt+, (comma) — lock_drive                                           *
+ * ===================================================================== */
+
+TEST(toggle_lock_drive_on_to_off)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_lock_drive(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_lock_drive_off_to_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_lock_drive(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_lock_drive_no_refresh)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_lock_drive(&v);
+	CHECK_INT_EQ(0, r.refresh_devs);
+	CHECK_INT_EQ(0, r.refresh_part);
+}
+
+TEST(toggle_lock_drive_double)
+{
+	int v = 1;
+	kbdshortcut_toggle_lock_drive(&v);
+	kbdshortcut_toggle_lock_drive(&v);
+	CHECK_INT_EQ(1, v);
+}
+
+/* ===================================================================== *
+ * Alt+Q — enable_file_indexing                                         *
+ * ===================================================================== */
+
+TEST(toggle_file_indexing_off_to_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_file_indexing(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_file_indexing_on_to_off)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_file_indexing(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_file_indexing_no_refresh)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_file_indexing(&v);
+	CHECK_INT_EQ(0, r.refresh_devs);
+	CHECK_INT_EQ(0, r.refresh_part);
+}
+
+/* ===================================================================== *
+ * Ctrl+Alt+F — list_non_usb_removable_drives                          *
+ * ===================================================================== */
+
+TEST(toggle_non_usb_removable_enable_saves_hdds)
+{
+	int list = 0, hdds = 0, prev = 0;
+	kbdshortcut_toggle_non_usb_removable(&list, &hdds, &prev);
+	CHECK_INT_EQ(1, list);
+	CHECK_INT_EQ(1, hdds);
+	CHECK_INT_EQ(0, prev);
+}
+
+TEST(toggle_non_usb_removable_enable_hdds_true)
+{
+	int list = 0, hdds = 1, prev = 0;
+	kbdshortcut_toggle_non_usb_removable(&list, &hdds, &prev);
+	CHECK_INT_EQ(1, hdds);
+	CHECK_INT_EQ(1, prev);
+}
+
+TEST(toggle_non_usb_removable_disable_restores_hdds)
+{
+	int list = 1, hdds = 1, prev = 0;
+	kbdshortcut_toggle_non_usb_removable(&list, &hdds, &prev);
+	CHECK_INT_EQ(0, list);
+	CHECK_INT_EQ(0, hdds);
+}
+
+TEST(toggle_non_usb_removable_disable_restores_true)
+{
+	int list = 1, hdds = 1, prev = 1;
+	kbdshortcut_toggle_non_usb_removable(&list, &hdds, &prev);
+	CHECK_INT_EQ(1, hdds);
+}
+
+TEST(toggle_non_usb_removable_requests_refresh)
+{
+	int list = 0, hdds = 0, prev = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_non_usb_removable(&list, &hdds, &prev);
+	CHECK_INT_EQ(1, r.refresh_devs);
+	CHECK_INT_EQ(0, r.refresh_part);
+}
+
+TEST(toggle_non_usb_removable_result_value_matches)
+{
+	int list = 0, hdds = 0, prev = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_non_usb_removable(&list, &hdds, &prev);
+	CHECK_INT_EQ(1, r.new_value);
+	r = kbdshortcut_toggle_non_usb_removable(&list, &hdds, &prev);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+/* ===================================================================== *
  * Alt+Z — zero_drive                                                    *
  * ===================================================================== */
 
@@ -515,6 +690,35 @@ int main(void)
 	RUN(toggle_force_update_one_to_zero);
 	RUN(toggle_force_update_large_to_zero);
 	RUN(toggle_force_update_double_returns_one);
+
+	printf("\n=== Ctrl+Alt+Y (force_update strict) ===\n");
+	RUN(toggle_force_update_strict_zero_to_two);
+	RUN(toggle_force_update_strict_nonzero_to_zero);
+	RUN(toggle_force_update_strict_differs_from_normal);
+
+	printf("\n=== Alt+. (usb_debug) ===\n");
+	RUN(toggle_usb_debug_off_to_on);
+	RUN(toggle_usb_debug_on_to_off);
+	RUN(toggle_usb_debug_no_partition_refresh);
+
+	printf("\n=== Alt+, (lock_drive) ===\n");
+	RUN(toggle_lock_drive_on_to_off);
+	RUN(toggle_lock_drive_off_to_on);
+	RUN(toggle_lock_drive_no_refresh);
+	RUN(toggle_lock_drive_double);
+
+	printf("\n=== Alt+Q (file_indexing) ===\n");
+	RUN(toggle_file_indexing_off_to_on);
+	RUN(toggle_file_indexing_on_to_off);
+	RUN(toggle_file_indexing_no_refresh);
+
+	printf("\n=== Ctrl+Alt+F (non_usb_removable) ===\n");
+	RUN(toggle_non_usb_removable_enable_saves_hdds);
+	RUN(toggle_non_usb_removable_enable_hdds_true);
+	RUN(toggle_non_usb_removable_disable_restores_hdds);
+	RUN(toggle_non_usb_removable_disable_restores_true);
+	RUN(toggle_non_usb_removable_requests_refresh);
+	RUN(toggle_non_usb_removable_result_value_matches);
 
 	printf("\n=== Alt+Z (zero_drive) ===\n");
 	RUN(zero_drive_sets_flags);
