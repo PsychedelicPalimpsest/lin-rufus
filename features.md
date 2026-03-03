@@ -851,3 +851,16 @@ This is the most structurally significant porting gap.
     - **Alt+R (delete settings)**: `on_delete_settings()` handler calls `unlink(ini_file)`, shows MSG_248/249; GDK_KEY_r + GDK_MOD1_MASK accel binding
     - **Alt+O (optical save)**: Alt+O accel binding to `on_save_clicked` (already calls `OpticalDiscSaveImage()`)
     - **`IsChecked(IDC_OLD_BIOS_FIXES)` fix**: was always returning FALSE (broken `IsDlgButtonChecked` stub); now uses `use_old_bios_fixes` global updated by `on_old_bios_check_toggled()` signal handler; `BOOL use_old_bios_fixes = FALSE` added to `globals.c`; `extern BOOL use_old_bios_fixes` declared in `format.c`
+
+167. ✅ DONE **IDC_EXTENDED_LABEL checkbox + SetAutorun Linux implementation** —
+    - GTK checkbox "Create extended label and icon files" added to Advanced Format Options expander
+    - `use_extended_label` global (BOOL, default TRUE) in `globals.c`; `on_extended_label_toggled()` handler updates it
+    - `should_enable_extended_label()` wired into `update_advanced_controls()` — grays out appropriately
+    - `SetAutorun()` implemented in `src/linux/icon.c`: creates `autorun.inf` with `[autorun]\nicon=autorun.ico\nlabel=<label>` in the volume root; label read via `GetWindowTextA(hLabel, ...)`; icon extraction skipped (no `.exe` resources on Linux); guard: `!IS_ERROR && use_extended_label && !write_as_image && fs_type < FS_EXT2`
+    - MSG_166 tooltip wired to checkbox
+    - 3 FormatThread integration tests: `extended_label_calls_set_autorun`, `no_extended_label_skips_set_autorun`, `extended_label_skipped_for_dd_image`
+
+168. ✅ DONE **Settings persistence parity: locale + advanced mode expanders** —
+    - **SETTING_LOCALE save/restore**: On language change (language menu handler), `WriteSettingStr(SETTING_LOCALE, selected_locale->txt[0])` persists the user's choice; on startup, `ReadSettingStr(SETTING_LOCALE)` is checked first — if saved locale matches a known locale it is used, otherwise falls back to system locale via `ToLocaleName(0)`. Mirrors Windows `ReadSettingStr(SETTING_LOCALE)` at startup and `WriteSettingStr(SETTING_LOCALE, ...)` on WM_DESTROY.
+    - **SETTING_ADVANCED_MODE_DEVICE**: `on_adv_device_toggled()` signal handler added to `adv_device_expander`; saves `WriteSettingBool(SETTING_ADVANCED_MODE_DEVICE, ...)` on toggle; on startup `ReadSettingBool(SETTING_ADVANCED_MODE_DEVICE)` → `ToggleAdvancedDeviceOptions()`.
+    - **SETTING_ADVANCED_MODE_FORMAT**: `on_adv_format_toggled()` extended with `WriteSettingBool(SETTING_ADVANCED_MODE_FORMAT, ...)` on toggle; on startup `ReadSettingBool(SETTING_ADVANCED_MODE_FORMAT)` → `ToggleAdvancedFormatOptions()`.

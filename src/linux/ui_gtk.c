@@ -262,6 +262,7 @@ static void on_toggle_rockridge(GtkWidget *w, gpointer data);
 static void on_toggle_usb_hdd(GtkWidget *w, gpointer data);
 static void on_list_usb_hdd_toggled(GtkToggleButton *btn, gpointer data);
 static void on_uefi_validation_toggled(GtkToggleButton *btn, gpointer data);
+static void on_adv_device_toggled(GtkExpander *exp, gpointer data);
 static void on_adv_format_toggled(GtkExpander *exp, gpointer data);
 static void on_old_bios_check_toggled(GtkToggleButton *btn, gpointer data);
 static void on_extended_label_toggled(GtkToggleButton *btn, gpointer data);
@@ -606,6 +607,8 @@ static GtkWidget *build_drive_properties(void)
 	gtk_box_pack_start(GTK_BOX(adv_box), rw.uefi_validation_check, FALSE, FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(rw.adv_device_expander), adv_box);
 	gtk_box_pack_start(GTK_BOX(vbox), rw.adv_device_expander, FALSE, FALSE, 2);
+	g_signal_connect(rw.adv_device_expander, "activate",
+	                 G_CALLBACK(on_adv_device_toggled), NULL);
 
 	return vbox;
 }
@@ -2158,9 +2161,20 @@ static void on_toggle_rockridge(GtkWidget *w, gpointer data)
 /* Mirrors Windows IDC_ADVANCED_FORMAT_OPTIONS: refresh FS+cluster combo after toggle */
 static void on_adv_format_toggled(GtkExpander *exp, gpointer data)
 {
-	(void)exp; (void)data;
+	(void)data;
+	/* GTK fires "activate" before toggling, so the current expanded state
+	 * is what we're toggling AWAY from. */
+	BOOL now_expanded = !gtk_expander_get_expanded(GTK_EXPANDER(exp));
+	WriteSettingBool(SETTING_ADVANCED_MODE_FORMAT, now_expanded);
 	populate_fs_combo();
 	SetFSFromISO();
+}
+
+static void on_adv_device_toggled(GtkExpander *exp, gpointer data)
+{
+	(void)data;
+	BOOL now_expanded = !gtk_expander_get_expanded(GTK_EXPANDER(exp));
+	WriteSettingBool(SETTING_ADVANCED_MODE_DEVICE, now_expanded);
 }
 
 static void on_toggle_usb_hdd(GtkWidget *w, gpointer data)
@@ -3273,6 +3287,9 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 						selected_locale = lcmd;
 						get_loc_data_file(loc_filename, selected_locale);
 						apply_localization(0, hMainDialog);
+						/* Persist the user's language choice across sessions */
+						if (selected_locale->txt[0])
+							WriteSettingStr(SETTING_LOCALE, selected_locale->txt[0]);
 						uprintf("Language switched to %s",
 						        lcmd->txt[1] ? lcmd->txt[1] : lcmd->txt[0]);
 					}
@@ -3397,12 +3414,22 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 		if (loc_path != NULL) {
 			uprintf("localization: loading '%s'", loc_path);
 			if (get_supported_locales(loc_path)) {
-				char *sys_locale = ToLocaleName(0);
-				loc_cmd *sel = get_locale_from_name(sys_locale, TRUE);
+				/* Prefer user-saved locale over system locale */
+				char *saved_locale = ReadSettingStr(SETTING_LOCALE);
+				loc_cmd *sel = NULL;
+				if (saved_locale && saved_locale[0]) {
+					sel = get_locale_from_name(saved_locale, FALSE);
+					if (sel == NULL)
+						sel = get_locale_from_name(saved_locale, TRUE);
+				}
+				if (sel == NULL) {
+					char *sys_locale = ToLocaleName(0);
+					sel = get_locale_from_name(sys_locale, TRUE);
+				}
 				if (sel != NULL)
 					get_loc_data_file(loc_path, sel);
 				else
-					uprintf("localization: no locale match for '%s'", sys_locale);
+					uprintf("localization: no locale match found");
 			} else {
 				uprintf("localization: failed to parse '%s'", loc_path);
 			}
@@ -3560,6 +3587,14 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	SetAccessibleName((HWND)rw.select_btn,   lmprintf(MSG_165));
 	SetAccessibleName((HWND)rw.start_btn,    lmprintf(MSG_171));
 	SetAccessibleName((HWND)rw.close_btn,    "Close");
+
+	/* Restore advanced expander state (mirrors Windows SETTING_ADVANCED_MODE_*) */
+	{
+		if (ReadSettingBool(SETTING_ADVANCED_MODE_DEVICE))
+			ToggleAdvancedDeviceOptions(TRUE);
+		if (ReadSettingBool(SETTING_ADVANCED_MODE_FORMAT))
+			ToggleAdvancedFormatOptions(TRUE);
+	}
 
 	/* Enumerate attached block devices and fill the device list. */
 	GetDevices(0);
