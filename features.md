@@ -550,3 +550,18 @@ This is the most structurally significant porting gap.
   `format.c` now checks `cli_win_to_go || (combo == IMOP_WIN_TO_GO)`.  5 new CLI tests
   (182 total), 1 new man-page test (73 total).  All tests pass.
 
+* ~~Feature 195~~: **RESOLVED** — CLI format flags: `--write-as-image`/`-w`,
+  `--fast-zeroing`/`-Z`, `--old-bios-fixes`/`-o`, `--allow-dual-uefi-bios`/`-A`,
+  `--preserve-timestamps`/`-e`, `--validate-md5sum`/`-m`, `--no-rufus-mbr`/`-R`,
+  `--no-extended-label`/`-x`, `--no-size-check`/`-s`.  All 9 flags wired via
+  `cli_apply_options()` to their corresponding globals in `globals.c`.  Man page
+  SYNOPSIS and OPTIONS updated.  248 CLI tests + 91 man-page tests pass.
+
+* ~~Feature 196~~: **RESOLVED** — Fixed pre-existing test build failures:
+  `test_format_ntfs_exfat_linux` (missing `advanced_mode_format` stub);
+  `test_persistence_linux`, `test_badblocks_integration_linux` (missing
+  `selected_cluster_size` stub); `test_loopback_linux` (duplicate `persistence_size`);
+  `test_e2e_linux`, `test_qemu_boot_linux`, `test_real_device_linux` (missing
+  `GetDevices` stub); `test_write_drive_linux` (missing stubs for new globals).
+  All Linux tests now build and pass (0 failures).
+
