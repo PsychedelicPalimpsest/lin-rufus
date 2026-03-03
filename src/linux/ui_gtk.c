@@ -882,7 +882,7 @@ static void on_close_clicked(GtkButton *btn, gpointer data)
 		 * via CHECK_FOR_USER_CANCEL and will exit cleanly. */
 		ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED);
 		uprintf("Cancellation requested by user.");
-		rufus_gtk_update_status("Cancelling...");
+		rufus_gtk_update_status(lmprintf(MSG_201));
 	} else {
 		device_monitor_stop();
 		rufus_set_log_handler(NULL);
@@ -1220,11 +1220,16 @@ start_format:
 	return;
 
 abort_format:
-	/* User cancelled or validation failed — clean up any unattend XML created above */
+	/* User cancelled or validation failed — mirrors Windows aborted_start path */
 	zero_drive = FALSE;
 	if (unattend_xml_path != NULL) {
 		unlink(unattend_xml_path);
 		safe_free(unattend_xml_path);
+	}
+	{
+		int nb_devices = ComboBox_GetCount(hDeviceList);
+		rufus_gtk_update_status(lmprintf(
+		    (nb_devices == 1) ? MSG_208 : MSG_209, nb_devices));
 	}
 }
 static void on_select_clicked(GtkButton *btn, gpointer data)
@@ -1531,8 +1536,13 @@ static void on_device_changed(GtkComboBox *combo, gpointer data)
 		return;
 	DWORD di = (DWORD)ComboBox_GetItemData(hDeviceList, sel);
 
+	/* Show device count in debug log (mirrors Windows IDC_DEVICE CBN_SELCHANGE PrintStatusDebug) */
+	int nb_devices = ComboBox_GetCount(hDeviceList);
+	uprintf("%s", lmprintf((nb_devices == 1) ? MSG_208 : MSG_209, nb_devices));
+
 	/* Read partition / FS data for the selected drive */
 	char fs_name[32] = "";
+	GetDrivePartitionData(di, fs_name, sizeof(fs_name), TRUE);
 	GetDrivePartitionData(di, fs_name, sizeof(fs_name), TRUE);
 
 	/* Ventoy detection — warn the user if the selected device has a
