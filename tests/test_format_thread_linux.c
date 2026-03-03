@@ -177,6 +177,7 @@ extern int     update_md5sum_call_count;
 extern int     wimextractfile_call_count;
 extern int     copy_sku_si_policy_call_count;
 extern char    g_test_mount_path[PATH_MAX];
+extern uint64_t g_mock_disk_size_override;
 extern int     extract_zip_call_count;
 extern char    extract_zip_last_dst[PATH_MAX];
 extern int     run_ntfs_fix_call_count;
@@ -343,6 +344,7 @@ static void reset_globals(void)
 	use_extended_label          = FALSE;
 	g_mock_image_option_data    = 0;
 	hImageOption                = NULL;
+	g_mock_disk_size_override   = 0;
 }
 
 /* Read bytes from a file at offset. Returns 0 on success, -1 on error. */
@@ -2761,6 +2763,111 @@ TEST(format_thread_windows_dual_bios_uefi_skips_syslinux)
 	unlink(path); free(path);
 }
 
+/*
+ * large_drive detection tests
+ *
+ * FormatThread must set large_drive=TRUE when SelectedDrive.DiskSize > 1 TB
+ * and large_drive=FALSE for normal-sized drives.
+ * The 1 TB threshold mirrors src/windows/format.c line 1387.
+ */
+#define ONE_TB  (1099511627776ULL)
+
+TEST(format_thread_large_drive_sets_flag)
+{
+	/*
+	 * Inject a fake DiskSize of 2 TB via g_mock_disk_size_override.
+	 * FormatThread should set large_drive = TRUE after GetDrivePartitionData.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	fs_type    = FS_FAT32;
+	boot_type  = BT_NON_BOOTABLE;
+
+	g_mock_disk_size_override = 2 * ONE_TB;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(large_drive == TRUE,
+	          "large_drive must be TRUE when DiskSize > 1 TB");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_small_drive_clears_flag)
+{
+	/*
+	 * A real 512 MB image is well under 1 TB.
+	 * FormatThread must leave large_drive = FALSE.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	fs_type    = FS_FAT32;
+	boot_type  = BT_NON_BOOTABLE;
+	large_drive = TRUE; /* pre-set to TRUE to make the clear explicit */
+
+	/* No disk size override — real file size (512 MB) is used */
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(large_drive == FALSE,
+	          "large_drive must be FALSE for a drive <= 1 TB");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_large_drive_boundary_exactly_1tb)
+{
+	/*
+	 * DiskSize == 1 TB exactly must NOT set large_drive.
+	 * The condition is strictly greater-than (> 1 TB).
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	fs_type    = FS_FAT32;
+	boot_type  = BT_NON_BOOTABLE;
+	large_drive = TRUE;
+
+	g_mock_disk_size_override = ONE_TB; /* exactly 1 TB */
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(large_drive == FALSE,
+	          "large_drive must be FALSE when DiskSize == 1 TB (not strictly greater)");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_large_drive_boundary_1tb_plus_1)
+{
+	/*
+	 * DiskSize == 1 TB + 1 byte must set large_drive.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	fs_type    = FS_FAT32;
+	boot_type  = BT_NON_BOOTABLE;
+
+	g_mock_disk_size_override = ONE_TB + 1;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(large_drive == TRUE,
+	          "large_drive must be TRUE when DiskSize == 1 TB + 1 byte");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
 int main(void)
 {
 	printf("=== ClearMBRGPT tests ===\n");
@@ -2882,6 +2989,12 @@ int main(void)
 
 	printf("\n=== FormatThread Syslinux HAS_WINDOWS exclusion tests ===\n");
 	RUN(format_thread_windows_dual_bios_uefi_skips_syslinux);
+
+	printf("\n=== FormatThread large_drive detection tests ===\n");
+	RUN(format_thread_large_drive_sets_flag);
+	RUN(format_thread_small_drive_clears_flag);
+	RUN(format_thread_large_drive_boundary_exactly_1tb);
+	RUN(format_thread_large_drive_boundary_1tb_plus_1);
 
 	TEST_RESULTS();
 }

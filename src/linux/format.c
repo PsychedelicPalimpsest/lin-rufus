@@ -786,6 +786,9 @@ DWORD WINAPI FormatThread(void* param)
 	 * ------------------------------------------------------------- */
 	if (zero_drive) {
 		GetDrivePartitionData(DriveIndex, fs_name, sizeof(fs_name), TRUE);
+		large_drive = (SelectedDrive.DiskSize > (1*TB));
+		if (large_drive)
+			uprintf("Notice: Large drive detected (may produce short writes)");
 		hPhysicalDrive = GetPhysicalHandle(DriveIndex, FALSE, TRUE, TRUE);
 		if (hPhysicalDrive == INVALID_HANDLE_VALUE) {
 			ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
@@ -817,6 +820,9 @@ DWORD WINAPI FormatThread(void* param)
 		}
 
 		GetDrivePartitionData(DriveIndex, fs_name, sizeof(fs_name), TRUE);
+		large_drive = (SelectedDrive.DiskSize > (1*TB));
+		if (large_drive)
+			uprintf("Notice: Large drive detected (may produce short writes)");
 		hPhysicalDrive = GetPhysicalHandle(DriveIndex, FALSE, TRUE, TRUE);
 		if (hPhysicalDrive == INVALID_HANDLE_VALUE) {
 			ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
@@ -868,6 +874,10 @@ DWORD WINAPI FormatThread(void* param)
 		ErrorStatus = RUFUS_ERROR(ERROR_INVALID_PARAMETER);
 		goto out;
 	}
+
+	large_drive = (SelectedDrive.DiskSize > (1*TB));
+	if (large_drive)
+		uprintf("Notice: Large drive detected (may produce short writes)");
 
 	/* Open physical drive for writing */
 	hPhysicalDrive = GetPhysicalHandle(DriveIndex, FALSE, TRUE, TRUE);

@@ -8,6 +8,7 @@
 #include "../src/linux/compat/windows.h"
 #include "../src/windows/rufus.h"
 #include "../src/windows/badblocks.h"
+#include "../src/common/drive.h"
 #include <string.h>
 
 DWORD _win_last_error = 0;
@@ -18,6 +19,24 @@ DWORD _win_last_error = 0;
  * Tests that use this MUST clean up the directory themselves.       */
 #include <linux/limits.h>
 char g_test_mount_path[PATH_MAX] = "";
+
+/* When non-zero, __wrap_GetDrivePartitionData overrides SelectedDrive.DiskSize
+ * with this value after calling the real function.  Reset between tests. */
+uint64_t g_mock_disk_size_override = 0;
+
+/* Forward declaration for the real function (provided by drive.c). */
+BOOL __real_GetDrivePartitionData(DWORD DriveIndex, char *FileSystemName,
+                                  DWORD FileSystemNameSize, BOOL bSilent);
+
+BOOL __wrap_GetDrivePartitionData(DWORD DriveIndex, char *FileSystemName,
+                                  DWORD FileSystemNameSize, BOOL bSilent)
+{
+    BOOL ret = __real_GetDrivePartitionData(DriveIndex, FileSystemName,
+                                            FileSystemNameSize, bSilent);
+    if (g_mock_disk_size_override != 0)
+        SelectedDrive.DiskSize = g_mock_disk_size_override;
+    return ret;
+}
 
 /* Forward declaration for the real function (provided by drive.c). */
 char *__real_GetExtPartitionName(DWORD DriveIndex, uint64_t PartitionOffset);
