@@ -2836,9 +2836,38 @@ void EnableControls(BOOL enable, BOOL remove_checkboxes)
 	}
 }
 
+/* Marquee progress — shown during ISO scan where completion time is unknown.
+ * Mirrors Windows PBS_MARQUEE mode; fires every 80 ms to pulse the GTK bar. */
+static guint marquee_timer_source = 0;
+
+static gboolean marquee_timer_cb(gpointer data)
+{
+	(void)data;
+	if (rw.progress_bar)
+		gtk_progress_bar_pulse(GTK_PROGRESS_BAR(rw.progress_bar));
+	return G_SOURCE_CONTINUE;
+}
+
+static void start_marquee(void)
+{
+	if (marquee_timer_source == 0)
+		marquee_timer_source = g_timeout_add(80, marquee_timer_cb, NULL);
+}
+
+static void stop_marquee(void)
+{
+	if (marquee_timer_source != 0) {
+		g_source_remove(marquee_timer_source);
+		marquee_timer_source = 0;
+	}
+	if (rw.progress_bar)
+		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(rw.progress_bar), 0.0);
+}
+
 void InitProgress(BOOL bOnlyFormat)
 {
 	(void)bOnlyFormat;
+	stop_marquee();
 	if (rw.progress_bar) {
 		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(rw.progress_bar), 0.0);
 		gtk_progress_bar_set_text(GTK_PROGRESS_BAR(rw.progress_bar), NULL);
@@ -3049,11 +3078,14 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		break;
 
 	case UM_PROGRESS_INIT:
-		InitProgress(TRUE);
+		if (w == PBS_MARQUEE)
+			start_marquee();
+		else
+			InitProgress(TRUE);
 		break;
 
 	case UM_PROGRESS_EXIT:
-		/* Nothing extra needed on Linux — progress bar stays visible. */
+		stop_marquee();
 		break;
 
 	case UM_TIMER_START:

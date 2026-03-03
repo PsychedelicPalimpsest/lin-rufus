@@ -1821,4 +1821,9 @@ typedef LONG NTSTATUS;
 #define _INC_WINDOWS
 #define WIN32_LEAN_AND_MEAN
 
+/* Progress bar constants (from commctrl.h) */
+#ifndef PBS_MARQUEE
+#define PBS_MARQUEE 0x08
+#endif
+
 #endif /* _LINUX_WINDOWS_COMPAT_H */

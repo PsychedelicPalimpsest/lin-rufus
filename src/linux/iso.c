@@ -816,6 +816,8 @@ BOOL ExtractISO(const char* src_iso, const char* dest_dir, BOOL scan)
 
 	if (scan) {
 		uprintf("ISO analysis:");
+		/* Show indeterminate (marquee) progress during scan — mirrors Windows */
+		SendMessage(hMainDialog, UM_PROGRESS_INIT, PBS_MARQUEE, 0);
 		total_blocks  = 0;
 		extra_blocks  = 0;
 		nb_blocks     = 0;

@@ -886,3 +886,11 @@ This is the most structurally significant porting gap.
     - Handler checks `op_in_progress` (no drop during active format); uses `g_strfreev` for URI list cleanup; triggers `ImageScanThread` exactly as `on_select_clicked` does
     - `drag_drop.c` added to `OS_SOURCES` in `Makefile.am` / `Makefile.in`
     - 11 tests in `test_drag_drop_linux.c` covering: simple path, spaces, multiple encoded chars, trailing CRLF/LF stripping, hostname stripping, deep path, null/empty/non-file-scheme inputs; all pass
+
+172. ✅ DONE **Progress bar marquee mode (PBS_MARQUEE parity)** —
+    - `start_marquee()` / `stop_marquee()` in `ui_gtk.c`: use `g_timeout_add(80, marquee_timer_cb)` to call `gtk_progress_bar_pulse()` every 80 ms; `stop_marquee()` cancels the timer and resets fraction to 0
+    - `UM_PROGRESS_INIT` handler now checks `wParam == PBS_MARQUEE`; if so calls `start_marquee()`, otherwise `InitProgress(TRUE)` — mirrors Windows `isMarquee` tracking
+    - `UM_PROGRESS_EXIT` handler calls `stop_marquee()` — mirrors Windows `PBM_SETMARQUEE FALSE`
+    - `InitProgress()` calls `stop_marquee()` defensively (guard against re-entrant marquee state)
+    - Linux `ExtractISO` scan path now sends `UM_PROGRESS_INIT, PBS_MARQUEE, 0` (mirrors Windows `iso.c:868`)
+    - `PBS_MARQUEE = 0x08` added to `compat/commctrl.h` and `compat/windows.h` so all Linux source files see it
