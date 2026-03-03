@@ -58,6 +58,7 @@ typedef struct {
     int  bad_blocks;        /* --bad-blocks: 1=run bad block scan, 0=skip */
     int  nb_passes;         /* --nb-passes 1-4: scan passes (requires bad_blocks); 0 = not set */
     char unattend_xml[512]; /* --unattend-xml PATH: pre-built unattend.xml to inject */
+    int  include_hdds;      /* --include-hdds: 1=list/allow HDDs, 0=removable only (default) */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

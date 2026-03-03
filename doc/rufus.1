@@ -20,6 +20,7 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-bad\-blocks\fR]
 [\fB\-\-nb\-passes\fR \fIN\fR]
 [\fB\-\-unattend\-xml\fR \fIPATH\fR]
+[\fB\-\-include\-hdds\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-label\fR \fILABEL\fR]
 [\fB\-\-quick\fR|\fB\-\-no\-quick\fR]
@@ -144,6 +145,13 @@ drive.  \fIPATH\fR must point to a valid
 .I autounattend.xml
 (or equivalent) file.  Useful for scripting fully automated Windows
 installations.
+.TP
+.BR \-H ", " \-\-include\-hdds
+Include hard drives (in addition to removable USB drives) in device
+enumeration.  By default only removable drives appear in
+.BR \-\-list\-devices
+output and are accepted by
+.BR \-\-device .
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

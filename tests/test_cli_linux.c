@@ -780,6 +780,39 @@ static void test_unattend_xml_empty_path_is_error(void)
     CHECK(r == CLI_PARSE_ERROR);
 }
 
+/* ---- --include-hdds tests ---- */
+
+static void test_init_include_hdds_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.include_hdds == 0);
+}
+
+static void test_include_hdds_sets_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --include-hdds", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.include_hdds != 0);
+}
+
+static void test_include_hdds_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -H", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.include_hdds != 0);
+}
+
+static void test_include_hdds_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.include_hdds == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -899,6 +932,12 @@ int main(void)
     RUN_TEST(test_unattend_xml_short_form);
     RUN_TEST(test_unattend_xml_requires_argument);
     RUN_TEST(test_unattend_xml_empty_path_is_error);
+
+    /* --include-hdds tests */
+    RUN_TEST(test_init_include_hdds_is_false);
+    RUN_TEST(test_include_hdds_sets_flag);
+    RUN_TEST(test_include_hdds_short_form);
+    RUN_TEST(test_include_hdds_default_is_off);
 
     TEST_RESULTS();
 }
