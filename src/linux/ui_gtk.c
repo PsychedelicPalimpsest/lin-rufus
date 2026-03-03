@@ -1643,9 +1643,14 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 			label = gtk_label_new(hash_str[i]);
 			gtk_widget_set_halign(label, GTK_ALIGN_START);
 			gtk_label_set_selectable(GTK_LABEL(label), TRUE);
-			PangoFontDescription *font = pango_font_description_from_string("Monospace");
-			gtk_widget_override_font(label, font);
-			pango_font_description_free(font);
+			/* Use CSS for monospace font (gtk_widget_override_font is deprecated). */
+			GtkCssProvider *mono_css = gtk_css_provider_new();
+			gtk_css_provider_load_from_data(mono_css,
+				"label { font-family: monospace; }", -1, NULL);
+			gtk_style_context_add_provider(gtk_widget_get_style_context(label),
+				GTK_STYLE_PROVIDER(mono_css),
+				GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+			g_object_unref(mono_css);
 			gtk_grid_attach(GTK_GRID(grid), label, 1, row, 1, 1);
 			row++;
 		}
