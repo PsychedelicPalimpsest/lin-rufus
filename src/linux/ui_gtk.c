@@ -2347,14 +2347,30 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 	case UM_FORMAT_COMPLETED: {
 		/* w = TRUE on success, FALSE on failure */
 		BOOL ok = (BOOL)w;
+		extern BOOL save_image;
 		op_in_progress = FALSE;
+		zero_drive = FALSE;
 		safe_closehandle(format_thread);
 		format_thread = NULL;
+
+		/* Clean up the temporary unattend XML created for this session */
+		extern char *unattend_xml_path;
+		if (unattend_xml_path != NULL) {
+			unlink(unattend_xml_path);
+			safe_free(unattend_xml_path);
+		}
+
 		EnableControls(ok, TRUE);
-		if (ok)
+		if (ok) {
 			rufus_gtk_update_status("Format completed successfully.");
-		else
+			/* Refresh device list so the new drive label is shown.
+			 * Mirrors Windows: skip the refresh when saving an image to disk. */
+			if (!save_image)
+				GetDevices(0);
+		} else {
 			rufus_gtk_update_status("Format failed.");
+		}
+		save_image = FALSE;  /* reset after checking above */
 		uprintf("*** Format completed (success=%d) ***", (int)ok);
 		/* Send desktop notification so the user can come back to Rufus */
 		{
