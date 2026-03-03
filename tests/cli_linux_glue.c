@@ -101,3 +101,15 @@ void set_preselected_fs(int fs) { (void)fs; }
 HWND hLabel = NULL;
 void window_text_register(HWND hwnd) { (void)hwnd; }
 BOOL SetWindowTextA(HWND hwnd, const char *text) { (void)hwnd; (void)text; return TRUE; }
+
+/* Locale stubs — cli_apply_options() may call these when --locale is set.
+ * These are no-ops because the CLI tests don't exercise locale loading. */
+#include "../src/windows/localization.h"
+loc_cmd *selected_locale = NULL;
+const char *find_loc_file(void) { return NULL; }
+void _init_localization(BOOL reinit) { (void)reinit; }
+BOOL get_supported_locales(const char *filename) { (void)filename; return FALSE; }
+loc_cmd *get_locale_from_name(char *locale_name, BOOL fallback)
+    { (void)locale_name; (void)fallback; return NULL; }
+BOOL get_loc_data_file(const char *filename, loc_cmd *lcmd)
+    { (void)filename; (void)lcmd; return FALSE; }

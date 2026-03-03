@@ -648,3 +648,34 @@ C wrappers in `tests/test_ui_automation_linux.c`:
 | 205 | `about_dialog_opens` | About button click opens an About dialog (xdotool detection) |
 
 All 15 UI automation tests pass.  Full test suite: all tests pass.
+
+---
+
+## Session 2026-03-05 — CLI locale, init paths fix
+
+### Feature 206: `--locale` CLI option
+
+Added `--locale LOCALE` long option to the Linux CLI (no short option since `-l` is already
+`--label` on Linux). When specified, the given locale name is loaded via `find_loc_file()`,
+`get_supported_locales()`, `get_locale_from_name()`, and `get_loc_data_file()`.
+
+- Added `char locale[64]` field to `cli_options_t` in `cli.h`
+- Added `{ "locale", required_argument, NULL, 1 }` to `long_opts[]` in `cli.c`
+- Added `--locale LOCALE` to help text
+- Added `case 1:` handler in `cli_parse_args()` switch
+- Added locale-loading code in `cli_apply_options()`
+- Added `#include "localization.h"` to `cli.c`
+- Added locale stubs to `tests/cli_linux_glue.c`
+- 7 new tests in `test_cli_linux.c` covering: empty default, long flag parse, French locale
+  parse, missing-arg error, default empty, help text mention, field truncation
+
+* ~~206~~: **RESOLVED** — `--locale LOCALE` CLI option added; 7 new tests pass; 320 total CLI tests.
+
+### Feature 207: `rufus_init_paths()` called in non-GTK CLI main()
+
+Previously the non-GTK `main()` in `rufus.c` called `cli_parse_args()` directly without first
+setting up `app_dir`, `app_data_dir`, `ini_file`, etc. This meant settings could not be read in
+CLI mode. Fixed by calling `rufus_init_paths()` before `cli_parse_args()`.
+
+* ~~207~~: **RESOLVED** — `rufus_init_paths()` now called in non-GTK `main()` before arg parsing.
+

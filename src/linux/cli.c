@@ -39,6 +39,8 @@
 #include "ui_combo_logic.h"
 #include "window_text_bridge.h"
 
+#include "localization.h"
+
 /* Globals set by cli_apply_options(); extern'd in format.c and globals.c */
 extern int    fs_type;
 extern int    boot_type;
@@ -82,6 +84,14 @@ extern BOOL usb_debug;
 extern BOOL enable_vmdk;
 extern BOOL advanced_mode_format;
 extern HWND hLabel;
+
+/* Locale support — localization.c/parser.c */
+extern loc_cmd *selected_locale;
+extern loc_cmd *get_locale_from_name(char *locale_name, BOOL fallback);
+extern BOOL get_supported_locales(const char *filename);
+extern BOOL get_loc_data_file(const char *filename, loc_cmd *lcmd);
+extern const char *find_loc_file(void);
+extern void _init_localization(BOOL reinit);
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -196,6 +206,7 @@ void cli_print_usage(const char *prog)
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "  -j, --json                Output --list-devices results as JSON\n"
+	       "      --locale LOCALE       Select UI locale/language (e.g. en-US, fr-FR)\n"
 	       "      --quick               Quick format (default)\n"
 	       "      --no-quick            Full format (zero-fill)\n"
 	       "      --verify              Verify write after image write\n"
@@ -249,6 +260,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
+		{ "locale",           required_argument, NULL,  1  },
 		{ NULL, 0, NULL, 0 }
 	};
 
@@ -274,6 +286,15 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 				printf("rufus %s\n", RUFUS_VERSION_STR);
 				return CLI_PARSE_VERSION;
 			}
+			break;
+
+		case 1:
+			/* --locale LOCALE: select UI locale/language */
+			if (!optarg || !*optarg) {
+				fprintf(stderr, "rufus: --locale requires a locale name (e.g. en-US)\n");
+				return CLI_PARSE_ERROR;
+			}
+			snprintf(opts->locale, sizeof(opts->locale), "%s", optarg);
 			break;
 
 		case 'd':
@@ -654,6 +675,24 @@ void cli_apply_options(const cli_options_t *opts)
 		hLabel = (HWND)&_label_sentinel;
 		window_text_register(hLabel);
 		SetWindowTextA(hLabel, opts->label);
+	}
+	/* Locale: if specified, load the locale data file for the requested language */
+	if (opts->locale[0] != '\0') {
+		const char *loc_path = find_loc_file();
+		if (loc_path != NULL) {
+			if (!selected_locale) {
+				_init_localization(FALSE);
+				get_supported_locales(loc_path);
+			}
+			loc_cmd *sel = get_locale_from_name((char *)opts->locale, FALSE);
+			if (sel == NULL)
+				sel = get_locale_from_name((char *)opts->locale, TRUE);
+			if (sel != NULL)
+				get_loc_data_file(loc_path, sel);
+			else
+				fprintf(stderr, "rufus: warning: locale '%s' not found\n",
+				        opts->locale);
+		}
 	}
 }
 

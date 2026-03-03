@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "framework.h"
 #include "../src/linux/compat/windows.h"
@@ -1611,6 +1612,84 @@ static void test_include_hdds_short_form_applies_correctly(void)
     enable_HDDs = FALSE;
 }
 
+/* ---- --locale tests (Feature 206) ---- */
+
+static void test_init_locale_is_empty(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.locale[0] == '\0');
+}
+
+static void test_locale_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --locale en-US --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(strcmp(opts.locale, "en-US") == 0);
+}
+
+static void test_locale_long_flag_french(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --locale fr-FR --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(strcmp(opts.locale, "fr-FR") == 0);
+}
+
+static void test_locale_missing_arg_is_error(void)
+{
+    cli_options_t opts;
+    /* --locale without argument is an error */
+    int r = parse("rufus --locale --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_locale_default_is_empty(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.locale[0] == '\0');
+}
+
+static void test_locale_help_mentions_locale(void)
+{
+    /* Capture help output to a temp file and verify "--locale" appears */
+    FILE *f = tmpfile();
+    if (!f) { printf("  SKIP: tmpfile failed\n"); return; }
+    /* Redirect stdout to the temp file */
+    int saved_fd = dup(STDOUT_FILENO);
+    dup2(fileno(f), STDOUT_FILENO);
+    cli_print_usage("rufus");
+    fflush(stdout);
+    dup2(saved_fd, STDOUT_FILENO);
+    close(saved_fd);
+    /* Read the captured output */
+    fseek(f, 0, SEEK_SET);
+    char buf[8192] = "";
+    fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    CHECK(strstr(buf, "--locale") != NULL);
+}
+
+static void test_locale_truncated_to_field_size(void)
+{
+    /* Locale larger than field (64 bytes) should be truncated, not overflow */
+    cli_options_t opts;
+    /* Build a very long locale string */
+    char long_locale[128];
+    memset(long_locale, 'a', sizeof(long_locale) - 1);
+    long_locale[sizeof(long_locale) - 1] = '\0';
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "rufus --locale %.100s --device /dev/sda", long_locale);
+    int r = parse(cmd, &opts);
+    /* Should parse without crashing; locale is stored (truncated) */
+    CHECK(r == CLI_PARSE_OK);
+    /* Field must be NUL-terminated (no overflow) */
+    CHECK(opts.locale[sizeof(opts.locale) - 1] == '\0');
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1869,6 +1948,15 @@ int main(void)
     RUN_TEST(test_list_devices_with_include_hdds_finds_drive);
     RUN_TEST(test_list_devices_without_include_hdds_finds_nothing);
     RUN_TEST(test_include_hdds_short_form_applies_correctly);
+
+    /* --locale tests (Feature 206) */
+    RUN_TEST(test_init_locale_is_empty);
+    RUN_TEST(test_locale_long_flag);
+    RUN_TEST(test_locale_long_flag_french);
+    RUN_TEST(test_locale_missing_arg_is_error);
+    RUN_TEST(test_locale_default_is_empty);
+    RUN_TEST(test_locale_help_mentions_locale);
+    RUN_TEST(test_locale_truncated_to_field_size);
 
     TEST_RESULTS();
 }

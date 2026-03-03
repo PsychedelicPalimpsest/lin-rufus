@@ -80,6 +80,7 @@ typedef struct {
     int  usb_debug;         /* --usb-debug/-g: enable verbose USB/SMART debug logging */
     int  enable_vmdk;       /* --enable-vmdk/-G: enable VMDK disk-image detection */
     int  advanced_format;   /* --advanced-format/-a: unlock ext2/3/4 and advanced format options */
+    char locale[64];        /* --locale LOCALE: select UI locale/language (e.g. "en-US", "fr-FR") */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

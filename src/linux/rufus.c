@@ -245,6 +245,10 @@ int main(int argc, char *argv[])
 
 	install_crash_handlers();
 
+	/* Initialize paths (app_dir, app_data_dir, ini_file) before parsing args
+	 * so settings can be read and locale data can be found. */
+	rufus_init_paths();
+
 	r = cli_parse_args(argc, argv, &opts);
 	if (r == CLI_PARSE_HELP)
 		return 0;
