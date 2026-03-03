@@ -282,6 +282,7 @@ static void on_toggle_file_indexing(GtkWidget *w, gpointer data);
 static void on_toggle_non_usb_removable(GtkWidget *w, gpointer data);
 static void on_toggle_esp(GtkWidget *w, gpointer data);
 static void on_delete_app_data_dir(GtkWidget *w, gpointer data);
+static void on_delete_settings(GtkWidget *w, gpointer data);
 static void on_zero_drive(GtkWidget *w, gpointer data);
 static void on_fast_zero_drive(GtkWidget *w, gpointer data);
 static void on_cycle_port(GtkWidget *w, gpointer data);
@@ -963,6 +964,10 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_p,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_toggle_esp), NULL, NULL));
+	/* Alt+R: delete the Rufus settings file (mirrors Windows Alt+R registry delete) */
+	gtk_accel_group_connect(accel, GDK_KEY_r,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_delete_settings), NULL, NULL));
 	/* Ctrl+Alt+F: toggle listing of non-USB removable drives */
 	gtk_accel_group_connect(accel, GDK_KEY_f,
 	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
@@ -2365,9 +2370,25 @@ static void on_delete_app_data_dir(GtkWidget *w, gpointer data)
 	user_deleted_rufus_dir = TRUE;
 }
 
-/* Callback invoked when the GTK dark-theme preference changes (either by the
- * user via Ctrl+Alt+D or because the desktop environment changed the system
- * theme).  Keeps is_darkmode_enabled in sync with the actual GTK state. */
+/* Alt+R: delete the Rufus settings/INI file.
+ * Mirrors Windows Alt+R which deletes the REGKEY_HKCU registry key. */
+static void on_delete_settings(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	extern char *ini_file;
+	if (ini_file && ini_file[0]) {
+		uprintf("Deleting settings file '%s'", ini_file);
+		if (unlink(ini_file) == 0) {
+			rufus_gtk_update_status(lmprintf(MSG_248));
+			ini_file = NULL;
+		} else {
+			rufus_gtk_update_status(lmprintf(MSG_249));
+		}
+	} else {
+		uprintf("No settings file to delete");
+		rufus_gtk_update_status(lmprintf(MSG_249));
+	}
+}
 static void on_gtk_dark_theme_changed(GObject *object, GParamSpec *pspec,
                                        gpointer data)
 {
