@@ -63,8 +63,8 @@ TEST(device_open_in_fm_build_cmd_basic)
     char buf[128];
     int rc = device_open_in_fm_build_cmd("/dev/sdb", buf, sizeof(buf));
     CHECK_MSG(rc == 1, "should return 1 on success");
-    CHECK_MSG(strcmp(buf, "xdg-open /dev/sdb") == 0,
-              "should produce 'xdg-open /dev/sdb'");
+    CHECK_MSG(strcmp(buf, "xdg-open '/dev/sdb'") == 0,
+              "should produce \"xdg-open '/dev/sdb'\": quoted path");
 }
 
 TEST(device_open_in_fm_build_cmd_sdc)
@@ -72,8 +72,8 @@ TEST(device_open_in_fm_build_cmd_sdc)
     char buf[128];
     int rc = device_open_in_fm_build_cmd("/dev/sdc", buf, sizeof(buf));
     CHECK_MSG(rc == 1, "should return 1 for /dev/sdc");
-    CHECK_MSG(strcmp(buf, "xdg-open /dev/sdc") == 0,
-              "should produce 'xdg-open /dev/sdc'");
+    CHECK_MSG(strcmp(buf, "xdg-open '/dev/sdc'") == 0,
+              "should produce \"xdg-open '/dev/sdc'\": quoted path");
 }
 
 TEST(device_open_in_fm_build_cmd_null_path)
@@ -108,8 +108,8 @@ TEST(device_open_in_fm_build_cmd_nvme)
     char buf[128];
     int rc = device_open_in_fm_build_cmd("/dev/nvme0n1", buf, sizeof(buf));
     CHECK_MSG(rc == 1, "should return 1 for nvme path");
-    CHECK_MSG(strcmp(buf, "xdg-open /dev/nvme0n1") == 0,
-              "should produce correct command for nvme path");
+    CHECK_MSG(strcmp(buf, "xdg-open '/dev/nvme0n1'") == 0,
+              "should produce correct quoted command for nvme path");
 }
 
 /* ---- hyperlink_build_markup tests ---- */

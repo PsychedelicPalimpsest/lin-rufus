@@ -497,10 +497,38 @@ This is the most structurally significant porting gap.
 | `common/device_monitor` (hotplug) tests | ✅ | 20 tests: lifecycle (start/stop/double/null), callback dispatch, debounce, thread safety, inject |
 | `common/net` (IsDownloadable, DownloadToFileOrBufferEx) tests | ✅ | 45 tests; real libcurl downloads, file+buffer modes, HTTP status, User-Agent, 404 handling, binary data |
 | `combo_bridge` (ComboBox message dispatch) tests | ✅ | 105 tests: lifecycle, all CB_* messages (ADDSTRING/RESETCONTENT/GETCURSEL/SETCURSEL/GETCOUNT/SETITEMDATA/GETITEMDATA/GETLBTEXT/GETLBTEXTLEN), capacity growth, GTK-free unit testing |
+| `device_combo.c` (`device_open_in_fm_build_cmd`) tests | ✅ | 7 tests in `test_ui_linux.c`: basic, sdc, nvme, null path, empty path, buffer too small, null output buffer |
+| `hyperlink.c` (`hyperlink_build_markup`) tests | ✅ | 7 tests in `test_ui_linux.c`: basic, null text falls back to url, XML escape, null url/buf/bufsz error cases, empty text |
+| `proposed_label.c` (`get_iso_proposed_label`) tests | ✅ | 8 tests in `test_ui_linux.c`: all branches covered |
+| `ntfsfix.c` (`RunNtfsFix`) tests | ❌ | No test coverage; needs mock for `system()` |
+| `dump_fat.c` (`DumpFatDir`) tests | ❌ | No test coverage; complex ISO+FAT interaction |
 
 ---
 
 ## Pending Work
 
 * Feature 188: Test the cli directly by calling the rufus executable (both via wine and linux)
+
+* Feature 189: GTK binary CLI integration — the GTK build currently rejects all Rufus
+  CLI flags (`--device`, `--image`, `--fs`, etc.) because `g_application_run()` processes
+  them before Rufus code runs.  Fix: register Rufus options via
+  `g_application_add_main_option_entries()` + `handle-local-options` signal so that
+  `--device` bypasses the GTK activate path entirely and invokes `cli_run()` instead.
+  Until this is fixed, the man page (`doc/rufus.1`) inaccurately describes the GTK
+  binary's CLI behaviour.  See QA.md for details.
+
+* Feature 190: Non-GTK CLI binary build path — building without GTK (`--with-ui` ≠ gtk)
+  currently fails because `windows/darkmode.c` includes `<dwmapi.h>` unconditionally.
+  The non-GTK Linux build should use `linux/darkmode.c` (stub) instead.  Add a
+  `--with-ui=cli` configure option (or similar) and ensure the non-GTK source set is
+  selected correctly in `src/Makefile.am`.
+
+* Feature 191: Add unit tests for `ntfsfix.c` (`RunNtfsFix`).  This file currently
+  has no test coverage.  The `ntfsfix` test should use a mock/override for `system()`.
+  Note: `device_combo.c` (`device_open_in_fm_build_cmd`) is now covered by 7 tests in
+  `tests/test_ui_linux.c`.
+
+* ~~Feature 192~~: **RESOLVED** — `device_open_in_fm_build_cmd()` now quotes the device
+  path (`xdg-open '%s'`).  The 3 stale tests expecting the old unquoted format were
+  updated in `tests/test_ui_linux.c` during QA session 2026-03-03.
 

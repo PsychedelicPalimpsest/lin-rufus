@@ -31,7 +31,7 @@ int device_open_in_fm_build_cmd(const char *dev_path, char *out, size_t sz)
 	if (!dev_path || dev_path[0] == '\0' || !out || sz == 0)
 		return 0;
 
-	int n = snprintf(out, sz, "xdg-open %s", dev_path);
+	int n = snprintf(out, sz, "xdg-open '%s'", dev_path);
 	if (n < 0 || (size_t)n >= sz)
 		return 0;
 
