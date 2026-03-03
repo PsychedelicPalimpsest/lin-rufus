@@ -3006,6 +3006,51 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		 * to reflect the scanned image content. */
 		uprintf("Image scan complete (is_iso=%d, is_bootable=%d)",
 		        (int)img_report.is_iso, (int)img_report.is_bootable_img);
+
+		/* If the image has no recognisable boot method, reject it and
+		 * reset to the unselected state (mirrors Windows line 1341-1348). */
+		if (!IS_DD_BOOTABLE(img_report) && !IS_BIOS_BOOTABLE(img_report) &&
+		    !IS_EFI_BOOTABLE(img_report) && !img_report.is_windows_img) {
+			rufus_gtk_update_status(lmprintf(MSG_086));
+			Notification(MB_OK | MB_ICONINFORMATION, lmprintf(MSG_081), lmprintf(MSG_082));
+			safe_free(image_path);
+			/* Reset boot combo entry text back to "Please SELECT" */
+			if (rw.boot_combo) {
+				combo_state_t *cs = (combo_state_t*)(uintptr_t)hBootType;
+				int img_idx = 1;
+				if (cs && img_idx < cs->count) {
+					free(cs->text[img_idx]);
+					cs->text[img_idx] = strdup(lmprintf(MSG_281, lmprintf(MSG_280)));
+					gtk_combo_box_text_remove(GTK_COMBO_BOX_TEXT(cs->gtk_widget), img_idx);
+					gtk_combo_box_text_insert_text(GTK_COMBO_BOX_TEXT(cs->gtk_widget),
+					                              img_idx, cs->text[img_idx]);
+				}
+			}
+			EnableControls(TRUE, FALSE);
+			break;
+		}
+
+		/* Update boot combo to show image filename (mirrors Windows UpdateImage). */
+		if (rw.boot_combo && image_path) {
+			combo_state_t *cs = (combo_state_t*)(uintptr_t)hBootType;
+			/* BT_IMAGE is at index 1 in populate_boot_combo */
+			int img_idx = 1;
+			if (cs && img_idx < cs->count) {
+				/* Find short filename (after last '/') */
+				const char *short_path = image_path;
+				for (const char *p = image_path; *p; p++)
+					if (*p == '/') short_path = p + 1;
+				free(cs->text[img_idx]);
+				cs->text[img_idx] = strdup(short_path ? short_path : image_path);
+				/* Update GTK display */
+				gtk_combo_box_text_remove(GTK_COMBO_BOX_TEXT(cs->gtk_widget), img_idx);
+				gtk_combo_box_text_insert_text(GTK_COMBO_BOX_TEXT(cs->gtk_widget), img_idx,
+				                              cs->text[img_idx]);
+				/* Keep BT_IMAGE selected */
+				gtk_combo_box_set_active(GTK_COMBO_BOX(cs->gtk_widget), img_idx);
+			}
+		}
+
 		populate_fs_combo();
 		SetFSFromISO();
 		SetPartitionSchemeAndTargetSystem(FALSE);
