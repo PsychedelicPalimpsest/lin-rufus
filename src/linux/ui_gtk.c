@@ -908,6 +908,10 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_i,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_toggle_iso), NULL, NULL));
+	/* Alt+O: save optical disc to ISO image (mirrors Windows Alt+O → OpticalDiscSaveImage) */
+	gtk_accel_group_connect(accel, GDK_KEY_o,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_save_clicked), NULL, NULL));
 	/* Alt+L: force large FAT32 format */
 	gtk_accel_group_connect(accel, GDK_KEY_l,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
