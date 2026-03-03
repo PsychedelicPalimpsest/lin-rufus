@@ -803,6 +803,60 @@ TEST(set_fs_no_needs_ntfs_keeps_fat32)
 }
 
 /* =========================================================================
+ * set_user_selected_fs tests
+ *
+ * When user explicitly selects an FS via the combo box, set_user_selected_fs()
+ * must lock that choice in and SetFSFromISO() must respect it over the
+ * automatic heuristic. Mirrors Windows IDC_FILE_SYSTEM CBN_SELCHANGE:
+ * if (set_selected_fs && (fs_type > 0)) selected_fs = fs_type;
+ * ======================================================================= */
+
+TEST(user_selected_fs_overrides_image_heuristic)
+{
+	setup_combos();
+	setup_fs_combo();
+	boot_type  = BT_IMAGE;
+	image_path = strdup("/tmp/linux.iso");
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_iso     = TRUE;
+	img_report.sl_version = (6 << 8) | 3;   /* Syslinux 6.3 → normally FAT32 */
+	img_report.has_efi    = 0x2;
+
+	/* User explicitly picked NTFS in the FS combo */
+	set_user_selected_fs(FS_NTFS);
+	SetFSFromISO();
+
+	/* User's choice must win over the Syslinux FAT32 heuristic */
+	CHECK_INT_EQ(combo_cur_data(hFileSystem), FS_NTFS);
+
+	/* Clean up for next test */
+	set_user_selected_fs(FS_UNKNOWN);
+	teardown_combos();
+}
+
+TEST(user_selected_fs_zero_reverts_to_auto)
+{
+	setup_combos();
+	setup_fs_combo();
+	boot_type  = BT_IMAGE;
+	image_path = strdup("/tmp/linux.iso");
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_iso     = TRUE;
+	img_report.sl_version = (6 << 8) | 3;
+	img_report.has_efi    = 0x2;
+
+	/* FS_UNKNOWN (0 arg) clears the lock */
+	set_user_selected_fs(FS_NTFS);
+	set_user_selected_fs(FS_UNKNOWN);
+	SetFSFromISO();
+
+	/* Automatic heuristic applies again: FAT32 for Syslinux */
+	CHECK_INT_EQ(combo_cur_data(hFileSystem), FS_FAT32);
+
+	teardown_combos();
+}
+
+/* =========================================================================
  * main
  * ======================================================================= */
 int main(void)
@@ -833,6 +887,8 @@ int main(void)
 	RUN(preselected_fs_absent_from_combo_falls_through);
 	RUN(set_fs_needs_ntfs_prefers_ntfs);
 	RUN(set_fs_no_needs_ntfs_keeps_fat32);
+	RUN(user_selected_fs_overrides_image_heuristic);
+	RUN(user_selected_fs_zero_reverts_to_auto);
 
 	TEST_RESULTS();
 	return (_fail > 0) ? 1 : 0;

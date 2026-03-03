@@ -62,6 +62,11 @@ void set_preselected_fs(int fs)
 	preselected_fs = fs;
 }
 
+void set_user_selected_fs(int fs)
+{
+	selected_fs = (fs > 0) ? fs : FS_UNKNOWN;
+}
+
 
 /* -------------------------------------------------------------------------
  * populate_fs_combo
@@ -223,8 +228,12 @@ void SetFSFromISO(void)
 			fs_mask |= 1 << fs_tmp;
 	}
 
+	/* If the user explicitly selected an FS in the GUI, honour it (highest priority) */
+	if ((selected_fs > FS_UNKNOWN && selected_fs < FS_MAX) && (fs_mask & (1 << selected_fs))) {
+		preferred_fs = selected_fs;
+	}
 	/* If a filesystem was preselected from the command line, honour it */
-	if ((preselected_fs >= 0 && preselected_fs < FS_MAX) && (fs_mask & (1 << preselected_fs))) {
+	else if ((preselected_fs >= 0 && preselected_fs < FS_MAX) && (fs_mask & (1 << preselected_fs))) {
 		preferred_fs = preselected_fs;
 	} else {
 		/*
@@ -258,8 +267,6 @@ void SetFSFromISO(void)
 				preferred_fs = FS_NTFS;
 		}
 	}
-
-	/* Find and select the preferred FS in the combo */
 	if (preferred_fs != FS_UNKNOWN) {
 		for (i = 0; i < ComboBox_GetCount(hFileSystem); i++) {
 			fs_tmp = (int)ComboBox_GetItemData(hFileSystem, i);
@@ -271,8 +278,6 @@ void SetFSFromISO(void)
 			}
 		}
 	}
-	if (selected_fs == FS_UNKNOWN)
-		selected_fs = preferred_fs;
 }
 
 /* -------------------------------------------------------------------------

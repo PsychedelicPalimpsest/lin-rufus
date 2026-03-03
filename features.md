@@ -873,3 +873,9 @@ This is the most structurally significant porting gap.
     - `advanced_mode_device` global set on startup from `SETTING_ADVANCED_MODE_DEVICE` (calls `populate_boot_combo()` with correct state)
     - GRUB version headers (`grub_version.h`, `grub2_version.h`) included in `ui_gtk.c` for version strings in combo entries
     - 3 new `SetComboEntry` tests in `test_combo_linux.c` (selects by data, fallback on no match, empty combo); 110 total pass
+
+170. ✅ DONE **Boot type selection_default tracking + FS user selection persistence** —
+    - **`selection_default` tracking in `on_boot_changed()`**: Added early-exit guard when boot type is unchanged (mirrors Windows `IDC_BOOT_SELECTION` handler `if (boot_type == selection_default) break`); `selection_default = boot_type` stored after each change; `EnableControls(TRUE, FALSE)` called to refresh button states after selection change
+    - **`set_user_selected_fs(int fs)` in `ui_combo_logic.c`**: New setter called from `on_fs_changed()` to record explicit user FS choices; `SetFSFromISO()` checks `selected_fs` with highest priority (before `preselected_fs` CLI arg and before image heuristics); calling with `FS_UNKNOWN` (0) clears the lock and reverts to automatic heuristic — mirrors Windows `if (set_selected_fs && (fs_type > 0)) selected_fs = fs_type`
+    - **Bug fix**: `SetFSFromISO()` no longer auto-assigns `selected_fs` at end of function (was leaking state across calls); `selected_fs` is exclusively owned by `set_user_selected_fs()`
+    - 2 new tests in `test_combo_logic_linux.c`: `user_selected_fs_overrides_image_heuristic`, `user_selected_fs_zero_reverts_to_auto`; 50 total combo_logic tests pass

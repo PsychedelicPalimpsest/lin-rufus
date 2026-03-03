@@ -1744,6 +1744,7 @@ static void on_device_changed(GtkComboBox *combo, gpointer data)
 
 static void on_boot_changed(GtkComboBox *combo, gpointer data)
 {
+	extern int selection_default;
 	(void)data;
 	(void)combo;
 
@@ -1751,6 +1752,11 @@ static void on_boot_changed(GtkComboBox *combo, gpointer data)
 	int sel = ComboBox_GetCurSel(hBootType);
 	if (sel >= 0)
 		boot_type = (int)ComboBox_GetItemData(hBootType, sel);
+
+	/* Early exit if selection didn't change (mirrors Windows IDC_BOOT_SELECTION guard) */
+	if (boot_type == selection_default)
+		return;
+	selection_default = boot_type;
 
 	/* Smart refresh of partition scheme + target system */
 	SetPartitionSchemeAndTargetSystem(FALSE);
@@ -1762,6 +1768,9 @@ static void on_boot_changed(GtkComboBox *combo, gpointer data)
 
 	/* Propose a label appropriate for the new boot type */
 	SetProposedLabel();
+
+	/* Re-enable controls for the new selection state */
+	EnableControls(TRUE, FALSE);
 
 	/* Update advanced-options checkbox sensitivity */
 	update_advanced_controls();
@@ -1777,6 +1786,9 @@ static void on_fs_changed(GtkComboBox *combo, gpointer data)
 	if (sel >= 0) {
 		fs_type = (int)ComboBox_GetItemData(hFileSystem, sel);
 		populate_cluster_combo(fs_type);
+		/* Record user's explicit FS choice so SetFSFromISO won't override it
+		 * (mirrors Windows: if (set_selected_fs && (fs_type > 0)) selected_fs = fs_type) */
+		set_user_selected_fs(fs_type);
 	}
 
 	/* Update advanced-options checkbox sensitivity (quick format depends on fs_type) */

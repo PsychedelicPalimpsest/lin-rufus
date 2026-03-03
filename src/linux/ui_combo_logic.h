@@ -34,6 +34,14 @@ void SetComboEntry(HWND hDlg, int data);
 void set_preselected_fs(int fs);
 
 /*
+ * set_user_selected_fs  —  record the filesystem the user manually selected
+ * via the FS combo.  Mirrors Windows `selected_fs = fs_type` in the
+ * IDC_FILE_SYSTEM CBN_SELCHANGE handler.  SetFSFromISO() will prefer this
+ * value over the automatic heuristic.
+ */
+void set_user_selected_fs(int fs);
+
+/*
  * populate_fs_combo  —  reset the hFileSystem combo and fill it with every
  * filesystem that is supported on this machine (FAT32 always; NTFS, exFAT,
  * UDF, ext2/3/4 conditionally on tool availability).  Defaults to FAT32.
