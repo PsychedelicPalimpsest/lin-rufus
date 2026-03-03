@@ -13,4 +13,4 @@ rufus (4.13.0-1) unstable; urgency=medium
   * Automatic dark mode following system theme.
   * udev-based device hot-plug detection with 1s debounce.
 
- -- Pete Batard <pete@akeo.ie>  Sun, 01 Jan 2025 00:00:00 +0000
+ -- PsychedelicPalimpsest  Sun, 01 Jan 2025 00:00:00 +0000

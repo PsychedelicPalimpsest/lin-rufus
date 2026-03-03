@@ -90,7 +90,7 @@ cp -r res/* %{buildroot}%{_datadir}/rufus/
 %{_datadir}/rufus/
 
 %changelog
-* Wed Jan 01 2025 Pete Batard <pete@akeo.ie> - 4.13.0-1
+* Wed Jan 01 2025 PsychedelicPalimpsest - 4.13.0-1
 - Initial RPM packaging for the Linux port
 - GTK3 graphical interface with polkit privilege escalation
 - CLI mode for headless/scripting use
