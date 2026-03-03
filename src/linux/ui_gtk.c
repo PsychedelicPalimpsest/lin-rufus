@@ -50,6 +50,7 @@
 #include "polkit.h"
 #include "hyperlink.h"
 #include "csm_help.h"
+#include "multidev.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -140,6 +141,7 @@ static void on_toggle_usb_hdd(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
 static void on_save_clicked(GtkButton *btn, gpointer data);
 static void on_persistence_changed(GtkWidget *w, gpointer data);
+static void on_multi_write_clicked(GtkButton *btn, gpointer data);
 void SetPersistenceSize(void);   /* defined later in this file */
 extern DWORD WINAPI HashThread(void *param);  /* hash.c */
 void ShowLanguageMenu(RECT rcExclude);
@@ -217,32 +219,36 @@ static GtkWidget *build_toolbar(void)
 {
 	GtkWidget *bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
 
-	rw.lang_btn     = gtk_button_new_with_label("🌐");
-	rw.about_btn    = gtk_button_new_with_label("ℹ");
-	rw.settings_btn = gtk_button_new_with_label("⚙");
-	rw.log_btn      = gtk_button_new_with_label("📋");
-	rw.save_btn     = gtk_button_new_with_label("💾");
-	rw.hash_btn     = gtk_button_new_with_label("#");
+	rw.lang_btn       = gtk_button_new_with_label("🌐");
+	rw.about_btn      = gtk_button_new_with_label("ℹ");
+	rw.settings_btn   = gtk_button_new_with_label("⚙");
+	rw.log_btn        = gtk_button_new_with_label("📋");
+	rw.save_btn       = gtk_button_new_with_label("💾");
+	rw.hash_btn       = gtk_button_new_with_label("#");
+	rw.multi_write_btn = gtk_button_new_with_label("⊕");
 
-	gtk_widget_set_tooltip_text(rw.lang_btn,     "Language");
-	gtk_widget_set_tooltip_text(rw.about_btn,    "About");
-	gtk_widget_set_tooltip_text(rw.settings_btn, "Settings");
-	gtk_widget_set_tooltip_text(rw.log_btn,      "Log");
-	gtk_widget_set_tooltip_text(rw.save_btn,     "Save");
-	gtk_widget_set_tooltip_text(rw.hash_btn,     "Hash");
+	gtk_widget_set_tooltip_text(rw.lang_btn,        "Language");
+	gtk_widget_set_tooltip_text(rw.about_btn,        "About");
+	gtk_widget_set_tooltip_text(rw.settings_btn,     "Settings");
+	gtk_widget_set_tooltip_text(rw.log_btn,          "Log");
+	gtk_widget_set_tooltip_text(rw.save_btn,         "Save");
+	gtk_widget_set_tooltip_text(rw.hash_btn,         "Hash");
+	gtk_widget_set_tooltip_text(rw.multi_write_btn,  "Write to multiple devices");
 
-	g_signal_connect(rw.log_btn,   "clicked", G_CALLBACK(on_log_clicked),   NULL);
-	g_signal_connect(rw.about_btn, "clicked", G_CALLBACK(on_about_clicked), NULL);
-	g_signal_connect(rw.lang_btn,  "clicked", G_CALLBACK(on_lang_clicked),  NULL);
-	g_signal_connect(rw.hash_btn,  "clicked", G_CALLBACK(on_hash_clicked),  NULL);
-	g_signal_connect(rw.save_btn,  "clicked", G_CALLBACK(on_save_clicked),  NULL);
+	g_signal_connect(rw.log_btn,          "clicked", G_CALLBACK(on_log_clicked),         NULL);
+	g_signal_connect(rw.about_btn,        "clicked", G_CALLBACK(on_about_clicked),        NULL);
+	g_signal_connect(rw.lang_btn,         "clicked", G_CALLBACK(on_lang_clicked),         NULL);
+	g_signal_connect(rw.hash_btn,         "clicked", G_CALLBACK(on_hash_clicked),         NULL);
+	g_signal_connect(rw.save_btn,         "clicked", G_CALLBACK(on_save_clicked),         NULL);
+	g_signal_connect(rw.multi_write_btn,  "clicked", G_CALLBACK(on_multi_write_clicked),  NULL);
 
-	gtk_box_pack_start(GTK_BOX(bar), rw.lang_btn,     FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(bar), rw.about_btn,    FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(bar), rw.settings_btn, FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(bar), rw.log_btn,      FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(bar), rw.save_btn,     FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(bar), rw.hash_btn,     FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(bar), rw.lang_btn,        FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(bar), rw.about_btn,       FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(bar), rw.settings_btn,    FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(bar), rw.log_btn,         FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(bar), rw.save_btn,        FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(bar), rw.hash_btn,        FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(bar), rw.multi_write_btn, FALSE, FALSE, 0);
 
 	return bar;
 }
@@ -926,6 +932,256 @@ static void on_download_iso_clicked(GtkButton *btn, gpointer data)
 	DownloadISO();
 }
 
+/*
+ * on_multi_write_clicked — "Write to multiple devices" dialog.
+ *
+ * Shows a checklist of all currently enumerated drives. The user selects
+ * one or more targets and clicks "Write". Rufus then writes the selected
+ * image to each drive in sequence, showing per-device status.
+ *
+ * Sequential (not parallel) to avoid global-state conflicts in FormatThread.
+ */
+typedef struct {
+	GtkWidget *check;  /* GtkCheckButton per device row */
+	int        idx;    /* index in the device combo */
+	DWORD      di;     /* DriveIndex */
+	char       name[256];
+} MultiWriteRow;
+
+static void on_multi_write_clicked(GtkButton *btn, gpointer data)
+{
+	(void)btn; (void)data;
+
+	if (op_in_progress) {
+		rufus_gtk_update_status("Cannot open multi-device dialog while operation is in progress");
+		return;
+	}
+
+	/* Enumerate all drives currently in the device combo */
+	int n = ComboBox_GetCount(hDeviceList);
+	if (n <= 0) {
+		Notification(MB_OK | MB_ICONINFORMATION, APPLICATION_NAME,
+		             "No devices found. Please insert a USB drive and refresh.");
+		return;
+	}
+
+	if (image_path == NULL || image_path[0] == '\0') {
+		Notification(MB_OK | MB_ICONINFORMATION, APPLICATION_NAME,
+		             "Please select a boot image before using multi-device write.");
+		return;
+	}
+
+	/* Build the dialog */
+	GtkWidget *dlg = gtk_dialog_new_with_buttons(
+		"Write to Multiple Devices",
+		GTK_WINDOW(rw.window),
+		GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+		"Cancel", GTK_RESPONSE_CANCEL,
+		"Write",  GTK_RESPONSE_OK,
+		NULL);
+	gtk_window_set_default_size(GTK_WINDOW(dlg), 480, 320);
+
+	GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
+	GtkWidget *vbox    = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+	gtk_container_set_border_width(GTK_CONTAINER(vbox), 12);
+
+	GtkWidget *header = gtk_label_new(
+		"Select the devices to write to.\n"
+		"All selected devices will be formatted — ALL DATA WILL BE DESTROYED.");
+	gtk_label_set_line_wrap(GTK_LABEL(header), TRUE);
+	gtk_label_set_xalign(GTK_LABEL(header), 0.0f);
+	gtk_box_pack_start(GTK_BOX(vbox), header, FALSE, FALSE, 0);
+
+	/* Scrolled window containing check buttons */
+	GtkWidget *sw   = gtk_scrolled_window_new(NULL, NULL);
+	GtkWidget *list = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+	gtk_container_add(GTK_CONTAINER(sw), list);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
+	                               GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+	gtk_widget_set_vexpand(sw, TRUE);
+	gtk_box_pack_start(GTK_BOX(vbox), sw, TRUE, TRUE, 0);
+
+	/* Allocate row info array */
+	MultiWriteRow *rows = calloc((size_t)n, sizeof(MultiWriteRow));
+	if (!rows) {
+		gtk_widget_destroy(dlg);
+		return;
+	}
+
+	char dev_name[256];
+	for (int i = 0; i < n; i++) {
+		rows[i].idx = i;
+		rows[i].di  = (DWORD)ComboBox_GetItemData(hDeviceList, i);
+		dev_name[0] = '\0';
+		SendMessageA(hDeviceList, CB_GETLBTEXT, (WPARAM)i, (LPARAM)dev_name);
+		strncpy(rows[i].name, dev_name, sizeof(rows[i].name) - 1);
+
+		char label[320];
+		snprintf(label, sizeof(label), "%s", rows[i].name);
+		rows[i].check = gtk_check_button_new_with_label(label);
+		gtk_box_pack_start(GTK_BOX(list), rows[i].check, FALSE, FALSE, 0);
+	}
+
+	gtk_box_pack_start(GTK_BOX(content), vbox, TRUE, TRUE, 0);
+	gtk_widget_show_all(dlg);
+
+	int response = gtk_dialog_run(GTK_DIALOG(dlg));
+	if (response != GTK_RESPONSE_OK) {
+		gtk_widget_destroy(dlg);
+		free(rows);
+		return;
+	}
+
+	/* Collect selected targets */
+	multidev_session_t session;
+	multidev_init(&session);
+	for (int i = 0; i < n; i++) {
+		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rows[i].check)))
+			multidev_add_target(&session, rows[i].di, rows[i].name, 0);
+	}
+	gtk_widget_destroy(dlg);
+	free(rows);
+
+	int n_sel = multidev_count_selected(&session);
+	if (n_sel == 0) {
+		/* User clicked Write without selecting any device — nothing to do */
+		return;
+	}
+
+	/* Mark all selected */
+	for (int i = 0; i < session.n_targets; i++)
+		multidev_set_selected(&session, i, TRUE);
+
+	/* Confirm */
+	{
+		char msg[512];
+		snprintf(msg, sizeof(msg),
+		         "You are about to write to %d device(s).\n"
+		         "ALL DATA ON THOSE DEVICES WILL BE DESTROYED.\n\n"
+		         "Are you sure?", session.n_targets);
+		if (Notification(MB_OKCANCEL | MB_ICONWARNING, APPLICATION_NAME, msg) != IDOK)
+			return;
+	}
+
+	/* Build progress dialog */
+	GtkWidget *prog_dlg = gtk_dialog_new_with_buttons(
+		"Multi-Device Write Progress",
+		GTK_WINDOW(rw.window),
+		GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+		"Close", GTK_RESPONSE_CLOSE,
+		NULL);
+	gtk_window_set_default_size(GTK_WINDOW(prog_dlg), 520, 280);
+	gtk_dialog_set_response_sensitive(GTK_DIALOG(prog_dlg), GTK_RESPONSE_CLOSE, FALSE);
+
+	GtkWidget *pcontent = gtk_dialog_get_content_area(GTK_DIALOG(prog_dlg));
+	GtkWidget *pgrid    = gtk_grid_new();
+	gtk_grid_set_column_spacing(GTK_GRID(pgrid), 12);
+	gtk_grid_set_row_spacing(GTK_GRID(pgrid), 6);
+	gtk_container_set_border_width(GTK_CONTAINER(pgrid), 12);
+	gtk_box_pack_start(GTK_BOX(pcontent), pgrid, TRUE, TRUE, 0);
+
+	/* Allocate per-device widget arrays */
+	GtkWidget **pbars    = calloc((size_t)session.n_targets, sizeof(GtkWidget *));
+	GtkWidget **plabels  = calloc((size_t)session.n_targets, sizeof(GtkWidget *));
+	if (!pbars || !plabels) {
+		free(pbars); free(plabels);
+		gtk_widget_destroy(prog_dlg);
+		return;
+	}
+
+	for (int i = 0; i < session.n_targets; i++) {
+		GtkWidget *name_lbl = gtk_label_new(session.targets[i].name);
+		gtk_label_set_xalign(GTK_LABEL(name_lbl), 0.0f);
+		gtk_widget_set_hexpand(name_lbl, FALSE);
+		gtk_grid_attach(GTK_GRID(pgrid), name_lbl, 0, i, 1, 1);
+
+		pbars[i] = gtk_progress_bar_new();
+		gtk_widget_set_hexpand(pbars[i], TRUE);
+		gtk_grid_attach(GTK_GRID(pgrid), pbars[i], 1, i, 1, 1);
+
+		plabels[i] = gtk_label_new("Pending");
+		gtk_label_set_xalign(GTK_LABEL(plabels[i]), 0.0f);
+		gtk_grid_attach(GTK_GRID(pgrid), plabels[i], 2, i, 1, 1);
+	}
+	gtk_widget_show_all(prog_dlg);
+
+	/* Run FormatThread sequentially for each target */
+	for (int i = 0; i < session.n_targets; i++) {
+		DWORD target_di = session.targets[i].DriveIndex;
+
+		/* Switch the main device combo to this target */
+		int n_items = ComboBox_GetCount(hDeviceList);
+		for (int j = 0; j < n_items; j++) {
+			if ((DWORD)ComboBox_GetItemData(hDeviceList, j) == target_di) {
+				ComboBox_SetCurSel(hDeviceList, j);
+				break;
+			}
+		}
+
+		gtk_label_set_text(GTK_LABEL(plabels[i]), "Writing…");
+		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(pbars[i]), 0.0);
+		/* Flush GTK events so the progress dialog updates */
+		while (gtk_events_pending())
+			gtk_main_iteration_do(FALSE);
+
+		op_in_progress = TRUE;
+		ErrorStatus    = 0;
+		EnableControls(FALSE, FALSE);
+		/* Disable Close button on progress dialog while writing */
+		gtk_dialog_set_response_sensitive(GTK_DIALOG(prog_dlg), GTK_RESPONSE_CLOSE, FALSE);
+
+		HANDLE thr = CreateThread(NULL, 0, FormatThread,
+		                          (void*)(uintptr_t)target_di, 0, NULL);
+		if (thr == NULL) {
+			multidev_set_result(&session, i, MULTIDEV_RESULT_FAILURE);
+			gtk_label_set_text(GTK_LABEL(plabels[i]), "Failed to start");
+			continue;
+		}
+
+		/* Poll until thread finishes, reading progress from the main progress bar */
+		while (WaitForSingleObject(thr, 200) == WAIT_TIMEOUT) {
+			if (rw.progress_bar) {
+				double frac = gtk_progress_bar_get_fraction(
+				                  GTK_PROGRESS_BAR(rw.progress_bar));
+				gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(pbars[i]), frac);
+			}
+			while (gtk_events_pending())
+				gtk_main_iteration_do(FALSE);
+		}
+		safe_closehandle(thr);
+
+		BOOL ok = (ErrorStatus == 0);
+		multidev_set_result(&session, i, ok ? MULTIDEV_RESULT_SUCCESS : MULTIDEV_RESULT_FAILURE);
+		multidev_set_progress(&session, i, 100.0f);
+		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(pbars[i]), ok ? 1.0f : 0.0f);
+		gtk_label_set_text(GTK_LABEL(plabels[i]), ok ? "✓ Done" : "✗ Failed");
+
+		op_in_progress = FALSE;
+		EnableControls(TRUE, FALSE);
+		while (gtk_events_pending())
+			gtk_main_iteration_do(FALSE);
+	}
+
+	/* Summary */
+	{
+		int n_ok   = multidev_count_success(&session);
+		int n_fail = multidev_count_failure(&session);
+		char summary[256];
+		snprintf(summary, sizeof(summary),
+		         "Multi-device write complete: %d succeeded, %d failed.",
+		         n_ok, n_fail);
+		rufus_gtk_update_status(summary);
+		uprintf("%s", summary);
+	}
+
+	gtk_dialog_set_response_sensitive(GTK_DIALOG(prog_dlg), GTK_RESPONSE_CLOSE, TRUE);
+	gtk_dialog_run(GTK_DIALOG(prog_dlg));
+	gtk_widget_destroy(prog_dlg);
+	free(pbars);
+	free(plabels);
+}
+
+
 static void on_device_changed(GtkComboBox *combo, gpointer data)
 {
 	(void)data;
@@ -1309,6 +1565,7 @@ void EnableControls(BOOL enable, BOOL remove_checkboxes)
 	if (rw.cluster_combo)     gtk_widget_set_sensitive(rw.cluster_combo,     e);
 	if (rw.label_entry)       gtk_widget_set_sensitive(rw.label_entry,       e);
 	if (rw.start_btn)         gtk_widget_set_sensitive(rw.start_btn,         e);
+	if (rw.multi_write_btn)   gtk_widget_set_sensitive(rw.multi_write_btn,   e);
 	if (rw.verify_write_check) gtk_widget_set_sensitive(rw.verify_write_check, e);
 
 	/* While an operation is in progress, repurpose the close button as Cancel */

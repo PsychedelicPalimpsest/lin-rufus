@@ -84,6 +84,7 @@ typedef struct {
 	GtkWidget *log_btn;             /* IDC_LOG */
 	GtkWidget *save_btn;            /* IDC_SAVE */
 	GtkWidget *hash_btn;            /* IDC_HASH */
+	GtkWidget *multi_write_btn;     /* write to multiple devices */
 
 	/* Log dialog */
 	GtkWidget *log_dialog;
