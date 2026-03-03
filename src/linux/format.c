@@ -543,14 +543,20 @@ BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive)
 		                          ? (img_size - off) : (uint64_t)chunk);
 		ssize_t r = pread(src_fd, buf, to_read, (off_t)off);
 		if (r <= 0) break;
-		ssize_t w = pwrite(dst_fd, buf, (size_t)r, (off_t)off);
+		/* Retry on transient write failures (e.g. USB bus errors) */
+		ssize_t w = -1;
+		for (int try = 0; try <= WRITE_RETRIES; try++) {
+			if (try > 0) usleep(200000U * (unsigned)try);
+			w = pwrite(dst_fd, buf, (size_t)r, (off_t)off);
+			if (w == r || IS_ERROR(ErrorStatus)) break;
+		}
 		if (w != r) {
 			LastWriteError = RUFUS_ERROR(ERROR_WRITE_FAULT);
 			ok = FALSE;
 			break;
 		}
 		off += (uint64_t)r;
-		UpdateProgressWithInfo(OP_FILE_COPY, MSG_261, off, img_size);
+		UpdateProgressWithInfo(OP_FORMAT, MSG_261, off, img_size);
 	}
 
 	free(buf);
