@@ -181,6 +181,9 @@ extern int     extract_zip_call_count;
 extern char    extract_zip_last_dst[PATH_MAX];
 extern int     run_ntfs_fix_call_count;
 extern char    run_ntfs_fix_last_path[PATH_MAX];
+extern int     set_autorun_call_count;
+extern char    set_autorun_last_path[PATH_MAX];
+extern BOOL    use_extended_label;
 /* ================================================================
  * Stub functions
  * ================================================================ */
@@ -335,6 +338,9 @@ static void reset_globals(void)
 	extract_zip_last_dst[0]     = '\0';
 	run_ntfs_fix_call_count     = 0;
 	run_ntfs_fix_last_path[0]   = '\0';
+	set_autorun_call_count      = 0;
+	set_autorun_last_path[0]    = '\0';
+	use_extended_label          = FALSE;
 	g_mock_image_option_data    = 0;
 	hImageOption                = NULL;
 }
@@ -2412,6 +2418,91 @@ TEST(format_thread_skips_zip_for_ext_fs)
 }
 
 /* ================================================================
+ * FormatThread extended label / autorun.inf tests
+ * ================================================================ */
+
+TEST(format_thread_extended_label_calls_set_autorun)
+{
+	/*
+	 * When use_extended_label=TRUE, FormatThread must call SetAutorun()
+	 * after format completes — feature parity with Windows format.c
+	 * IDC_EXTENDED_LABEL check.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type          = BT_NON_BOOTABLE;
+	partition_type     = PARTITION_STYLE_MBR;
+	fs_type            = FS_FAT32;
+	write_as_image     = FALSE;
+	use_extended_label = TRUE;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(set_autorun_call_count >= 1,
+	          "SetAutorun must be called when use_extended_label=TRUE");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_no_extended_label_skips_set_autorun)
+{
+	/*
+	 * When use_extended_label=FALSE (default), FormatThread must NOT call
+	 * SetAutorun().
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type          = BT_NON_BOOTABLE;
+	partition_type     = PARTITION_STYLE_MBR;
+	fs_type            = FS_FAT32;
+	write_as_image     = FALSE;
+	use_extended_label = FALSE;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(set_autorun_call_count == 0,
+	          "SetAutorun must NOT be called when use_extended_label=FALSE");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_extended_label_skipped_for_dd_image)
+{
+	/*
+	 * Pure DD image write (write_as_image=TRUE) skips autorun.inf creation —
+	 * mirrors Windows format.c where SetAutorun is only in the non-DD paths.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type          = BT_IMAGE;
+	partition_type     = PARTITION_STYLE_MBR;
+	fs_type            = FS_FAT32;
+	write_as_image     = TRUE;
+	use_extended_label = TRUE;
+	/* Provide a minimal image path (stub will handle it) */
+	image_path         = path;
+	img_report.is_bootable_img = TRUE;
+	img_report.is_iso = FALSE;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(set_autorun_call_count == 0,
+	          "SetAutorun must NOT be called for pure DD image write");
+
+	image_path = NULL;
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+/* ================================================================
  * FormatThread NTFS fixup tests (ntfsfix for WinPE/AIK images)
  * ================================================================ */
 
@@ -2772,6 +2863,11 @@ int main(void)
 	RUN(format_thread_extracts_zip_when_archive_path_set);
 	RUN(format_thread_skips_zip_when_archive_path_null);
 	RUN(format_thread_skips_zip_for_ext_fs);
+
+	printf("\n=== FormatThread extended label / autorun.inf tests ===\n");
+	RUN(format_thread_extended_label_calls_set_autorun);
+	RUN(format_thread_no_extended_label_skips_set_autorun);
+	RUN(format_thread_extended_label_skipped_for_dd_image);
 
 	printf("\n=== FormatThread NTFS fixup (ntfsfix) tests ===\n");
 	RUN(format_thread_ntfs_iso_runs_ntfsfix);

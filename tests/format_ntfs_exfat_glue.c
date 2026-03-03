@@ -72,3 +72,8 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 { (void)drive_letter; (void)flags; return FALSE; }
 
 BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }
+
+BOOL use_old_bios_fixes = FALSE;
+BOOL use_extended_label = FALSE;
+BOOL SetAutorun(const char *path) { (void)path; return TRUE; }
+BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent; return FALSE; }

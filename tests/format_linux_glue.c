@@ -15,6 +15,7 @@ BOOL             quick_format   = TRUE;
 BOOL             enable_bad_blocks = FALSE;
 BOOL             enable_verify_write = FALSE;
 BOOL             use_old_bios_fixes = FALSE;
+BOOL             use_extended_label = FALSE;
 int              nb_passes_sel  = 0;
 
 /* ---- ui.c ---- */
@@ -114,3 +115,6 @@ BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return FALSE; }
 /* ExtractZip stub — stdio.c is not linked in format_linux tests. */
 BOOL ExtractZip(const char* src_zip, const char* dest_dir)
 { (void)src_zip; (void)dest_dir; return TRUE; }
+/* SetAutorun stub — icon.c is not linked in format_linux tests. */
+BOOL SetAutorun(const char *path) { (void)path; return TRUE; }
+BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent; return FALSE; }

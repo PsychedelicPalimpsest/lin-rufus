@@ -41,6 +41,10 @@ DWORD _win_last_error = 0;
 char *unattend_xml_path = NULL;
 int   unattend_xml_flags = 0;
 
+/* Format-thread globals not defined in test_badblocks_integration_linux.c */
+BOOL use_old_bios_fixes = FALSE;
+BOOL use_extended_label = FALSE;
+
 void wue_set_mount_path(const char *path) { (void)path; }
 
 BOOL SetupWinPE(char drive_letter)
@@ -55,3 +59,6 @@ BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }
 
 /* RunNtfsFix stub */
 BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE; }
+/* SetAutorun stub — icon.c is not linked in these tests. */
+BOOL SetAutorun(const char *path) { (void)path; return TRUE; }
+BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent; return FALSE; }

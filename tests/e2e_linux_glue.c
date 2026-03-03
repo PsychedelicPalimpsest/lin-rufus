@@ -140,3 +140,6 @@ BOOL HashFile(unsigned type, const char* path, uint8_t* sum)
 
 /* RunNtfsFix stub — ntfsfix.c is not linked in e2e tests. */
 BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE; }
+/* SetAutorun stub — icon.c is not linked in these tests. */
+BOOL SetAutorun(const char *path) { (void)path; return TRUE; }
+BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent; return FALSE; }

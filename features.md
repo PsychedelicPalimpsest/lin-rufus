@@ -422,7 +422,8 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Function | Status | Notes |
 |----------|--------|-------|
 | `ExtractAppIcon()` | 🚫 | Windows `.ico` embedding — N/A on Linux |
-| `SetAutorun()` | 🚫 | `autorun.inf` is Windows-only |
+| `SetAutorun()` | ✅ | Creates `autorun.inf` (`[autorun]\nicon=autorun.ico\nlabel=<label>`) for FAT/NTFS/exFAT drives (not ext2+); reads label from `hLabel` via `GetWindowTextA`; skipped for DD image writes; guarded by `use_extended_label` global |
+| IDC_EXTENDED_LABEL checkbox | ✅ | GTK checkbox in advanced format expander; toggles `use_extended_label` global; enable/disable logic driven by `should_enable_extended_label()`; 3 FormatThread integration tests in `test_format_thread_linux.c` |
 
 ### 3r. Dark Mode (`darkmode.c`)
 

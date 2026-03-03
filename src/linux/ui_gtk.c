@@ -264,6 +264,7 @@ static void on_list_usb_hdd_toggled(GtkToggleButton *btn, gpointer data);
 static void on_uefi_validation_toggled(GtkToggleButton *btn, gpointer data);
 static void on_adv_format_toggled(GtkExpander *exp, gpointer data);
 static void on_old_bios_check_toggled(GtkToggleButton *btn, gpointer data);
+static void on_extended_label_toggled(GtkToggleButton *btn, gpointer data);
 /* New Alt+key shortcuts */
 static void on_toggle_rufus_mbr(GtkWidget *w, gpointer data);
 static void on_toggle_detect_fakes(GtkWidget *w, gpointer data);
@@ -647,6 +648,11 @@ static GtkWidget *build_format_options(void)
 	gtk_box_pack_start(GTK_BOX(adv_box), rw.old_bios_check, FALSE, FALSE, 0);
 	g_signal_connect(rw.old_bios_check, "toggled",
 		G_CALLBACK(on_old_bios_check_toggled), NULL);
+	rw.extended_label_check = gtk_check_button_new_with_label("Create extended label and icon files");
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.extended_label_check), TRUE);
+	gtk_box_pack_start(GTK_BOX(adv_box), rw.extended_label_check, FALSE, FALSE, 0);
+	g_signal_connect(rw.extended_label_check, "toggled",
+		G_CALLBACK(on_extended_label_toggled), NULL);
 	rw.verify_write_check = gtk_check_button_new_with_label("Verify write (re-read and compare after write)");
 	gtk_box_pack_start(GTK_BOX(adv_box), rw.verify_write_check, FALSE, FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(rw.adv_format_expander), adv_box);
@@ -2195,6 +2201,15 @@ static void on_old_bios_check_toggled(GtkToggleButton *btn, gpointer data)
 	uprintf("Old BIOS fixes: %s", use_old_bios_fixes ? "enabled" : "disabled");
 }
 
+/* Checkbox handler: extended label / autorun.inf creation */
+static void on_extended_label_toggled(GtkToggleButton *btn, gpointer data)
+{
+	(void)data;
+	extern BOOL use_extended_label;
+	use_extended_label = gtk_toggle_button_get_active(btn) ? TRUE : FALSE;
+	uprintf("Extended label: %s", use_extended_label ? "enabled" : "disabled");
+}
+
 /* --- New Alt+key cheat-mode toggle handlers --- */
 
 static void on_toggle_rufus_mbr(GtkWidget *w, gpointer data)
@@ -2668,6 +2683,17 @@ void update_advanced_controls(void)
 		gtk_widget_set_sensitive(rw.old_bios_check, en ? TRUE : FALSE);
 		if (!en)
 			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.old_bios_check), FALSE);
+	}
+
+	/* --- Extended label / autorun.inf --- */
+	if (rw.extended_label_check) {
+		BOOL en = should_enable_extended_label(fs_type, boot_type, &img_report);
+		gtk_widget_set_sensitive(rw.extended_label_check, en ? TRUE : FALSE);
+		if (!en) {
+			extern BOOL use_extended_label;
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.extended_label_check), FALSE);
+			use_extended_label = FALSE;
+		}
 	}
 
 	/* --- Quick format --- */
@@ -3511,6 +3537,8 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 		CreateTooltip((HWND)rw.uefi_validation_check, lmprintf(MSG_167), 10000);
 	if (rw.old_bios_check)
 		CreateTooltip((HWND)rw.old_bios_check,    lmprintf(MSG_169), -1);
+	if (rw.extended_label_check)
+		CreateTooltip((HWND)rw.extended_label_check, lmprintf(MSG_166), 10000);
 	if (rw.list_usb_hdd_check)
 		CreateTooltip((HWND)rw.list_usb_hdd_check,lmprintf(MSG_170), -1);
 	if (rw.persistence_scale)

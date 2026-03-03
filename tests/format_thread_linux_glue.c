@@ -104,6 +104,7 @@ BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
 BOOL enable_bad_blocks = FALSE;
 BOOL enable_verify_write = FALSE;
 BOOL use_old_bios_fixes = FALSE;
+BOOL use_extended_label = FALSE;
 int  nb_passes_sel     = 0;
 
 /*
@@ -280,4 +281,23 @@ BOOL RunNtfsFix(const char *partition_path)
         snprintf(run_ntfs_fix_last_path, sizeof(run_ntfs_fix_last_path),
                  "%s", partition_path);
     return TRUE;
+}
+
+/* SetAutorun creates autorun.inf on the target volume (extended label feature).
+ * icon.c is NOT linked in format_thread tests; this stub replaces it. */
+int  set_autorun_call_count     = 0;
+char set_autorun_last_path[PATH_MAX] = "";
+
+BOOL SetAutorun(const char *path)
+{
+    set_autorun_call_count++;
+    if (path)
+        snprintf(set_autorun_last_path, sizeof(set_autorun_last_path),
+                 "%s", path);
+    return TRUE;
+}
+
+BOOL ExtractAppIcon(const char *path, BOOL bSilent)
+{
+    (void)path; (void)bSilent; return FALSE;
 }

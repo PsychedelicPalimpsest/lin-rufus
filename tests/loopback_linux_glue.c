@@ -59,6 +59,8 @@ BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
 
 BOOL enable_bad_blocks = FALSE;
 BOOL enable_verify_write = FALSE;
+BOOL use_old_bios_fixes = FALSE;
+BOOL use_extended_label = FALSE;
 int  nb_passes_sel     = 0;
 
 BOOL BadBlocks(HANDLE hPhysicalDrive, ULONGLONG disk_size, int nb_passes,
@@ -129,3 +131,6 @@ BOOL ExtractZip(const char* src_zip, const char* dest_dir)
 { (void)src_zip; (void)dest_dir; return TRUE; }
 /* RunNtfsFix stub — ntfsfix.c is not linked in loopback tests. */
 BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE; }
+/* SetAutorun stub — icon.c is not linked in these tests. */
+BOOL SetAutorun(const char *path) { (void)path; return TRUE; }
+BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent; return FALSE; }

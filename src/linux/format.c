@@ -66,6 +66,7 @@ extern BOOL quick_format;
 extern BOOL enable_bad_blocks;
 extern BOOL enable_verify_write;
 extern BOOL use_old_bios_fixes;
+extern BOOL use_extended_label;
 extern int  nb_passes_sel;
 extern char *image_path;
 extern char *archive_path;
@@ -1219,6 +1220,19 @@ DWORD WINAPI FormatThread(void* param)
 			free(zip_mount);
 		} else {
 			uprintf("WARNING: Could not mount partition for ZIP extraction");
+		}
+	}
+
+	/* Create autorun.inf / extended label if user requested it.
+	 * Mirrors Windows format.c lines 1832-1833 and 1925-1926.
+	 * Not applicable for pure DD images or ext2/3/4 filesystems. */
+	if (!IS_ERROR(ErrorStatus) && use_extended_label && !write_as_image
+	    && fs_type < FS_EXT2) {
+		char *autorun_mount = AltMountVolume(DriveIndex, part_offset, FALSE);
+		if (autorun_mount != NULL) {
+			SetAutorun(autorun_mount);
+			AltUnmountVolume(autorun_mount, FALSE);
+			free(autorun_mount);
 		}
 	}
 
