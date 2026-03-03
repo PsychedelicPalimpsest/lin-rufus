@@ -194,7 +194,47 @@ static void stop_clock_timer(void)
 		gtk_label_set_text(GTK_LABEL(rw.elapsed_label), "");
 }
 
-/* ---- Forward declarations ---- */
+/* Blocking I/O timer — mirrors Windows BlockingTimer (3 s interval).
+ * Detects when ISO extraction gets stuck after user requests cancel. */
+static guint blocking_timer_source = 0;
+static int64_t last_iso_blocking_status_val = -1;
+static BOOL blocking_user_notified = FALSE;
+
+static gboolean blocking_timer_cb(gpointer data)
+{
+	(void)data;
+	extern int64_t iso_blocking_status;
+	if (iso_blocking_status < 0) {
+		blocking_timer_source = 0;
+		blocking_user_notified = FALSE;
+		uprintf("Killed blocking I/O timer\n");
+		return G_SOURCE_REMOVE;
+	}
+	if (!blocking_user_notified) {
+		if (last_iso_blocking_status_val == iso_blocking_status) {
+			blocking_user_notified = TRUE;
+			uprintf("Blocking I/O operation detected\n");
+			Notification(MB_OK | MB_ICONINFORMATION,
+			             lmprintf(MSG_048), lmprintf(MSG_080));
+		} else {
+			last_iso_blocking_status_val = iso_blocking_status;
+		}
+	}
+	return G_SOURCE_CONTINUE;
+}
+
+static void start_blocking_timer(void)
+{
+	extern int64_t iso_blocking_status;
+	if (iso_blocking_status < 0)
+		return;
+	last_iso_blocking_status_val = iso_blocking_status;
+	blocking_user_notified = FALSE;
+	if (blocking_timer_source == 0)
+		blocking_timer_source = g_timeout_add(3000, blocking_timer_cb, NULL);
+}
+
+
 static void on_start_clicked(GtkButton *btn, gpointer data);
 static void on_close_clicked(GtkButton *btn, gpointer data);
 static void on_select_clicked(GtkButton *btn, gpointer data);
@@ -943,6 +983,9 @@ static void on_close_clicked(GtkButton *btn, gpointer data)
 		ErrorStatus = RUFUS_ERROR(ERROR_CANCELLED);
 		uprintf("Cancellation requested by user.");
 		rufus_gtk_update_status(lmprintf(MSG_201));
+		/* Start a blocking I/O detector if we're in the middle of ISO extraction,
+		 * mirroring Windows BlockingTimer. */
+		start_blocking_timer();
 	} else {
 		device_monitor_stop();
 		rufus_set_log_handler(NULL);
