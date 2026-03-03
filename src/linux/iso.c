@@ -356,11 +356,21 @@ static int udf_extract_files(udf_t* p_udf, udf_dirent_t* p_udf_dirent,
 					goto out;
 			}
 		} else {
+			/* UDF symlink detection. Mirrors Windows iso.c line 444-445. */
+			if (S_ISLNK(udf_get_posix_filemode(p_udf_dirent)))
+				img_report.has_symlinks = SYMLINKS_UDF;
 			file_length = udf_get_file_length(p_udf_dirent);
 			const char* rel = psz_extract_dir ?
 				&psz_fullpath[strlen(psz_extract_dir)] : psz_fullpath;
 			if (check_iso_props(psz_path, file_length, psz_basename,
 			                    psz_fullpath, &props)) {
+				safe_free(psz_fullpath);
+				continue;
+			}
+			if (scan_only) {
+				/* Scan mode: count blocks and detect props; no I/O */
+				total_blocks += (uint64_t)(file_length > 0 ?
+				    (file_length + 2047) / 2048 : 1);
 				safe_free(psz_fullpath);
 				continue;
 			}
@@ -859,6 +869,7 @@ BOOL ExtractISO(const char* src_iso, const char* dest_dir, BOOL scan)
 		}
 		if (udf_extract_files(p_udf, p_udf_root, "") == 0)
 			ret = TRUE;
+		p_udf_root = NULL;  /* udf_readdir inside udf_extract_files frees all dirents */
 		goto out;
 	}
 

@@ -471,6 +471,72 @@ static void cleanup_mintlmde_iso(void)
     unlink(MINTLMDE_ISO_PATH);
 }
 
+/* ================================================================
+ * UDF ISO fixture — minimal UDF ISO with a symlink
+ * ================================================================ */
+
+#define UDF_SYMLINK_ISO_PATH "/tmp/test_rufus_udf_symlink.iso"
+static int udf_symlink_iso_available = 0;
+
+static void setup_udf_symlink_iso(void)
+{
+    /*
+     * Creates a minimal UDF 2.60 ISO with:
+     *   /test/file.txt  — a regular file
+     *   /test/mylink    — a UDF symlink pointing to file.txt
+     *
+     * When scanned, iso.c should detect S_ISLNK(udf_get_posix_filemode())
+     * and set img_report.has_symlinks = SYMLINKS_UDF.
+     */
+    const char *script =
+        "python3 -c \""
+        "import pycdlib, io\n"
+        "iso = pycdlib.PyCdlib()\n"
+        "iso.new(udf='2.60')\n"
+        "iso.add_directory('/TEST', udf_path='/test')\n"
+        "content = b'UDF symlink test'\n"
+        "iso.add_fp(io.BytesIO(content), len(content), '/TEST/FILE.TXT;1', udf_path='/test/file.txt')\n"
+        "iso.add_symlink(udf_symlink_path='/test/mylink', udf_target='file.txt')\n"
+        "iso.write('" UDF_SYMLINK_ISO_PATH "')\n"
+        "iso.close()\n"
+        "\"";
+    struct stat st;
+    if (system(script) == 0 && stat(UDF_SYMLINK_ISO_PATH, &st) == 0 && st.st_size > 0)
+        udf_symlink_iso_available = 1;
+}
+
+static void cleanup_udf_symlink_iso(void)
+{
+    unlink(UDF_SYMLINK_ISO_PATH);
+}
+
+/* Minimal UDF ISO WITHOUT symlinks — for negative test */
+#define UDF_PLAIN_ISO_PATH "/tmp/test_rufus_udf_plain.iso"
+static int udf_plain_iso_available = 0;
+
+static void setup_udf_plain_iso(void)
+{
+    const char *script =
+        "python3 -c \""
+        "import pycdlib, io\n"
+        "iso = pycdlib.PyCdlib()\n"
+        "iso.new(udf='2.60')\n"
+        "iso.add_directory('/TEST', udf_path='/test')\n"
+        "content = b'No symlinks here'\n"
+        "iso.add_fp(io.BytesIO(content), len(content), '/TEST/FILE.TXT;1', udf_path='/test/file.txt')\n"
+        "iso.write('" UDF_PLAIN_ISO_PATH "')\n"
+        "iso.close()\n"
+        "\"";
+    struct stat st;
+    if (system(script) == 0 && stat(UDF_PLAIN_ISO_PATH, &st) == 0 && st.st_size > 0)
+        udf_plain_iso_available = 1;
+}
+
+static void cleanup_udf_plain_iso(void)
+{
+    unlink(UDF_PLAIN_ISO_PATH);
+}
+
 TEST(grubver_empty_buf)
 {
     /* Buffer smaller than max_string_size (32) — function should not scan */
@@ -1429,6 +1495,62 @@ TEST(scan_iso_no_live_casper_stays_false)
 }
 
 /* ================================================================
+ * UDF symlink detection tests
+ *
+ * Tests that img_report.has_symlinks is set to SYMLINKS_UDF when a
+ * UDF ISO is scanned and contains a symlink entry.
+ * Mirrors Windows iso.c lines 444-445.
+ * ================================================================ */
+
+TEST(scan_udf_symlink_sets_has_symlinks)
+{
+    /*
+     * A UDF ISO with a symlink must set img_report.has_symlinks = SYMLINKS_UDF
+     * after scanning.  Linux udf_extract_files() checks S_ISLNK() on each
+     * entry; Windows iso.c does the same at line 444-445.
+     */
+    if (!udf_symlink_iso_available) {
+        printf("SKIP: UDF symlink ISO unavailable\n");
+        return;
+    }
+
+    char *saved_image_path = image_path;
+    image_path = UDF_SYMLINK_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+
+    ExtractISO(UDF_SYMLINK_ISO_PATH, "", TRUE);
+
+    CHECK_MSG(img_report.has_symlinks == SYMLINKS_UDF,
+              "has_symlinks must be SYMLINKS_UDF when UDF ISO contains a symlink");
+
+    image_path = saved_image_path;
+    memset(&img_report, 0, sizeof(img_report));
+}
+
+TEST(scan_udf_no_symlink_has_no_symlinks)
+{
+    /*
+     * A UDF ISO with NO symlinks must leave img_report.has_symlinks == 0.
+     */
+    if (!udf_plain_iso_available) {
+        printf("SKIP: UDF plain ISO unavailable\n");
+        return;
+    }
+
+    char *saved_image_path = image_path;
+    image_path = UDF_PLAIN_ISO_PATH;
+    memset(&img_report, 0, sizeof(img_report));
+
+    ExtractISO(UDF_PLAIN_ISO_PATH, "", TRUE);
+
+    CHECK_MSG(img_report.has_symlinks == 0,
+              "has_symlinks must remain 0 for UDF ISO without symlinks");
+
+    image_path = saved_image_path;
+    memset(&img_report, 0, sizeof(img_report));
+}
+
+/* ================================================================
  * iso9660_readfat tests
  *
  * Tests the sector-reader callback used by libfat to read the FAT
@@ -2007,6 +2129,14 @@ int main(void)
     if (!mintlmde_iso_available)
         printf("  NOTE: Mint LMDE test ISO not available; needs_ntfs tests skipped\n\n");
 
+    setup_udf_symlink_iso();
+    if (!udf_symlink_iso_available)
+        printf("  NOTE: UDF symlink test ISO not available; UDF symlink tests skipped\n\n");
+
+    setup_udf_plain_iso();
+    if (!udf_plain_iso_available)
+        printf("  NOTE: UDF plain test ISO not available; UDF no-symlink test skipped\n\n");
+
     StrArrayCreate(&modified_files, 8);
 
     printf("  GetGrubVersion\n");
@@ -2091,6 +2221,10 @@ int main(void)
     RUN(scan_iso_live_casper_symlink_sets_needs_ntfs);
     RUN(scan_iso_no_live_casper_stays_false);
 
+    printf("\n  UDF symlink detection\n");
+    RUN(scan_udf_symlink_sets_has_symlinks);
+    RUN(scan_udf_no_symlink_has_no_symlinks);
+
     printf("\n  iso9660_readfat\n");
     RUN(readfat_inrange_sector_zero);
     RUN(readfat_inrange_last_slot);
@@ -2129,6 +2263,8 @@ int main(void)
     cleanup_knoppix_iso();
     cleanup_wininst_iso();
     cleanup_mintlmde_iso();
+    cleanup_udf_symlink_iso();
+    cleanup_udf_plain_iso();
 
     TEST_RESULTS();
 }
