@@ -51,6 +51,7 @@ extern char   *image_path;
 extern HWND    hMainDialog;
 extern DWORD   ErrorStatus;
 extern char    temp_dir[];
+extern char    app_data_dir[];
 extern const char* efi_archname[];
 
 /* Maximum download buffer chunk */
@@ -286,8 +287,9 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 		return 0;
 
 	/* Pre-check: refuse to attempt downloads when no network interface is UP.
-	 * This avoids waiting for a TCP/TLS timeout when the machine is offline. */
-	if (!is_network_available()) {
+	 * This avoids waiting for a TCP/TLS timeout when the machine is offline.
+	 * file:// URLs are local and do not require a network connection. */
+	if (strncmp(url, "file://", 7) != 0 && !is_network_available()) {
 		if (!silent)
 			uprintf("No network connection available — skipping download of '%s'",
 			        net_short_name(url));
@@ -382,12 +384,13 @@ uint64_t DownloadToFileOrBufferEx(const char *url, const char *file,
 		goto out;
 	}
 
-	if (http_code != 200 && http_code != 206) {
+	if (http_code != 200 && http_code != 206 && http_code != 0) {
 		if (!silent)
 			uprintf("HTTP %ld for '%s'", http_code, url);
 		/* Keep .partial so the resume can be attempted later */
 		goto out;
 	}
+	/* http_code == 0 is normal for file:// URLs — treat as success if curl succeeded */
 
 	/* Success — finalize or return data */
 	if (file != NULL) {
@@ -550,6 +553,97 @@ static HANDLE update_check_thread = NULL;
 /* Forward declaration — defined below */
 void CheckForDBXUpdates(void);
 
+/* ---- Locale auto-download ---- */
+
+/* 30 days in seconds */
+#define LOCALE_REFRESH_INTERVAL (30 * 24 * 3600)
+
+/*
+ * get_locale_download_path — return the path where embedded.loc is saved.
+ * Uses app_data_dir when available, falls back to a temp-dir path.
+ * Returns a pointer to a static buffer.
+ */
+const char *get_locale_download_path(void)
+{
+	static char loc_dl_path[MAX_PATH];
+	if (app_data_dir[0] != '\0')
+		snprintf(loc_dl_path, sizeof(loc_dl_path), "%s/embedded.loc", app_data_dir);
+	else
+		snprintf(loc_dl_path, sizeof(loc_dl_path), "/tmp/rufus_embedded.loc");
+	return loc_dl_path;
+}
+
+/*
+ * is_locale_update_needed — decide whether we should download a fresh
+ * embedded.loc from the server.
+ *
+ * Returns TRUE when ALL of:
+ *   • update.loc_url is non-NULL (server advertises a locale bundle)
+ *   • AND at least one of:
+ *       - stored locale version differs from update.loc_version
+ *       - last locale check was more than LOCALE_REFRESH_INTERVAL seconds ago
+ */
+BOOL is_locale_update_needed(void)
+{
+	if (update.loc_url == NULL)
+		return FALSE;
+
+	int32_t stored_version = ReadSetting32(SETTING_LOCALE_VERSION);
+	int64_t last_check     = ReadSetting64(SETTING_LAST_LOCALE_UPDATE);
+	time_t  now            = time(NULL);
+
+	if ((uint32_t)stored_version != update.loc_version)
+		return TRUE;
+	if ((time_t)last_check == 0 || (now - (time_t)last_check) > LOCALE_REFRESH_INTERVAL)
+		return TRUE;
+	return FALSE;
+}
+
+/*
+ * download_locale_update — download update.loc_url to get_locale_download_path().
+ *
+ * On success: writes SETTING_LAST_LOCALE_UPDATE and SETTING_LOCALE_VERSION,
+ *             returns TRUE.
+ * On failure: returns FALSE, settings unchanged.
+ */
+BOOL download_locale_update(void)
+{
+	const char *dest;
+	char tmp_path[MAX_PATH];
+	DWORD downloaded;
+
+	if (update.loc_url == NULL)
+		return FALSE;
+
+	/* Ensure the destination directory exists */
+	if (app_data_dir[0] != '\0')
+		(void)mkdir(app_data_dir, 0755);
+
+	dest = get_locale_download_path();
+
+	/* Download to a temp path first, then rename atomically */
+	snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", dest);
+	downloaded = DownloadToFileOrBuffer(update.loc_url, tmp_path, NULL, NULL, FALSE);
+	if (downloaded == 0) {
+		uprintf("Locale download failed for: %s", update.loc_url);
+		unlink(tmp_path);
+		return FALSE;
+	}
+
+	if (rename(tmp_path, dest) != 0) {
+		uprintf("Failed to install locale to: %s", dest);
+		unlink(tmp_path);
+		return FALSE;
+	}
+
+	WriteSetting64(SETTING_LAST_LOCALE_UPDATE, (int64_t)time(NULL));
+	WriteSetting32(SETTING_LOCALE_VERSION, (int32_t)update.loc_version);
+	uprintf("Locale bundle updated to version %u: %s", update.loc_version, dest);
+	return TRUE;
+}
+
+
+
 static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 {
 	(void)param;
@@ -573,6 +667,10 @@ static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 		WriteSetting64(SETTING_LAST_UPDATE, (int64_t)time(NULL));
 		/* Parse version/URL out of the buffer */
 		parse_update((char *)buf, (size_t)downloaded + 1);
+
+		/* Check if locale bundle needs refreshing */
+		if (is_locale_update_needed())
+			download_locale_update();
 
 		if (rufus_is_newer_version(update.version, rufus_version)) {
 			uprintf("New version %d.%d.%d available!",

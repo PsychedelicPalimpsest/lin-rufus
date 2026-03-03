@@ -301,6 +301,8 @@ void parse_update(char* buf, size_t len)
 	update.platform_min[1] = 2;
 	safe_free(update.download_url);
 	safe_free(update.release_notes);
+	safe_free(update.loc_url);
+	update.loc_version = 0;
 	if ((data = get_sanitized_token_data_buffer("version", 1, buf, len)) != NULL) {
 		for (i = 0; (i < 3) && ((token = strtok((i == 0) ? data : NULL, ".")) != NULL); i++)
 			update.version[i] = (uint16_t)atoi(token);
@@ -317,6 +319,11 @@ void parse_update(char* buf, size_t len)
 	if (update.download_url == NULL)
 		update.download_url = get_sanitized_token_data_buffer("download_url", 1, buf, len);
 	update.release_notes = get_sanitized_token_data_buffer("release_notes", 1, buf, len);
+	update.loc_url = get_sanitized_token_data_buffer("loc_url", 1, buf, len);
+	if ((data = get_sanitized_token_data_buffer("loc_version", 1, buf, len)) != NULL) {
+		update.loc_version = (uint32_t)atoi(data);
+		safe_free(data);
+	}
 }
 
 /*

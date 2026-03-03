@@ -68,6 +68,8 @@ extern char* ini_file;
 #define SETTING_IGNORE_BOOT_MARKER          "IgnoreBootMarker"
 #define SETTING_INCLUDE_BETAS               "CheckForBetas"
 #define SETTING_LAST_UPDATE                 "LastUpdateCheck"
+#define SETTING_LAST_LOCALE_UPDATE          "LastLocaleUpdateCheck"
+#define SETTING_LOCALE_VERSION              "LocaleVersion"
 #define SETTING_LOCALE                      "Locale"
 #define SETTING_UPDATE_INTERVAL             "UpdateCheckInterval"
 #define SETTING_USE_EXT_VERSION             "UseExtVersion"

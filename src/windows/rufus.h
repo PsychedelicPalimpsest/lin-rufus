@@ -515,6 +515,8 @@ typedef struct {
 	uint32_t platform_min[2];		// minimum platform version required
 	char* download_url;
 	char* release_notes;
+	char* loc_url;			// URL for embedded.loc locale bundle update
+	uint32_t loc_version;		// version stamp from the .ver file for embedded.loc
 } RUFUS_UPDATE;
 
 typedef struct {
