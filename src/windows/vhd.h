@@ -114,3 +114,8 @@ extern void VhdUnmountImage(void);
 extern BOOL SaveImage(void);
 extern void OpticalDiscSaveImage(void);
 extern DWORD WINAPI IsoSaveImageThread(void* param);
+#ifndef _WIN32
+/* Linux-only: VHD footer parser and NBD server (used by tests) */
+extern uint64_t vhd_get_fixed_disk_size(const char *path);
+extern void    *nbd_server_thread(void *arg);
+#endif

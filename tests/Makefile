@@ -734,7 +734,22 @@ CFLAGS_LINUX_test_xml_linux := \
 LDFLAGS_LINUX_test_xml_linux :=
 EXTRA_SRC_LINUX_test_xml_linux := $(XML_SRC)
 
-# combo_linux tests: ComboBox message-dispatch bridge (no GTK required)
+# vhd_nbd_linux tests: VHD footer parsing + NBD server protocol (socketpair)
+# Root tests: kernel_nbd_device_available, kernel_nbd_full_mount_fixed_vhd
+CFLAGS_LINUX_test_vhd_nbd_linux := \
+	-D_RUFUS \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/bled -I$(SRC_DIR)/wimlib -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
+	-Wno-strict-aliasing
+LDFLAGS_LINUX_test_vhd_nbd_linux := -lz -lpthread -lxml2 -lm $(CDIO_LIBS)
+EXTRA_SRC_LINUX_test_vhd_nbd_linux := \
+	$(SRC_DIR)/linux/vhd.c \
+	$(BLED_LIB) \
+	$(WIM_LIB) \
+	$(XML_SRC)
+
 COMBO_LINUX_SRC := $(SRC_DIR)/linux/combo_bridge.c \
                    $(COMPAT)/msg_dispatch.c
 CFLAGS_LINUX_test_combo_linux := \
