@@ -765,6 +765,11 @@ CFLAGS_LINUX_test_ventoy_detect_linux := \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_ventoy_detect_linux := -lblkid
 
+# kbd_shortcuts tests: Alt+key toggle functions (pure C, no GTK)
+CFLAGS_LINUX_test_kbd_shortcuts_linux := \
+	-I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter
+
 COMBO_LINUX_SRC := $(SRC_DIR)/linux/combo_bridge.c \
                    $(COMPAT)/msg_dispatch.c
 CFLAGS_LINUX_test_combo_linux := \

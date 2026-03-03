@@ -739,3 +739,23 @@ This is the most structurally significant porting gap.
     2. **`src/linux/wue.c` path offset bug** (`[3]` → `[1]`): Linux `iso.c` stores `wininst_path` as `"/sources/install.wim"` (leading `/`), so offset `[1]` gives `"sources/install.wim"` (correct for wimlib's `iso|path` format). The old Windows-inherited offset `[3]` gave `"rces/install.wim"` (wrong). Fix: changed `&img_report.wininst_path[0][3]` → `&img_report.wininst_path[0][1]`.
     Tests: 2 new regression tests added to `test_wue_linux.c`: `populate_wv_wim_in_iso` (positive: WIM with version 10.0.19041 extracted from ISO → major/build verified) and `populate_wv_wim_in_iso_wrong_offset_fails` (negative: bad path returns FALSE). Both use a hand-crafted 504-byte minimal WIM binary (208-byte header + UTF-16LE XML) embedded in a genisoimage ISO9660 image. 81 total tests pass.
 
+
+139. ~~**Alt+key cheat-mode keyboard shortcuts**~~ ✅ **DONE** — Full parity with Windows Alt+key shortcut set; 17 new keyboard shortcuts wired to GTK accel group:
+    - **Alt+A**: toggle `use_rufus_mbr` (Rufus vs standard MBR) — persisted via `SETTING_DISABLE_RUFUS_MBR`
+    - **Alt+B**: toggle `detect_fakes` (fake USB detection) — persisted
+    - **Alt+E**: toggle `allow_dual_uefi_bios` (dual UEFI/BIOS mode) — triggers `SetPartitionSchemeAndTargetSystem`; persisted
+    - **Alt+G**: toggle `enable_VHDs` (VHD/virtual disk detection) — triggers `GetDevices(0)`; persisted
+    - **Alt+H**: toggle `enable_extra_hashes` (SHA-512 computation) — persisted
+    - **Alt+I**: toggle `enable_iso` (ISO extraction vs force DD) — re-runs ImageScanThread if image loaded
+    - **Alt+L**: toggle `force_large_fat32` (large FAT32 on <32 GB drives) — triggers `GetDevices(0)`; persisted
+    - **Alt+M**: toggle `ignore_boot_marker` (treat any image as DD-writable) — persisted
+    - **Alt+N**: toggle `enable_ntfs_compression`
+    - **Alt+S**: toggle `size_check` — new global `BOOL size_check = TRUE` in `globals.c`; size enforcement added to `on_start_clicked()` using `kbdshortcut_size_check_fails()`
+    - **Alt+T**: toggle `preserve_timestamps` — persisted
+    - **Alt+U**: toggle `use_fake_units` (GiB vs GB) — triggers `GetDevices(0)`; persisted
+    - **Alt+W**: toggle `enable_vmdk` (VMware disk detection) — triggers `GetDevices(0)`; persisted
+    - **Alt+Y**: toggle `force_update` (force update check to succeed)
+    - **Alt+Z**: zero the drive (sets `zero_drive=TRUE`, `fast_zeroing=FALSE`, simulates Start click)
+    - **Ctrl+Alt+Z**: fast zero (skip empty blocks: `zero_drive=TRUE`, `fast_zeroing=TRUE`)
+    - **Ctrl+Alt+E**: expert mode (pre-existing; now Alt+E is separate for dual-UEFI-BIOS)
+    Pure-C toggle logic extracted to `src/linux/kbd_shortcuts.c` + `src/linux/kbd_shortcuts.h`; 73 tests in `tests/test_kbd_shortcuts_linux.c` all pass; binary builds clean.

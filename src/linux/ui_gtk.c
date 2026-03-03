@@ -52,6 +52,7 @@
 #include "csm_help.h"
 #include "multidev.h"
 #include "ventoy_detect.h"
+#include "kbd_shortcuts.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -66,6 +67,16 @@ extern BOOL enable_bad_blocks;
 extern BOOL enable_verify_write;
 extern int  nb_passes_sel;
 extern BOOL write_as_image, write_as_esp;
+extern BOOL size_check;         /* globals.c */
+extern BOOL fast_zeroing;       /* globals.c */
+extern BOOL force_large_fat32;  /* globals.c */
+extern BOOL use_rufus_mbr;      /* globals.c */
+extern BOOL use_fake_units;     /* globals.c */
+extern BOOL preserve_timestamps;/* globals.c */
+extern BOOL enable_vmdk;        /* globals.c */
+extern BOOL enable_ntfs_compression; /* globals.c */
+extern BOOL allow_dual_uefi_bios;    /* globals.c */
+extern BOOL enable_VHDs;        /* globals.c */
 
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
@@ -140,6 +151,23 @@ static void on_toggle_expert_mode(GtkWidget *w, gpointer data);
 static void on_toggle_joliet(GtkWidget *w, gpointer data);
 static void on_toggle_rockridge(GtkWidget *w, gpointer data);
 static void on_toggle_usb_hdd(GtkWidget *w, gpointer data);
+/* New Alt+key shortcuts */
+static void on_toggle_rufus_mbr(GtkWidget *w, gpointer data);
+static void on_toggle_detect_fakes(GtkWidget *w, gpointer data);
+static void on_toggle_dual_uefi_bios(GtkWidget *w, gpointer data);
+static void on_toggle_vhds(GtkWidget *w, gpointer data);
+static void on_toggle_extra_hashes(GtkWidget *w, gpointer data);
+static void on_toggle_iso(GtkWidget *w, gpointer data);
+static void on_toggle_large_fat32(GtkWidget *w, gpointer data);
+static void on_toggle_boot_marker(GtkWidget *w, gpointer data);
+static void on_toggle_ntfs_compression(GtkWidget *w, gpointer data);
+static void on_toggle_size_check(GtkWidget *w, gpointer data);
+static void on_toggle_preserve_ts(GtkWidget *w, gpointer data);
+static void on_toggle_proper_units(GtkWidget *w, gpointer data);
+static void on_toggle_vmdk(GtkWidget *w, gpointer data);
+static void on_toggle_force_update(GtkWidget *w, gpointer data);
+static void on_zero_drive(GtkWidget *w, gpointer data);
+static void on_fast_zero_drive(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
 static void on_save_clicked(GtkButton *btn, gpointer data);
 static void on_persistence_changed(GtkWidget *w, gpointer data);
@@ -708,6 +736,70 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_f,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_toggle_usb_hdd), NULL, NULL));
+	/* Alt+A: toggle Rufus MBR */
+	gtk_accel_group_connect(accel, GDK_KEY_a,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_rufus_mbr), NULL, NULL));
+	/* Alt+B: toggle fake drive detection */
+	gtk_accel_group_connect(accel, GDK_KEY_b,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_detect_fakes), NULL, NULL));
+	/* Alt+E: toggle dual UEFI/BIOS mode */
+	gtk_accel_group_connect(accel, GDK_KEY_e,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_dual_uefi_bios), NULL, NULL));
+	/* Alt+G: toggle VHD/virtual disk detection */
+	gtk_accel_group_connect(accel, GDK_KEY_g,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_vhds), NULL, NULL));
+	/* Alt+H: toggle extra hash (SHA-512) computation */
+	gtk_accel_group_connect(accel, GDK_KEY_h,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_extra_hashes), NULL, NULL));
+	/* Alt+I: toggle ISO support (force DD mode when disabled) */
+	gtk_accel_group_connect(accel, GDK_KEY_i,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_iso), NULL, NULL));
+	/* Alt+L: force large FAT32 format */
+	gtk_accel_group_connect(accel, GDK_KEY_l,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_large_fat32), NULL, NULL));
+	/* Alt+M: toggle boot marker check */
+	gtk_accel_group_connect(accel, GDK_KEY_m,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_boot_marker), NULL, NULL));
+	/* Alt+N: toggle NTFS compression */
+	gtk_accel_group_connect(accel, GDK_KEY_n,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_ntfs_compression), NULL, NULL));
+	/* Alt+S: toggle ISO-vs-disk size check */
+	gtk_accel_group_connect(accel, GDK_KEY_s,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_size_check), NULL, NULL));
+	/* Alt+T: preserve timestamps */
+	gtk_accel_group_connect(accel, GDK_KEY_t,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_preserve_ts), NULL, NULL));
+	/* Alt+U: use proper (binary) size units */
+	gtk_accel_group_connect(accel, GDK_KEY_u,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_proper_units), NULL, NULL));
+	/* Alt+W: toggle VMware/VMDK disk detection */
+	gtk_accel_group_connect(accel, GDK_KEY_w,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_vmdk), NULL, NULL));
+	/* Alt+Y: force update check */
+	gtk_accel_group_connect(accel, GDK_KEY_y,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_force_update), NULL, NULL));
+	/* Alt+Z: zero the drive */
+	gtk_accel_group_connect(accel, GDK_KEY_z,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_zero_drive), NULL, NULL));
+	/* Ctrl+Alt+Z: zero the drive with fast-zeroing (skip empty blocks) */
+	gtk_accel_group_connect(accel, GDK_KEY_z,
+	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_fast_zero_drive), NULL, NULL));
 
 	gtk_widget_show_all(win);
 
@@ -767,6 +859,20 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	uprintf("Format started by user (drive=%u, fs=%d, part=%d, target=%d, boot=%d, quick=%d, bad_blocks=%d, passes_sel=%d)",
 	        di, fs_type, partition_type, target_type, boot_type, quick_format,
 	        enable_bad_blocks, nb_passes_sel);
+
+	/* Enforce image size check (Alt+S disables this) */
+	if (boot_type == BT_IMAGE) {
+		extern RUFUS_DRIVE_INFO SelectedDrive;
+		if (kbdshortcut_size_check_fails((int)size_check,
+		                                 img_report.projected_size,
+		                                 (unsigned long long)SelectedDrive.DiskSize)) {
+			uprintf("Image is larger than the target drive — aborting (use Alt+S to bypass)");
+			Notification(MB_OK | MB_ICONERROR, APPLICATION_NAME,
+			             "The selected image is larger than the target drive.\n"
+			             "Press Alt+S to disable the size check if you know what you are doing.");
+			return;
+		}
+	}
 
 	/* Show "WARNING: ALL DATA ON DEVICE WILL BE DESTROYED" confirmation */
 	{
@@ -1522,6 +1628,155 @@ static void on_toggle_usb_hdd(GtkWidget *w, gpointer data)
 	enable_HDDs = !enable_HDDs;
 	uprintf("USB HDD detection: %s", enable_HDDs ? "enabled" : "disabled");
 	GetDevices(0);
+}
+
+/* --- New Alt+key cheat-mode toggle handlers --- */
+
+static void on_toggle_rufus_mbr(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_rufus_mbr((int*)&use_rufus_mbr);
+	WriteSettingBool(SETTING_DISABLE_RUFUS_MBR, !r.new_value);
+	uprintf("Rufus MBR: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_toggle_detect_fakes(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	extern BOOL detect_fakes;
+	kbdshortcut_result_t r = kbdshortcut_toggle_detect_fakes((int*)&detect_fakes);
+	WriteSettingBool(SETTING_DISABLE_FAKE_DRIVES_CHECK, !r.new_value);
+	uprintf("Fake drive detection: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_toggle_dual_uefi_bios(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_dual_uefi_bios((int*)&allow_dual_uefi_bios);
+	WriteSettingBool(SETTING_ENABLE_WIN_DUAL_EFI_BIOS, r.new_value);
+	uprintf("Dual UEFI/BIOS mode: %s", r.new_value ? "enabled" : "disabled");
+	if (r.refresh_part) {
+		SetPartitionSchemeAndTargetSystem(FALSE);
+	}
+}
+
+static void on_toggle_vhds(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_vhds((int*)&enable_VHDs);
+	WriteSettingBool(SETTING_DISABLE_VHDS, !r.new_value);
+	uprintf("VHD/virtual disk detection: %s", r.new_value ? "enabled" : "disabled");
+	if (r.refresh_devs)
+		GetDevices(0);
+}
+
+static void on_toggle_extra_hashes(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_extra_hashes((int*)&enable_extra_hashes);
+	WriteSettingBool(SETTING_ENABLE_EXTRA_HASHES, r.new_value);
+	uprintf("Extra hash (SHA-512) computation: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_toggle_iso(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	extern BOOL enable_iso;
+	kbdshortcut_result_t r = kbdshortcut_toggle_iso((int*)&enable_iso);
+	uprintf("ISO support: %s", r.new_value ? "enabled" : "disabled");
+	/* Re-scan current image if one is loaded, to apply the new setting */
+	if (image_path != NULL) {
+		HANDLE scan_thr = CreateThread(NULL, 0, ImageScanThread, NULL, 0, NULL);
+		if (scan_thr != NULL)
+			CloseHandle(scan_thr);
+	}
+}
+
+static void on_toggle_large_fat32(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_large_fat32((int*)&force_large_fat32);
+	WriteSettingBool(SETTING_FORCE_LARGE_FAT32_FORMAT, r.new_value);
+	uprintf("Force large FAT32: %s", r.new_value ? "enabled" : "disabled");
+	if (r.refresh_devs)
+		GetDevices(0);
+}
+
+static void on_toggle_boot_marker(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	extern BOOL ignore_boot_marker;
+	kbdshortcut_result_t r = kbdshortcut_toggle_boot_marker((int*)&ignore_boot_marker);
+	WriteSettingBool(SETTING_IGNORE_BOOT_MARKER, r.new_value);
+	uprintf("Ignore boot marker: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_toggle_ntfs_compression(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_ntfs_compression((int*)&enable_ntfs_compression);
+	uprintf("NTFS compression: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_toggle_size_check(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_size_check((int*)&size_check);
+	uprintf("ISO size check: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_toggle_preserve_ts(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_preserve_ts((int*)&preserve_timestamps);
+	WriteSettingBool(SETTING_PRESERVE_TIMESTAMPS, r.new_value);
+	uprintf("Preserve timestamps: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_toggle_proper_units(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_proper_units((int*)&use_fake_units);
+	WriteSettingBool(SETTING_USE_PROPER_SIZE_UNITS, !r.new_value);
+	uprintf("Proper size units (GiB/MiB): %s", r.new_value ? "disabled (SI)" : "enabled (binary)");
+	if (r.refresh_devs)
+		GetDevices(0);
+}
+
+static void on_toggle_vmdk(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_result_t r = kbdshortcut_toggle_vmdk((int*)&enable_vmdk);
+	WriteSettingBool(SETTING_ENABLE_VMDK_DETECTION, r.new_value);
+	uprintf("VMware/VMDK detection: %s", r.new_value ? "enabled" : "disabled");
+	if (r.refresh_devs)
+		GetDevices(0);
+}
+
+static void on_toggle_force_update(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	extern int force_update;
+	kbdshortcut_result_t r = kbdshortcut_toggle_force_update(&force_update);
+	uprintf("Force update check: %s", r.new_value ? "enabled" : "disabled");
+}
+
+static void on_zero_drive(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_zero_drive((int*)&zero_drive, (int*)&fast_zeroing);
+	uprintf("Zero drive requested (standard)");
+	/* Simulate Start button click */
+	gtk_button_clicked(GTK_BUTTON(rw.start_btn));
+}
+
+static void on_fast_zero_drive(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	kbdshortcut_fast_zero_drive((int*)&zero_drive, (int*)&fast_zeroing);
+	uprintf("Zero drive requested (fast — skip empty blocks)");
+	/* Simulate Start button click */
+	gtk_button_clicked(GTK_BUTTON(rw.start_btn));
 }
 
 /* Callback invoked when the GTK dark-theme preference changes (either by the

@@ -1,0 +1,537 @@
+/* tests/test_kbd_shortcuts_linux.c — tests for kbd_shortcuts.c
+ *
+ * Copyright © 2025 Rufus contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * These tests cover the pure-C keyboard shortcut toggle functions.
+ * No GTK, no display, no settings I/O.
+ */
+#include <stdio.h>
+#include <string.h>
+#include "framework.h"
+
+/* Pull in the implementation directly (no separate compilation needed) */
+#include "../src/linux/kbd_shortcuts.c"
+
+/* ===================================================================== *
+ * Alt+A — use_rufus_mbr                                                 *
+ * ===================================================================== */
+
+TEST(toggle_rufus_mbr_off)
+{
+	int v = 1;  /* default: Rufus MBR enabled */
+	kbdshortcut_result_t r = kbdshortcut_toggle_rufus_mbr(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+	CHECK_INT_EQ(0, r.refresh_devs);
+	CHECK_INT_EQ(0, r.refresh_part);
+}
+
+TEST(toggle_rufus_mbr_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_rufus_mbr(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_rufus_mbr_double_returns_original)
+{
+	int v = 1;
+	kbdshortcut_toggle_rufus_mbr(&v);
+	kbdshortcut_toggle_rufus_mbr(&v);
+	CHECK_INT_EQ(1, v);
+}
+
+/* ===================================================================== *
+ * Alt+B — detect_fakes                                                  *
+ * ===================================================================== */
+
+TEST(toggle_detect_fakes_off)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_detect_fakes(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_detect_fakes_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_detect_fakes(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_detect_fakes_double_returns_original)
+{
+	int v = 1;
+	kbdshortcut_toggle_detect_fakes(&v);
+	kbdshortcut_toggle_detect_fakes(&v);
+	CHECK_INT_EQ(1, v);
+}
+
+/* ===================================================================== *
+ * Alt+E — allow_dual_uefi_bios (must set refresh_part)                  *
+ * ===================================================================== */
+
+TEST(toggle_dual_uefi_bios_sets_refresh_part)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_dual_uefi_bios(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.refresh_part);
+}
+
+TEST(toggle_dual_uefi_bios_new_value_reflected)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_dual_uefi_bios(&v);
+	CHECK_INT_EQ(0, r.new_value);
+	CHECK_INT_EQ(0, v);
+}
+
+TEST(toggle_dual_uefi_bios_double_returns_original)
+{
+	int v = 0;
+	kbdshortcut_toggle_dual_uefi_bios(&v);
+	kbdshortcut_toggle_dual_uefi_bios(&v);
+	CHECK_INT_EQ(0, v);
+}
+
+/* ===================================================================== *
+ * Alt+G — enable_VHDs (must request device list refresh)                *
+ * ===================================================================== */
+
+TEST(toggle_vhds_requests_refresh)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_vhds(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(1, r.refresh_devs);
+}
+
+TEST(toggle_vhds_new_value)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_vhds(&v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_vhds_double_returns_original)
+{
+	int v = 1;
+	kbdshortcut_toggle_vhds(&v);
+	kbdshortcut_toggle_vhds(&v);
+	CHECK_INT_EQ(1, v);
+}
+
+/* ===================================================================== *
+ * Alt+H — enable_extra_hashes                                           *
+ * ===================================================================== */
+
+TEST(toggle_extra_hashes_basic)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_extra_hashes(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+	CHECK_INT_EQ(0, r.refresh_devs);
+}
+
+TEST(toggle_extra_hashes_double)
+{
+	int v = 0;
+	kbdshortcut_toggle_extra_hashes(&v);
+	kbdshortcut_toggle_extra_hashes(&v);
+	CHECK_INT_EQ(0, v);
+}
+
+/* ===================================================================== *
+ * Alt+I — enable_iso                                                    *
+ * ===================================================================== */
+
+TEST(toggle_iso_off)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_iso(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_iso_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_iso(&v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_iso_double)
+{
+	int v = 1;
+	kbdshortcut_toggle_iso(&v);
+	kbdshortcut_toggle_iso(&v);
+	CHECK_INT_EQ(1, v);
+}
+
+/* ===================================================================== *
+ * Alt+L — force_large_fat32 (must request device list refresh)          *
+ * ===================================================================== */
+
+TEST(toggle_large_fat32_requests_refresh)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_large_fat32(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.refresh_devs);
+}
+
+TEST(toggle_large_fat32_double)
+{
+	int v = 0;
+	kbdshortcut_toggle_large_fat32(&v);
+	kbdshortcut_toggle_large_fat32(&v);
+	CHECK_INT_EQ(0, v);
+}
+
+/* ===================================================================== *
+ * Alt+M — ignore_boot_marker                                            *
+ * ===================================================================== */
+
+TEST(toggle_boot_marker_basic)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_boot_marker(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+	CHECK_INT_EQ(0, r.refresh_devs);
+}
+
+TEST(toggle_boot_marker_double)
+{
+	int v = 0;
+	kbdshortcut_toggle_boot_marker(&v);
+	kbdshortcut_toggle_boot_marker(&v);
+	CHECK_INT_EQ(0, v);
+}
+
+/* ===================================================================== *
+ * Alt+N — enable_ntfs_compression                                       *
+ * ===================================================================== */
+
+TEST(toggle_ntfs_compression_basic)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_ntfs_compression(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_ntfs_compression_double)
+{
+	int v = 1;
+	kbdshortcut_toggle_ntfs_compression(&v);
+	kbdshortcut_toggle_ntfs_compression(&v);
+	CHECK_INT_EQ(1, v);
+}
+
+/* ===================================================================== *
+ * Alt+S — size_check                                                    *
+ * ===================================================================== */
+
+TEST(toggle_size_check_default_on)
+{
+	/* Default is size_check=1; toggling should disable it */
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_size_check(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_size_check_re_enable)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_size_check(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_size_check_double)
+{
+	int v = 1;
+	kbdshortcut_toggle_size_check(&v);
+	kbdshortcut_toggle_size_check(&v);
+	CHECK_INT_EQ(1, v);
+}
+
+/* ===================================================================== *
+ * Alt+T — preserve_timestamps                                           *
+ * ===================================================================== */
+
+TEST(toggle_preserve_ts_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_preserve_ts(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_preserve_ts_double)
+{
+	int v = 0;
+	kbdshortcut_toggle_preserve_ts(&v);
+	kbdshortcut_toggle_preserve_ts(&v);
+	CHECK_INT_EQ(0, v);
+}
+
+/* ===================================================================== *
+ * Alt+U — use_fake_units (must request device list refresh)             *
+ * ===================================================================== */
+
+TEST(toggle_proper_units_requests_refresh)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_proper_units(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.refresh_devs);
+}
+
+TEST(toggle_proper_units_double)
+{
+	int v = 0;
+	kbdshortcut_toggle_proper_units(&v);
+	kbdshortcut_toggle_proper_units(&v);
+	CHECK_INT_EQ(0, v);
+}
+
+/* ===================================================================== *
+ * Alt+W — enable_vmdk (must request device list refresh)                *
+ * ===================================================================== */
+
+TEST(toggle_vmdk_requests_refresh)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_vmdk(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.refresh_devs);
+}
+
+TEST(toggle_vmdk_double)
+{
+	int v = 1;
+	kbdshortcut_toggle_vmdk(&v);
+	kbdshortcut_toggle_vmdk(&v);
+	CHECK_INT_EQ(1, v);
+}
+
+/* ===================================================================== *
+ * Alt+Y — force_update (0 → 1, >0 → 0)                                 *
+ * ===================================================================== */
+
+TEST(toggle_force_update_zero_to_one)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_force_update(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_force_update_one_to_zero)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_force_update(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_force_update_large_to_zero)
+{
+	int v = 5;
+	kbdshortcut_result_t r = kbdshortcut_toggle_force_update(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_force_update_double_returns_one)
+{
+	int v = 0;
+	kbdshortcut_toggle_force_update(&v);
+	kbdshortcut_toggle_force_update(&v);
+	CHECK_INT_EQ(0, v);
+}
+
+/* ===================================================================== *
+ * Alt+Z — zero_drive                                                    *
+ * ===================================================================== */
+
+TEST(zero_drive_sets_flags)
+{
+	int zd = 0, fz = 1;
+	kbdshortcut_zero_drive(&zd, &fz);
+	CHECK_INT_EQ(1, zd);
+	CHECK_INT_EQ(0, fz);
+}
+
+TEST(zero_drive_does_not_enable_fast)
+{
+	int zd = 0, fz = 0;
+	kbdshortcut_zero_drive(&zd, &fz);
+	CHECK_INT_EQ(0, fz);
+}
+
+/* ===================================================================== *
+ * Ctrl+Alt+Z — fast zero_drive                                          *
+ * ===================================================================== */
+
+TEST(fast_zero_drive_sets_flags)
+{
+	int zd = 0, fz = 0;
+	kbdshortcut_fast_zero_drive(&zd, &fz);
+	CHECK_INT_EQ(1, zd);
+	CHECK_INT_EQ(1, fz);
+}
+
+TEST(fast_zero_drive_overrides_false)
+{
+	int zd = 1, fz = 0;
+	kbdshortcut_fast_zero_drive(&zd, &fz);
+	CHECK_INT_EQ(1, zd);
+	CHECK_INT_EQ(1, fz);
+}
+
+/* ===================================================================== *
+ * kbdshortcut_size_check_fails                                          *
+ * ===================================================================== */
+
+TEST(size_check_fails_when_image_larger_and_check_enabled)
+{
+	/* 5 GiB image, 4 GiB drive — should fail */
+	unsigned long long img  = 5ULL * 1024 * 1024 * 1024;
+	unsigned long long disk = 4ULL * 1024 * 1024 * 1024;
+	CHECK_INT_EQ(1, kbdshortcut_size_check_fails(1, img, disk));
+}
+
+TEST(size_check_passes_when_image_fits)
+{
+	/* 3 GiB image, 4 GiB drive — fits fine */
+	unsigned long long img  = 3ULL * 1024 * 1024 * 1024;
+	unsigned long long disk = 4ULL * 1024 * 1024 * 1024;
+	CHECK_INT_EQ(0, kbdshortcut_size_check_fails(1, img, disk));
+}
+
+TEST(size_check_bypassed_when_disabled)
+{
+	/* 10 GiB image, 4 GiB drive — check disabled, so should pass */
+	unsigned long long img  = 10ULL * 1024 * 1024 * 1024;
+	unsigned long long disk =  4ULL * 1024 * 1024 * 1024;
+	CHECK_INT_EQ(0, kbdshortcut_size_check_fails(0, img, disk));
+}
+
+TEST(size_check_exact_size_passes)
+{
+	/* Exact match — image fits exactly */
+	unsigned long long sz = 8ULL * 1024 * 1024 * 1024;
+	CHECK_INT_EQ(0, kbdshortcut_size_check_fails(1, sz, sz));
+}
+
+TEST(size_check_zero_image_passes)
+{
+	/* Zero-size image always fits */
+	CHECK_INT_EQ(0, kbdshortcut_size_check_fails(1, 0, 4ULL * 1024 * 1024 * 1024));
+}
+
+TEST(size_check_zero_disk_fails_with_any_image)
+{
+	/* Disk size 0 (error case) — any non-zero image should fail */
+	CHECK_INT_EQ(1, kbdshortcut_size_check_fails(1, 1024, 0));
+}
+
+/* ===================================================================== *
+ * main                                                                  *
+ * ===================================================================== */
+
+int main(void)
+{
+	printf("=== Alt+A (use_rufus_mbr) ===\n");
+	RUN(toggle_rufus_mbr_off);
+	RUN(toggle_rufus_mbr_on);
+	RUN(toggle_rufus_mbr_double_returns_original);
+
+	printf("\n=== Alt+B (detect_fakes) ===\n");
+	RUN(toggle_detect_fakes_off);
+	RUN(toggle_detect_fakes_on);
+	RUN(toggle_detect_fakes_double_returns_original);
+
+	printf("\n=== Alt+E (allow_dual_uefi_bios) ===\n");
+	RUN(toggle_dual_uefi_bios_sets_refresh_part);
+	RUN(toggle_dual_uefi_bios_new_value_reflected);
+	RUN(toggle_dual_uefi_bios_double_returns_original);
+
+	printf("\n=== Alt+G (enable_VHDs) ===\n");
+	RUN(toggle_vhds_requests_refresh);
+	RUN(toggle_vhds_new_value);
+	RUN(toggle_vhds_double_returns_original);
+
+	printf("\n=== Alt+H (enable_extra_hashes) ===\n");
+	RUN(toggle_extra_hashes_basic);
+	RUN(toggle_extra_hashes_double);
+
+	printf("\n=== Alt+I (enable_iso) ===\n");
+	RUN(toggle_iso_off);
+	RUN(toggle_iso_on);
+	RUN(toggle_iso_double);
+
+	printf("\n=== Alt+L (force_large_fat32) ===\n");
+	RUN(toggle_large_fat32_requests_refresh);
+	RUN(toggle_large_fat32_double);
+
+	printf("\n=== Alt+M (ignore_boot_marker) ===\n");
+	RUN(toggle_boot_marker_basic);
+	RUN(toggle_boot_marker_double);
+
+	printf("\n=== Alt+N (enable_ntfs_compression) ===\n");
+	RUN(toggle_ntfs_compression_basic);
+	RUN(toggle_ntfs_compression_double);
+
+	printf("\n=== Alt+S (size_check toggle) ===\n");
+	RUN(toggle_size_check_default_on);
+	RUN(toggle_size_check_re_enable);
+	RUN(toggle_size_check_double);
+
+	printf("\n=== Alt+T (preserve_timestamps) ===\n");
+	RUN(toggle_preserve_ts_on);
+	RUN(toggle_preserve_ts_double);
+
+	printf("\n=== Alt+U (use_fake_units) ===\n");
+	RUN(toggle_proper_units_requests_refresh);
+	RUN(toggle_proper_units_double);
+
+	printf("\n=== Alt+W (enable_vmdk) ===\n");
+	RUN(toggle_vmdk_requests_refresh);
+	RUN(toggle_vmdk_double);
+
+	printf("\n=== Alt+Y (force_update) ===\n");
+	RUN(toggle_force_update_zero_to_one);
+	RUN(toggle_force_update_one_to_zero);
+	RUN(toggle_force_update_large_to_zero);
+	RUN(toggle_force_update_double_returns_one);
+
+	printf("\n=== Alt+Z (zero_drive) ===\n");
+	RUN(zero_drive_sets_flags);
+	RUN(zero_drive_does_not_enable_fast);
+
+	printf("\n=== Ctrl+Alt+Z (fast zero_drive) ===\n");
+	RUN(fast_zero_drive_sets_flags);
+	RUN(fast_zero_drive_overrides_false);
+
+	printf("\n=== size_check_fails logic ===\n");
+	RUN(size_check_fails_when_image_larger_and_check_enabled);
+	RUN(size_check_passes_when_image_fits);
+	RUN(size_check_bypassed_when_disabled);
+	RUN(size_check_exact_size_passes);
+	RUN(size_check_zero_image_passes);
+	RUN(size_check_zero_disk_fails_with_any_image);
+
+	TEST_RESULTS();
+	return (_fail > 0) ? 1 : 0;
+}

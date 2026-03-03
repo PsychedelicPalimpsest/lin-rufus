@@ -87,6 +87,7 @@ BOOL use_vds = FALSE, ignore_boot_marker = FALSE, save_image = FALSE;
 BOOL appstore_version = FALSE, is_vds_available = FALSE;
 BOOL persistent_log = FALSE, has_ffu_support = FALSE;
 BOOL expert_mode = FALSE, use_rufus_mbr = TRUE;
+BOOL size_check = TRUE;   /* Alt+S: enforce projected_size <= DiskSize */
 int default_fs = 0, default_thread_priority = 0;
 size_t ubuffer_pos = 0;
 
