@@ -280,6 +280,7 @@ static void on_toggle_usb_debug(GtkWidget *w, gpointer data);
 static void on_toggle_lock_drive(GtkWidget *w, gpointer data);
 static void on_toggle_file_indexing(GtkWidget *w, gpointer data);
 static void on_toggle_non_usb_removable(GtkWidget *w, gpointer data);
+static void on_toggle_esp(GtkWidget *w, gpointer data);
 static void on_delete_app_data_dir(GtkWidget *w, gpointer data);
 static void on_zero_drive(GtkWidget *w, gpointer data);
 static void on_fast_zero_drive(GtkWidget *w, gpointer data);
@@ -958,6 +959,10 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_q,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_toggle_file_indexing), NULL, NULL));
+	/* Alt+P: toggle GPT ESP ↔ MS Basic Data for currently selected device */
+	gtk_accel_group_connect(accel, GDK_KEY_p,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_esp), NULL, NULL));
 	/* Ctrl+Alt+F: toggle listing of non-USB removable drives */
 	gtk_accel_group_connect(accel, GDK_KEY_f,
 	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
@@ -2278,6 +2283,20 @@ static void on_cycle_port(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	int index = ComboBox_GetCurSel(hDeviceList);
 	if (index >= 0)
+		CyclePort(index);
+}
+
+/* Alt+P: toggle GPT partition type between EFI System and MS Basic Data,
+ * then cycle the USB port to force re-enumeration (mirrors Windows Alt+P). */
+static void on_toggle_esp(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	extern BOOL ToggleEsp(DWORD di, uint64_t off);
+	int index = ComboBox_GetCurSel(hDeviceList);
+	if (index < 0)
+		return;
+	DWORD DeviceNum = (DWORD)ComboBox_GetItemData(hDeviceList, index);
+	if (ToggleEsp(DeviceNum, 0))
 		CyclePort(index);
 }
 
