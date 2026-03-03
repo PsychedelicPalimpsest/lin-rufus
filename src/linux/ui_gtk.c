@@ -20,6 +20,7 @@
 #include "ui_gtk.h"
 
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -133,6 +134,8 @@ static BOOL app_changed_label  = FALSE;
 /* Set TRUE while SetPersistenceSize() is updating the entry to avoid feedback loop. */
 static BOOL app_changed_persistence = FALSE;
 static void on_persistence_size_entry_changed(GtkWidget *w, gpointer data);
+static gboolean on_persistence_size_entry_focus_out(GtkWidget *w, GdkEventFocus *event, gpointer data);
+static void on_nb_passes_changed(GtkComboBox *combo, gpointer data);
 
 /* Elapsed time counter and GLib timer source ID (mirrors Windows ClockTimer). */
 static unsigned int elapsed_timer_count = 0;
@@ -629,6 +632,8 @@ static GtkWidget *build_format_options(void)
 	gtk_widget_set_sensitive(rw.nb_passes_combo, FALSE);
 	g_signal_connect_swapped(rw.bad_blocks_check, "toggled",
 		G_CALLBACK(gtk_widget_set_sensitive), rw.nb_passes_combo);
+	g_signal_connect(rw.nb_passes_combo, "changed",
+		G_CALLBACK(on_nb_passes_changed), NULL);
 	gtk_box_pack_start(GTK_BOX(row1), rw.quick_format_check, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(row1), rw.bad_blocks_check,   FALSE, FALSE, 8);
 	gtk_box_pack_start(GTK_BOX(row1), lbl_np,                FALSE, FALSE, 8);
@@ -689,6 +694,8 @@ static GtkWidget *build_persistence_row(void)
 	                 G_CALLBACK(on_persistence_changed), NULL);
 	g_signal_connect(rw.persistence_size, "changed",
 	                 G_CALLBACK(on_persistence_size_entry_changed), NULL);
+	g_signal_connect(rw.persistence_size, "focus-out-event",
+	                 G_CALLBACK(on_persistence_size_entry_focus_out), NULL);
 
 	return vbox;
 }
@@ -1866,6 +1873,44 @@ static void on_persistence_size_entry_changed(GtkWidget *w, gpointer data)
 	app_changed_persistence = FALSE;
 }
 
+/* Enforce minimum persistence size (MIN_EXT_SIZE) when the entry loses focus.
+ * Mirrors Windows IDC_PERSISTENCE_SIZE EN_KILLFOCUS handler (rufus.c ~line 2374). */
+static gboolean on_persistence_size_entry_focus_out(GtkWidget *w, GdkEventFocus *event, gpointer data)
+{
+	(void)event; (void)data;
+	if (persistence_size == 0) return FALSE;
+	if (persistence_size < MIN_EXT_SIZE) {
+		char tmp[16];
+		int unit = gtk_combo_box_get_active(GTK_COMBO_BOX(rw.persistence_units));
+		uint64_t mult = (unit == 1) ? (1024ULL * 1024 * 1024) : (1024ULL * 1024);
+		uint64_t min_units = (MIN_EXT_SIZE + mult - 1) / mult; /* round up */
+		persistence_size = min_units * mult;
+		snprintf(tmp, sizeof(tmp), "%" PRIu64, min_units);
+		app_changed_persistence = TRUE;
+		gtk_entry_set_text(GTK_ENTRY(w), tmp);
+		gtk_range_set_value(GTK_RANGE(rw.persistence_scale), (double)min_units);
+		app_changed_persistence = FALSE;
+	}
+	return FALSE;
+}
+
+/* Update the bad-blocks write-pattern tooltip when the passes count changes.
+ * Mirrors Windows IDC_NB_PASSES CBN_SELCHANGE → SetPassesTooltip() (rufus.c ~line 2408). */
+static void on_nb_passes_changed(GtkComboBox *combo, gpointer data)
+{
+	(void)data;
+	static const unsigned int pattern[BADLOCKS_PATTERN_TYPES][BADBLOCK_PATTERN_COUNT] = {
+		BADBLOCK_PATTERN_ONE_PASS, BADBLOCK_PATTERN_TWO_PASSES, BADBLOCK_PATTERN_SLC,
+		BADCLOCK_PATTERN_MLC, BADBLOCK_PATTERN_TLC };
+	int sel = gtk_combo_box_get_active(combo);
+	if (sel < 0 || sel >= BADLOCKS_PATTERN_TYPES) return;
+	/* MSG_153 (1 pass), MSG_154 (2 passes), MSG_156 (4 passes SLC/MLC/TLC) */
+	int msg_id = MSG_153 + ((sel >= 2) ? 3 : sel);
+	CreateTooltip((HWND)rw.nb_passes_combo,
+		lmprintf(msg_id, pattern[sel][0], pattern[sel][1], pattern[sel][2], pattern[sel][3]), -1);
+	nb_passes_sel = sel;
+}
+
 static void on_log_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
@@ -2846,6 +2891,14 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 			rufus_gtk_update_status(lmprintf(MSG_283));
 		} else {
 			rufus_gtk_update_status(lmprintf(MSG_212));
+			/* When the device isn't ready, a port cycle usually helps */
+			if (SCODE_CODE(ErrorStatus) == ERROR_NOT_READY) {
+				int index = ComboBox_GetCurSel(hDeviceList);
+				if (index >= 0) {
+					uprintf("Device not ready - Trying to cycle port...");
+					CyclePort(index);
+				}
+			}
 			Notification(MB_ICONERROR | MB_CLOSE, lmprintf(MSG_042),
 			             lmprintf(MSG_043, StrError(ErrorStatus, FALSE)));
 		}
