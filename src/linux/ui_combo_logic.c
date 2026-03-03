@@ -228,12 +228,20 @@ void SetFSFromISO(void)
 		preferred_fs = preselected_fs;
 	} else {
 		/*
-		 * Syslinux, ReactOS, KolibriOS, and EFI-only images (when targeting
-		 * UEFI and the image has no 4 GB file) prefer FAT32.
+		 * Images that require NTFS (e.g. Mint LMDE — live→casper symlink) must
+		 * use NTFS regardless of other image properties.  Mirrors Windows
+		 * rufus.c IS_FAT32_COMPAT check (lines 193-209).
 		 */
-		if (HAS_SYSLINUX(img_report) || HAS_REACTOS(img_report) || HAS_KOLIBRIOS(img_report) ||
+		if (img_report.needs_ntfs) {
+			if (fs_mask & (1 << FS_NTFS))
+				preferred_fs = FS_NTFS;
+		} else if (HAS_SYSLINUX(img_report) || HAS_REACTOS(img_report) || HAS_KOLIBRIOS(img_report) ||
 		    (IS_EFI_BOOTABLE(img_report) && (target_type == TT_UEFI) &&
 		     (!windows_to_go) && (!img_report.has_4GB_file))) {
+			/*
+			 * Syslinux, ReactOS, KolibriOS, and EFI-only images (when targeting
+			 * UEFI and the image has no 4 GB file) prefer FAT32.
+			 */
 			if (fs_mask & (1 << FS_FAT32))
 				preferred_fs = FS_FAT32;
 			else if ((fs_mask & (1 << FS_FAT16)) && !HAS_KOLIBRIOS(img_report))

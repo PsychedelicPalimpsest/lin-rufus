@@ -757,6 +757,51 @@ TEST(preselected_fs_absent_from_combo_falls_through)
 	teardown_combos();
 }
 
+/*
+ * Mint LMDE / other images with needs_ntfs=TRUE must prefer NTFS in
+ * SetFSFromISO, because working symlinks require NTFS.
+ * Mirrors Windows rufus.c lines 193-209 (IS_FAT32_COMPAT check).
+ */
+TEST(set_fs_needs_ntfs_prefers_ntfs)
+{
+	setup_combos();
+	setup_fs_combo();
+	boot_type  = BT_IMAGE;
+	image_path = strdup("/tmp/mintlmde.iso");
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_iso      = TRUE;
+	img_report.sl_version  = (6 << 8) | 3;  /* Syslinux 6.3 */
+	img_report.needs_ntfs  = TRUE;            /* Mint LMDE: live → casper symlink */
+
+	SetFSFromISO();
+
+	CHECK_INT_EQ(combo_cur_data(hFileSystem), FS_NTFS);
+
+	teardown_combos();
+}
+
+/*
+ * When needs_ntfs is FALSE, the normal Syslinux preference (FAT32) applies.
+ */
+TEST(set_fs_no_needs_ntfs_keeps_fat32)
+{
+	setup_combos();
+	setup_fs_combo();
+	boot_type  = BT_IMAGE;
+	image_path = strdup("/tmp/normal.iso");
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_iso     = TRUE;
+	img_report.sl_version = (6 << 8) | 3;   /* Syslinux 6.3 */
+	img_report.needs_ntfs = FALSE;
+
+	SetFSFromISO();
+
+	/* Without needs_ntfs, Syslinux prefers FAT32 */
+	CHECK_INT_EQ(combo_cur_data(hFileSystem), FS_FAT32);
+
+	teardown_combos();
+}
+
 /* =========================================================================
  * main
  * ======================================================================= */
@@ -786,6 +831,8 @@ int main(void)
 	RUN(preselected_fs_overrides_syslinux_default);
 	RUN(preselected_fs_unknown_reverts_to_auto);
 	RUN(preselected_fs_absent_from_combo_falls_through);
+	RUN(set_fs_needs_ntfs_prefers_ntfs);
+	RUN(set_fs_no_needs_ntfs_keeps_fat32);
 
 	TEST_RESULTS();
 	return (_fail > 0) ? 1 : 0;
