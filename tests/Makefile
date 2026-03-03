@@ -990,11 +990,20 @@ CFLAGS_LINUX_test_qemu_boot_linux  := $(CFLAGS_LINUX_test_e2e_linux)
 LDFLAGS_LINUX_test_qemu_boot_linux := $(LDFLAGS_LINUX_test_e2e_linux)
 EXTRA_SRC_LINUX_test_qemu_boot_linux := $(EXTRA_SRC_LINUX_test_e2e_linux)
 
+# real_device_linux tests: CLI end-to-end tests against a real block device.
+# Requires root AND RUFUS_TEST_DEVICE env var.  All tests skip gracefully if
+# RUFUS_TEST_DEVICE is not set, so it is safe to include in ROOT_BINS.
+# Example: sudo RUFUS_TEST_DEVICE=/dev/sdX make run-root
+CFLAGS_LINUX_test_real_device_linux  := $(CFLAGS_LINUX_test_e2e_linux)
+LDFLAGS_LINUX_test_real_device_linux := $(LDFLAGS_LINUX_test_e2e_linux)
+EXTRA_SRC_LINUX_test_real_device_linux := $(EXTRA_SRC_LINUX_test_e2e_linux)
+
 # Tests that require root / a privileged container (e.g. /dev/loop* access).
 # Run via:  make run-root          (must already be root)
 #           ./run_tests.sh --root-only   (same)
 #           ./run_tests.sh --container   (auto-launches privileged Docker/Podman)
-ROOT_BINS := test_loopback_linux test_e2e_linux_linux test_qemu_boot_linux_linux
+ROOT_BINS := test_loopback_linux test_e2e_linux_linux test_qemu_boot_linux_linux \
+             test_real_device_linux_linux
 
 .PHONY: all linux windows run-linux run-wine run-root clean
 

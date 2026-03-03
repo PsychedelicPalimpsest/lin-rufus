@@ -610,8 +610,13 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         mbr[461] = (prot_size >> 24) & 0xFF;
         mbr[510] = 0x55; mbr[511] = 0xAA;
 
-        uint64_t first_usable = 34;
-        uint64_t last_usable  = (total_sects > 68) ? total_sects - 34 : first_usable;
+        /* Use 2048-sector alignment for the first partition (matches Windows Rufus
+         * and standard partitioning tools like gdisk/sgdisk).  This ensures the
+         * partition device node (/dev/nvme0n2p1) can be found immediately after
+         * BLKRRPART without waiting for udevd to settle with a non-standard offset. */
+        uint64_t first_usable = 2048;
+        uint64_t last_usable  = (total_sects > first_usable + 34) ?
+                                 total_sects - 34 : first_usable;
 
         /* Build partition entry 0 (main) */
         static const uint8_t bd_type[16] = {
