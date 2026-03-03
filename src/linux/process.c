@@ -23,6 +23,8 @@
 #include "rufus.h"
 #include "drive.h"
 
+extern StrArray BlockingProcessList;
+
 /* NT / Windows stubs — N/A on Linux */
 NTSTATUS PhEnumHandlesEx(void *Handles)                              { (void)Handles; return 0; }
 NTSTATUS PhOpenProcess(HANDLE *h, DWORD access, HANDLE pid)          { (void)h; (void)access; (void)pid; return 0; }
@@ -82,6 +84,7 @@ void StopProcessSearch(void)
 {
 	search_active        = FALSE;
 	search_device_number = (DWORD)-1;
+	StrArrayClear(&BlockingProcessList);
 }
 
 /* -----------------------------------------------------------------------
@@ -105,15 +108,16 @@ static BYTE scan_proc_for_device(dev_t target_dev)
 {
 	BYTE mask = 0;
 	struct dirent *entry, *fd_entry;
-	char fd_path[64], link_path[128];
+	char fd_path[64], link_path[128], comm_path[64], comm[256];
 	struct stat st;
 	DIR *proc_dir, *fd_dir;
+	FILE *comm_f;
 
 	proc_dir = opendir("/proc");
 	if (!proc_dir)
 		return 0;
 
-	while ((entry = readdir(proc_dir)) != NULL && !mask) {
+	while ((entry = readdir(proc_dir)) != NULL) {
 		/* Only numeric directories (PIDs) */
 		if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
 			continue;
@@ -123,6 +127,7 @@ static BYTE scan_proc_for_device(dev_t target_dev)
 		if (!fd_dir)
 			continue;
 
+		BOOL found_in_proc = FALSE;
 		while ((fd_entry = readdir(fd_dir)) != NULL) {
 			if (fd_entry->d_name[0] == '.')
 				continue;
@@ -135,10 +140,26 @@ static BYTE scan_proc_for_device(dev_t target_dev)
 			    st.st_rdev == target_dev) {
 				/* Report both read and write access conservatively */
 				mask |= 0x03;
+				found_in_proc = TRUE;
 				break;
 			}
 		}
 		closedir(fd_dir);
+
+		if (found_in_proc) {
+			/* Read process name from /proc/<pid>/comm */
+			snprintf(comm_path, sizeof(comm_path), "/proc/%s/comm", entry->d_name);
+			comm_f = fopen(comm_path, "r");
+			if (comm_f) {
+				if (fgets(comm, sizeof(comm), comm_f)) {
+					/* Strip trailing newline */
+					comm[strcspn(comm, "\n")] = '\0';
+					if (comm[0] != '\0')
+						StrArrayAdd(&BlockingProcessList, comm, TRUE);
+				}
+				fclose(comm_f);
+			}
+		}
 	}
 	closedir(proc_dir);
 	return mask;
@@ -153,6 +174,8 @@ BYTE GetProcessSearch(uint32_t timeout, uint8_t access_mask, BOOL bIgnoreStalePr
 	(void)timeout;
 	(void)access_mask;
 	(void)bIgnoreStaleProcesses;
+
+	StrArrayClear(&BlockingProcessList);
 
 	if (!search_active || search_device_number == (DWORD)-1)
 		return 0;

@@ -718,7 +718,8 @@ CFLAGS_LINUX_test_process_linux := \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter
 LDFLAGS_LINUX_test_process_linux :=
-EXTRA_SRC_LINUX_test_process_linux := $(SRC_DIR)/linux/process.c
+EXTRA_SRC_LINUX_test_process_linux := $(SRC_DIR)/linux/process.c \
+	$(SRC_DIR)/linux/stdfn.c
 
 # mount_linux tests: AltMountVolume, AltUnmountVolume, MountVolume, RemountVolume
 MOUNT_LINUX_SRC := $(SRC_DIR)/linux/drive.c \

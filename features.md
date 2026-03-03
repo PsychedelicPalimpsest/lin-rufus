@@ -701,3 +701,30 @@ Linux implementation:
 * ~~208~~: **RESOLVED** — Log auto-saved on exit; persistent log appends with timestamp.
   9 new tests pass. Full test suite: all tests pass.
 
+
+
+### Feature 209: Blocking process list (Linux)
+
+On Windows, before formatting begins `GetProcessSearch(SEARCH_PROCESS_TIMEOUT, 0x06, TRUE)` is
+called. If any process holds the device open, `BlockingProcessList` (a `StrArray`) is populated
+with those process names and a warning dialog (MSG_132) is shown. The user may cancel.
+
+Linux implementation:
+- Added `StrArray BlockingProcessList = { 0 }` to `src/linux/globals.c`
+- Added `extern StrArray BlockingProcessList` to `src/windows/rufus.h` (shared header)
+- Modified `StopProcessSearch()` in `linux/process.c` to call `StrArrayClear(&BlockingProcessList)`
+- Modified `scan_proc_for_device()`: scans all matching PIDs (not just the first), reads
+  `/proc/<pid>/comm` for each and calls `StrArrayAdd(&BlockingProcessList, name, TRUE)`
+- Modified `GetProcessSearch()`: calls `StrArrayClear(&BlockingProcessList)` at start of every scan
+- Replaced stale "Windows-only" comment in `on_start_clicked()` with actual call to
+  `GetProcessSearch(SEARCH_PROCESS_TIMEOUT, 0x06, TRUE)` + MSG_278 + MSG_132 warning dialog
+- Added `StrArrayCreate(&BlockingProcessList, 16)` in `on_app_activate()` startup
+- Added `StopProcessSearch()` + `StrArrayDestroy(&BlockingProcessList)` in `on_close_clicked()`
+- 4 new TDD tests in `tests/test_process_linux.c`:
+  - `blocking_process_list_is_accessible`
+  - `stop_process_search_clears_blocking_list`
+  - `get_process_search_clears_blocking_list_before_scan`
+  - `blocking_list_empty_when_no_matching_device`
+
+* ~~209~~: **RESOLVED** — BlockingProcessList populated on Linux; warning shown before format.
+  4 new tests pass (25 total in test_process_linux). Full test suite: all tests pass.

@@ -37,6 +37,7 @@ DWORD  DownloadStatus = 0;
 DWORD  LastWriteError = 0;
 HWND   hMainDialog    = NULL;
 BOOL   usb_debug      = FALSE;
+StrArray BlockingProcessList = { 0 };
 
 /* Minimal stubs */
 void uprintf(const char *fmt, ...) {
@@ -253,6 +254,59 @@ TEST(enable_privileges_always_true)
 }
 
 /* ================================================================== */
+/* BlockingProcessList                                                  */
+/* ================================================================== */
+
+TEST(blocking_process_list_is_accessible)
+{
+    /* BlockingProcessList must be a valid StrArray (capacity 0 initially is OK) */
+    CHECK_MSG(BlockingProcessList.Index >= 0,
+              "BlockingProcessList.Index should be >= 0");
+}
+
+TEST(stop_process_search_clears_blocking_list)
+{
+    /* Manually add an entry, then stop; list must be cleared */
+    StrArrayCreate(&BlockingProcessList, 4);
+    StrArrayAdd(&BlockingProcessList, "some_process", TRUE);
+    CHECK_MSG(BlockingProcessList.Index == 1,
+              "Before stop: list should have one entry");
+    StopProcessSearch();
+    CHECK_MSG(BlockingProcessList.Index == 0,
+              "After StopProcessSearch: BlockingProcessList must be cleared");
+}
+
+TEST(get_process_search_clears_blocking_list_before_scan)
+{
+    /* Populate list manually, then run a search with no registered device.
+     * The list should be cleared at the start of GetProcessSearch even if
+     * no matching processes are found. */
+    StrArrayCreate(&BlockingProcessList, 4);
+    StrArrayAdd(&BlockingProcessList, "stale_entry", TRUE);
+    CHECK_MSG(BlockingProcessList.Index == 1, "Setup: list has one entry");
+
+    StartProcessSearch();
+    /* No SetProcessSearch — device path will be NULL → should still clear */
+    GetProcessSearch(100, 0x07, FALSE);
+    StopProcessSearch();
+
+    CHECK_MSG(BlockingProcessList.Index == 0,
+              "BlockingProcessList should be cleared at start of GetProcessSearch");
+}
+
+TEST(blocking_list_empty_when_no_matching_device)
+{
+    StrArrayCreate(&BlockingProcessList, 4);
+    StartProcessSearch();
+    /* Register an invalid device number → GetPhysicalName returns NULL */
+    SetProcessSearch(0xDEAD);
+    GetProcessSearch(200, 0x07, FALSE);
+    StopProcessSearch();
+    CHECK_MSG(BlockingProcessList.Index == 0,
+              "No matching device → BlockingProcessList should be empty");
+}
+
+/* ================================================================== */
 /* main                                                                 */
 /* ================================================================== */
 int main(void)
@@ -282,6 +336,11 @@ int main(void)
     RUN(search_process_self);
 
     RUN(enable_privileges_always_true);
+
+    RUN(blocking_process_list_is_accessible);
+    RUN(stop_process_search_clears_blocking_list);
+    RUN(get_process_search_clears_blocking_list_before_scan);
+    RUN(blocking_list_empty_when_no_matching_device);
 
     TEST_RESULTS();
 }

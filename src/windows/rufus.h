@@ -787,6 +787,7 @@ extern char ubuffer[UBUFFER_SIZE], embedded_sl_version_str[2][12];
 extern char szFolderPath[MAX_PATH], app_dir[MAX_PATH], temp_dir[MAX_PATH], system_dir[MAX_PATH];
 extern char sysnative_dir[MAX_PATH], app_data_dir[MAX_PATH], *image_path, *fido_url;
 extern StrArray modified_files;
+extern StrArray BlockingProcessList;
 
 /*
  * Shared prototypes

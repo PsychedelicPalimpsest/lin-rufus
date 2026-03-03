@@ -149,6 +149,7 @@ uint64_t md5sum_totalbytes = 0;
  * (populated when hash_algos.c is included there).
  * modified_files is used by UpdateMD5Sum in hash.c. */
 StrArray modified_files = { 0 };
+StrArray BlockingProcessList = { 0 };
 
 /* ---- From net.c ---- */
 /* DownloadStatus already defined above */

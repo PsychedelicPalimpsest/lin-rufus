@@ -1054,6 +1054,8 @@ static void on_close_clicked(GtkButton *btn, gpointer data)
 		start_blocking_timer();
 	} else {
 		device_monitor_stop();
+		StopProcessSearch();
+		StrArrayDestroy(&BlockingProcessList);
 		rufus_set_log_handler(NULL);
 
 		/* Save log to <app_data_dir>/rufus.log on exit — mirrors Windows WM_DESTROY.
@@ -1150,7 +1152,14 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 				             lmprintf(MSG_112, dur_mins, dur_secs));
 			}
 		}
-		/* GetProcessSearch is Windows-only; on Linux skip straight to confirm */
+		/* Check for processes holding the device open — mirrors Windows behaviour */
+		PrintStatus(0, MSG_278);
+		if (GetProcessSearch(SEARCH_PROCESS_TIMEOUT, 0x06, TRUE)) {
+			char title[256] = APPLICATION_NAME;
+			SendMessageA(hDeviceList, CB_GETLBTEXT, (WPARAM)sel, (LPARAM)title);
+			if (Notification(MB_ICONWARNING | MB_YESNO, title, lmprintf(MSG_132)) != IDYES)
+				return;
+		}
 		PrintStatus(0, MSG_142);
 		char dev_name[256] = "the selected device";
 		SendMessageA(hDeviceList, CB_GETLBTEXT, (WPARAM)sel, (LPARAM)dev_name);
@@ -3650,6 +3659,9 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 
 	/* Initialise version array from compile-time constants */
 	init_rufus_version();
+
+	/* Initialise blocking process list for conflicting-process detection */
+	StrArrayCreate(&BlockingProcessList, 16);
 
 	/* Initialise application paths (app_dir, app_data_dir, user_dir, ini_file)
 	 * using XDG Base Directory conventions. */
