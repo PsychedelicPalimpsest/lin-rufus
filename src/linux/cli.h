@@ -60,6 +60,8 @@ typedef struct {
     char unattend_xml[512]; /* --unattend-xml PATH: pre-built unattend.xml to inject */
     int  include_hdds;      /* --include-hdds: 1=list/allow HDDs, 0=removable only (default) */
     int  zero_drive;        /* --zero-drive: 1=wipe entire drive with zeros and exit */
+    int  force_large_fat32; /* --force-large-fat32: bypass size limit for FAT32 on large drives */
+    int  ntfs_compression;  /* --ntfs-compression: enable NTFS file compression */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

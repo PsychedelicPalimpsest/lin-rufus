@@ -22,6 +22,8 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-unattend\-xml\fR \fIPATH\fR]
 [\fB\-\-include\-hdds\fR]
 [\fB\-\-zero\-drive\fR]
+[\fB\-\-force\-large\-fat32\fR]
+[\fB\-\-ntfs\-compression\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-label\fR \fILABEL\fR]
 [\fB\-\-quick\fR|\fB\-\-no\-quick\fR]
@@ -160,6 +162,15 @@ is equivalent to running
 .B dd if=/dev/zero of=DEVICE
 but uses Rufus's own I/O layer and progress reporting.  Does not perform
 any filesystem formatting.
+.TP
+.BR \-F ", " \-\-force\-large\-fat32
+Force FAT32 formatting on drives larger than 32\ GiB.  By default Rufus
+refuses to format drives over this threshold as FAT32; this flag overrides
+the restriction.  Useful for Nintendo Switch SD cards and similar use-cases.
+.TP
+.BR \-C ", " \-\-ntfs\-compression
+Enable file-level NTFS compression on the formatted volume.  Only has
+effect when the target filesystem is NTFS.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

@@ -314,6 +314,26 @@ TEST(man_page_documents_zero_drive_flag) {
     free(content);
 }
 
+TEST(man_page_documents_force_large_fat32_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "force-large-fat32") != NULL || strstr(content, "force.large.fat32") != NULL
+       || strstr(content, "force\\-large\\-fat32") != NULL);
+    free(content);
+}
+
+TEST(man_page_documents_ntfs_compression_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "ntfs-compression") != NULL || strstr(content, "ntfs.compression") != NULL
+       || strstr(content, "ntfs\\-compression") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_fat32) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -410,6 +430,8 @@ int main(void)
     RUN(man_page_documents_unattend_xml_flag);
     RUN(man_page_documents_include_hdds_flag);
     RUN(man_page_documents_zero_drive_flag);
+    RUN(man_page_documents_force_large_fat32_flag);
+    RUN(man_page_documents_ntfs_compression_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);
     RUN(man_page_documents_mbr);

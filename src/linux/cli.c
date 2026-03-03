@@ -61,6 +61,8 @@ extern int  nb_passes_sel;
 extern char *unattend_xml_path;
 extern BOOL enable_HDDs;
 extern BOOL zero_drive;
+extern BOOL force_large_fat32;
+extern BOOL enable_ntfs_compression;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -153,6 +155,8 @@ void cli_print_usage(const char *prog)
 	       "  -u, --unattend-xml PATH   Inject a pre-built unattend.xml for Windows setup\n"
 	       "  -H, --include-hdds        Include hard drives in device enumeration (default: removable only)\n"
 	       "  -z, --zero-drive          Wipe the entire device with zeros (skip formatting)\n"
+	       "  -F, --force-large-fat32   Force FAT32 on drives > 32 GiB\n"
+	       "  -C, --ntfs-compression    Enable NTFS file compression on the formatted volume\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "      --quick               Quick format (default)\n"
@@ -186,6 +190,8 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "unattend-xml",     required_argument, NULL, 'u' },
 		{ "include-hdds",     no_argument,       NULL, 'H' },
 		{ "zero-drive",       no_argument,       NULL, 'z' },
+		{ "force-large-fat32", no_argument,      NULL, 'F' },
+		{ "ntfs-compression", no_argument,       NULL, 'C' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -200,7 +206,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -353,6 +359,14 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->zero_drive = 1;
 			break;
 
+		case 'F':
+			opts->force_large_fat32 = 1;
+			break;
+
+		case 'C':
+			opts->ntfs_compression = 1;
+			break;
+
 		case 'L':
 			return CLI_PARSE_LIST;
 
@@ -444,6 +458,12 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Zero-wipe mode */
 	if (opts->zero_drive)
 		zero_drive = TRUE;
+	/* Force large FAT32 formatting */
+	if (opts->force_large_fat32)
+		force_large_fat32 = TRUE;
+	/* Enable NTFS compression */
+	if (opts->ntfs_compression)
+		enable_ntfs_compression = TRUE;
 }
 
 /*

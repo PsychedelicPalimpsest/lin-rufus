@@ -846,6 +846,56 @@ static void test_zero_drive_default_is_off(void)
     CHECK(opts.zero_drive == 0);
 }
 
+/* ---- --force-large-fat32 tests ---- */
+
+static void test_init_force_large_fat32_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.force_large_fat32 == 0);
+}
+
+static void test_force_large_fat32_sets_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --force-large-fat32", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.force_large_fat32 != 0);
+}
+
+static void test_force_large_fat32_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.force_large_fat32 == 0);
+}
+
+/* ---- --ntfs-compression tests ---- */
+
+static void test_init_ntfs_compression_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.ntfs_compression == 0);
+}
+
+static void test_ntfs_compression_sets_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --ntfs-compression", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.ntfs_compression != 0);
+}
+
+static void test_ntfs_compression_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.ntfs_compression == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -977,6 +1027,16 @@ int main(void)
     RUN_TEST(test_zero_drive_sets_flag);
     RUN_TEST(test_zero_drive_short_form);
     RUN_TEST(test_zero_drive_default_is_off);
+
+    /* --force-large-fat32 tests */
+    RUN_TEST(test_init_force_large_fat32_is_false);
+    RUN_TEST(test_force_large_fat32_sets_flag);
+    RUN_TEST(test_force_large_fat32_default_is_off);
+
+    /* --ntfs-compression tests */
+    RUN_TEST(test_init_ntfs_compression_is_false);
+    RUN_TEST(test_ntfs_compression_sets_flag);
+    RUN_TEST(test_ntfs_compression_default_is_off);
 
     TEST_RESULTS();
 }
