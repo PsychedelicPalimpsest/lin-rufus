@@ -35,11 +35,9 @@
  * common/localization.c to avoid including localization_data.h directly here. */
 
 /* GTK widget registry — only available when building the full UI */
-#ifdef __linux__
-#ifndef RUFUS_TEST
+#ifdef USE_GTK
 #include <gtk/gtk.h>
 #include "ui_gtk.h"
-#endif
 #endif
 
 /* -----------------------------------------------------------------------
@@ -47,7 +45,7 @@
  * GTK widget pointer stored in the global rw struct.
  * Returns NULL if the ID is unknown or GTK is not initialised.
  * --------------------------------------------------------------------- */
-#if !defined(RUFUS_TEST) && !defined(_WIN32)
+#if !defined(RUFUS_TEST) && !defined(_WIN32) && defined(USE_GTK)
 static GtkWidget *ctrl_id_to_widget(int ctrl_id)
 {
 	switch (ctrl_id) {
@@ -114,8 +112,8 @@ void apply_localization(int dlg_id, HWND hDlg)
 {
 	(void)hDlg;
 
-#if defined(RUFUS_TEST) || defined(_WIN32)
-	/* No GTK in test or Windows builds — nothing to do */
+#if defined(RUFUS_TEST) || defined(_WIN32) || !defined(USE_GTK)
+	/* No GTK in test, Windows, or non-GTK builds — nothing to do */
 	(void)dlg_id;
 #else
 	loc_cmd *lcmd;

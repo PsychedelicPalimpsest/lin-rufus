@@ -36,6 +36,7 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-no\-size\-check\fR]
 [\fB\-\-ignore\-boot\-marker\fR]
 [\fB\-\-file\-indexing\fR]
+[\fB\-\-detect\-fakes\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-json\fR]
 [\fB\-\-label\fR \fILABEL\fR]
@@ -255,6 +256,13 @@ Enable NTFS file indexing on the formatted volume.  By default Rufus
 sets the \fINOT_CONTENT_INDEXED\fR attribute on all extracted files to
 prevent Windows Search from indexing the bootable USB; this flag allows
 indexing instead.  Only affects NTFS and UDF volumes.
+.TP
+.BR \-D ", " \-\-detect\-fakes
+During a bad-block scan, activate fake drive detection.  Rufus writes
+a distinct pattern to each block and verifies that reads return the
+same data from the \fIsame physical address\fR; drives that remap
+writes (counterfeit/cloned drives) fail this test even if they pass a
+normal read-after-write check.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

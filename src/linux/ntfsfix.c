@@ -17,6 +17,18 @@
 #include "../windows/rufus.h"
 
 /*
+ * ntfsfix_system_fn — pluggable system() hook for unit testing.
+ * Tests may replace this pointer to capture the command string without
+ * actually executing anything.  Production code always uses system().
+ */
+static int (*ntfsfix_system_fn)(const char *cmd) = system;
+
+void ntfsfix_set_system_hook(int (*hook)(const char *cmd))
+{
+	ntfsfix_system_fn = hook ? hook : system;
+}
+
+/*
  * RunNtfsFix - run ntfsfix on a partition to ensure NTFS boot integrity.
  *
  * WinPE/AIK images need the NTFS volume to be marked "clean" after writing;
@@ -29,7 +41,7 @@ BOOL RunNtfsFix(const char *partition_path)
 	char cmd[512];
 	snprintf(cmd, sizeof(cmd), "ntfsfix \"%s\"", partition_path);
 	uprintf("Running NTFS fixup: %s", cmd);
-	int r = system(cmd);
+	int r = ntfsfix_system_fn(cmd);
 	if (r != 0)
 		uprintf("WARNING: ntfsfix returned %d", r);
 	return TRUE;

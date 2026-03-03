@@ -1344,6 +1344,39 @@ static void test_file_indexing_default_is_off(void)
     CHECK(opts.file_indexing == 0);
 }
 
+/* ---- --detect-fakes tests ---- */
+
+static void test_init_detect_fakes_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.detect_fakes == 0);
+}
+
+static void test_detect_fakes_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --detect-fakes", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.detect_fakes != 0);
+}
+
+static void test_detect_fakes_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -D", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.detect_fakes != 0);
+}
+
+static void test_detect_fakes_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.detect_fakes == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1565,6 +1598,12 @@ int main(void)
     RUN_TEST(test_file_indexing_long_flag);
     RUN_TEST(test_file_indexing_short_flag);
     RUN_TEST(test_file_indexing_default_is_off);
+
+    /* --detect-fakes tests */
+    RUN_TEST(test_init_detect_fakes_is_false);
+    RUN_TEST(test_detect_fakes_long_flag);
+    RUN_TEST(test_detect_fakes_short_flag);
+    RUN_TEST(test_detect_fakes_default_is_off);
 
     TEST_RESULTS();
 }

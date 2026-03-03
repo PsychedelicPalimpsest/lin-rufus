@@ -41,8 +41,9 @@ void ToggleImageOptions(void)                              {}
 void CreateSmallButtons(HWND hDlg)                         { (void)hDlg; }
 void CreateAdditionalControls(HWND hDlg)                   { (void)hDlg; }
 void InitProgress(BOOL bOnlyFormat)                        { (void)bOnlyFormat; }
-void UpdateProgress(int op, float percent)                 { (void)op;(void)percent; }
-void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f) { (void)op;(void)msg;(void)cur;(void)tot;(void)f; }
+/* Weak fallbacks — overridden by rufus.c (non-GTK binary) or ui_gtk.c (GTK binary) */
+void __attribute__((weak)) UpdateProgress(int op, float percent) { (void)op;(void)percent; }
+void __attribute__((weak)) _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f) { (void)op;(void)msg;(void)cur;(void)tot;(void)f; }
 void ShowLanguageMenu(RECT rcExclude)                      { (void)rcExclude; }
 void SetPassesTooltip(void)                                {}
 void SetBootTypeDropdownWidth(void)                        {}

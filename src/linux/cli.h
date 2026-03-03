@@ -75,6 +75,7 @@ typedef struct {
     int  no_size_check;     /* --no-size-check/-s: skip image-larger-than-drive check */
     int  ignore_boot_marker; /* --ignore-boot-marker/-I: skip boot signature validation in VHD/image */
     int  file_indexing;     /* --file-indexing/-n: enable NTFS file indexing (Windows: avoid NOT_CONTENT_INDEXED) */
+    int  detect_fakes;      /* --detect-fakes/-D: detect fake/cloned drives during bad-block scan */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

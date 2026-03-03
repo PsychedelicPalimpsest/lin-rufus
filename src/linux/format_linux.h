@@ -189,6 +189,7 @@ BOOL format_linux_write_sbr(HANDLE hDrive);
  * images can boot correctly.  Mirrors Windows format.c CheckDisk().
  */
 BOOL RunNtfsFix(const char *partition_path);
+void ntfsfix_set_system_hook(int (*hook)(const char *cmd));
 
 /*
  * format_udf_build_cmd - build a mkudffs command string (testable helper).

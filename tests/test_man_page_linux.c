@@ -470,6 +470,18 @@ TEST(man_page_documents_file_indexing_flag) {
     free(content);
 }
 
+TEST(man_page_documents_detect_fakes_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "detect-fakes") != NULL
+       || strstr(content, "detect.fakes") != NULL
+       || strstr(content, "detect\\-fakes") != NULL
+       || strstr(content, "fake") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_json_flag) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -590,6 +602,7 @@ int main(void)
     RUN(man_page_documents_no_size_check_flag);
     RUN(man_page_documents_ignore_boot_marker_flag);
     RUN(man_page_documents_file_indexing_flag);
+    RUN(man_page_documents_detect_fakes_flag);
     RUN(man_page_documents_json_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);
