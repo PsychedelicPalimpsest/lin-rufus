@@ -889,6 +889,13 @@ CFLAGS_LINUX_test_xdg_dirs_linux := \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_xdg_dirs_linux := $(SRC_DIR)/linux/xdg.c
 
+# drag_drop_linux tests: path_from_file_uri URI → path conversion
+CFLAGS_LINUX_test_drag_drop_linux := \
+	-DRUFUS_TEST \
+	-I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_drag_drop_linux := $(SRC_DIR)/linux/drag_drop.c
+
 # polkit_linux tests: privilege elevation helper
 CFLAGS_LINUX_test_polkit_linux := \
 	-I$(SRC_DIR)/linux \

@@ -56,6 +56,7 @@
 #include "kbd_shortcuts.h"
 #include "ui_enable_opts.h"
 #include "boot_validation.h"
+#include "drag_drop.h"
 #include "../../res/grub/grub_version.h"
 #include "../../res/grub2/grub2_version.h"
 
@@ -297,6 +298,9 @@ static void on_cycle_port(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
 void InitProgress(BOOL bOnlyFormat);
 static void on_save_clicked(GtkButton *btn, gpointer data);
+static void on_drag_data_received(GtkWidget *w, GdkDragContext *ctx,
+                                  gint x, gint y, GtkSelectionData *sel,
+                                  guint info, guint t, gpointer data);
 static void on_persistence_changed(GtkWidget *w, gpointer data);
 static void on_multi_write_clicked(GtkButton *btn, gpointer data);
 void SetPersistenceSize(void);   /* defined later in this file */
@@ -1005,6 +1009,12 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_z,
 	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_fast_zero_drive), NULL, NULL));
+
+	/* Enable drag-and-drop of image files onto the window (mirrors WM_DROPFILES) */
+	gtk_drag_dest_set(win, GTK_DEST_DEFAULT_ALL, NULL, 0, GDK_ACTION_COPY);
+	gtk_drag_dest_add_uri_targets(win);
+	g_signal_connect(win, "drag-data-received",
+	                 G_CALLBACK(on_drag_data_received), NULL);
 
 	gtk_widget_show_all(win);
 
@@ -2133,6 +2143,44 @@ static void on_save_clicked(GtkButton *btn, gpointer data)
 	(void)btn; (void)data;
 	extern void OpticalDiscSaveImage(void);
 	OpticalDiscSaveImage();
+}
+
+/*
+ * on_drag_data_received — handle files dragged onto the Rufus window.
+ *
+ * Mirrors Windows WM_DROPFILES handler: takes the first dropped file URI,
+ * converts it to a local path, and triggers an image scan exactly as
+ * clicking SELECT with a pre-filled image_path would.
+ */
+static void on_drag_data_received(GtkWidget *w, GdkDragContext *ctx,
+                                  gint x, gint y, GtkSelectionData *sel,
+                                  guint info, guint t, gpointer data)
+{
+	(void)w; (void)x; (void)y; (void)info; (void)data;
+
+	extern BOOL op_in_progress;
+	if (op_in_progress) {
+		gtk_drag_finish(ctx, FALSE, FALSE, t);
+		return;
+	}
+
+	gchar **uris = gtk_selection_data_get_uris(sel);
+	if (uris && uris[0]) {
+		char *path = path_from_file_uri(uris[0]);
+		if (path) {
+			safe_free(image_path);
+			image_path = path;
+			write_as_image = FALSE;
+			write_as_esp   = FALSE;
+			safe_free(archive_path);
+			uprintf("Image dropped: %s", image_path);
+			HANDLE scan_thr = CreateThread(NULL, 0, ImageScanThread, NULL, 0, NULL);
+			safe_closehandle(scan_thr);
+			rufus_gtk_update_status(image_path);
+		}
+		g_strfreev(uris);
+	}
+	gtk_drag_finish(ctx, TRUE, FALSE, t);
 }
 
 static void on_toggle_dark_mode(GtkWidget *w, gpointer data)

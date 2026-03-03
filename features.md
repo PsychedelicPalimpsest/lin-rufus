@@ -879,3 +879,10 @@ This is the most structurally significant porting gap.
     - **`set_user_selected_fs(int fs)` in `ui_combo_logic.c`**: New setter called from `on_fs_changed()` to record explicit user FS choices; `SetFSFromISO()` checks `selected_fs` with highest priority (before `preselected_fs` CLI arg and before image heuristics); calling with `FS_UNKNOWN` (0) clears the lock and reverts to automatic heuristic — mirrors Windows `if (set_selected_fs && (fs_type > 0)) selected_fs = fs_type`
     - **Bug fix**: `SetFSFromISO()` no longer auto-assigns `selected_fs` at end of function (was leaking state across calls); `selected_fs` is exclusively owned by `set_user_selected_fs()`
     - 2 new tests in `test_combo_logic_linux.c`: `user_selected_fs_overrides_image_heuristic`, `user_selected_fs_zero_reverts_to_auto`; 50 total combo_logic tests pass
+
+171. ✅ DONE **Drag-and-drop file support (WM_DROPFILES parity)** —
+    - `on_drag_data_received()` handler registered on main window via `gtk_drag_dest_set()` + `gtk_drag_dest_add_uri_targets()` — mirrors Windows `WM_DROPFILES` handler
+    - `path_from_file_uri(const char *uri)` pure-C helper in `src/linux/drag_drop.c`: strips `file://` scheme, strips optional hostname, decodes `%XX` percent-encoding, strips trailing `\r\n`
+    - Handler checks `op_in_progress` (no drop during active format); uses `g_strfreev` for URI list cleanup; triggers `ImageScanThread` exactly as `on_select_clicked` does
+    - `drag_drop.c` added to `OS_SOURCES` in `Makefile.am` / `Makefile.in`
+    - 11 tests in `test_drag_drop_linux.c` covering: simple path, spaces, multiple encoded chars, trailing CRLF/LF stripping, hostname stripping, deep path, null/empty/non-file-scheme inputs; all pass
