@@ -864,3 +864,12 @@ This is the most structurally significant porting gap.
     - **SETTING_LOCALE save/restore**: On language change (language menu handler), `WriteSettingStr(SETTING_LOCALE, selected_locale->txt[0])` persists the user's choice; on startup, `ReadSettingStr(SETTING_LOCALE)` is checked first — if saved locale matches a known locale it is used, otherwise falls back to system locale via `ToLocaleName(0)`. Mirrors Windows `ReadSettingStr(SETTING_LOCALE)` at startup and `WriteSettingStr(SETTING_LOCALE, ...)` on WM_DESTROY.
     - **SETTING_ADVANCED_MODE_DEVICE**: `on_adv_device_toggled()` signal handler added to `adv_device_expander`; saves `WriteSettingBool(SETTING_ADVANCED_MODE_DEVICE, ...)` on toggle; on startup `ReadSettingBool(SETTING_ADVANCED_MODE_DEVICE)` → `ToggleAdvancedDeviceOptions()`.
     - **SETTING_ADVANCED_MODE_FORMAT**: `on_adv_format_toggled()` extended with `WriteSettingBool(SETTING_ADVANCED_MODE_FORMAT, ...)` on toggle; on startup `ReadSettingBool(SETTING_ADVANCED_MODE_FORMAT)` → `ToggleAdvancedFormatOptions()`.
+
+169. ✅ DONE **Advanced boot mode entries in boot combo (populate_boot_combo parity)** —
+    - `populate_boot_combo()` now adds MS-DOS, FreeDOS in normal mode; when `advanced_mode_device=TRUE` (Advanced Drive Properties expander expanded), also adds Syslinux V4/V6, ReactOS, GRUB2, GRUB4DOS, UEFI:NTFS — exactly mirroring Windows `SetBootOptions()` behaviour
+    - `on_adv_device_toggled()` now sets `advanced_mode_device`, calls `populate_boot_combo()`, `EnableControls`, `populate_fs_combo()`/`SetFSFromISO()` — mirrors Windows `IDC_ADVANCED_DRIVE_PROPERTIES` handler
+    - When advanced mode is turned off with an advanced boot type selected, falls back to `BT_IMAGE`
+    - `SetComboEntry()` fixed: old version silently did nothing when passed a `combo_state_t*` handle (GTK type check failed); new version has a combo_bridge fallback path that correctly calls `ComboBox_SetCurSel` via the bridge
+    - `advanced_mode_device` global set on startup from `SETTING_ADVANCED_MODE_DEVICE` (calls `populate_boot_combo()` with correct state)
+    - GRUB version headers (`grub_version.h`, `grub2_version.h`) included in `ui_gtk.c` for version strings in combo entries
+    - 3 new `SetComboEntry` tests in `test_combo_linux.c` (selects by data, fallback on no match, empty combo); 110 total pass

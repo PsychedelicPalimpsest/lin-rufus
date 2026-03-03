@@ -56,6 +56,8 @@
 #include "kbd_shortcuts.h"
 #include "ui_enable_opts.h"
 #include "boot_validation.h"
+#include "../../res/grub/grub_version.h"
+#include "../../res/grub2/grub2_version.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -2172,9 +2174,16 @@ static void on_adv_format_toggled(GtkExpander *exp, gpointer data)
 
 static void on_adv_device_toggled(GtkExpander *exp, gpointer data)
 {
+	extern BOOL advanced_mode_device;
 	(void)data;
-	BOOL now_expanded = !gtk_expander_get_expanded(GTK_EXPANDER(exp));
-	WriteSettingBool(SETTING_ADVANCED_MODE_DEVICE, now_expanded);
+	advanced_mode_device = !gtk_expander_get_expanded(GTK_EXPANDER(exp));
+	WriteSettingBool(SETTING_ADVANCED_MODE_DEVICE, advanced_mode_device);
+	/* Refresh boot combo (adds/removes Syslinux/ReactOS/GRUB2/GRUB4DOS/UEFI:NTFS) */
+	populate_boot_combo();
+	boot_type = (int)ComboBox_GetCurItemData(hBootType);
+	EnableControls(TRUE, FALSE);
+	populate_fs_combo();
+	SetFSFromISO();
 }
 
 static void on_toggle_usb_hdd(GtkWidget *w, gpointer data)
@@ -2567,21 +2576,32 @@ void set_hyperlink_label(GtkWidget *widget, const char *url, const char *text)
 void SetComboEntry(HWND hDlg, int data)
 {
 	int i, nb_entries;
+	/* hDlg may be either a real GtkWidget* or a combo_state_t* wrapped as HWND.
+	 * Try GtkWidget first; if it's not a ComboBox, fall through to combo_bridge. */
 	GtkWidget *w = (GtkWidget *)hDlg;
-	if (!w || !GTK_IS_COMBO_BOX(w))
+	if (w && GTK_IS_COMBO_BOX(w)) {
+		nb_entries = gtk_tree_model_iter_n_children(
+			gtk_combo_box_get_model(GTK_COMBO_BOX(w)), NULL);
+		for (i = 0; i < nb_entries; i++) {
+			if ((int)ComboBox_GetItemData(hDlg, i) == data) {
+				gtk_combo_box_set_active(GTK_COMBO_BOX(w), i);
+				return;
+			}
+		}
+		if (nb_entries > 0)
+			gtk_combo_box_set_active(GTK_COMBO_BOX(w), 0);
 		return;
-	nb_entries = gtk_tree_model_iter_n_children(
-		gtk_combo_box_get_model(GTK_COMBO_BOX(w)), NULL);
-	/* Search for the item whose HWND-level data value matches `data` */
+	}
+	/* combo_state_t* path: search item data and use CB_SETCURSEL via bridge */
+	nb_entries = (int)ComboBox_GetCount(hDlg);
 	for (i = 0; i < nb_entries; i++) {
 		if ((int)ComboBox_GetItemData(hDlg, i) == data) {
-			gtk_combo_box_set_active(GTK_COMBO_BOX(w), i);
+			ComboBox_SetCurSel(hDlg, i);
 			return;
 		}
 	}
-	/* Fallback: select first item */
 	if (nb_entries > 0)
-		gtk_combo_box_set_active(GTK_COMBO_BOX(w), 0);
+		ComboBox_SetCurSel(hDlg, 0);
 }
 
 /* Layout helpers — GTK manages its own layout so most of these are no-ops. */
@@ -3328,17 +3348,47 @@ static void on_device_change(void *user_data)
  */
 static void populate_boot_combo(void)
 {
+	char tmp[32];
+	extern BOOL advanced_mode_device;
+
 	IGNORE_RETVAL(ComboBox_ResetContent(hBootType));
 	IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
-	    ComboBox_AddString(hBootType, "Non-bootable"), BT_NON_BOOTABLE));
+	    ComboBox_AddString(hBootType, lmprintf(MSG_279)), BT_NON_BOOTABLE));
 	IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
-	    ComboBox_AddString(hBootType, "Disk or ISO image (Please SELECT)"), BT_IMAGE));
+	    ComboBox_AddString(hBootType,
+	        (image_path == NULL) ? lmprintf(MSG_281, lmprintf(MSG_280)) :
+	            (strrchr(image_path, '/') ? strrchr(image_path, '/') + 1 : image_path)),
+	    BT_IMAGE));
+	IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+	    ComboBox_AddString(hBootType, "MS-DOS"), BT_MSDOS));
 	IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
 	    ComboBox_AddString(hBootType, "FreeDOS"), BT_FREEDOS));
 
-	/* Select "Non-bootable" as the default */
-	IGNORE_RETVAL(ComboBox_SetCurSel(hBootType, 0));
-	boot_type = BT_NON_BOOTABLE;
+	if (advanced_mode_device) {
+		static_sprintf(tmp, "Syslinux %s", embedded_sl_version_str[0]);
+		IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+		    ComboBox_AddString(hBootType, tmp), BT_SYSLINUX_V4));
+		static_sprintf(tmp, "Syslinux %s", embedded_sl_version_str[1]);
+		IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+		    ComboBox_AddString(hBootType, tmp), BT_SYSLINUX_V6));
+		IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+		    ComboBox_AddString(hBootType, "ReactOS"), BT_REACTOS));
+		static_sprintf(tmp, "Grub " GRUB2_PACKAGE_VERSION);
+		IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+		    ComboBox_AddString(hBootType, tmp), BT_GRUB2));
+		static_sprintf(tmp, "Grub4DOS " GRUB4DOS_VERSION);
+		IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+		    ComboBox_AddString(hBootType, tmp), BT_GRUB4DOS));
+		IGNORE_RETVAL(ComboBox_SetItemData(hBootType,
+		    ComboBox_AddString(hBootType, "UEFI:NTFS"), BT_UEFI_NTFS));
+	}
+
+	/* When advanced mode is off and the current boot_type is an advanced entry,
+	 * fall back to BT_IMAGE (mirrors Windows SetBootOptions fallback). */
+	if (!advanced_mode_device && boot_type >= BT_SYSLINUX_V4)
+		boot_type = BT_IMAGE;
+
+	SetComboEntry(hBootType, boot_type);
 }
 
 /* ======================================================================
@@ -3590,8 +3640,13 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 
 	/* Restore advanced expander state (mirrors Windows SETTING_ADVANCED_MODE_*) */
 	{
-		if (ReadSettingBool(SETTING_ADVANCED_MODE_DEVICE))
+		extern BOOL advanced_mode_device;
+		if (ReadSettingBool(SETTING_ADVANCED_MODE_DEVICE)) {
+			advanced_mode_device = TRUE;
 			ToggleAdvancedDeviceOptions(TRUE);
+			/* Re-populate boot combo now that advanced_mode_device is set */
+			populate_boot_combo();
+		}
 		if (ReadSettingBool(SETTING_ADVANCED_MODE_FORMAT))
 			ToggleAdvancedFormatOptions(TRUE);
 	}

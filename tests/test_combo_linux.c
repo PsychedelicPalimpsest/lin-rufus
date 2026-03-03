@@ -390,6 +390,69 @@ TEST(register_all_null_safe)
 }
 
 /* -------------------------------------------------------------------------
+ * SetComboEntry — search by item data and select via combo bridge
+ * (non-GTK implementation, identical logic to the non-GTK branch in ui_gtk.c)
+ * --------------------------------------------------------------------- */
+static void SetComboEntry(HWND hDlg, int data)
+{
+	int i, nb_entries = (int)ComboBox_GetCount(hDlg);
+	for (i = 0; i < nb_entries; i++) {
+		if ((int)ComboBox_GetItemData(hDlg, i) == data) {
+			ComboBox_SetCurSel(hDlg, i);
+			return;
+		}
+	}
+	if (nb_entries > 0)
+		ComboBox_SetCurSel(hDlg, 0);
+}
+
+TEST(set_combo_entry_selects_by_data)
+{
+	combo_state_t *cs = make_combo();
+	HWND h = (HWND)cs;
+	ComboBox_SetItemData(h, ComboBox_AddString(h, "Non-bootable"), (DWORD_PTR)0);
+	ComboBox_SetItemData(h, ComboBox_AddString(h, "Image"),        (DWORD_PTR)1);
+	ComboBox_SetItemData(h, ComboBox_AddString(h, "FreeDOS"),      (DWORD_PTR)5);
+
+	SetComboEntry(h, 5);  /* FreeDOS has data=5 at index 2 */
+	CHECK_INT_EQ(ComboBox_GetCurSel(h), 2);
+
+	SetComboEntry(h, 1);  /* Image has data=1 at index 1 */
+	CHECK_INT_EQ(ComboBox_GetCurSel(h), 1);
+
+	SetComboEntry(h, 0);  /* Non-bootable has data=0 at index 0 */
+	CHECK_INT_EQ(ComboBox_GetCurSel(h), 0);
+
+	free_combo(cs);
+}
+
+TEST(set_combo_entry_fallback_on_no_match)
+{
+	combo_state_t *cs = make_combo();
+	HWND h = (HWND)cs;
+	ComboBox_SetItemData(h, ComboBox_AddString(h, "A"), (DWORD_PTR)10);
+	ComboBox_SetItemData(h, ComboBox_AddString(h, "B"), (DWORD_PTR)20);
+
+	/* data=99 doesn't exist → falls back to index 0 */
+	SetComboEntry(h, 99);
+	CHECK_INT_EQ(ComboBox_GetCurSel(h), 0);
+
+	free_combo(cs);
+}
+
+TEST(set_combo_entry_empty_combo_does_nothing)
+{
+	combo_state_t *cs = make_combo();
+	HWND h = (HWND)cs;
+
+	/* Empty combo — must not crash */
+	SetComboEntry(h, 5);
+	CHECK_INT_EQ(ComboBox_GetCurSel(h), CB_ERR);
+
+	free_combo(cs);
+}
+
+/* -------------------------------------------------------------------------
  * Simulate GetDevices() populating hDeviceList
  * --------------------------------------------------------------------- */
 TEST(simulate_getdevices_populate)
@@ -447,5 +510,8 @@ int main(void)
 	RUN(many_items_grow_capacity);
 	RUN(register_all_null_safe);
 	RUN(simulate_getdevices_populate);
+	RUN(set_combo_entry_selects_by_data);
+	RUN(set_combo_entry_fallback_on_no_match);
+	RUN(set_combo_entry_empty_combo_does_nothing);
 	TEST_RESULTS();
 }
