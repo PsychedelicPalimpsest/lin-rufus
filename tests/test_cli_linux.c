@@ -738,6 +738,48 @@ static void test_list_devices_ignores_other_options(void)
     CHECK(r == CLI_PARSE_LIST);
 }
 
+/* ---- --unattend-xml tests ---- */
+
+static void test_init_unattend_xml_is_empty(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.unattend_xml[0] == '\0');
+}
+
+static void test_unattend_xml_sets_path(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --unattend-xml /tmp/unattend.xml", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(strcmp(opts.unattend_xml, "/tmp/unattend.xml") == 0);
+}
+
+static void test_unattend_xml_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -u /tmp/unattend.xml", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(strcmp(opts.unattend_xml, "/tmp/unattend.xml") == 0);
+}
+
+static void test_unattend_xml_requires_argument(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --unattend-xml", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_unattend_xml_empty_path_is_error(void)
+{
+    /* Pass an empty string argument directly (can't do via parse() which doesn't handle quotes) */
+    cli_options_t opts;
+    cli_options_init(&opts);
+    char *argv[] = { "rufus", "--device", "/dev/sda", "--unattend-xml", "", NULL };
+    int r = cli_parse_args(5, argv, &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -850,6 +892,13 @@ int main(void)
     RUN_TEST(test_list_devices_does_not_require_device);
     RUN_TEST(test_list_devices_short_form);
     RUN_TEST(test_list_devices_ignores_other_options);
+
+    /* --unattend-xml tests */
+    RUN_TEST(test_init_unattend_xml_is_empty);
+    RUN_TEST(test_unattend_xml_sets_path);
+    RUN_TEST(test_unattend_xml_short_form);
+    RUN_TEST(test_unattend_xml_requires_argument);
+    RUN_TEST(test_unattend_xml_empty_path_is_error);
 
     TEST_RESULTS();
 }

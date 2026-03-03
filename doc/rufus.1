@@ -19,6 +19,7 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-persistence\fR \fIN\fR]
 [\fB\-\-bad\-blocks\fR]
 [\fB\-\-nb\-passes\fR \fIN\fR]
+[\fB\-\-unattend\-xml\fR \fIPATH\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-label\fR \fILABEL\fR]
 [\fB\-\-quick\fR|\fB\-\-no\-quick\fR]
@@ -136,6 +137,13 @@ data.  The number of scan passes is controlled by \fB\-\-nb\-passes\fR.
 .BR \-N ", " \-\-nb\-passes " " \fIN\fR
 Number of passes to use for the bad-blocks scan.  \fIN\fR must be between
 1 and 4 inclusive.  Requires \fB\-\-bad\-blocks\fR.
+.TP
+.BR \-u ", " \-\-unattend\-xml " " \fIPATH\fR
+Inject a pre-built Windows unattended-setup XML file into the formatted
+drive.  \fIPATH\fR must point to a valid
+.I autounattend.xml
+(or equivalent) file.  Useful for scripting fully automated Windows
+installations.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

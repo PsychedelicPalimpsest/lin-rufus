@@ -27,6 +27,7 @@ DWORD  selected_cluster_size = 0;
 uint64_t persistence_size = 0;
 BOOL   enable_bad_blocks = FALSE;
 int    nb_passes_sel     = 0;
+char  *unattend_xml_path = NULL;
 char  *image_path        = NULL;
 char   app_dir[MAX_PATH] = "/tmp";
 DWORD  ErrorStatus       = 0;

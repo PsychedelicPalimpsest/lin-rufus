@@ -58,6 +58,7 @@ extern DWORD selected_cluster_size;
 extern uint64_t persistence_size;
 extern BOOL enable_bad_blocks;
 extern int  nb_passes_sel;
+extern char *unattend_xml_path;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -147,6 +148,7 @@ void cli_print_usage(const char *prog)
 	       "  -P, --persistence N       Persistence partition size in MiB (live-USB images only)\n"
 	       "  -B, --bad-blocks          Scan device for bad blocks before formatting\n"
 	       "  -N, --nb-passes N         Number of bad-block scan passes: 1-4 (requires -B)\n"
+	       "  -u, --unattend-xml PATH   Inject a pre-built unattend.xml for Windows setup\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "      --quick               Quick format (default)\n"
@@ -177,6 +179,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "persistence",      required_argument, NULL, 'P' },
 		{ "bad-blocks",       no_argument,       NULL, 'B' },
 		{ "nb-passes",        required_argument, NULL, 'N' },
+		{ "unattend-xml",     required_argument, NULL, 'u' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -191,7 +194,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:L",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:L",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -328,6 +331,14 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			break;
 		}
 
+		case 'u':
+			if (!optarg || !*optarg) {
+				fprintf(stderr, "rufus: --unattend-xml requires a path\n");
+				return CLI_PARSE_ERROR;
+			}
+			snprintf(opts->unattend_xml, sizeof(opts->unattend_xml), "%s", optarg);
+			break;
+
 		case 'L':
 			return CLI_PARSE_LIST;
 
@@ -408,6 +419,11 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Number of bad-block scan passes (0 = not set, use default) */
 	if (opts->nb_passes > 0)
 		nb_passes_sel = opts->nb_passes - 1; /* 0-based index used by format.c */
+	/* Pre-built unattend.xml to inject (WUE) */
+	if (opts->unattend_xml[0] != '\0') {
+		free(unattend_xml_path);
+		unattend_xml_path = strdup(opts->unattend_xml);
+	}
 }
 
 /*

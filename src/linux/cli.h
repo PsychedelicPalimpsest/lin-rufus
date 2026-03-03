@@ -57,6 +57,7 @@ typedef struct {
     uint64_t persistence_size; /* --persistence N MiB; 0 = no persistence partition */
     int  bad_blocks;        /* --bad-blocks: 1=run bad block scan, 0=skip */
     int  nb_passes;         /* --nb-passes 1-4: scan passes (requires bad_blocks); 0 = not set */
+    char unattend_xml[512]; /* --unattend-xml PATH: pre-built unattend.xml to inject */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */
