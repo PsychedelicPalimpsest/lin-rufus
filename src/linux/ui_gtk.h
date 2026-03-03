@@ -72,6 +72,7 @@ typedef struct {
 	/* Status / progress section */
 	GtkWidget *progress_bar;        /* IDC_PROGRESS */
 	GtkWidget *status_label;        /* IDC_STATUS */
+	GtkWidget *elapsed_label;       /* elapsed time display (right of status) */
 
 	/* Main action buttons */
 	GtkWidget *start_btn;           /* IDC_START */

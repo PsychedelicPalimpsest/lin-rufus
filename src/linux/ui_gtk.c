@@ -134,6 +134,10 @@ static BOOL app_changed_label  = FALSE;
 static BOOL app_changed_persistence = FALSE;
 static void on_persistence_size_entry_changed(GtkWidget *w, gpointer data);
 
+/* Elapsed time counter and GLib timer source ID (mirrors Windows ClockTimer). */
+static unsigned int elapsed_timer_count = 0;
+static guint elapsed_timer_source = 0;
+
 /* Forward declaration for combo registration helper */
 static void combo_register_all(void);
 /* Forward declaration for initial combo population */
@@ -152,6 +156,42 @@ static gboolean idle_update_progress(gpointer data)
 			CLAMP((double)p->pct / 100.0, 0.0, 1.0));
 	free(p);
 	return G_SOURCE_REMOVE;
+}
+
+/* Elapsed-time ticker — fired every 1000 ms while a format is in progress.
+ * Mirrors the Windows ClockTimer callback. */
+static gboolean clock_timer_cb(gpointer data)
+{
+	(void)data;
+	elapsed_timer_count++;
+	if (rw.elapsed_label) {
+		char buf[16];
+		snprintf(buf, sizeof(buf), "%02u:%02u:%02u",
+		         elapsed_timer_count / 3600,
+		         (elapsed_timer_count % 3600) / 60,
+		         elapsed_timer_count % 60);
+		gtk_label_set_text(GTK_LABEL(rw.elapsed_label), buf);
+	}
+	return G_SOURCE_CONTINUE;
+}
+
+static void start_clock_timer(void)
+{
+	elapsed_timer_count = 0;
+	if (rw.elapsed_label)
+		gtk_label_set_text(GTK_LABEL(rw.elapsed_label), "00:00:00");
+	if (elapsed_timer_source == 0)
+		elapsed_timer_source = g_timeout_add(1000, clock_timer_cb, NULL);
+}
+
+static void stop_clock_timer(void)
+{
+	if (elapsed_timer_source != 0) {
+		g_source_remove(elapsed_timer_source);
+		elapsed_timer_source = 0;
+	}
+	if (rw.elapsed_label)
+		gtk_label_set_text(GTK_LABEL(rw.elapsed_label), "");
 }
 
 /* ---- Forward declarations ---- */
@@ -610,12 +650,21 @@ static GtkWidget *build_status_section(void)
 	rw.progress_bar  = gtk_progress_bar_new();
 	gtk_widget_set_hexpand(rw.progress_bar, TRUE);
 
+	/* Status row: left-aligned message + right-aligned elapsed time */
+	GtkWidget *status_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
 	rw.status_label = gtk_label_new("Ready");
 	gtk_widget_set_halign(rw.status_label, GTK_ALIGN_START);
 	gtk_label_set_ellipsize(GTK_LABEL(rw.status_label), PANGO_ELLIPSIZE_END);
+	gtk_widget_set_hexpand(rw.status_label, TRUE);
+
+	rw.elapsed_label = gtk_label_new("");
+	gtk_widget_set_halign(rw.elapsed_label, GTK_ALIGN_END);
+
+	gtk_box_pack_start(GTK_BOX(status_row), rw.status_label,  TRUE,  TRUE,  0);
+	gtk_box_pack_start(GTK_BOX(status_row), rw.elapsed_label, FALSE, FALSE, 4);
 
 	gtk_box_pack_start(GTK_BOX(vbox), rw.progress_bar,  FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(vbox), rw.status_label,  FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(vbox), status_row,        FALSE, FALSE, 0);
 
 	return vbox;
 }
@@ -2440,14 +2489,20 @@ void EnableControls(BOOL enable, BOOL remove_checkboxes)
 	if (rw.device_combo)      gtk_widget_set_sensitive(rw.device_combo,      e);
 	if (rw.boot_combo)        gtk_widget_set_sensitive(rw.boot_combo,        e);
 	if (rw.select_btn)        gtk_widget_set_sensitive(rw.select_btn,        e);
-	if (rw.partition_combo)   gtk_widget_set_sensitive(rw.partition_combo,   e);
-	if (rw.target_combo)      gtk_widget_set_sensitive(rw.target_combo,      e);
-	if (rw.filesystem_combo)  gtk_widget_set_sensitive(rw.filesystem_combo,  e);
-	if (rw.cluster_combo)     gtk_widget_set_sensitive(rw.cluster_combo,     e);
 	if (rw.label_entry)       gtk_widget_set_sensitive(rw.label_entry,       e);
 	if (rw.start_btn)         gtk_widget_set_sensitive(rw.start_btn,         e);
 	if (rw.multi_write_btn)   gtk_widget_set_sensitive(rw.multi_write_btn,   e);
 	if (rw.verify_write_check) gtk_widget_set_sensitive(rw.verify_write_check, e);
+
+	/* Mirror Windows: disable partition/target/fs/cluster combos for pure DD images */
+	gboolean dd_combo_enable = e;
+	if (enable && (boot_type == BT_IMAGE) && (image_path != NULL) &&
+	    !(img_report.is_iso || img_report.is_windows_img))
+		dd_combo_enable = FALSE;
+	if (rw.partition_combo)   gtk_widget_set_sensitive(rw.partition_combo,   dd_combo_enable);
+	if (rw.target_combo)      gtk_widget_set_sensitive(rw.target_combo,      dd_combo_enable);
+	if (rw.filesystem_combo)  gtk_widget_set_sensitive(rw.filesystem_combo,  dd_combo_enable);
+	if (rw.cluster_combo)     gtk_widget_set_sensitive(rw.cluster_combo,     dd_combo_enable);
 
 	/* While an operation is in progress, repurpose the close button as Cancel */
 	if (rw.close_btn) {
@@ -2608,6 +2663,7 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		zero_drive = FALSE;
 		safe_closehandle(format_thread);
 		format_thread = NULL;
+		stop_clock_timer();
 
 		/* Clean up the temporary unattend XML created for this session */
 		extern char *unattend_xml_path;
@@ -2647,6 +2703,7 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 	}
 
 	case UM_ENABLE_CONTROLS:
+		stop_clock_timer();
 		if (!IS_ERROR(ErrorStatus))
 			rufus_gtk_update_status(lmprintf(MSG_210));
 		else if (SCODE_CODE(ErrorStatus) == ERROR_CANCELLED)
@@ -2667,8 +2724,7 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		break;
 
 	case UM_TIMER_START:
-		/* On Windows this starts an elapsed-time timer. On Linux we rely
-		 * on progress callbacks from the format thread. */
+		start_clock_timer();
 		break;
 
 	case UM_SELECT_ISO:
