@@ -48,6 +48,7 @@ BOOL   detect_fakes          = FALSE;
 BOOL   expert_mode           = FALSE;
 BOOL   usb_debug             = FALSE;
 BOOL   enable_vmdk           = FALSE;
+BOOL   advanced_mode_format  = FALSE;
 char  *image_path        = NULL;
 char   app_dir[MAX_PATH] = "/tmp";
 DWORD  ErrorStatus       = 0;

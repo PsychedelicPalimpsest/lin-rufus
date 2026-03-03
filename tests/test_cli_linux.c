@@ -1476,6 +1476,39 @@ static void test_enable_vmdk_default_is_off(void)
     CHECK(opts.enable_vmdk == 0);
 }
 
+/* ---- --advanced-format tests ---- */
+
+static void test_init_advanced_format_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.advanced_format == 0);
+}
+
+static void test_advanced_format_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --advanced-format", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.advanced_format != 0);
+}
+
+static void test_advanced_format_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -a", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.advanced_format != 0);
+}
+
+static void test_advanced_format_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.advanced_format == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1721,6 +1754,12 @@ int main(void)
     RUN_TEST(test_enable_vmdk_long_flag);
     RUN_TEST(test_enable_vmdk_short_flag);
     RUN_TEST(test_enable_vmdk_default_is_off);
+
+    /* --advanced-format tests */
+    RUN_TEST(test_init_advanced_format_is_false);
+    RUN_TEST(test_advanced_format_long_flag);
+    RUN_TEST(test_advanced_format_short_flag);
+    RUN_TEST(test_advanced_format_default_is_off);
 
     TEST_RESULTS();
 }

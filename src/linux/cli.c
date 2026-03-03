@@ -79,6 +79,7 @@ extern BOOL detect_fakes;
 extern BOOL expert_mode;
 extern BOOL usb_debug;
 extern BOOL enable_vmdk;
+extern BOOL advanced_mode_format;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -189,6 +190,7 @@ void cli_print_usage(const char *prog)
 	       "  -E, --expert-mode         Unlock expert-level features (advanced hash/SBAT options)\n"
 	       "  -g, --usb-debug           Enable verbose USB/SMART debug logging\n"
 	       "  -G, --enable-vmdk         Enable VMDK disk-image detection\n"
+	       "  -a, --advanced-format     Unlock ext2/3/4 and advanced format options\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "  -j, --json                Output --list-devices results as JSON\n"
@@ -241,6 +243,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "expert-mode",     no_argument,       NULL, 'E' },
 		{ "usb-debug",       no_argument,       NULL, 'g' },
 		{ "enable-vmdk",     no_argument,       NULL, 'G' },
+		{ "advanced-format", no_argument,       NULL, 'a' },
 		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
@@ -257,7 +260,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemRxsInjDEgGL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemRxsInjDEgGaL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -482,6 +485,10 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->enable_vmdk = 1;
 			break;
 
+		case 'a':
+			opts->advanced_format = 1;
+			break;
+
 		case 'j':
 			opts->json = 1;
 			break;
@@ -633,6 +640,9 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Enable VMDK disk-image detection */
 	if (opts->enable_vmdk)
 		enable_vmdk = TRUE;
+	/* Enable advanced format mode (unlocks ext2/3/4 and other advanced options) */
+	if (opts->advanced_format)
+		advanced_mode_format = TRUE;
 }
 
 /*
