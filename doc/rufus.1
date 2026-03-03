@@ -16,6 +16,9 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-target\fR \fITARGET\fR]
 [\fB\-\-boot\-type\fR \fITYPE\fR]
 [\fB\-\-cluster\-size\fR \fIN\fR]
+[\fB\-\-persistence\fR \fIN\fR]
+[\fB\-\-bad\-blocks\fR]
+[\fB\-\-nb\-passes\fR \fIN\fR]
 [\fB\-\-label\fR \fILABEL\fR]
 [\fB\-\-quick\fR|\fB\-\-no\-quick\fR]
 [\fB\-\-verify\fR]
@@ -117,6 +120,21 @@ given, otherwise \fBnon-bootable\fR.
 Cluster (allocation unit) size in bytes for the formatted filesystem.
 Must be a power of two in the range 512–2097152.  Defaults to 0, meaning
 the filesystem formatter chooses the optimal cluster size for the volume.
+.TP
+.BR \-P ", " \-\-persistence " " \fIN\fR
+Create a persistent data overlay partition of \fIN\fR MiB after the main
+partition.  Only meaningful for live-USB images that support overlay
+persistence (e.g.\& Ubuntu/Debian Casper images).  Set to \fB0\fR (default)
+to skip the persistence partition.
+.TP
+.BR \-B ", " \-\-bad\-blocks
+Scan the entire device for bad blocks before formatting.  Each block is
+read (and optionally written) to detect sectors that cannot reliably store
+data.  The number of scan passes is controlled by \fB\-\-nb\-passes\fR.
+.TP
+.BR \-N ", " \-\-nb\-passes " " \fIN\fR
+Number of passes to use for the bad-blocks scan.  \fIN\fR must be between
+1 and 4 inclusive.  Requires \fB\-\-bad\-blocks\fR.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

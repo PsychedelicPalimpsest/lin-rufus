@@ -119,7 +119,7 @@ automatically the run step is transparently escalated via `sudo podman`.
 | Test system (`tests/`, `run_tests.sh`) | ✅ | Runs native + Wine + privileged container (root tests) |
 | GCC 15 compound-literal regression fix in `cregex_compile.c` | ✅ | Static node lifetimes replaced with local vars |
 | GTK3 UI backend (`-DUSE_GTK`) | ✅ | Window builds and launches |
-| Non-GTK console fallback (`src/linux/rufus.c main()`) | ✅ | Full CLI mode via `cli.c`; `cli_parse_args` + `cli_run`; flags: `--device`, `--image`, `--fs`, `--partition-scheme`, `--target`, `--boot-type`, `--cluster-size`, `--label`, `--quick`/`--no-quick`, `--verify`, `--no-prompt`, `--version`, `--help`; `selected_cluster_size` global wired into `format.c` `FormatThread`; 98 tests pass |
+| Non-GTK console fallback (`src/linux/rufus.c main()`) | ✅ | Full CLI mode via `cli.c`; `cli_parse_args` + `cli_run`; flags: `--device`, `--image`, `--fs`, `--partition-scheme`, `--target`, `--boot-type`, `--cluster-size`, `--persistence`, `--bad-blocks`, `--nb-passes`, `--label`, `--quick`/`--no-quick`, `--verify`, `--no-prompt`, `--version`, `--help`; `selected_cluster_size`, `persistence_size`, `enable_bad_blocks`, `nb_passes_sel` globals wired; `optind=0` re-entrant reset; 129 tests pass |
 
 ---
 
@@ -536,4 +536,9 @@ This is the most structurally significant porting gap.
 * ~~Feature 192~~: **RESOLVED** — `device_open_in_fm_build_cmd()` now quotes the device
   path (`xdg-open '%s'`).  The 3 stale tests expecting the old unquoted format were
   updated in `tests/test_ui_linux.c` during QA session 2026-03-03.
+
+* ~~Feature 193~~: **RESOLVED** — CLI extended options: `--version`, `--boot-type`/`-b`,
+  `--cluster-size`/`-c`, `--persistence`/`-P`, `--bad-blocks`/`-B`, `--nb-passes`/`-N`;
+  `optind=0` re-entrant reset; all 6 options wired via `cli_apply_options()` into globals;
+  man page documented; 129 CLI tests + 54 man-page tests pass.
 

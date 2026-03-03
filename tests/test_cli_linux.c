@@ -554,6 +554,158 @@ static void test_cluster_size_too_large_is_error(void)
     CHECK(r == CLI_PARSE_ERROR);
 }
 
+/* ---- --persistence tests ---- */
+
+static void test_init_persistence_is_zero(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.persistence_size == 0);
+}
+
+static void test_persistence_zero(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --persistence 0", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.persistence_size == 0);
+}
+
+static void test_persistence_megabytes(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --persistence 512", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.persistence_size == (uint64_t)512 * 1024 * 1024);
+}
+
+static void test_persistence_gigabyte(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --persistence 4096", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.persistence_size == (uint64_t)4096 * 1024 * 1024);
+}
+
+static void test_persistence_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -P 256", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.persistence_size == (uint64_t)256 * 1024 * 1024);
+}
+
+static void test_persistence_alpha_is_error(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --persistence foo", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+/* ---- --bad-blocks tests ---- */
+
+static void test_init_bad_blocks_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.bad_blocks == 0);
+}
+
+static void test_bad_blocks_sets_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --bad-blocks", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.bad_blocks != 0);
+}
+
+static void test_bad_blocks_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -B", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.bad_blocks != 0);
+}
+
+static void test_bad_blocks_default_is_false(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.bad_blocks == 0);
+}
+
+/* ---- --nb-passes tests ---- */
+
+static void test_init_nb_passes_is_zero(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.nb_passes == 0);
+}
+
+static void test_nb_passes_one(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --bad-blocks --nb-passes 1", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.nb_passes == 1);
+}
+
+static void test_nb_passes_four(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --bad-blocks --nb-passes 4", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.nb_passes == 4);
+}
+
+static void test_nb_passes_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -B -N 2", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.nb_passes == 2);
+}
+
+static void test_nb_passes_zero_is_error(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --nb-passes 0", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_nb_passes_five_is_error(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --nb-passes 5", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_nb_passes_alpha_is_error(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --nb-passes abc", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_nb_passes_requires_bad_blocks(void)
+{
+    /* --nb-passes without --bad-blocks should be an error */
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --nb-passes 2", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_nb_passes_with_bad_blocks(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --bad-blocks --nb-passes 2", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.nb_passes == 2);
+    CHECK(opts.bad_blocks != 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -635,6 +787,31 @@ int main(void)
     RUN_TEST(test_cluster_size_not_power_of_two_is_error);
     RUN_TEST(test_cluster_size_alpha_is_error);
     RUN_TEST(test_cluster_size_too_large_is_error);
+
+    /* --persistence tests */
+    RUN_TEST(test_init_persistence_is_zero);
+    RUN_TEST(test_persistence_zero);
+    RUN_TEST(test_persistence_megabytes);
+    RUN_TEST(test_persistence_gigabyte);
+    RUN_TEST(test_persistence_short_form);
+    RUN_TEST(test_persistence_alpha_is_error);
+
+    /* --bad-blocks tests */
+    RUN_TEST(test_init_bad_blocks_is_false);
+    RUN_TEST(test_bad_blocks_sets_flag);
+    RUN_TEST(test_bad_blocks_short_form);
+    RUN_TEST(test_bad_blocks_default_is_false);
+
+    /* --nb-passes tests */
+    RUN_TEST(test_init_nb_passes_is_zero);
+    RUN_TEST(test_nb_passes_one);
+    RUN_TEST(test_nb_passes_four);
+    RUN_TEST(test_nb_passes_short_form);
+    RUN_TEST(test_nb_passes_zero_is_error);
+    RUN_TEST(test_nb_passes_five_is_error);
+    RUN_TEST(test_nb_passes_alpha_is_error);
+    RUN_TEST(test_nb_passes_requires_bad_blocks);
+    RUN_TEST(test_nb_passes_with_bad_blocks);
 
     TEST_RESULTS();
 }

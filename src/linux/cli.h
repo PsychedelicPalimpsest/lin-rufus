@@ -27,6 +27,7 @@
 #ifdef __linux__
 
 #include <stddef.h>
+#include <stdint.h>
 #include "compat/windows.h"
 
 /* Return codes from cli_parse_args() */
@@ -52,6 +53,9 @@ typedef struct {
     int  no_prompt;         /* --no-prompt: 1=auto-accept all dialogs, 0=interactive */
     int  boot_type;         /* BT_* constant; -1 = auto (BT_IMAGE if image set, else BT_NON_BOOTABLE) */
     DWORD cluster_size;     /* --cluster-size N bytes; 0 = default (auto) */
+    uint64_t persistence_size; /* --persistence N MiB; 0 = no persistence partition */
+    int  bad_blocks;        /* --bad-blocks: 1=run bad block scan, 0=skip */
+    int  nb_passes;         /* --nb-passes 1-4: scan passes (requires bad_blocks); 0 = not set */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

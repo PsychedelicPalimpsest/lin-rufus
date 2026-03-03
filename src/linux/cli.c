@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -53,6 +54,9 @@ extern void drive_linux_add_drive(const char *id, const char *name,
 extern DWORD ErrorStatus;
 extern DWORD FormatThread(void *param);
 extern DWORD selected_cluster_size;
+extern uint64_t persistence_size;
+extern BOOL enable_bad_blocks;
+extern int  nb_passes_sel;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -139,6 +143,9 @@ void cli_print_usage(const char *prog)
 	       "  -t, --target T            Boot target: bios uefi\n"
 	       "  -b, --boot-type TYPE      Boot type: non-bootable image freedos msdos\n"
 	       "  -c, --cluster-size N      Cluster size in bytes (must be power of 2, e.g. 4096)\n"
+	       "  -P, --persistence N       Persistence partition size in MiB (live-USB images only)\n"
+	       "  -B, --bad-blocks          Scan device for bad blocks before formatting\n"
+	       "  -N, --nb-passes N         Number of bad-block scan passes: 1-4 (requires -B)\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "      --quick               Quick format (default)\n"
 	       "      --no-quick            Full format (zero-fill)\n"
@@ -165,6 +172,9 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "verify",           no_argument,       NULL, 'V' },
 		{ "no-prompt",        no_argument,       NULL, 'y' },
 		{ "version",          no_argument,       NULL,  0  },
+		{ "persistence",      required_argument, NULL, 'P' },
+		{ "bad-blocks",       no_argument,       NULL, 'B' },
+		{ "nb-passes",        required_argument, NULL, 'N' },
 		{ "help",             no_argument,       NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
@@ -173,11 +183,12 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	int tmp;
 	int opt_index;
 
-	/* Reset getopt state for re-entrant tests */
-	optind = 1;
+	/* Reset getopt state for re-entrant tests.
+	 * On glibc, optind=0 forces full reinitialization (resets nextchar). */
+	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVy",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -276,6 +287,44 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->no_prompt = 1;
 			break;
 
+		case 'P': {
+			/* --persistence N : N is in MiB */
+			char *end = NULL;
+			unsigned long val;
+			if (!optarg || !*optarg) {
+				fprintf(stderr, "rufus: --persistence requires a size in MiB\n");
+				return CLI_PARSE_ERROR;
+			}
+			val = strtoul(optarg, &end, 10);
+			if (!end || *end != '\0') {
+				fprintf(stderr, "rufus: invalid persistence size '%s'\n", optarg);
+				return CLI_PARSE_ERROR;
+			}
+			opts->persistence_size = (uint64_t)val * 1024 * 1024;
+			break;
+		}
+
+		case 'B':
+			opts->bad_blocks = 1;
+			break;
+
+		case 'N': {
+			/* --nb-passes 1-4 */
+			char *end = NULL;
+			long val;
+			if (!optarg || !*optarg) {
+				fprintf(stderr, "rufus: --nb-passes requires a value (1-4)\n");
+				return CLI_PARSE_ERROR;
+			}
+			val = strtol(optarg, &end, 10);
+			if (!end || *end != '\0' || val < 1 || val > 4) {
+				fprintf(stderr, "rufus: --nb-passes must be 1-4, got '%s'\n", optarg);
+				return CLI_PARSE_ERROR;
+			}
+			opts->nb_passes = (int)val;
+			break;
+		}
+
 		case 'h':
 			cli_print_usage(argv[0]);
 			return CLI_PARSE_HELP;
@@ -292,6 +341,12 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	if (opts->device[0] == '\0') {
 		fprintf(stderr, "rufus: --device is required\n");
 		cli_print_usage(argv[0]);
+		return CLI_PARSE_ERROR;
+	}
+
+	/* --nb-passes requires --bad-blocks */
+	if (opts->nb_passes > 0 && !opts->bad_blocks) {
+		fprintf(stderr, "rufus: --nb-passes requires --bad-blocks\n");
 		return CLI_PARSE_ERROR;
 	}
 
@@ -336,6 +391,17 @@ void cli_apply_options(const cli_options_t *opts)
 
 	/* Cluster size (0 = default) */
 	selected_cluster_size = opts->cluster_size;
+
+	/* Persistence partition size (0 = no persistence) */
+	persistence_size = opts->persistence_size;
+
+	/* Bad blocks scan */
+	if (opts->bad_blocks)
+		enable_bad_blocks = TRUE;
+
+	/* Number of bad-block scan passes (0 = not set, use default) */
+	if (opts->nb_passes > 0)
+		nb_passes_sel = opts->nb_passes - 1; /* 0-based index used by format.c */
 }
 
 int cli_run(const cli_options_t *opts)
