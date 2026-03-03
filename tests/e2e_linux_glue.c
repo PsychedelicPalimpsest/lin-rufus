@@ -143,3 +143,18 @@ BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE;
 /* SetAutorun stub — icon.c is not linked in these tests. */
 BOOL SetAutorun(const char *path) { (void)path; return TRUE; }
 BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent; return FALSE; }
+
+/* ExtractISOFile stub — iso.c is not linked in e2e tests. */
+int64_t ExtractISOFile(const char *iso, const char *iso_file,
+                       const char *dest_file, DWORD attributes)
+{ (void)iso; (void)iso_file; (void)dest_file; (void)attributes; return 0; }
+
+/* UpdateMD5Sum stub — hash.c is not linked in e2e tests. */
+void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg)
+{ (void)dest_dir; (void)md5sum_name_arg; }
+
+/* CopySKUSiPolicy stub — wue.c is not linked in e2e tests. */
+BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return FALSE; }
+
+/* md5sum_name global — defined in iso.c which is not linked in e2e tests. */
+const char *md5sum_name[2] = { "md5sum.txt", "md5sum.txt~rufus" };

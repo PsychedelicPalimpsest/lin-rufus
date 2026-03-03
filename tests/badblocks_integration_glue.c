@@ -62,3 +62,38 @@ BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE;
 /* SetAutorun stub — icon.c is not linked in these tests. */
 BOOL SetAutorun(const char *path) { (void)path; return TRUE; }
 BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent; return FALSE; }
+
+/* ExtractISOFile stub — iso.c is not linked in badblocks integration tests. */
+int64_t ExtractISOFile(const char *iso, const char *iso_file,
+                       const char *dest_file, DWORD attributes)
+{ (void)iso; (void)iso_file; (void)dest_file; (void)attributes; return 0; }
+
+/* UpdateMD5Sum stub — hash.c is not linked. */
+void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg)
+{ (void)dest_dir; (void)md5sum_name_arg; }
+
+/* CopySKUSiPolicy stub — wue.c is not linked. */
+BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return FALSE; }
+
+/* SetupWinToGo stub */
+BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
+{ (void)di; (void)dn; (void)use_esp; return TRUE; }
+
+/* ExtractZip stub — stdio.c is not linked here. */
+BOOL ExtractZip(const char *src, const char *dst)
+{ (void)src; (void)dst; return TRUE; }
+
+/* VHD globals needed by vhd.c */
+BOOL has_ffu_support = FALSE;
+BOOL ignore_boot_marker = FALSE;
+
+/* hash.c globals needed by vhd.c */
+FILE*    fd_md5sum    = NULL;
+uint64_t total_blocks = 0, extra_blocks = 0, nb_blocks = 0, last_nb_blocks = 0;
+BOOL HashFile(unsigned type, const char* path, uint8_t* sum)
+{ (void)type; (void)path; (void)sum; return FALSE; }
+
+/* wuprintf stub — stdio.c is not linked in badblocks integration tests. */
+#include <stdarg.h>
+#include <wchar.h>
+void wuprintf(const wchar_t *fmt, ...) { (void)fmt; }

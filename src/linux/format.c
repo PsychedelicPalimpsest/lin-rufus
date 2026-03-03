@@ -1196,7 +1196,7 @@ DWORD WINAPI FormatThread(void* param)
 	if (boot_type == BT_IMAGE && !write_as_image && image_path != NULL
 	    && img_report.is_iso) {
 		UpdateProgress(OP_FILE_COPY, 0.0f);
-		char *mount_path = GetExtPartitionName(DriveIndex, part_offset);
+		char *mount_path = AltMountVolume(DriveIndex, part_offset, FALSE);
 		if (mount_path != NULL) {
 			if (!ExtractISO(image_path, mount_path, FALSE)) {
 				if (!IS_ERROR(ErrorStatus))
@@ -1300,6 +1300,7 @@ DWORD WINAPI FormatThread(void* param)
 				UpdateMD5Sum(mount_path,
 				             md5sum_name[img_report.has_md5sum ? img_report.has_md5sum - 1 : 0]);
 
+			AltUnmountVolume(mount_path, FALSE);
 			free(mount_path);
 		}
 	}

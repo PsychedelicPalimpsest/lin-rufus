@@ -187,6 +187,13 @@ extern char    run_ntfs_fix_last_path[PATH_MAX];
 extern int     set_autorun_call_count;
 extern char    set_autorun_last_path[PATH_MAX];
 extern BOOL    use_extended_label;
+extern int     alt_mount_volume_call_count;
+extern char    alt_mount_volume_last_ret[PATH_MAX];
+extern int     alt_unmount_volume_call_count;
+
+/* Tracking for ExtractISO calls from format.c */
+static int  extract_iso_dst_call_count = 0;
+static char extract_iso_last_dst_path[PATH_MAX] = "";
 /* ================================================================
  * Stub functions
  * ================================================================ */
@@ -259,7 +266,11 @@ BOOL IsCurrentProcessElevated(void) { return FALSE; }
 
 /* ExtractISO stub — just reports success (file copy tested separately) */
 BOOL ExtractISO(const char *src, const char *dst, BOOL scan_only) {
-	(void)src; (void)dst; (void)scan_only;
+	(void)src; (void)scan_only;
+	extract_iso_dst_call_count++;
+	if (dst)
+		snprintf(extract_iso_last_dst_path, sizeof(extract_iso_last_dst_path),
+		         "%s", dst);
 	return TRUE;
 }
 
@@ -347,6 +358,11 @@ static void reset_globals(void)
 	g_mock_image_option_data    = 0;
 	hImageOption                = NULL;
 	g_mock_disk_size_override   = 0;
+	alt_mount_volume_call_count   = 0;
+	alt_mount_volume_last_ret[0]  = '\0';
+	alt_unmount_volume_call_count = 0;
+	extract_iso_dst_call_count    = 0;
+	extract_iso_last_dst_path[0]  = '\0';
 }
 
 /* Read bytes from a file at offset. Returns 0 on success, -1 on error. */
@@ -3070,6 +3086,79 @@ TEST(format_thread_large_drive_boundary_1tb_plus_1)
 	unlink(path); free(path);
 }
 
+/* ================================================================
+ * ISO extraction mount parity tests
+ *
+ * When BT_IMAGE + is_iso + !write_as_image, FormatThread must:
+ *   1. Call AltMountVolume() to mount the freshly-formatted partition
+ *      and get a writable directory path.
+ *   2. Pass that directory to ExtractISO() (not a raw block-device path).
+ *   3. Call AltUnmountVolume() after all extraction / post-processing.
+ *
+ * This is the Linux equivalent of Windows RemountVolume() which provides
+ * a drive letter that can then be written to by ExtractISO.
+ * ================================================================ */
+
+TEST(format_thread_iso_extract_uses_alt_mount)
+{
+	/*
+	 * BT_IMAGE + is_iso + !write_as_image:
+	 *   - AltMountVolume must be called (at least once for ISO extraction).
+	 *   - ExtractISO must receive the path returned by AltMountVolume,
+	 *     NOT a raw block-device path starting with "/dev/".
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type          = BT_IMAGE;
+	partition_type     = PARTITION_STYLE_MBR;
+	fs_type            = FS_FAT32;
+	target_type        = TT_BIOS;
+	img_report.is_iso  = 1;
+	write_as_image     = FALSE;
+	image_path         = path;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(alt_mount_volume_call_count >= 1,
+	          "AltMountVolume must be called for ISO extraction");
+	CHECK_MSG(strncmp(extract_iso_last_dst_path, "/dev/", 5) != 0,
+	          "ExtractISO must NOT receive a raw device path");
+	CHECK_MSG(extract_iso_last_dst_path[0] == '/',
+	          "ExtractISO must receive an absolute path");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_iso_unmounts_partition_after_extract)
+{
+	/*
+	 * After ISO extraction and all post-processing steps,
+	 * AltUnmountVolume must be called to release the mount.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type          = BT_IMAGE;
+	partition_type     = PARTITION_STYLE_MBR;
+	fs_type            = FS_FAT32;
+	target_type        = TT_BIOS;
+	img_report.is_iso  = 1;
+	write_as_image     = FALSE;
+	image_path         = path;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(alt_unmount_volume_call_count >= 1,
+	          "AltUnmountVolume must be called after ISO extraction");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
 int main(void)
 {
 	printf("=== ClearMBRGPT tests ===\n");
@@ -3210,6 +3299,10 @@ int main(void)
 	RUN(format_thread_small_drive_clears_flag);
 	RUN(format_thread_large_drive_boundary_exactly_1tb);
 	RUN(format_thread_large_drive_boundary_1tb_plus_1);
+
+	printf("\n=== FormatThread ISO extraction mount parity tests ===\n");
+	RUN(format_thread_iso_extract_uses_alt_mount);
+	RUN(format_thread_iso_unmounts_partition_after_extract);
 
 	TEST_RESULTS();
 }

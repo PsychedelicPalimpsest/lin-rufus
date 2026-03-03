@@ -191,11 +191,21 @@ BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
  * paths.  Return a temporary directory so the WTG branch in format.c can
  * reach SetupWinToGo() without a real block device. */
 #include <stdlib.h>
+#include <linux/limits.h>
+int  alt_mount_volume_call_count   = 0;
+char alt_mount_volume_last_ret[PATH_MAX] = "";
+int  alt_unmount_volume_call_count = 0;
+
 char *AltMountVolume(DWORD di, uint64_t off, BOOL bSilent)
 {
     (void)di; (void)off; (void)bSilent;
+    alt_mount_volume_call_count++;
     char template[] = "/tmp/rufus_wtg_XXXXXX";
     char *dir = mkdtemp(template);
+    if (dir) {
+        snprintf(alt_mount_volume_last_ret, sizeof(alt_mount_volume_last_ret),
+                 "%s", dir);
+    }
     return dir ? strdup(dir) : NULL;
 }
 
@@ -203,7 +213,11 @@ BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
 {
     (void)bSilent;
     if (!dn || dn[0] == '\0') return FALSE;
-    rmdir(dn);
+    alt_unmount_volume_call_count++;
+    /* Recursively remove the temp dir (non-empty dirs from Win7 EFI mkdir) */
+    char cmd[PATH_MAX + 32];
+    snprintf(cmd, sizeof(cmd), "rm -rf \"%s\" 2>/dev/null", dn);
+    system(cmd);
     return TRUE;
 }
 

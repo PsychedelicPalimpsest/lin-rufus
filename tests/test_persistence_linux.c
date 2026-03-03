@@ -81,6 +81,8 @@ BOOL advanced_mode_device  = FALSE;
 BOOL advanced_mode_format  = FALSE;
 BOOL use_rufus_mbr         = TRUE;
 BOOL its_a_me_mario        = FALSE;
+BOOL use_old_bios_fixes    = FALSE;
+BOOL use_extended_label    = FALSE;
 
 DWORD ErrorStatus          = 0;
 DWORD LastWriteError       = 0;
@@ -312,6 +314,8 @@ BOOL ExtractZip(const char *src_zip, const char *dest_dir)
 { (void)src_zip; (void)dest_dir; return FALSE; }
 BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE; }
 void UpdateMD5Sum(const char *path, const char *name) { (void)path; (void)name; }
+BOOL SetAutorun(const char *path) { (void)path; return TRUE; }
+BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent; return FALSE; }
 /* wimlib stubs */
 #include "../src/wimlib/wimlib.h"
 int wimlib_open_wimU(const char *wim_file, int open_flags, WIMStruct **wim_ret)

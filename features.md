@@ -970,3 +970,15 @@ This is the most structurally significant porting gap.
       - `write_pbr_ntfs_matches_ntfs_br` — verifies `entire_ntfs_br_matches` after write
       - `write_pbr_ntfs_no_ntfs_sig_fails` — no NTFS magic → FALSE
       - 326 passed, 0 failed (vs 300 before)
+
+182. ✅ DONE **ISO extraction uses mounted directory (not raw device path)** —
+    - **Parity gap**: Linux `FormatThread` was calling `GetExtPartitionName(DriveIndex, part_offset)` to get a path for ISO extraction, then passing that path as the `dest_dir` argument to `ExtractISO`. `GetExtPartitionName` returns a raw block device path like `/dev/sdb1`, not a mounted directory. `ExtractISO` constructs file paths via `snprintf(fullpath, MAX_PATH, "%s/%s", dest_dir, filename)` and then calls `open(fullpath, O_CREAT|O_WRONLY)` — this fails with ENOTDIR because `/dev/sdb1/boot/grub/...` is not a valid directory hierarchy. Windows `FormatThread` uses `RemountVolume()` which returns a mounted drive letter (already a valid directory). Linux must use `AltMountVolume()` which creates a temp dir via `mkdtemp` and mounts the partition there.
+    - **Fix** (`src/linux/format.c`):
+      - Line ~1199: Changed `GetExtPartitionName(DriveIndex, part_offset)` → `AltMountVolume(DriveIndex, part_offset, FALSE)` so `mount_path` is a real writable tmpdir.
+      - Line ~1303: Added `AltUnmountVolume(mount_path, FALSE)` immediately before the existing `free(mount_path)` so the tmpdir is cleaned up after extraction, mirroring the pattern used by all other `AltMountVolume` call sites in the same file (WTG, FreeDOS, Syslinux, ZIP, autorun).
+      - The `GetExtPartitionName` call on line ~1393 (for `RunNtfsFix`) was deliberately left unchanged — ntfsfix needs the raw device path, not a mount directory.
+    - **Tests**: 2 new tests in `tests/test_format_thread_linux.c`:
+      - `format_thread_iso_extract_uses_alt_mount`: sets up BT_IMAGE + iso mode, runs FormatThread, asserts `alt_mount_volume_call_count >= 1` and that `ExtractISO` received a non-`/dev/` path.
+      - `format_thread_iso_unmounts_partition_after_extract`: same setup, asserts `alt_unmount_volume_call_count >= 1` (cleanup always happens).
+      - Tracking infrastructure added to `tests/format_thread_linux_glue.c` (`alt_mount_volume_call_count`, `alt_mount_volume_last_ret`, `alt_unmount_volume_call_count`) and to the `ExtractISO` stub in `tests/test_format_thread_linux.c` (`extract_iso_dst_call_count`, `extract_iso_last_dst_path`).
+      - 334 passed, 0 failed.

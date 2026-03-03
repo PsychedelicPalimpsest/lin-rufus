@@ -77,3 +77,24 @@ BOOL use_old_bios_fixes = FALSE;
 BOOL use_extended_label = FALSE;
 BOOL SetAutorun(const char *path) { (void)path; return TRUE; }
 BOOL ExtractAppIcon(const char *path, BOOL bSilent) { (void)path; (void)bSilent; return FALSE; }
+
+/* Missing stubs for format.c features added in later items */
+BOOL allow_dual_uefi_bios = FALSE;
+HWND hImageOption = NULL;
+BOOL VhdMountImageAndGetSize(const char *path, uint64_t *size)
+{ (void)path; (void)size; return FALSE; }
+BOOL VhdUnmountImage(void) { return TRUE; }
+BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
+{ (void)di; (void)dn; (void)use_esp; return TRUE; }
+int64_t ExtractISOFile(const char *iso, const char *iso_file,
+                       const char *dest_file, DWORD attributes)
+{ (void)iso; (void)iso_file; (void)dest_file; (void)attributes; return 0; }
+BOOL WimExtractFile(const char *wim, int index, const char *src, const char *dst)
+{ (void)wim; (void)index; (void)src; (void)dst; return FALSE; }
+BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return FALSE; }
+void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg)
+{ (void)dest_dir; (void)md5sum_name_arg; }
+/* md5sum_name and archive_path are defined in test_format_ntfs_exfat_linux.c */
+BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE; }
+BOOL ExtractZip(const char *src, const char *dst)
+{ (void)src; (void)dst; return TRUE; }
