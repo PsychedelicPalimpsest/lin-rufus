@@ -387,6 +387,29 @@ TEST(man_page_documents_allow_dual_uefi_bios_flag) {
     free(content);
 }
 
+TEST(man_page_documents_preserve_timestamps_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "preserve-timestamps") != NULL
+       || strstr(content, "preserve.timestamps") != NULL
+       || strstr(content, "preserve\\-timestamps") != NULL);
+    free(content);
+}
+
+TEST(man_page_documents_validate_md5sum_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "validate-md5sum") != NULL
+       || strstr(content, "validate.md5sum") != NULL
+       || strstr(content, "validate\\-md5sum") != NULL
+       || strstr(content, "md5sum") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_json_flag) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -500,6 +523,8 @@ int main(void)
     RUN(man_page_documents_fast_zeroing_flag);
     RUN(man_page_documents_old_bios_fixes_flag);
     RUN(man_page_documents_allow_dual_uefi_bios_flag);
+    RUN(man_page_documents_preserve_timestamps_flag);
+    RUN(man_page_documents_validate_md5sum_flag);
     RUN(man_page_documents_json_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);

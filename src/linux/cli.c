@@ -68,6 +68,8 @@ extern BOOL write_as_image;
 extern BOOL fast_zeroing;
 extern BOOL use_old_bios_fixes;
 extern BOOL allow_dual_uefi_bios;
+extern BOOL preserve_timestamps;
+extern BOOL validate_md5sum;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -167,6 +169,8 @@ void cli_print_usage(const char *prog)
 	       "  -Z, --fast-zeroing        With --zero-drive: 0xFF-fill + readback (bad-block detection)\n"
 	       "  -o, --old-bios-fixes      Add boot fixups for old/buggy BIOSes\n"
 	       "  -A, --allow-dual-uefi-bios  Allow both UEFI and legacy BIOS boot (dual-mode)\n"
+	       "  -e, --preserve-timestamps  Preserve file timestamps during ISO extraction\n"
+	       "  -m, --validate-md5sum     Validate UEFI media MD5 checksums after write\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "  -j, --json                Output --list-devices results as JSON\n"
@@ -208,6 +212,8 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "fast-zeroing",      no_argument,       NULL, 'Z' },
 		{ "old-bios-fixes",   no_argument,       NULL, 'o' },
 		{ "allow-dual-uefi-bios", no_argument,   NULL, 'A' },
+		{ "preserve-timestamps", no_argument,    NULL, 'e' },
+		{ "validate-md5sum",  no_argument,       NULL, 'm' },
 		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
@@ -224,7 +230,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAjL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemjL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -405,6 +411,14 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->allow_dual_uefi_bios = 1;
 			break;
 
+		case 'e':
+			opts->preserve_timestamps = 1;
+			break;
+
+		case 'm':
+			opts->validate_md5sum = 1;
+			break;
+
 		case 'j':
 			opts->json = 1;
 			break;
@@ -526,6 +540,12 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Allow both UEFI and legacy BIOS to boot from the same USB */
 	if (opts->allow_dual_uefi_bios)
 		allow_dual_uefi_bios = TRUE;
+	/* Preserve file timestamps during ISO extraction */
+	if (opts->preserve_timestamps)
+		preserve_timestamps = TRUE;
+	/* Enable UEFI media MD5 validation */
+	if (opts->validate_md5sum)
+		validate_md5sum = TRUE;
 }
 
 /*

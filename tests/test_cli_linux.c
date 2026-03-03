@@ -1113,6 +1113,72 @@ static void test_allow_dual_uefi_bios_default_is_off(void)
     CHECK(opts.allow_dual_uefi_bios == 0);
 }
 
+/* ---- --preserve-timestamps tests ---- */
+
+static void test_init_preserve_timestamps_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.preserve_timestamps == 0);
+}
+
+static void test_preserve_timestamps_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --preserve-timestamps", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.preserve_timestamps != 0);
+}
+
+static void test_preserve_timestamps_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -e", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.preserve_timestamps != 0);
+}
+
+static void test_preserve_timestamps_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.preserve_timestamps == 0);
+}
+
+/* ---- --validate-md5sum tests ---- */
+
+static void test_init_validate_md5sum_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.validate_md5sum == 0);
+}
+
+static void test_validate_md5sum_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --validate-md5sum", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.validate_md5sum != 0);
+}
+
+static void test_validate_md5sum_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -m", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.validate_md5sum != 0);
+}
+
+static void test_validate_md5sum_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.validate_md5sum == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1292,6 +1358,18 @@ int main(void)
     RUN_TEST(test_allow_dual_uefi_bios_long_flag);
     RUN_TEST(test_allow_dual_uefi_bios_short_flag);
     RUN_TEST(test_allow_dual_uefi_bios_default_is_off);
+
+    /* --preserve-timestamps tests */
+    RUN_TEST(test_init_preserve_timestamps_is_false);
+    RUN_TEST(test_preserve_timestamps_long_flag);
+    RUN_TEST(test_preserve_timestamps_short_flag);
+    RUN_TEST(test_preserve_timestamps_default_is_off);
+
+    /* --validate-md5sum tests */
+    RUN_TEST(test_init_validate_md5sum_is_false);
+    RUN_TEST(test_validate_md5sum_long_flag);
+    RUN_TEST(test_validate_md5sum_short_flag);
+    RUN_TEST(test_validate_md5sum_default_is_off);
 
     TEST_RESULTS();
 }

@@ -68,6 +68,8 @@ typedef struct {
     int  fast_zeroing;      /* --fast-zeroing/-Z: with --zero-drive: 0xFF-fill and readback */
     int  old_bios_fixes;    /* --old-bios-fixes/-o: add boot fixups for old/buggy BIOSes */
     int  allow_dual_uefi_bios; /* --allow-dual-uefi-bios/-A: allow both UEFI and legacy BIOS boot */
+    int  preserve_timestamps; /* --preserve-timestamps/-e: keep file timestamps during ISO extraction */
+    int  validate_md5sum;   /* --validate-md5sum/-m: enable UEFI media MD5 validation */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */
