@@ -681,10 +681,14 @@ char* VhdMountImageAndGetSize(const char* path, uint64_t* disk_size)
 		nbd_dev[0] = '\0';
 		for (int i = 0; i < 16; i++) {
 			snprintf(nbd_dev, sizeof(nbd_dev), "/dev/nbd%d", i);
+			/* Pass explicit format to avoid qemu-nbd probing ambiguity */
+			const char *fmt_arg = (strcasecmp(ext, ".vhdx") == 0)
+			                       ? "--format=vhdx" : "--format=vpc";
 			snprintf(cmd, sizeof(cmd),
-				"qemu-nbd --connect=%s \"%s\" 2>/dev/null", nbd_dev, path);
+				"qemu-nbd %s --connect=%s \"%s\" 2>/dev/null",
+				fmt_arg, nbd_dev, path);
 			if (system(cmd) == 0) {
-				usleep(500000);  /* let the kernel settle */
+				usleep(1000000);  /* let the kernel settle (1 s) */
 				break;
 			}
 			nbd_dev[0] = '\0';
@@ -719,11 +723,16 @@ char* VhdMountImageAndGetSize(const char* path, uint64_t* disk_size)
 	physical_path[sizeof(physical_path) - 1] = '\0';
 
 	if (disk_size != NULL) {
+		/* Poll until the device reports a non-zero size (up to 3 s) */
 		*disk_size = 0;
-		fd = open(nbd_dev, O_RDONLY);
-		if (fd >= 0) {
-			ioctl(fd, BLKGETSIZE64, disk_size);
-			close(fd);
+		for (int try = 0; try < 6 && *disk_size == 0; try++) {
+			fd = open(nbd_dev, O_RDONLY);
+			if (fd >= 0) {
+				ioctl(fd, BLKGETSIZE64, disk_size);
+				close(fd);
+			}
+			if (*disk_size == 0)
+				usleep(500000); /* wait 500 ms and retry */
 		}
 	}
 
@@ -752,6 +761,8 @@ void VhdUnmountImage(void)
 		snprintf(cmd, sizeof(cmd),
 		         "qemu-nbd --disconnect %s 2>/dev/null", nbd_dev);
 		system(cmd);
+		sync();
+		usleep(200000); /* allow the kernel to fully release the device */
 	}
 
 	nbd_dev[0] = '\0';

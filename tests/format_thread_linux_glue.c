@@ -145,3 +145,13 @@ BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
  * For format_thread tests, use a no-op stub so the format path compiles and
  * returns success without actually extracting any files. */
 BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }
+
+/* vhd.c symbols needed when vhd.c is linked into format thread tests */
+BOOL   ignore_boot_marker = FALSE;
+BOOL   has_ffu_support    = FALSE;
+FILE*    fd_md5sum    = NULL;
+uint64_t total_blocks = 0, extra_blocks = 0, nb_blocks = 0, last_nb_blocks = 0;
+BOOL HashFile(unsigned type, const char* path, uint8_t* sum)
+{ (void)type; (void)path; (void)sum; return FALSE; }
+
+void wuprintf(const wchar_t *fmt, ...) { (void)fmt; }

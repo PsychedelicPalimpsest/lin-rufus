@@ -131,3 +131,9 @@ BOOL PostMessageA(HWND h, UINT m, WPARAM w, LPARAM l)
 { (void)h; (void)m; (void)w; (void)l; return FALSE; }
 
 LONG GetEntryWidth(HWND h, const char *e) { (void)h; (void)e; return 0; }
+
+/* iso.c/hash.c symbols needed when vhd.c is linked but iso.c is not */
+FILE*    fd_md5sum    = NULL;
+uint64_t total_blocks = 0, extra_blocks = 0, nb_blocks = 0, last_nb_blocks = 0;
+BOOL HashFile(unsigned type, const char* path, uint8_t* sum)
+{ (void)type; (void)path; (void)sum; return FALSE; }

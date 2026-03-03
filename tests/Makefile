@@ -102,12 +102,17 @@ EXTRA_SRC_LINUX_test_parser := $(PARSER_SRC)
 # drive_linux tests: Linux drive access (GetPhysicalName, partition parsing, etc.)
 # (full entry below overrides this — kept here for clarity on variable names)
 
+# Early WIM/XML definitions needed by format_linux and format_thread tests (vhd.c dep)
+WIM_LIB_EARLY := $(SRC_DIR)/wimlib/libwim.a
+XML_SRC_EARLY := $(COMMON)/xml.c
+
 # format_linux tests: FAT32 and ext2/ext3 formatting via POSIX image files
 FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                     $(SRC_DIR)/linux/format_fat32.c \
                     $(SRC_DIR)/linux/format_ext.c \
                     $(SRC_DIR)/linux/format_ext_tools.c \
                     $(SRC_DIR)/linux/drive.c \
+                    $(SRC_DIR)/linux/vhd.c \
                     $(COMMON)/drive.c \
                     $(COMMON)/format_fat32.c \
                     $(COMMON)/format.c \
@@ -126,12 +131,15 @@ FORMAT_MS_SRC := $(SRC_DIR)/ms-sys/file.c \
                  $(SRC_DIR)/ms-sys/fat32.c \
                  $(SRC_DIR)/ms-sys/partition_info.c
 CFLAGS_LINUX_test_format_linux := \
+	-D_RUFUS \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-I$(SRC_DIR)/wimlib \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_format_linux := -lblkid
-EXTRA_SRC_LINUX_test_format_linux := $(FORMAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB) $(BLED_LIB) format_linux_glue.c
+LDFLAGS_LINUX_test_format_linux := -lblkid -lz -lxml2 -lm \
+	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group
+EXTRA_SRC_LINUX_test_format_linux := $(FORMAT_LINUX_SRC) $(FORMAT_MS_SRC) $(EXT2FS_LIB) $(BLED_LIB) $(XML_SRC_EARLY) format_linux_glue.c
 
 # ext_error_linux tests: error_message() and ext2fs_print_progress() from format_ext.c
 # drive.c is NOT linked — GetExtPartitionName is stubbed in the test file.
@@ -174,6 +182,7 @@ FORMAT_THREAD_LINUX_SRC := \
 	$(SRC_DIR)/linux/format_ext.c \
 	$(SRC_DIR)/linux/format_ext_tools.c \
 	$(SRC_DIR)/linux/drive.c \
+	$(SRC_DIR)/linux/vhd.c \
 	$(COMMON)/drive.c \
 	$(COMMON)/format_fat32.c \
 	$(COMMON)/format.c \
@@ -182,12 +191,15 @@ FORMAT_THREAD_LINUX_SRC := \
 	$(SRC_DIR)/ext2fs/posix_io.c \
 	$(FORMAT_MS_SRC)
 CFLAGS_LINUX_test_format_thread_linux := \
+	-D_RUFUS \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-I$(SRC_DIR)/wimlib \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_format_thread_linux := -lpthread -lblkid
-EXTRA_SRC_LINUX_test_format_thread_linux := $(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) format_thread_linux_glue.c
+LDFLAGS_LINUX_test_format_thread_linux := -lpthread -lblkid -lz -lxml2 -lm \
+	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group
+EXTRA_SRC_LINUX_test_format_thread_linux := $(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) $(XML_SRC_EARLY) format_thread_linux_glue.c
 
 # pe_parser_linux tests: PE binary parsing (GetPeArch, GetPeSection, RvaToPhysical, etc.)
 PE_PARSER_SRC := $(COMMON)/parser.c $(SRC_DIR)/linux/parser.c \
@@ -757,6 +769,22 @@ EXTRA_SRC_LINUX_test_vhd_nbd_linux := \
 	$(WIM_LIB) \
 	$(XML_SRC)
 
+# vhd_format_linux tests: VHD/VHDX DD-write support (constants + mount/read)
+# Root tests: vhd_format_mount_read_verify, vhd_format_dd_write_to_loopback
+CFLAGS_LINUX_test_vhd_format_linux := \
+	-D_RUFUS \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/bled -I$(SRC_DIR)/wimlib -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers \
+	-Wno-strict-aliasing
+LDFLAGS_LINUX_test_vhd_format_linux := -lz -lpthread -lxml2 -lm $(CDIO_LIBS)
+EXTRA_SRC_LINUX_test_vhd_format_linux := \
+	$(SRC_DIR)/linux/vhd.c \
+	$(BLED_LIB) \
+	$(WIM_LIB) \
+	$(XML_SRC)
+
 # multidev tests: multi-device write session logic (no GTK)
 CFLAGS_LINUX_test_multidev_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
@@ -894,13 +922,16 @@ CFLAGS_LINUX_test_compat_layer := \
 # Requires root (tests skip gracefully when not root via SKIP_NOT_ROOT()).
 # Uses the same source set as format_thread_linux.
 CFLAGS_LINUX_test_loopback := \
+	-D_RUFUS \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-I$(SRC_DIR)/wimlib \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_loopback := -lpthread -lblkid
+LDFLAGS_LINUX_test_loopback := -lpthread -lblkid -lz -lxml2 -lm \
+	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group
 EXTRA_SRC_LINUX_test_loopback := \
-	$(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) loopback_linux_glue.c
+	$(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) $(XML_SRC_EARLY) loopback_linux_glue.c
 
 # download_resume_linux tests: .partial file helpers for resumable downloads
 CFLAGS_LINUX_test_download_resume_linux := \
@@ -1041,13 +1072,16 @@ E2E_LINUX_SRC := $(FORMAT_THREAD_LINUX_SRC) \
                  $(SRC_DIR)/linux/freedos_data.c \
                  $(SRC_DIR)/linux/cli.c
 CFLAGS_LINUX_test_e2e_linux := \
+	-D_RUFUS \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(COMMON) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-I$(SRC_DIR)/wimlib \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_e2e_linux := -lpthread -lblkid
+LDFLAGS_LINUX_test_e2e_linux := -lpthread -lblkid -lz -lxml2 -lm \
+	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group
 EXTRA_SRC_LINUX_test_e2e_linux := \
-	$(E2E_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) e2e_linux_glue.c
+	$(E2E_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) $(XML_SRC_EARLY) e2e_linux_glue.c
 
 # syslinux_linux tests: GetSyslinuxVersion, libfat_readfile, InstallSyslinux
 LIBFAT_LIB       := $(SRC_DIR)/syslinux/libfat/libfat.a
@@ -1087,7 +1121,7 @@ EXTRA_SRC_LINUX_test_real_device_linux := $(EXTRA_SRC_LINUX_test_e2e_linux)
 #           ./run_tests.sh --root-only   (same)
 #           ./run_tests.sh --container   (auto-launches privileged Docker/Podman)
 ROOT_BINS := test_loopback_linux test_e2e_linux_linux test_qemu_boot_linux_linux \
-             test_real_device_linux_linux
+             test_real_device_linux_linux test_vhd_format_linux_linux
 
 .PHONY: all linux windows run-linux run-wine run-root clean
 

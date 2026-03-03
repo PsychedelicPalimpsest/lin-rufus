@@ -98,3 +98,12 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 }
 
 BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }
+
+/* vhd.c/wimlib symbols needed when vhd.c is linked but globals.c/stdio.c are not */
+BOOL   ignore_boot_marker = FALSE;
+BOOL   has_ffu_support    = FALSE;
+FILE*    fd_md5sum    = NULL;
+uint64_t total_blocks = 0, extra_blocks = 0, nb_blocks = 0, last_nb_blocks = 0;
+BOOL HashFile(unsigned type, const char* path, uint8_t* sum)
+{ (void)type; (void)path; (void)sum; return FALSE; }
+void wuprintf(const wchar_t *fmt, ...) { (void)fmt; }

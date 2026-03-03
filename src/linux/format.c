@@ -31,10 +31,13 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <linux/fs.h>
 #include <linux/limits.h>
 
 #include "rufus.h"
 #include "resource.h"
+#include "bled/bled.h"
 #include "localization.h"
 #include "drive.h"
 #include "format.h"
@@ -51,6 +54,7 @@
 #include "ms-sys/inc/partition_info.h"
 #include "../../res/grub/grub_version.h"
 #include "drive_linux.h"
+#include "vhd.h"
 
 extern const char* FileSystemLabel[FS_MAX];
 extern BOOL force_large_fat32, enable_ntfs_compression, lock_drive, zero_drive, fast_zeroing;
@@ -356,14 +360,23 @@ BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive)
 		return FALSE;
 	}
 
-	/* Determine image size */
+	/* Determine image size — use BLKGETSIZE64 for block devices (e.g. NBD) */
 	struct stat st;
 	if (fstat(src_fd, &st) != 0) {
 		close(src_fd);
 		ErrorStatus = RUFUS_ERROR(ERROR_READ_FAULT);
 		return FALSE;
 	}
-	uint64_t img_size = (uint64_t)st.st_size;
+	uint64_t img_size = 0;
+	if (S_ISBLK(st.st_mode)) {
+		if (ioctl(src_fd, BLKGETSIZE64, &img_size) != 0) {
+			close(src_fd);
+			ErrorStatus = RUFUS_ERROR(ERROR_READ_FAULT);
+			return FALSE;
+		}
+	} else {
+		img_size = (uint64_t)st.st_size;
+	}
 
 	const size_t chunk = 4 * 1024 * 1024;
 	uint8_t *buf = (uint8_t*)malloc(chunk);
@@ -563,16 +576,45 @@ DWORD WINAPI FormatThread(void* param)
 	 * Write-as-image mode: copy raw image to device and exit
 	 * ------------------------------------------------------------- */
 	if (write_as_image && boot_type == BT_IMAGE) {
+		char *vhd_nbd_path = NULL;
+		BOOL is_vhd_image = (img_report.compression_type == IMG_COMPRESSION_VHD ||
+		                     img_report.compression_type == IMG_COMPRESSION_VHDX);
+
+		/* For VHD/VHDX images, mount them first so we write the virtual
+		 * disk contents rather than the raw container bytes. */
+		if (is_vhd_image && image_path != NULL) {
+			uint64_t vhd_disk_size = 0;
+			vhd_nbd_path = VhdMountImageAndGetSize(image_path, &vhd_disk_size);
+			if (vhd_nbd_path == NULL) {
+				uprintf("Failed to mount VHD/VHDX image '%s'", image_path);
+				ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
+				goto out;
+			}
+			uprintf("VHD/VHDX mounted at %s (%" PRIu64 " bytes)", vhd_nbd_path, vhd_disk_size);
+		}
+
 		GetDrivePartitionData(DriveIndex, fs_name, sizeof(fs_name), TRUE);
 		hPhysicalDrive = GetPhysicalHandle(DriveIndex, FALSE, TRUE, TRUE);
 		if (hPhysicalDrive == INVALID_HANDLE_VALUE) {
 			ErrorStatus = RUFUS_ERROR(ERROR_OPEN_FAILED);
 			goto out;
 		}
+
+		/* Temporarily redirect image_path to NBD device for VHD images */
+		const char *orig_image_path = image_path;
+		if (is_vhd_image && vhd_nbd_path != NULL)
+			image_path = vhd_nbd_path;
+
 		if (!format_linux_write_drive(hPhysicalDrive, FALSE)) {
+			image_path = orig_image_path;
 			goto out;
 		}
-		if (enable_verify_write && image_path) {
+
+		/* Restore image_path before verify/cleanup */
+		image_path = orig_image_path;
+
+		/* Skip write-verify for VHD images (source is now unmounted) */
+		if (!is_vhd_image && enable_verify_write && image_path) {
 			struct stat _vst;
 			uint64_t img_sz = (stat(image_path, &_vst) == 0) ? (uint64_t)_vst.st_size : 0;
 			if (img_sz > 0) {
@@ -956,6 +998,7 @@ DWORD WINAPI FormatThread(void* param)
 	UpdateProgress(OP_FINALIZE, -1.0f);
 
 out:
+	VhdUnmountImage();
 	safe_closehandle(hLogicalVolume);
 	safe_closehandle(hPhysicalDrive);
 	PostMessage(hMainDialog, UM_FORMAT_COMPLETED, (WPARAM)TRUE, 0);
