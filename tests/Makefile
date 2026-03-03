@@ -757,6 +757,14 @@ CFLAGS_LINUX_test_multidev_linux := \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 
+# ventoy_detect tests: Ventoy detection via MBR magic + blkid labels
+CFLAGS_LINUX_test_ventoy_detect_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(COMMON) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_ventoy_detect_linux := -lblkid
+
 COMBO_LINUX_SRC := $(SRC_DIR)/linux/combo_bridge.c \
                    $(COMPAT)/msg_dispatch.c
 CFLAGS_LINUX_test_combo_linux := \

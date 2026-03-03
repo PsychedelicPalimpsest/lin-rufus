@@ -51,6 +51,7 @@
 #include "hyperlink.h"
 #include "csm_help.h"
 #include "multidev.h"
+#include "ventoy_detect.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -1196,6 +1197,17 @@ static void on_device_changed(GtkComboBox *combo, gpointer data)
 	/* Read partition / FS data for the selected drive */
 	char fs_name[32] = "";
 	GetDrivePartitionData(di, fs_name, sizeof(fs_name), TRUE);
+
+	/* Ventoy detection — warn the user if the selected device has a
+	 * Ventoy installation so they don't accidentally overwrite it. */
+	{
+		char *dev_path = GetPhysicalName(di);
+		if (dev_path) {
+			if (ventoy_detect(dev_path))
+				rufus_gtk_update_status("⚠ Ventoy installation detected on this device");
+			free(dev_path);
+		}
+	}
 
 	/* Smart refresh: partition scheme + target system based on boot type */
 	SetPartitionSchemeAndTargetSystem(FALSE);
