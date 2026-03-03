@@ -259,6 +259,7 @@ static void on_toggle_rockridge(GtkWidget *w, gpointer data);
 static void on_toggle_usb_hdd(GtkWidget *w, gpointer data);
 static void on_list_usb_hdd_toggled(GtkToggleButton *btn, gpointer data);
 static void on_uefi_validation_toggled(GtkToggleButton *btn, gpointer data);
+static void on_adv_format_toggled(GtkExpander *exp, gpointer data);
 /* New Alt+key shortcuts */
 static void on_toggle_rufus_mbr(GtkWidget *w, gpointer data);
 static void on_toggle_detect_fakes(GtkWidget *w, gpointer data);
@@ -640,6 +641,9 @@ static GtkWidget *build_format_options(void)
 	gtk_box_pack_start(GTK_BOX(adv_box), rw.verify_write_check, FALSE, FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(rw.adv_format_expander), adv_box);
 	gtk_box_pack_start(GTK_BOX(vbox), rw.adv_format_expander, FALSE, FALSE, 2);
+	/* When format options are toggled, refresh the FS combo (mirrors Windows IDC_ADVANCED_FORMAT_OPTIONS) */
+	g_signal_connect(rw.adv_format_expander, "activate",
+	                 G_CALLBACK(on_adv_format_toggled), NULL);
 
 	return vbox;
 }
@@ -1693,6 +1697,14 @@ static void on_device_changed(GtkComboBox *combo, gpointer data)
 
 	/* Propose a label for the label entry based on current state */
 	SetProposedLabel();
+
+	/* Watch for open handles on this device (mirrors Windows process search) */
+	if (nb_devices == 0) {
+		StopProcessSearch();
+	} else if (!StartProcessSearch() || !SetProcessSearch(di)) {
+		uprintf("Failed to start conflicting process search");
+		StopProcessSearch();
+	}
 }
 
 static void on_boot_changed(GtkComboBox *combo, gpointer data)
@@ -2073,6 +2085,14 @@ static void on_toggle_rockridge(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	enable_rockridge = !enable_rockridge;
 	uprintf("Rock Ridge support: %s", enable_rockridge ? "enabled" : "disabled");
+}
+
+/* Mirrors Windows IDC_ADVANCED_FORMAT_OPTIONS: refresh FS+cluster combo after toggle */
+static void on_adv_format_toggled(GtkExpander *exp, gpointer data)
+{
+	(void)exp; (void)data;
+	populate_fs_combo();
+	SetFSFromISO();
 }
 
 static void on_toggle_usb_hdd(GtkWidget *w, gpointer data)
