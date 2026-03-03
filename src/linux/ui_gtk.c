@@ -3876,12 +3876,15 @@ int main(int argc, char *argv[])
 	 */
 	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--device") == 0 || strcmp(argv[i], "-d") == 0 ||
-		    strcmp(argv[i], "--list-devices") == 0 || strcmp(argv[i], "-L") == 0) {
+		    strcmp(argv[i], "--list-devices") == 0 || strcmp(argv[i], "-L") == 0 ||
+		    strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "--help") == 0 ||
+		    strcmp(argv[i], "-h") == 0) {
 			cli_options_t opts;
-			rufus_init_paths();
 			int r = cli_parse_args(argc, argv, &opts);
 			if (r == CLI_PARSE_HELP || r == CLI_PARSE_VERSION)
 				return 0;
+			/* Only initialise paths when we actually need to access the filesystem */
+			rufus_init_paths();
 			if (r == CLI_PARSE_LIST)
 				return cli_print_devices();
 			if (r != CLI_PARSE_OK)
