@@ -154,6 +154,9 @@ void free_dialog_list(void)
 	loc_cmd *lcmd, *next;
 
 	for (i = 0; i < ARRAYSIZE(loc_dlg); i++) {
+		/* Guard: {NULL,NULL} means uninit; properly empty list has next == self */
+		if (loc_dlg[i].list.next == NULL)
+			continue;
 		if (list_empty(&loc_dlg[i].list))
 			continue;
 		list_for_each_entry_safe(lcmd, next, &loc_dlg[i].list, loc_cmd, list) {
@@ -166,6 +169,11 @@ void free_dialog_list(void)
 void free_locale_list(void)
 {
 	loc_cmd *lcmd, *next;
+
+	/* Guard against calling before locale_list has been initialized
+	 * (list_init sets next/prev to self; {NULL,NULL} means uninit). */
+	if (locale_list.next == NULL)
+		return;
 
 	list_for_each_entry_safe(lcmd, next, &locale_list, loc_cmd, list) {
 		list_del(&lcmd->list);
@@ -302,7 +310,7 @@ char* lmprintf(uint32_t msg_id, ...)
 	buf[buf_id][0] = 0;
 
 	msg_id &= MSG_MASK;
-	if ((msg_id >= MSG_000) && (msg_id < MSG_MAX))
+	if ((msg_id >= MSG_000) && (msg_id < MSG_MAX) && (msg_table != NULL))
 		format = msg_table[msg_id - MSG_000];
 
 	if (format == NULL) {

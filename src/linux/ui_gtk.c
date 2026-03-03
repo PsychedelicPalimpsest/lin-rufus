@@ -1844,6 +1844,7 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	 * the best match for the system language to the UI strings. */
 	{
 		const char *loc_path = find_loc_file();
+		init_localization();
 		if (loc_path != NULL) {
 			uprintf("localization: loading '%s'", loc_path);
 			if (get_supported_locales(loc_path)) {

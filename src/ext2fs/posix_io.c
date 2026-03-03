@@ -319,12 +319,19 @@ errcode_t ext2fs_check_mount_point(const char *device, int *mount_flags,
  * renamed strtoul's internal entry point to __isoc23_strtoul.  On older
  * glibc (< 2.38) that symbol does not exist, so we provide it here as a
  * thin wrapper around the classic strtoul.
+ *
+ * On glibc >= 2.38, __isoc23_strtoul is already defined in libc and
+ * strtoul() is aliased to it, so providing our own definition would
+ * cause infinite recursion (our shim calls strtoul → __isoc23_strtoul
+ * → our shim → ...).  Guard against this with a version check.
  */
 #include <stdlib.h>
+#if defined(__GLIBC__) && (__GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 38))
 unsigned long __isoc23_strtoul(const char *nptr, char **endptr, int base);
 unsigned long __isoc23_strtoul(const char *nptr, char **endptr, int base)
 {
 	return strtoul(nptr, endptr, base);
 }
+#endif
 
 #endif /* __linux__ */

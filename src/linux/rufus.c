@@ -204,6 +204,11 @@ const char *find_loc_file(void)
     if (stat(loc_path, &st) == 0 && S_ISREG(st.st_mode))
         return loc_path;
 
+    /* 1b. Development (binary in src/ subdir): <app_dir>/../res/loc/embedded.loc */
+    snprintf(loc_path, sizeof(loc_path), "%s../res/loc/embedded.loc", app_dir);
+    if (stat(loc_path, &st) == 0 && S_ISREG(st.st_mode))
+        return loc_path;
+
     /* 2. Installed alongside binary: <app_dir>/embedded.loc */
     snprintf(loc_path, sizeof(loc_path), "%sembedded.loc", app_dir);
     if (stat(loc_path, &st) == 0 && S_ISREG(st.st_mode))

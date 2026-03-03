@@ -268,6 +268,7 @@ BOOL get_supported_locales(const char* filename)
 	loc_line_nr = 0;
 	line[0] = 0;
 	free_locale_list();
+	list_init(&locale_list);
 	do {
 		end_of_block = ftell(fd);
 		if (fgets(line, sizeof(line), fd) == NULL)
