@@ -410,6 +410,42 @@ TEST(man_page_documents_validate_md5sum_flag) {
     free(content);
 }
 
+TEST(man_page_documents_no_rufus_mbr_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "no-rufus-mbr") != NULL
+       || strstr(content, "no.rufus.mbr") != NULL
+       || strstr(content, "no\\-rufus\\-mbr") != NULL
+       || strstr(content, "rufus.mbr") != NULL);
+    free(content);
+}
+
+TEST(man_page_documents_no_extended_label_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "no-extended-label") != NULL
+       || strstr(content, "no.extended.label") != NULL
+       || strstr(content, "no\\-extended\\-label") != NULL
+       || strstr(content, "extended.label") != NULL);
+    free(content);
+}
+
+TEST(man_page_documents_no_size_check_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "no-size-check") != NULL
+       || strstr(content, "no.size.check") != NULL
+       || strstr(content, "no\\-size\\-check") != NULL
+       || strstr(content, "size.check") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_json_flag) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -525,6 +561,9 @@ int main(void)
     RUN(man_page_documents_allow_dual_uefi_bios_flag);
     RUN(man_page_documents_preserve_timestamps_flag);
     RUN(man_page_documents_validate_md5sum_flag);
+    RUN(man_page_documents_no_rufus_mbr_flag);
+    RUN(man_page_documents_no_extended_label_flag);
+    RUN(man_page_documents_no_size_check_flag);
     RUN(man_page_documents_json_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);

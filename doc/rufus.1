@@ -31,6 +31,9 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-allow\-dual\-uefi\-bios\fR]
 [\fB\-\-preserve\-timestamps\fR]
 [\fB\-\-validate\-md5sum\fR]
+[\fB\-\-no\-rufus\-mbr\fR]
+[\fB\-\-no\-extended\-label\fR]
+[\fB\-\-no\-size\-check\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-json\fR]
 [\fB\-\-label\fR \fILABEL\fR]
@@ -223,6 +226,22 @@ receive the current time.
 Enable validation of UEFI media MD5 checksums after writing.  When set,
 Rufus will verify the \fImd5sum.txt\fR file embedded in UEFI-bootable ISOs
 against the written content.
+.TP
+.BR \-R ", " \-\-no\-rufus\-mbr
+Use the standard generic MBR instead of Rufus's custom MBR code.  The
+default is to install Rufus's own MBR which supports the Rufus boot
+selector; this flag disables that.
+.TP
+.BR \-x ", " \-\-no\-extended\-label
+Disable extended volume label support on FAT filesystems.  By default
+Rufus stores a label longer than the FAT 11-character limit using the
+extended label mechanism; this flag reverts to the truncated standard
+label only.
+.TP
+.BR \-s ", " \-\-no\-size\-check
+Skip the check that rejects images whose projected size exceeds the
+device capacity.  Use with caution: writing an oversized image will
+corrupt the device.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

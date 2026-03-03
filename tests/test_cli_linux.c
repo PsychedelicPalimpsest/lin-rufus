@@ -1179,6 +1179,105 @@ static void test_validate_md5sum_default_is_off(void)
     CHECK(opts.validate_md5sum == 0);
 }
 
+/* ---- --no-rufus-mbr tests ---- */
+
+static void test_init_no_rufus_mbr_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.no_rufus_mbr == 0);
+}
+
+static void test_no_rufus_mbr_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --no-rufus-mbr", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_rufus_mbr != 0);
+}
+
+static void test_no_rufus_mbr_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -R", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_rufus_mbr != 0);
+}
+
+static void test_no_rufus_mbr_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_rufus_mbr == 0);
+}
+
+/* ---- --no-extended-label tests ---- */
+
+static void test_init_no_extended_label_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.no_extended_label == 0);
+}
+
+static void test_no_extended_label_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --no-extended-label", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_extended_label != 0);
+}
+
+static void test_no_extended_label_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -x", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_extended_label != 0);
+}
+
+static void test_no_extended_label_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_extended_label == 0);
+}
+
+/* ---- --no-size-check tests ---- */
+
+static void test_init_no_size_check_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.no_size_check == 0);
+}
+
+static void test_no_size_check_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --no-size-check", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_size_check != 0);
+}
+
+static void test_no_size_check_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -s", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_size_check != 0);
+}
+
+static void test_no_size_check_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.no_size_check == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1370,6 +1469,24 @@ int main(void)
     RUN_TEST(test_validate_md5sum_long_flag);
     RUN_TEST(test_validate_md5sum_short_flag);
     RUN_TEST(test_validate_md5sum_default_is_off);
+
+    /* --no-rufus-mbr tests */
+    RUN_TEST(test_init_no_rufus_mbr_is_false);
+    RUN_TEST(test_no_rufus_mbr_long_flag);
+    RUN_TEST(test_no_rufus_mbr_short_flag);
+    RUN_TEST(test_no_rufus_mbr_default_is_off);
+
+    /* --no-extended-label tests */
+    RUN_TEST(test_init_no_extended_label_is_false);
+    RUN_TEST(test_no_extended_label_long_flag);
+    RUN_TEST(test_no_extended_label_short_flag);
+    RUN_TEST(test_no_extended_label_default_is_off);
+
+    /* --no-size-check tests */
+    RUN_TEST(test_init_no_size_check_is_false);
+    RUN_TEST(test_no_size_check_long_flag);
+    RUN_TEST(test_no_size_check_short_flag);
+    RUN_TEST(test_no_size_check_default_is_off);
 
     TEST_RESULTS();
 }

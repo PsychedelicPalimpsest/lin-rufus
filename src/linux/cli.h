@@ -70,6 +70,9 @@ typedef struct {
     int  allow_dual_uefi_bios; /* --allow-dual-uefi-bios/-A: allow both UEFI and legacy BIOS boot */
     int  preserve_timestamps; /* --preserve-timestamps/-e: keep file timestamps during ISO extraction */
     int  validate_md5sum;   /* --validate-md5sum/-m: enable UEFI media MD5 validation */
+    int  no_rufus_mbr;      /* --no-rufus-mbr/-R: use standard MBR instead of Rufus's custom MBR */
+    int  no_extended_label; /* --no-extended-label/-x: disable extended volume label on FAT */
+    int  no_size_check;     /* --no-size-check/-s: skip image-larger-than-drive check */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

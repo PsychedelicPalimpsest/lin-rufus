@@ -70,6 +70,9 @@ extern BOOL use_old_bios_fixes;
 extern BOOL allow_dual_uefi_bios;
 extern BOOL preserve_timestamps;
 extern BOOL validate_md5sum;
+extern BOOL use_rufus_mbr;
+extern BOOL use_extended_label;
+extern BOOL size_check;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -171,6 +174,9 @@ void cli_print_usage(const char *prog)
 	       "  -A, --allow-dual-uefi-bios  Allow both UEFI and legacy BIOS boot (dual-mode)\n"
 	       "  -e, --preserve-timestamps  Preserve file timestamps during ISO extraction\n"
 	       "  -m, --validate-md5sum     Validate UEFI media MD5 checksums after write\n"
+	       "  -R, --no-rufus-mbr        Use standard MBR instead of Rufus's custom MBR\n"
+	       "  -x, --no-extended-label   Disable extended volume label on FAT filesystems\n"
+	       "  -s, --no-size-check       Skip image-larger-than-device size check\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "  -j, --json                Output --list-devices results as JSON\n"
@@ -214,6 +220,9 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "allow-dual-uefi-bios", no_argument,   NULL, 'A' },
 		{ "preserve-timestamps", no_argument,    NULL, 'e' },
 		{ "validate-md5sum",  no_argument,       NULL, 'm' },
+		{ "no-rufus-mbr",    no_argument,       NULL, 'R' },
+		{ "no-extended-label", no_argument,     NULL, 'x' },
+		{ "no-size-check",   no_argument,       NULL, 's' },
 		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
@@ -230,7 +239,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemjL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemRxsjL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -419,6 +428,18 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->validate_md5sum = 1;
 			break;
 
+		case 'R':
+			opts->no_rufus_mbr = 1;
+			break;
+
+		case 'x':
+			opts->no_extended_label = 1;
+			break;
+
+		case 's':
+			opts->no_size_check = 1;
+			break;
+
 		case 'j':
 			opts->json = 1;
 			break;
@@ -543,9 +564,15 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Preserve file timestamps during ISO extraction */
 	if (opts->preserve_timestamps)
 		preserve_timestamps = TRUE;
-	/* Enable UEFI media MD5 validation */
-	if (opts->validate_md5sum)
-		validate_md5sum = TRUE;
+	/* Use standard MBR instead of Rufus's custom MBR */
+	if (opts->no_rufus_mbr)
+		use_rufus_mbr = FALSE;
+	/* Disable extended volume label */
+	if (opts->no_extended_label)
+		use_extended_label = FALSE;
+	/* Skip image-larger-than-device size check */
+	if (opts->no_size_check)
+		size_check = FALSE;
 }
 
 /*
