@@ -134,6 +134,7 @@ static void on_fs_changed(GtkComboBox *combo, gpointer data);
 static void on_target_changed(GtkComboBox *combo, gpointer data);
 static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
+static void on_settings_clicked(GtkButton *btn, gpointer data);
 static void on_toggle_dark_mode(GtkWidget *w, gpointer data);
 static void on_toggle_expert_mode(GtkWidget *w, gpointer data);
 static void on_toggle_joliet(GtkWidget *w, gpointer data);
@@ -242,6 +243,7 @@ static GtkWidget *build_toolbar(void)
 	g_signal_connect(rw.hash_btn,         "clicked", G_CALLBACK(on_hash_clicked),         NULL);
 	g_signal_connect(rw.save_btn,         "clicked", G_CALLBACK(on_save_clicked),         NULL);
 	g_signal_connect(rw.multi_write_btn,  "clicked", G_CALLBACK(on_multi_write_clicked),  NULL);
+	g_signal_connect(rw.settings_btn,     "clicked", G_CALLBACK(on_settings_clicked),     NULL);
 
 	gtk_box_pack_start(GTK_BOX(bar), rw.lang_btn,        FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(bar), rw.about_btn,       FALSE, FALSE, 0);
@@ -1302,6 +1304,145 @@ static void on_about_clicked(GtkButton *btn, gpointer data)
 	gtk_dialog_run(GTK_DIALOG(dlg));
 	gtk_widget_destroy(dlg);
 }
+
+/*
+ * Settings dialog — shown when the ⚙ toolbar button is clicked.
+ *
+ * Shows a checklist of boolean preferences that can be toggled and
+ * saved to the INI settings file.  Mirrors the Windows "Application
+ * Options" section from the update policy dialog.
+ */
+static void on_settings_clicked(GtkButton *btn, gpointer data)
+{
+	(void)btn; (void)data;
+
+	extern BOOL detect_fakes;
+	extern BOOL ignore_boot_marker;
+	extern BOOL usb_debug;
+
+	GtkWidget *dlg = gtk_dialog_new_with_buttons(
+		"Application Settings",
+		GTK_WINDOW(rw.window),
+		GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+		"Cancel", GTK_RESPONSE_CANCEL,
+		"OK",     GTK_RESPONSE_OK,
+		NULL);
+	gtk_window_set_default_size(GTK_WINDOW(dlg), 420, 340);
+
+	GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
+	GtkWidget *vbox    = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+	gtk_container_set_border_width(GTK_CONTAINER(vbox), 12);
+	gtk_box_pack_start(GTK_BOX(content), vbox, TRUE, TRUE, 0);
+
+	/* --- Update interval --- */
+	GtkWidget *updates_frame = gtk_frame_new("Update Checks");
+	GtkWidget *updates_box   = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+	gtk_container_set_border_width(GTK_CONTAINER(updates_box), 8);
+	gtk_container_add(GTK_CONTAINER(updates_frame), updates_box);
+	gtk_box_pack_start(GTK_BOX(vbox), updates_frame, FALSE, FALSE, 0);
+
+	int32_t cur_interval = (int32_t)ReadSetting32(SETTING_UPDATE_INTERVAL);
+	GtkWidget *rb_daily    = gtk_radio_button_new_with_label(NULL, "Check for updates daily");
+	GtkWidget *rb_weekly   = gtk_radio_button_new_with_label_from_widget(
+	                             GTK_RADIO_BUTTON(rb_daily), "Check for updates weekly");
+	GtkWidget *rb_disabled = gtk_radio_button_new_with_label_from_widget(
+	                             GTK_RADIO_BUTTON(rb_daily), "Disable update checks");
+
+	if (cur_interval < 0)
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rb_disabled), TRUE);
+	else if (cur_interval > 86400)
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rb_weekly), TRUE);
+	else
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rb_daily), TRUE);
+
+	gtk_box_pack_start(GTK_BOX(updates_box), rb_daily,    FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(updates_box), rb_weekly,   FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(updates_box), rb_disabled, FALSE, FALSE, 0);
+
+	/* --- Behaviour options --- */
+	GtkWidget *opts_frame = gtk_frame_new("Behaviour");
+	GtkWidget *opts_box   = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+	gtk_container_set_border_width(GTK_CONTAINER(opts_box), 8);
+	gtk_container_add(GTK_CONTAINER(opts_frame), opts_box);
+	gtk_box_pack_start(GTK_BOX(vbox), opts_frame, FALSE, FALSE, 0);
+
+	GtkWidget *cb_dark       = gtk_check_button_new_with_label("Dark mode");
+	GtkWidget *cb_expert     = gtk_check_button_new_with_label("Expert mode");
+	GtkWidget *cb_usb_debug  = gtk_check_button_new_with_label("USB debug logging");
+	GtkWidget *cb_fake_chk   = gtk_check_button_new_with_label("Detect fake flash drives");
+	GtkWidget *cb_boot_marker= gtk_check_button_new_with_label("Ignore boot marker");
+
+	BOOL cur_dark = (ReadSetting32(SETTING_DARK_MODE) == 2);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_dark),       cur_dark);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_expert),     expert_mode);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_usb_debug),  usb_debug);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_fake_chk),   detect_fakes);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_boot_marker),ignore_boot_marker);
+
+	gtk_box_pack_start(GTK_BOX(opts_box), cb_dark,        FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(opts_box), cb_expert,      FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(opts_box), cb_usb_debug,   FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(opts_box), cb_fake_chk,    FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(opts_box), cb_boot_marker, FALSE, FALSE, 0);
+
+	gtk_widget_show_all(dlg);
+	int response = gtk_dialog_run(GTK_DIALOG(dlg));
+
+	if (response == GTK_RESPONSE_OK) {
+		/* Save update interval */
+		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rb_disabled)))
+			WriteSetting32(SETTING_UPDATE_INTERVAL, -1);
+		else if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rb_weekly)))
+			WriteSetting32(SETTING_UPDATE_INTERVAL, 7 * 86400);
+		else
+			WriteSetting32(SETTING_UPDATE_INTERVAL, 86400);
+
+		/* Dark mode */
+		BOOL new_dark = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cb_dark));
+		WriteSetting32(SETTING_DARK_MODE, new_dark ? 2 : 1);
+		is_darkmode_enabled = new_dark ? TRUE : FALSE;
+		{
+			GtkSettings *gsettings = gtk_settings_get_default();
+			g_object_set(G_OBJECT(gsettings),
+			             "gtk-application-prefer-dark-theme",
+			             (gboolean)new_dark, NULL);
+		}
+
+		/* Expert mode */
+		BOOL new_expert = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cb_expert));
+		if (new_expert != expert_mode) {
+			expert_mode = new_expert;
+			WriteSettingBool(SETTING_EXPERT_MODE, expert_mode);
+		}
+
+		/* USB debug */
+		BOOL new_usb_debug = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cb_usb_debug));
+		if (new_usb_debug != usb_debug) {
+			usb_debug = new_usb_debug;
+			WriteSettingBool(SETTING_ENABLE_USB_DEBUG, usb_debug);
+		}
+
+		/* Detect fake drives */
+		BOOL new_detect_fakes = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cb_fake_chk));
+		if (new_detect_fakes != detect_fakes) {
+			detect_fakes = new_detect_fakes;
+			WriteSettingBool(SETTING_DISABLE_FAKE_DRIVES_CHECK, !detect_fakes);
+		}
+
+		/* Ignore boot marker */
+		BOOL new_boot_marker = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cb_boot_marker));
+		if (new_boot_marker != ignore_boot_marker) {
+			ignore_boot_marker = new_boot_marker;
+			WriteSettingBool(SETTING_IGNORE_BOOT_MARKER, ignore_boot_marker);
+		}
+
+		uprintf("Settings saved: dark=%d expert=%d usb_debug=%d detect_fakes=%d ignore_boot_marker=%d",
+		        new_dark, expert_mode, usb_debug, detect_fakes, ignore_boot_marker);
+	}
+
+	gtk_widget_destroy(dlg);
+}
+
 
 static void on_lang_menu_activate(GtkMenuItem *item, gpointer data)
 {
