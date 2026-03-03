@@ -3140,12 +3140,24 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	combo_register_all();
 
 	/* Set tooltips on key UI controls, using localized strings if available. */
-	CreateTooltip((HWND)rw.filesystem_combo, lmprintf(MSG_157), -1);
-	CreateTooltip((HWND)rw.cluster_combo,    lmprintf(MSG_158), -1);
-	CreateTooltip((HWND)rw.label_entry,      lmprintf(MSG_159), -1);
-	CreateTooltip((HWND)rw.boot_combo,       lmprintf(MSG_164), -1);
-	CreateTooltip((HWND)rw.select_btn,       lmprintf(MSG_165), -1);
-	CreateTooltip((HWND)rw.start_btn,        lmprintf(MSG_171), -1);
+	CreateTooltip((HWND)rw.filesystem_combo,      lmprintf(MSG_157), -1);
+	CreateTooltip((HWND)rw.cluster_combo,         lmprintf(MSG_158), -1);
+	CreateTooltip((HWND)rw.label_entry,           lmprintf(MSG_159), -1);
+	CreateTooltip((HWND)rw.partition_combo,       lmprintf(MSG_163), -1);
+	CreateTooltip((HWND)rw.target_combo,          lmprintf(MSG_150), 30000);
+	CreateTooltip((HWND)rw.boot_combo,            lmprintf(MSG_164), -1);
+	CreateTooltip((HWND)rw.select_btn,            lmprintf(MSG_165), -1);
+	CreateTooltip((HWND)rw.start_btn,             lmprintf(MSG_171), -1);
+	if (rw.bad_blocks_check)
+		CreateTooltip((HWND)rw.bad_blocks_check,  lmprintf(MSG_161), -1);
+	if (rw.quick_format_check)
+		CreateTooltip((HWND)rw.quick_format_check,lmprintf(MSG_162), -1);
+	if (rw.uefi_validation_check)
+		CreateTooltip((HWND)rw.uefi_validation_check, lmprintf(MSG_167), 10000);
+	if (rw.old_bios_check)
+		CreateTooltip((HWND)rw.old_bios_check,    lmprintf(MSG_169), -1);
+	if (rw.list_usb_hdd_check)
+		CreateTooltip((HWND)rw.list_usb_hdd_check,lmprintf(MSG_170), -1);
 
 	/* Set ATK accessible names on toolbar buttons so screen readers (Orca)
 	 * announce the button function rather than the emoji label glyph name.
