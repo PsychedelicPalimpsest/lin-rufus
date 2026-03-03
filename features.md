@@ -840,3 +840,13 @@ This is the most structurally significant porting gap.
     - Elapsed time display: `elapsed_label` added to status row (right-aligned); `start_clock_timer()`/`stop_clock_timer()`/`clock_timer_cb()` mirror Windows ClockTimer (1 s interval, HH:MM:SS); `UM_TIMER_START` starts it, `UM_FORMAT_COMPLETED` and `UM_ENABLE_CONTROLS` stop it
     - `EnableControls`: disable partition/target/fs/cluster combos when a pure DD image is loaded (mirrors Windows lines 895-902)
     - Blocking I/O timer: `start_blocking_timer()`/`blocking_timer_cb()` mirror Windows BlockingTimer (3 s); fires when user cancels during ISO extraction (`iso_blocking_status >= 0`); shows MSG_048/MSG_080 notification if stuck
+
+166. ✅ DONE **UI parity batch: Ctrl+SELECT ZIP, Alt shortcuts, FS refresh, process search, build fixes, IsChecked old_bios_fixes** —
+    - **Ctrl+click SELECT** now opens a `*.zip` FileDialog (mirrors Windows Ctrl+IDC_SELECT for ZIP archives); stores path in `archive_path`
+    - **FS combo refresh** on Advanced Format Options expander toggle: `on_adv_format_toggled()` calls `populate_fs_combo()` + `SetFSFromISO()` (mirrors Windows IDC_ADVANCED_FORMAT_OPTIONS handler calling `SetFileSystemAndClusterSize(NULL)`)
+    - **Process search on device select**: `on_device_changed()` now calls `StartProcessSearch()`/`SetProcessSearch()` after device selection (mirrors Windows `IDC_DEVICE CBN_SELCHANGE` handler)
+    - **Build fix**: `linux/sl_version.c`, `linux/dump_fat.c`, `linux/ntfsfix.c` added to `OS_SOURCES` in `src/Makefile.am` (were compiled but not linked; fixed `RunNtfsFix`/`GetSyslinuxVersion`/`DumpFatDir` linker errors)
+    - **Alt+P (ToggleEsp)**: `on_toggle_esp()` handler calls `ToggleEsp(DeviceNum, 0)` then `CyclePort()` if successful; GDK_KEY_p + GDK_MOD1_MASK accel binding
+    - **Alt+R (delete settings)**: `on_delete_settings()` handler calls `unlink(ini_file)`, shows MSG_248/249; GDK_KEY_r + GDK_MOD1_MASK accel binding
+    - **Alt+O (optical save)**: Alt+O accel binding to `on_save_clicked` (already calls `OpticalDiscSaveImage()`)
+    - **`IsChecked(IDC_OLD_BIOS_FIXES)` fix**: was always returning FALSE (broken `IsDlgButtonChecked` stub); now uses `use_old_bios_fixes` global updated by `on_old_bios_check_toggled()` signal handler; `BOOL use_old_bios_fixes = FALSE` added to `globals.c`; `extern BOOL use_old_bios_fixes` declared in `format.c`

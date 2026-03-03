@@ -65,6 +65,7 @@ extern BOOL use_rufus_mbr;
 extern BOOL quick_format;
 extern BOOL enable_bad_blocks;
 extern BOOL enable_verify_write;
+extern BOOL use_old_bios_fixes;
 extern int  nb_passes_sel;
 extern char *image_path;
 extern char *archive_path;
@@ -850,7 +851,7 @@ DWORD WINAPI FormatThread(void* param)
 		    (target_type == TT_BIOS) && (!allow_dual_uefi_bios))
 			extra_partitions &= ~XP_UEFI_NTFS;
 	}
-	if (IsChecked(IDC_OLD_BIOS_FIXES))
+	if (use_old_bios_fixes)
 		extra_partitions |= XP_COMPAT;
 	if (!CreatePartition(hPhysicalDrive, partition_type, fs_type,
 	                     mbr_is_bootable, extra_partitions)) {

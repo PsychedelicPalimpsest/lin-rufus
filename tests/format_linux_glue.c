@@ -14,6 +14,7 @@ BOOL             use_rufus_mbr = TRUE;
 BOOL             quick_format   = TRUE;
 BOOL             enable_bad_blocks = FALSE;
 BOOL             enable_verify_write = FALSE;
+BOOL             use_old_bios_fixes = FALSE;
 int              nb_passes_sel  = 0;
 
 /* ---- ui.c ---- */

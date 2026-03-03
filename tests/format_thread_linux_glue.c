@@ -103,6 +103,7 @@ BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
  */
 BOOL enable_bad_blocks = FALSE;
 BOOL enable_verify_write = FALSE;
+BOOL use_old_bios_fixes = FALSE;
 int  nb_passes_sel     = 0;
 
 /*

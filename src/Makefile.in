@@ -146,6 +146,9 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-stdio.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-stdlg.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-syslinux.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-sl_version.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-dump_fat.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-ntfsfix.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	$(am__objects_2) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-ui_combo_logic.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-ui_enable_opts.$(OBJEXT) \
@@ -483,7 +486,7 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/img_info.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c linux/sl_version.c linux/dump_fat.c linux/ntfsfix.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -608,6 +611,9 @@ linux/rufus-stdfn.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-stdio.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-stdlg.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-syslinux.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-sl_version.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-dump_fat.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-ntfsfix.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui_gtk.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui_combo_logic.$(OBJEXT): linux/$(am__dirstamp)
@@ -947,6 +953,24 @@ linux/rufus-syslinux.o: linux/syslinux.c
 
 linux/rufus-syslinux.obj: linux/syslinux.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-syslinux.obj `if test -f 'linux/syslinux.c'; then $(CYGPATH_W) 'linux/syslinux.c'; else $(CYGPATH_W) '$(srcdir)/linux/syslinux.c'; fi`
+
+linux/rufus-sl_version.o: linux/sl_version.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-sl_version.o `test -f 'linux/sl_version.c' || echo '$(srcdir)/'`linux/sl_version.c
+
+linux/rufus-sl_version.obj: linux/sl_version.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-sl_version.obj `if test -f 'linux/sl_version.c'; then $(CYGPATH_W) 'linux/sl_version.c'; else $(CYGPATH_W) '$(srcdir)/linux/sl_version.c'; fi`
+
+linux/rufus-dump_fat.o: linux/dump_fat.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-dump_fat.o `test -f 'linux/dump_fat.c' || echo '$(srcdir)/'`linux/dump_fat.c
+
+linux/rufus-dump_fat.obj: linux/dump_fat.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-dump_fat.obj `if test -f 'linux/dump_fat.c'; then $(CYGPATH_W) 'linux/dump_fat.c'; else $(CYGPATH_W) '$(srcdir)/linux/dump_fat.c'; fi`
+
+linux/rufus-ntfsfix.o: linux/ntfsfix.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ntfsfix.o `test -f 'linux/ntfsfix.c' || echo '$(srcdir)/'`linux/ntfsfix.c
+
+linux/rufus-ntfsfix.obj: linux/ntfsfix.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ntfsfix.obj `if test -f 'linux/ntfsfix.c'; then $(CYGPATH_W) 'linux/ntfsfix.c'; else $(CYGPATH_W) '$(srcdir)/linux/ntfsfix.c'; fi`
 
 linux/rufus-ui.o: linux/ui.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ui.o `test -f 'linux/ui.c' || echo '$(srcdir)/'`linux/ui.c

@@ -260,6 +260,7 @@ static void on_toggle_usb_hdd(GtkWidget *w, gpointer data);
 static void on_list_usb_hdd_toggled(GtkToggleButton *btn, gpointer data);
 static void on_uefi_validation_toggled(GtkToggleButton *btn, gpointer data);
 static void on_adv_format_toggled(GtkExpander *exp, gpointer data);
+static void on_old_bios_check_toggled(GtkToggleButton *btn, gpointer data);
 /* New Alt+key shortcuts */
 static void on_toggle_rufus_mbr(GtkWidget *w, gpointer data);
 static void on_toggle_detect_fakes(GtkWidget *w, gpointer data);
@@ -639,6 +640,8 @@ static GtkWidget *build_format_options(void)
 	GtkWidget *adv_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
 	rw.old_bios_check = gtk_check_button_new_with_label("Add fixes for old BIOS (extra partition, align, etc.)");
 	gtk_box_pack_start(GTK_BOX(adv_box), rw.old_bios_check, FALSE, FALSE, 0);
+	g_signal_connect(rw.old_bios_check, "toggled",
+		G_CALLBACK(on_old_bios_check_toggled), NULL);
 	rw.verify_write_check = gtk_check_button_new_with_label("Verify write (re-read and compare after write)");
 	gtk_box_pack_start(GTK_BOX(adv_box), rw.verify_write_check, FALSE, FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(rw.adv_format_expander), adv_box);
@@ -2136,6 +2139,15 @@ static void on_uefi_validation_toggled(GtkToggleButton *btn, gpointer data)
 	extern BOOL validate_md5sum;
 	validate_md5sum = gtk_toggle_button_get_active(btn) ? TRUE : FALSE;
 	uprintf("UEFI media validation (md5sum): %s", validate_md5sum ? "enabled" : "disabled");
+}
+
+/* Checkbox handler: old BIOS fixes (XP_COMPAT extra partition/align) */
+static void on_old_bios_check_toggled(GtkToggleButton *btn, gpointer data)
+{
+	(void)data;
+	extern BOOL use_old_bios_fixes;
+	use_old_bios_fixes = gtk_toggle_button_get_active(btn) ? TRUE : FALSE;
+	uprintf("Old BIOS fixes: %s", use_old_bios_fixes ? "enabled" : "disabled");
 }
 
 /* --- New Alt+key cheat-mode toggle handlers --- */

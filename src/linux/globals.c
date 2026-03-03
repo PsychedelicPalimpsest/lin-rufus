@@ -88,6 +88,7 @@ BOOL appstore_version = FALSE, is_vds_available = FALSE;
 BOOL persistent_log = FALSE, has_ffu_support = FALSE;
 BOOL expert_mode = FALSE, use_rufus_mbr = TRUE;
 BOOL size_check = TRUE;   /* Alt+S: enforce projected_size <= DiskSize */
+BOOL use_old_bios_fixes = FALSE;              /* IDC_OLD_BIOS_FIXES checkbox state */
 BOOL lock_drive = TRUE;   /* Alt+,: disable physical drive locking when FALSE */
 BOOL user_deleted_rufus_dir = FALSE; /* Alt+D: track that user deleted app files dir */
 BOOL previous_enable_HDDs = FALSE;   /* Ctrl+Alt+F: saved enable_HDDs before toggle */
