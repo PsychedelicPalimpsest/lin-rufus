@@ -78,6 +78,7 @@ extern BOOL fast_zeroing;       /* globals.c */
 extern BOOL force_large_fat32;  /* globals.c */
 extern BOOL use_rufus_mbr;      /* globals.c */
 extern BOOL use_fake_units;     /* globals.c */
+extern char ClusterSizeLabel[MAX_CLUSTER_SIZES][64]; /* globals.c */
 extern BOOL preserve_timestamps;/* globals.c */
 extern BOOL enable_vmdk;        /* globals.c */
 extern BOOL enable_ntfs_compression; /* globals.c */
@@ -2969,13 +2970,37 @@ void ShowLanguageMenu(RECT rcExclude)
 void SetPassesTooltip(void)
 {
 	if (!rw.nb_passes_combo) return;
-	gtk_widget_set_tooltip_text(rw.nb_passes_combo,
-		"Number of passes for bad block check");
+	static const unsigned int pattern[BADLOCKS_PATTERN_TYPES][BADBLOCK_PATTERN_COUNT] = {
+		BADBLOCK_PATTERN_ONE_PASS, BADBLOCK_PATTERN_TWO_PASSES, BADBLOCK_PATTERN_SLC,
+		BADCLOCK_PATTERN_MLC, BADBLOCK_PATTERN_TLC };
+	int sel = gtk_combo_box_get_active(GTK_COMBO_BOX(rw.nb_passes_combo));
+	if (sel < 0 || sel >= BADLOCKS_PATTERN_TYPES) sel = 0;
+	int msg_id = MSG_153 + ((sel >= 2) ? 3 : sel);
+	CreateTooltip((HWND)rw.nb_passes_combo,
+		lmprintf(msg_id, pattern[sel][0], pattern[sel][1], pattern[sel][2], pattern[sel][3]), -1);
 }
 
 void SetBootTypeDropdownWidth(void)
 {
 	/* GTK auto-sizes combo boxes — nothing to do. */
+}
+
+/* Initialise the ClusterSizeLabel[] array with localised size strings.
+ * Mirrors Windows rufus.c SetClusterSizeLabels().
+ * Slot 0   = "Default"                 (MSG_029)
+ * Slots 1+ = "512 bytes", "1 KB", ...  (MSG_026 / MSG_027 / MSG_028)
+ */
+void SetClusterSizeLabels(void)
+{
+	unsigned int i, j, msg_id;
+	safe_sprintf(ClusterSizeLabel[0], 64, "%s", lmprintf(MSG_029));
+	for (i = 512, j = 1, msg_id = MSG_026; j < MAX_CLUSTER_SIZES; i <<= 1, j++) {
+		if (i > 8192) {
+			i /= 1024;
+			msg_id++;
+		}
+		safe_sprintf(ClusterSizeLabel[j], 64, "%u %s", i, lmprintf(msg_id));
+	}
 }
 
 void OnPaint(HDC hdc)
@@ -3804,6 +3829,7 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	}
 
 	/* Enumerate attached block devices and fill the device list. */
+	SetClusterSizeLabels();
 	GetDevices(0);
 
 	/* Start the udev block-device hotplug monitor.  Events are debounced

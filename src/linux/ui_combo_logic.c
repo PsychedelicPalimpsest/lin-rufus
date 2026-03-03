@@ -19,6 +19,8 @@
 #include "compat/windowsx.h"   /* ComboBox_GetCurSel */
 #include "compat/winioctl.h"   /* PARTITION_STYLE_MBR/GPT/RAW */
 #include "../windows/rufus.h"
+#include "resource.h"          /* MSG_029, MSG_030, ... */
+#include "localization.h"      /* lmprintf */
 #include "../windows/drive.h"  /* RUFUS_DRIVE_INFO */
 #include "ui_combo_logic.h"
 
@@ -45,6 +47,7 @@ extern RUFUS_DRIVE_INFO SelectedDrive;
 extern const char *sfd_name;
 extern uint8_t image_options;
 extern const char *FileSystemLabel[FS_MAX];
+extern char ClusterSizeLabel[MAX_CLUSTER_SIZES][64];
 
 /* Scan-local preferred selection state (mirrors Windows static locals) */
 static int selected_pt  = -1;   /* user-overridden partition type, -1 = auto */
@@ -163,38 +166,67 @@ void populate_fs_combo(void)
 /* -------------------------------------------------------------------------
  * populate_cluster_combo
  *
- * Fills hClusterSize for the given filesystem.  For ext* and exFAT a
- * single "default" entry is offered.  For FAT32 and NTFS a full list of
- * standard cluster sizes is provided.
+ * Fills hClusterSize for the given filesystem using the allowed/default
+ * cluster sizes in SelectedDrive.ClusterSize[fs] (set by ComputeClusterSizes)
+ * and the localised labels in ClusterSizeLabel[].
+ *
+ * Mirrors Windows rufus.c SetClusterSizes().
  * --------------------------------------------------------------------- */
 void populate_cluster_combo(int fs)
 {
 	IGNORE_RETVAL(ComboBox_ResetContent(hClusterSize));
 
-	if (IS_EXT(fs) || fs == FS_EXFAT) {
+	if (fs < 0 || fs >= FS_MAX)
+		return;
+
+	/* Filesystems with a single "Default" cluster size */
+	if (SelectedDrive.ClusterSize[fs].Allowed == SINGLE_CLUSTERSIZE_DEFAULT) {
 		IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
-		    ComboBox_AddString(hClusterSize, "4096 bytes (Default)"), 4096));
+		    ComboBox_AddString(hClusterSize, lmprintf(MSG_029)), 0));
 		IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, 0));
 		return;
 	}
 
-	static const struct { const char *label; DWORD size; } clusters[] = {
-		{ "512 bytes",   512   },
-		{ "1024 bytes",  1024  },
-		{ "2048 bytes",  2048  },
-		{ "4096 bytes",  4096  },
-		{ "8192 bytes",  8192  },
-		{ "16384 bytes", 16384 },
-		{ "32768 bytes", 32768 },
-		{ "65536 bytes", 65536 },
-		{ NULL, 0 }
-	};
-	int def = 3; /* 4096 bytes default */
-	for (int i = 0; clusters[i].label; i++) {
+	/* No cluster sizes computed (no drive selected, or unsupported FS) */
+	if (SelectedDrive.ClusterSize[fs].Allowed == 0 ||
+	    SelectedDrive.ClusterSize[fs].Default == 0) {
 		IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
-		    ComboBox_AddString(hClusterSize, clusters[i].label), clusters[i].size));
+		    ComboBox_AddString(hClusterSize, lmprintf(MSG_029)), 0));
+		IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, 0));
+		return;
 	}
-	IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, def));
+
+	/* Walk the bitmask: bit N set → cluster size = (0x100 << N) bytes.
+	 * This matches the ClusterSizeLabel[] layout (index 0 = 512, index 1 = 1024, …). */
+	int default_idx = 0, k = 0;
+	ULONG j;
+	int i;
+	for (i = 0, j = 0x200; j < 0x10000000; i++, j <<= 1) {
+		if (j & SelectedDrive.ClusterSize[fs].Allowed) {
+			char label[96];
+			/* ClusterSizeLabel[0] is "Default"; labels for sizes start at [1].
+			 * j = 0x200 (512) maps to index 1, j = 0x400 (1024) → index 2, etc. */
+			int label_idx = i + 1;
+			if (label_idx < MAX_CLUSTER_SIZES && ClusterSizeLabel[label_idx][0])
+				safe_sprintf(label, sizeof(label), "%s", ClusterSizeLabel[label_idx]);
+			else
+				safe_sprintf(label, sizeof(label), "%lu bytes", (unsigned long)j);
+
+			if (j == SelectedDrive.ClusterSize[fs].Default) {
+				/* Mark this entry as default */
+				char deflt[128];
+				safe_sprintf(deflt, sizeof(deflt), lmprintf(MSG_030, label));
+				IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
+				    ComboBox_AddString(hClusterSize, deflt), j));
+				default_idx = k;
+			} else {
+				IGNORE_RETVAL(ComboBox_SetItemData(hClusterSize,
+				    ComboBox_AddString(hClusterSize, label), j));
+			}
+			k++;
+		}
+	}
+	IGNORE_RETVAL(ComboBox_SetCurSel(hClusterSize, default_idx));
 }
 
 /* -------------------------------------------------------------------------

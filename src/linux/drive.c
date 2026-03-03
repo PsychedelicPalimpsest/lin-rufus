@@ -48,6 +48,7 @@
 /* rufus_drive[] is defined in globals.c (production) or inline by tests */
 extern RUFUS_DRIVE rufus_drive[MAX_DRIVES];
 extern BOOL write_as_esp;
+extern BOOL advanced_mode_format;
 
 /* -------------------------------------------------------------------------
  * Partition fd offset table — strong implementations for linux_get_fd_base_offset
@@ -362,6 +363,9 @@ BOOL GetDrivePartitionData(DWORD DriveIndex, char *FileSystemName,
     SelectedDrive.DeviceNumber  = DriveIndex;
     SelectedDrive.nPartitions   = 0;
     SelectedDrive.PartitionStyle = PARTITION_STYLE_RAW;
+
+    /* Compute valid cluster sizes for each filesystem based on disk size */
+    ComputeClusterSizes();
 
     if (FileSystemName && FileSystemNameSize > 0)
         FileSystemName[0] = '\0';
@@ -1308,6 +1312,107 @@ BOOL IsDeviceWriteProtected(DWORD DriveIndex)
 char GetUnusedDriveLetter(void)                       { return 0; }
 BOOL IsDriveLetterInUse(const char dl)                { (void)dl; return FALSE; }
 char RemoveDriveLetters(DWORD di, BOOL last, BOOL s)  { (void)di;(void)last;(void)s; return 0; }
+
+/* -------------------------------------------------------------------------
+ * ComputeClusterSizes — compute Allowed / Default cluster sizes for each
+ * filesystem based on SelectedDrive.DiskSize and SectorSize.
+ *
+ * Mirrors the ClusterSize[] computation in Windows' SetFileSystemAndClusterSize
+ * (rufus.c ~line 495-580).  Must be called after SelectedDrive.DiskSize is set.
+ * --------------------------------------------------------------------- */
+void ComputeClusterSizes(void)
+{
+    LONGLONG i;
+    memset(&SelectedDrive.ClusterSize, 0, sizeof(SelectedDrive.ClusterSize));
+
+    /* FAT16 — drives < 4 GB only */
+    if (SelectedDrive.DiskSize < 4 * GB) {
+        SelectedDrive.ClusterSize[FS_FAT16].Allowed = 0x00001E00;
+        for (i = 32; i <= 4096; i <<= 1) {
+            if (SelectedDrive.DiskSize < i * MB) {
+                SelectedDrive.ClusterSize[FS_FAT16].Default = 16 * (ULONG)i;
+                break;
+            }
+            SelectedDrive.ClusterSize[FS_FAT16].Allowed <<= 1;
+        }
+        SelectedDrive.ClusterSize[FS_FAT16].Allowed &= 0x0001FE00;
+    }
+
+    /* FAT32 — 32 MB … 2 TB */
+    if ((SelectedDrive.DiskSize >= 32 * MB) && (SelectedDrive.DiskSize < MAX_FAT32_SIZE)) {
+        SelectedDrive.ClusterSize[FS_FAT32].Allowed = 0x000001F8;
+        for (i = 32; i <= (32 * 1024); i <<= 1) {
+            if (SelectedDrive.DiskSize * 1.0f < i * MB * FAT32_CLUSTER_THRESHOLD) {
+                SelectedDrive.ClusterSize[FS_FAT32].Default = 8 * (ULONG)i;
+                break;
+            }
+            SelectedDrive.ClusterSize[FS_FAT32].Allowed <<= 1;
+        }
+        SelectedDrive.ClusterSize[FS_FAT32].Allowed &= 0x0001FE00;
+
+        /* 256 MB – 32 GB range follows a different default rule */
+        if ((SelectedDrive.DiskSize >= 256 * MB) && (SelectedDrive.DiskSize < 32 * GB)) {
+            for (i = 8; i <= 32; i <<= 1) {
+                if (SelectedDrive.DiskSize * 1.0f < i * GB * FAT32_CLUSTER_THRESHOLD) {
+                    SelectedDrive.ClusterSize[FS_FAT32].Default = ((ULONG)i / 2) * KB;
+                    break;
+                }
+            }
+        }
+        if (SelectedDrive.DiskSize >= 32 * GB) {
+            SelectedDrive.ClusterSize[FS_FAT32].Allowed &= 0x0001C000;
+            SelectedDrive.ClusterSize[FS_FAT32].Default = 0x00008000;
+        }
+    }
+
+    if (SelectedDrive.DiskSize < 256 * TB) {
+        /* NTFS */
+        SelectedDrive.ClusterSize[FS_NTFS].Allowed = 0x0001F000;
+        for (i = 16; i <= 256; i <<= 1) {
+            if (SelectedDrive.DiskSize < i * TB) {
+                SelectedDrive.ClusterSize[FS_NTFS].Default = ((ULONG)i / 4) * KB;
+                break;
+            }
+        }
+
+        /* exFAT */
+        SelectedDrive.ClusterSize[FS_EXFAT].Allowed = 0x03FFFE00;
+        if (SelectedDrive.DiskSize < 256 * MB)
+            SelectedDrive.ClusterSize[FS_EXFAT].Default = 4 * KB;
+        else if (SelectedDrive.DiskSize < 32 * GB)
+            SelectedDrive.ClusterSize[FS_EXFAT].Default = 32 * KB;
+        else
+            SelectedDrive.ClusterSize[FS_EXFAT].Default = 128 * KB;
+
+        /* UDF */
+        SelectedDrive.ClusterSize[FS_UDF].Allowed = SINGLE_CLUSTERSIZE_DEFAULT;
+        SelectedDrive.ClusterSize[FS_UDF].Default = 1;
+
+        /* ext2/ext3/ext4 — require advanced_mode_format and >= MIN_EXT_SIZE */
+        if (advanced_mode_format && (SelectedDrive.DiskSize >= MIN_EXT_SIZE)) {
+            SelectedDrive.ClusterSize[FS_EXT2].Allowed = SINGLE_CLUSTERSIZE_DEFAULT;
+            SelectedDrive.ClusterSize[FS_EXT2].Default = 1;
+            SelectedDrive.ClusterSize[FS_EXT3].Allowed = SINGLE_CLUSTERSIZE_DEFAULT;
+            SelectedDrive.ClusterSize[FS_EXT3].Default = 1;
+        }
+    }
+
+    /* Strip cluster sizes below the sector size (applies to FAT16 / FAT32 / NTFS) */
+    for (int fs = 0; fs < FS_MAX; fs++) {
+        if (SelectedDrive.ClusterSize[fs].Allowed == SINGLE_CLUSTERSIZE_DEFAULT)
+            continue;
+        if (SelectedDrive.SectorSize > 1) {
+            SelectedDrive.ClusterSize[fs].Allowed &= ~(SelectedDrive.SectorSize - 1);
+            if ((SelectedDrive.ClusterSize[fs].Default &
+                 SelectedDrive.ClusterSize[fs].Allowed) == 0) {
+                /* Lost the default — pick lowest still-allowed size */
+                SelectedDrive.ClusterSize[fs].Default =
+                    SelectedDrive.ClusterSize[fs].Allowed &
+                    (-(LONG)SelectedDrive.ClusterSize[fs].Allowed);
+            }
+        }
+    }
+}
 
 /* -------------------------------------------------------------------------
  * GetDriveLabel — read filesystem label via libblkid

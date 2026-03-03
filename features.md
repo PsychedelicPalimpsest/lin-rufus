@@ -1010,3 +1010,22 @@ This is the most structurally significant porting gap.
   - `src/linux/net.c` (`CheckForUpdatesThread`): When `SETTING_INCLUDE_BETAS` is set, fetches `rufus_linux_beta.ver`, parses both stable and beta into separate `RUFUS_UPDATE` structs using `parse_update_into`, and uses whichever is newer.
   - `tests/net_linux_glue.c`: Added stub for `parse_update_into`.
 - **Tests**: 5 new tests in `tests/test_parser.c` (`parse_update_into_*`).
+
+## Feature #186: ComputeClusterSizes + SetClusterSizeLabels parity
+- **Status**: ✅ DONE
+- **Description**: On Windows, `SetFileSystemAndClusterSize()` (rufus.c) computes per-filesystem allowed/default cluster size bitmasks into `SelectedDrive.ClusterSize[]` and `SetClusterSizeLabels()` initialises the localised `ClusterSizeLabel[]` display strings. On Linux both were absent, so cluster size dropdowns showed hardcoded English strings and `SelectedDrive.ClusterSize` was never populated.
+- **Implementation**:
+  - `src/linux/drive.c`: Added `ComputeClusterSizes()` — mirrors Windows rufus.c lines 495-580; computes `Allowed`/`Default` bitmasks for FAT16, FAT32, NTFS, exFAT, UDF and ext2/3/4; strips cluster sizes below the drive sector size. Called from `GetDrivePartitionData()` after `SelectedDrive.DiskSize` is set.
+  - `src/linux/drive_linux.h`: Added `void ComputeClusterSizes(void)` declaration.
+  - `src/linux/ui.c`: Added `SetClusterSizeLabels()` (for non-GTK/test builds); uses weak-fallback definition of `ClusterSizeLabel[]` so tests that don't link `globals.c` still link without error.
+  - `src/linux/ui_gtk.c`: Added matching `SetClusterSizeLabels()` for GTK production builds; called during UI init before `GetDevices(0)`.
+  - `src/linux/ui_combo_logic.c`: Rewrote `populate_cluster_combo()` to use `SelectedDrive.ClusterSize[fs].Allowed`/`.Default` bitmasks + `ClusterSizeLabel[]` labels, mirroring Windows `SetClusterSizes()`.
+  - `src/linux/globals.c`: Updated weak `lmprintf` stub to return `"?"` instead of `""` so label-building code in `SetClusterSizeLabels` produces non-empty strings even in minimal test builds.
+- **Tests**: 29 tests in `tests/test_cluster_sizes_linux.c` covering:
+  - FAT16: allowed/default per disk size, 5 GB upper limit
+  - FAT32: threshold behaviour (32 MB gets Allowed=0 due to mask), 512 MB allowed/default, 2.1 TB disabled, default 4 KB
+  - NTFS: 512 MB allowed/default, 4 KB default, 8 TB large-drive default
+  - exFAT: allowed, per-size defaults (4 KB / 32 KB / 128 KB)
+  - UDF/ext2: single-default marker, advanced_mode_format gate
+  - `SetClusterSizeLabels`: slot-0 non-empty, slot-1 "512" prefix, unit-transition check (byte→KB at index 6)
+  - All 29 pass.

@@ -241,6 +241,21 @@ CFLAGS_LINUX_test_drive_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/
 LDFLAGS_LINUX_test_drive_linux := -lblkid
 EXTRA_SRC_LINUX_test_drive_linux := $(DRIVE_LINUX_SRC) $(BLED_LIB)
 
+# cluster_sizes_linux tests: ComputeClusterSizes, SetClusterSizeLabels
+CLUSTER_SIZES_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(COMMON)/drive.c \
+                            $(SRC_DIR)/linux/stdfn.c \
+                            $(SRC_DIR)/linux/stdio.c $(SRC_DIR)/linux/globals.c \
+                            $(SRC_DIR)/linux/ui.c \
+                            $(SRC_DIR)/linux/parser.c \
+                            $(FORMAT_MS_SRC)
+CFLAGS_LINUX_test_cluster_sizes_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -DRUFUS_TEST
+LDFLAGS_LINUX_test_cluster_sizes_linux := -lblkid
+EXTRA_SRC_LINUX_test_cluster_sizes_linux := $(CLUSTER_SIZES_LINUX_SRC) $(BLED_LIB)
+
 # drive2_linux tests: GUID, partition types, AnalyzeMBR/PBR, RefreshLayout,
 #                     GetDriveTypeFromIndex, GetDriveLabel
 DRIVE2_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(COMMON)/drive.c \
@@ -1203,6 +1218,7 @@ test_parser_linux: $(EXTRA_SRC_LINUX_test_parser)
 test_hash_linux: $(EXTRA_SRC_LINUX_test_hash_linux)
 test_net_linux_linux: $(EXTRA_SRC_LINUX_test_net_linux)
 test_settings_linux_linux: $(EXTRA_SRC_LINUX_test_settings_linux)
+test_cluster_sizes_linux_linux: $(EXTRA_SRC_LINUX_test_cluster_sizes_linux)
 
 # Pattern rules for Windows binaries
 _win_test_name = $(patsubst %.exe,%,$(notdir $@))

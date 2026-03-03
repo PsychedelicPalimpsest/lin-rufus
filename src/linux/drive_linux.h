@@ -119,4 +119,14 @@ void drive_linux_set_sysfs_root(const char *root);
  */
 BOOL IsDeviceWriteProtected(DWORD DriveIndex);
 
+/*
+ * Compute the Allowed / Default cluster size bitmasks for each filesystem
+ * based on SelectedDrive.DiskSize and SelectedDrive.SectorSize.
+ * Called automatically by GetDrivePartitionData() after disk size is known.
+ * Also resets SelectedDrive.ClusterSize to zero before computing.
+ *
+ * Exposed here so unit tests can call it with a fake SelectedDrive.
+ */
+void ComputeClusterSizes(void);
+
 #endif /* !_WIN32 */

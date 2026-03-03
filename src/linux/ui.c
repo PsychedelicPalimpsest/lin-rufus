@@ -20,6 +20,7 @@
 /* Linux stub: ui.c - user interface (no-op on Linux) */
 #include "rufus.h"
 #include "ui.h"
+#include "localization.h"
 
 
 void SetAccessibleName(HWND hCtrl, const char* name)       { (void)hCtrl;(void)name; }
@@ -46,3 +47,24 @@ void ShowLanguageMenu(RECT rcExclude)                      { (void)rcExclude; }
 void SetPassesTooltip(void)                                {}
 void SetBootTypeDropdownWidth(void)                        {}
 void OnPaint(HDC hdc)                                      { (void)hdc; }
+
+/* Weak fallback definition — overridden by the real array in globals.c when linked. */
+char __attribute__((weak)) ClusterSizeLabel[MAX_CLUSTER_SIZES][64];
+
+/* Initialise the ClusterSizeLabel[] array with localised size strings.
+ * Mirrors Windows rufus.c SetClusterSizeLabels().
+ * Slot 0   = "Default"                 (MSG_029)
+ * Slots 1+ = "512 bytes", "1 KB", ...  (MSG_026 / MSG_027 / MSG_028)
+ */
+void SetClusterSizeLabels(void)
+{
+	unsigned int i, j, msg_id;
+	safe_sprintf(ClusterSizeLabel[0], 64, "%s", lmprintf(MSG_029));
+	for (i = 512, j = 1, msg_id = MSG_026; j < MAX_CLUSTER_SIZES; i <<= 1, j++) {
+		if (i > 8192) {
+			i /= 1024;
+			msg_id++;
+		}
+		safe_sprintf(ClusterSizeLabel[j], 64, "%u %s", i, lmprintf(msg_id));
+	}
+}
