@@ -567,3 +567,51 @@ This is the most structurally significant porting gap.
 
 * 197: WinUI tests to ensure all the windows features do not get regressed. Like with linux, use an API to simulate button presses, as to make it truly end to end
 * 198: Ensure CLI feature parity, all options that can be shared between OSes should be, ideally through being moved into common
+
+---
+
+## QA Session 2026-03-03 (third session) — Bugs Found and Fixed
+
+### Bug 1: `--include-hdds` silently ignored with `--list-devices` (FIXED)
+
+**Root cause:** `cli_apply_options(&opts)` was not called before `cli_print_devices()` in
+both the GTK path (`ui_gtk.c`) and the non-GTK path (`rufus.c`).
+**Also:** `cli_options_t opts` was declared without initialization; `cli_parse_args` did not
+call `cli_options_init()` internally, causing stack garbage to corrupt `opts.json` etc.
+**Fix:** Added `cli_options_init(opts)` at the top of `cli_parse_args()` in `cli.c`; added
+`cli_apply_options(&opts)` before `cli_print_devices()` in both `ui_gtk.c` and `rufus.c`.
+
+### Bug 2: `--label` flag silently ignored (FIXED)
+
+**Root cause 1:** `cli_apply_options()` never wired `opts->label` to `hLabel`.  On Linux,
+`hLabel` is `NULL` in CLI mode; `GetWindowTextA(NULL, ...)` returns empty string.
+**Fix (Part A):** Added label wiring in `cli_apply_options()` (`cli.c`): register a sentinel
+HWND for `hLabel` and call `SetWindowTextA(hLabel, opts->label)`.
+
+**Root cause 2:** `WritePBR_fs()` (`format.c`) called every `write_fat_32_*_br(fp, 0)` with
+`bKeepLabel=0`, which unconditionally overwrote the volume label at boot sector offset 0x47
+with the template `"NO NAME   "`.  On Windows this is harmless because `SetVolumeLabel()` is
+called afterwards; on Linux there is no such fallback.
+**Fix (Part B):** Changed all `write_fat_32_*_br(fp, 0)` calls to `write_fat_32_*_br(fp, 1)`
+in `WritePBR_fs()` so the BPB (including label) is preserved when writing the VBR bootcode.
+
+**Remaining known gap:** The root directory volume-label entry (FAT directory entry with
+`ATTR_VOLUME_ID=0x08`) is NOT written by `FormatLargeFAT32`.  Tools that read only the root
+directory (e.g. `fatlabel`) will see no label.  `blkid` reads the boot sector (`LABEL_FATBOOT`)
+and shows the correct label.  This is tracked as **Feature 199** below.
+
+### Bug 3: Integration test gap — no test for `--include-hdds --list-devices`
+
+The existing CLI tests parse `include_hdds` in isolation but do not verify that
+`--include-hdds --list-devices` together cause `cli_print_devices()` to see `enable_HDDs=TRUE`.
+Tracked as **Feature 200** below.
+
+* 199: `FormatLargeFAT32` does not write the root-directory volume-label entry (FAT directory
+  entry with `ATTR_VOLUME_ID=0x08`).  Tools like `fatlabel` and some Linux `mount` implementations
+  read the root directory label, not the boot sector.  Add label entry creation to
+  `format_fat32.c` after zeroing the root cluster, and add a test that mounts the image (or
+  reads root-directory bytes) to verify.
+
+* 200: Add integration test for `--include-hdds --list-devices`: mock a block device,
+  call the full CLI parse-and-run path, and assert that `enable_HDDs` is set to `TRUE` and
+  that the device appears in the output.  This would have caught Bug 1 automatically.

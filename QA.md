@@ -204,7 +204,83 @@ Fixed by updating the three `CHECK_MSG` expected strings.
 
 ---
 
-## Tips for Next QA Session
+## What Was Tested — Session 2026-03-03 (third session)
+
+### Bugs Fixed This Session
+
+**Bug 1 — `--include-hdds` ignored with `--list-devices`** (two related sub-bugs):
+1. `cli_options_t opts` declared uninitialized; `cli_parse_args()` now calls
+   `cli_options_init(opts)` at the top so callers don't need to.
+2. `cli_apply_options(&opts)` was missing in the `CLI_PARSE_LIST` branch of both
+   `ui_gtk.c` and `rufus.c`; added before `cli_print_devices()`.
+
+**Bug 2 — `--label` silently ignored**:
+1. `cli_apply_options()` in `cli.c` now wires `opts->label` into `hLabel` via
+   `window_text_register()` + `SetWindowTextA()` using a static sentinel HWND.
+2. `WritePBR_fs()` in `format.c` changed all `write_fat_32_*_br(fp, 0)` →
+   `write_fat_32_*_br(fp, 1)` (bKeepLabel) so the VBR write preserves the label
+   set by `FormatLargeFAT32` in the boot sector BPB (offset 0x47).  On Windows
+   `SetVolumeLabel()` handles re-applying the label after WritePBR; Linux had no
+   such fallback.
+
+**Known remaining gap (Feature 199):** The FAT32 root-directory volume label entry
+(`ATTR_VOLUME_ID=0x08`) is not created by `FormatLargeFAT32`.  `fatlabel` returns empty;
+`blkid` shows `LABEL_FATBOOT` correctly from the boot sector.
+
+### Tests Run
+
+| Test | Result |
+|------|--------|
+| `./run_tests.sh --linux-only` | ✅ All tests passed |
+| `./run_tests.sh --wine-only` | ✅ All tests passed |
+| `sudo RUFUS_TEST_DEVICE=/dev/nvme0n2 test_real_device_linux_linux` | ✅ 11 passed |
+| `sudo RUFUS_TEST_DEVICE=/dev/nvme0n2 test_e2e_linux_linux` | ✅ 13 passed |
+| Manual `--list-devices` (no flags) | ✅ exit 1, no output (NVMe not removable) |
+| Manual `--include-hdds --list-devices` | ✅ nvme0n1 + nvme0n2 shown, exit 0 |
+| Manual `--include-hdds --list-devices --json` | ✅ valid JSON |
+| Manual `--fs fat32 --no-prompt` | ✅ format completed, FAT32 partition verified |
+| Manual `--image ubuntu-24.04.4 --write-as-image --no-prompt` | ✅ ISO 9660 magic verified |
+| Manual `--fs fat32 --label TESTVOL --no-prompt` | ✅ `blkid` shows `LABEL_FATBOOT="TESTVOL"` |
+
+### Spot Checks Performed
+
+| File | Finding |
+|------|---------|
+| `src/linux/pki.c` | OpenSSL RSA-2048 + PKCS7; correct cleanup with goto |
+| `src/linux/stdio.c` | Log handler, uprintf, wuprintf; correct |
+| `src/linux/device_monitor.c` | udev netlink monitor; correct |
+| `src/linux/drag_drop.c` | File URI decoder; clean |
+| `src/linux/format_ext_tools.c` | Tool-finder and command-builder; clean |
+| `src/linux/ui_enable_opts.c` | Checkbox sensitivity predicates; correct |
+| `tests/test_status_history_linux.c` | 15 tests for ring-buffer; good coverage |
+| `tests/test_drag_drop_linux.c` | 11 tests for URI parsing; good coverage |
+
+### Feature Parity Notes (Priority 6)
+
+- `DIFFERENCES.md` documents intentional divergences accurately.
+- Windows CLI (`-i/-g/-l/-f/-w`) only pre-selects GUI options; no headless mode.
+  Linux CLI is a genuine non-interactive formatter.  This is expected and documented.
+- All CLI flags exercised from man page match `cli_parse_args()` option table.
+- `--label` was documented but broken; now fixed.
+
+### New Feature Tracker Items
+
+- Feature 199: FAT32 root-directory label entry missing from `FormatLargeFAT32`
+- Feature 200: Integration test for `--include-hdds --list-devices` pipeline
+
+---
+
+## Tips for Next QA Session (updated)
+
+1. **Read this file and check `features.md` Pending Work** before starting.
+2. **Use `shuf`** to distribute spot-check effort evenly across the large codebase.
+3. **Run `./run_tests.sh --linux-only` first** to establish baseline; always
+   force-rebuild specific test binaries (`make -B -C tests test_<name>_linux_linux`).
+4. **Test disk `/dev/nvme0n2`** — after third session it has FAT32 with label "TESTVOL".
+5. **`--label` now works** (verified: `blkid` shows `LABEL_FATBOOT`), but `fatlabel`
+   still returns empty due to missing root-dir label entry (Feature 199).
+6. **Wine32 missing** — `wine32 is missing` warnings are benign; only 64-bit tests work.
+7. **No hardcoded `/dev/nvme0n2` in repo** — all device tests use `RUFUS_TEST_DEVICE` env var.
 
 1. **Start by reading this file**, then check `features.md` Pending Work.
 2. **Use `shuf` to select random spot-check targets** (as per task instructions).

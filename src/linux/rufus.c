@@ -250,8 +250,10 @@ int main(int argc, char *argv[])
 		return 0;
 	if (r == CLI_PARSE_VERSION)
 		return 0;
-	if (r == CLI_PARSE_LIST)
+	if (r == CLI_PARSE_LIST) {
+		cli_apply_options(&opts);
 		return cli_print_devices(opts.json);
+	}
 	if (r != CLI_PARSE_OK)
 		return 1;
 

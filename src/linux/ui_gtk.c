@@ -3885,8 +3885,10 @@ int main(int argc, char *argv[])
 				return 0;
 			/* Only initialise paths when we actually need to access the filesystem */
 			rufus_init_paths();
-			if (r == CLI_PARSE_LIST)
+			if (r == CLI_PARSE_LIST) {
+				cli_apply_options(&opts);
 				return cli_print_devices(opts.json);
+			}
 			if (r != CLI_PARSE_OK)
 				return 1;
 			return cli_run(&opts);

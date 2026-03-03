@@ -37,6 +37,7 @@
 #include "compat/winioctl.h"
 #include "cli.h"
 #include "ui_combo_logic.h"
+#include "window_text_bridge.h"
 
 /* Globals set by cli_apply_options(); extern'd in format.c and globals.c */
 extern int    fs_type;
@@ -80,6 +81,7 @@ extern BOOL expert_mode;
 extern BOOL usb_debug;
 extern BOOL enable_vmdk;
 extern BOOL advanced_mode_format;
+extern HWND hLabel;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -254,6 +256,9 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	int tmp;
 	int opt_index;
 	int list_devices = 0; /* deferred return for --list-devices (allows --json to parse too) */
+
+	/* Always initialise opts to safe defaults so callers don't need to. */
+	cli_options_init(opts);
 
 	/* Reset getopt state for re-entrant tests.
 	 * On glibc, optind=0 forces full reinitialization (resets nextchar). */
@@ -643,6 +648,13 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Enable advanced format mode (unlocks ext2/3/4 and other advanced options) */
 	if (opts->advanced_format)
 		advanced_mode_format = TRUE;
+	/* Volume label: register a sentinel HWND so GetWindowTextA(hLabel,...) works */
+	if (opts->label[0] != '\0') {
+		static int _label_sentinel;
+		hLabel = (HWND)&_label_sentinel;
+		window_text_register(hLabel);
+		SetWindowTextA(hLabel, opts->label);
+	}
 }
 
 /*
