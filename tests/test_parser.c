@@ -763,6 +763,68 @@ TEST(replace_in_token_data_null_args)
 }
 
 /* ============================================================
+ * parse_update_into
+ * ============================================================ */
+
+TEST(parse_update_into_basic_version)
+{
+    char buf[256];
+    snprintf(buf, sizeof(buf), "version = 4.2.1\n");
+    RUFUS_UPDATE u = { 0 };
+    BOOL r = parse_update_into(buf, strlen(buf) + 1, &u);
+    CHECK(r == TRUE);
+    CHECK_INT_EQ(4, u.version[0]);
+    CHECK_INT_EQ(2, u.version[1]);
+    CHECK_INT_EQ(1, u.version[2]);
+    free(u.download_url); free(u.release_notes); free(u.loc_url);
+}
+
+TEST(parse_update_into_null_buf)
+{
+    RUFUS_UPDATE u = { 0 };
+    BOOL r = parse_update_into(NULL, 0, &u);
+    CHECK(r == FALSE);
+}
+
+TEST(parse_update_into_does_not_touch_global)
+{
+    char buf[256];
+    snprintf(buf, sizeof(buf), "version = 99.99.99\n");
+    RUFUS_UPDATE u = { 0 };
+    uint16_t saved[3] = { update.version[0], update.version[1], update.version[2] };
+    parse_update_into(buf, strlen(buf) + 1, &u);
+    /* Global update struct must be untouched */
+    CHECK_INT_EQ(saved[0], update.version[0]);
+    CHECK_INT_EQ(saved[1], update.version[1]);
+    CHECK_INT_EQ(saved[2], update.version[2]);
+    free(u.download_url); free(u.release_notes); free(u.loc_url);
+}
+
+TEST(parse_update_into_beta_has_higher_major_minor)
+{
+    char beta_buf[256];
+    snprintf(beta_buf, sizeof(beta_buf), "version = 4.6.0\n");
+    RUFUS_UPDATE beta = { 0 };
+    parse_update_into(beta_buf, strlen(beta_buf) + 1, &beta);
+    CHECK_INT_EQ(4, beta.version[0]);
+    CHECK_INT_EQ(6, beta.version[1]);
+    CHECK_INT_EQ(0, beta.version[2]);
+    free(beta.download_url); free(beta.release_notes); free(beta.loc_url);
+}
+
+TEST(parse_update_into_stable_version_parsed_correctly)
+{
+    char stable_buf[256];
+    snprintf(stable_buf, sizeof(stable_buf), "version = 4.5.1234\n");
+    RUFUS_UPDATE stable = { 0 };
+    parse_update_into(stable_buf, strlen(stable_buf) + 1, &stable);
+    CHECK_INT_EQ(4, stable.version[0]);
+    CHECK_INT_EQ(5, stable.version[1]);
+    CHECK_INT_EQ(1234, stable.version[2]);
+    free(stable.download_url); free(stable.release_notes); free(stable.loc_url);
+}
+
+/* ============================================================
  * main
  * ============================================================ */
 
@@ -864,6 +926,13 @@ int main(void)
     RUN(replace_in_token_data_no_match);
     RUN(replace_in_token_data_same_src_rep);
     RUN(replace_in_token_data_null_args);
+
+    printf("\n=== parse_update_into ===\n");
+    RUN(parse_update_into_basic_version);
+    RUN(parse_update_into_null_buf);
+    RUN(parse_update_into_does_not_touch_global);
+    RUN(parse_update_into_beta_has_higher_major_minor);
+    RUN(parse_update_into_stable_version_parsed_correctly);
 
     TEST_RESULTS();
 }

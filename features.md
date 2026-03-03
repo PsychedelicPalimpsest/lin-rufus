@@ -982,3 +982,31 @@ This is the most structurally significant porting gap.
       - `format_thread_iso_unmounts_partition_after_extract`: same setup, asserts `alt_unmount_volume_call_count >= 1` (cleanup always happens).
       - Tracking infrastructure added to `tests/format_thread_linux_glue.c` (`alt_mount_volume_call_count`, `alt_mount_volume_last_ret`, `alt_unmount_volume_call_count`) and to the `ExtractISO` stub in `tests/test_format_thread_linux.c` (`extract_iso_dst_call_count`, `extract_iso_last_dst_path`).
       - 334 passed, 0 failed.
+
+---
+
+## Feature #183: Ctrl+P — Persistent Log Toggle (Linux)
+- **Status**: ✅ DONE
+- **Description**: Added Ctrl+P keyboard shortcut to toggle persistent log on Linux, matching Windows behaviour.
+- **Implementation**:
+  - `src/linux/kbd_shortcuts.c` / `.h`: Added `kbdshortcut_toggle_persistent_log(int *persistent_log)` — same toggle pattern as other shortcuts.
+  - `src/linux/ui_gtk.c`: Added `on_toggle_persistent_log` GTK handler; registered Ctrl+P accelerator in the accel group; added `persistent_log` extern declaration.
+  - `src/linux/ui_gtk.c` (settings dialog): Added "Persistent log (Ctrl+P)" checkbox in the Behaviour frame, reads/writes `SETTING_PERSISTENT_LOG`.
+- **Tests**: 5 new tests in `tests/test_kbd_shortcuts_linux.c`:
+  - `toggle_persistent_log_off_to_on`, `toggle_persistent_log_on_to_off`, `toggle_persistent_log_double_returns_original`, `toggle_persistent_log_no_refresh_devs`, `toggle_persistent_log_no_refresh_part`.
+
+## Feature #184: Ctrl+L — Show/Hide Log Dialog (Linux)
+- **Status**: ✅ DONE
+- **Description**: Added Ctrl+L keyboard shortcut to show/focus the log dialog, matching Windows' IDC_LOG handler.
+- **Implementation**:
+  - `src/linux/ui_gtk.c`: Registered Ctrl+L accelerator that calls `on_log_clicked` — shows and raises the log dialog window.
+
+## Feature #185: Beta Channel Setting (Linux)
+- **Status**: ✅ DONE
+- **Description**: Added "Include beta versions" checkbox to settings dialog and beta-channel awareness to `CheckForUpdatesThread`, matching Windows' SETTING_INCLUDE_BETAS / `releases_only` logic.
+- **Implementation**:
+  - `src/linux/ui_gtk.c` (settings dialog): Added `cb_betas` checkbox in the Update Checks frame; reads/writes `SETTING_INCLUDE_BETAS`.
+  - `src/linux/parser.c`: Refactored `parse_update` into `parse_update_into(buf, len, RUFUS_UPDATE*)` helper (writes to caller-provided struct without touching global `update`) + a thin wrapper `parse_update` that calls it on the global. Declared in `src/windows/rufus.h`.
+  - `src/linux/net.c` (`CheckForUpdatesThread`): When `SETTING_INCLUDE_BETAS` is set, fetches `rufus_linux_beta.ver`, parses both stable and beta into separate `RUFUS_UPDATE` structs using `parse_update_into`, and uses whichever is newer.
+  - `tests/net_linux_glue.c`: Added stub for `parse_update_into`.
+- **Tests**: 5 new tests in `tests/test_parser.c` (`parse_update_into_*`).

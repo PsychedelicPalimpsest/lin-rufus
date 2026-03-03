@@ -622,6 +622,48 @@ TEST(size_check_zero_disk_fails_with_any_image)
 }
 
 /* ===================================================================== *
+ * Ctrl+P — persistent_log                                               *
+ * ===================================================================== */
+
+TEST(toggle_persistent_log_off_to_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_persistent_log(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_persistent_log_on_to_off)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_persistent_log(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_persistent_log_double_returns_original)
+{
+	int v = 0;
+	kbdshortcut_toggle_persistent_log(&v);
+	kbdshortcut_toggle_persistent_log(&v);
+	CHECK_INT_EQ(0, v);
+}
+
+TEST(toggle_persistent_log_no_refresh_devs)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_persistent_log(&v);
+	CHECK_INT_EQ(0, r.refresh_devs);
+}
+
+TEST(toggle_persistent_log_no_refresh_part)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_persistent_log(&v);
+	CHECK_INT_EQ(0, r.refresh_part);
+}
+
+/* ===================================================================== *
  * main                                                                  *
  * ===================================================================== */
 
@@ -735,6 +777,13 @@ int main(void)
 	RUN(size_check_exact_size_passes);
 	RUN(size_check_zero_image_passes);
 	RUN(size_check_zero_disk_fails_with_any_image);
+
+	printf("\n=== Ctrl+P (persistent_log) ===\n");
+	RUN(toggle_persistent_log_off_to_on);
+	RUN(toggle_persistent_log_on_to_off);
+	RUN(toggle_persistent_log_double_returns_original);
+	RUN(toggle_persistent_log_no_refresh_devs);
+	RUN(toggle_persistent_log_no_refresh_part);
 
 	TEST_RESULTS();
 	return (_fail > 0) ? 1 : 0;

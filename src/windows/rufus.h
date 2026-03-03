@@ -882,6 +882,7 @@ extern char* replace_char(const char* src, const char c, const char* rep);
 extern void filter_chars(char* str, const char* rem, const char rep);
 extern char* remove_substr(const char* src, const char* sub);
 extern void parse_update(char* buf, size_t len);
+extern BOOL parse_update_into(char* buf, size_t len, RUFUS_UPDATE* out);
 extern void* get_data_from_asn1(const uint8_t* buf, size_t buf_len, const char* oid_str, uint8_t asn1_type, size_t* data_len);
 extern int sanitize_label(char* label);
 extern int IsHDD(DWORD DriveIndex, uint16_t vid, uint16_t pid, const char* strid);

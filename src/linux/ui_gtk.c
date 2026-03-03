@@ -294,6 +294,7 @@ static void on_delete_app_data_dir(GtkWidget *w, gpointer data);
 static void on_delete_settings(GtkWidget *w, gpointer data);
 static void on_zero_drive(GtkWidget *w, gpointer data);
 static void on_fast_zero_drive(GtkWidget *w, gpointer data);
+static void on_toggle_persistent_log(GtkWidget *w, gpointer data);
 static void on_cycle_port(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
 void InitProgress(BOOL bOnlyFormat);
@@ -1010,6 +1011,14 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_z,
 	                        GDK_CONTROL_MASK | GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_fast_zero_drive), NULL, NULL));
+	/* Ctrl+L: show/hide the log dialog (mirrors Windows IDC_LOG handler) */
+	gtk_accel_group_connect(accel, GDK_KEY_l,
+	                        GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_log_clicked), NULL, NULL));
+	/* Ctrl+P: toggle persistent log (mirrors Windows Ctrl+P handler) */
+	gtk_accel_group_connect(accel, GDK_KEY_p,
+	                        GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_toggle_persistent_log), NULL, NULL));
 
 	/* Enable drag-and-drop of image files onto the window (mirrors WM_DROPFILES) */
 	gtk_drag_dest_set(win, GTK_DEST_DEFAULT_ALL, NULL, 0, GDK_ACTION_COPY);
@@ -1985,6 +1994,7 @@ static void on_settings_clicked(GtkButton *btn, gpointer data)
 
 	extern BOOL detect_fakes;
 	extern BOOL ignore_boot_marker;
+	extern BOOL persistent_log;
 	extern BOOL usb_debug;
 
 	GtkWidget *dlg = gtk_dialog_new_with_buttons(
@@ -2026,6 +2036,11 @@ static void on_settings_clicked(GtkButton *btn, gpointer data)
 	gtk_box_pack_start(GTK_BOX(updates_box), rb_weekly,   FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(updates_box), rb_disabled, FALSE, FALSE, 0);
 
+	GtkWidget *cb_betas = gtk_check_button_new_with_label("Include beta versions");
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_betas),
+	                             ReadSettingBool(SETTING_INCLUDE_BETAS));
+	gtk_box_pack_start(GTK_BOX(updates_box), cb_betas, FALSE, FALSE, 0);
+
 	/* --- Behaviour options --- */
 	GtkWidget *opts_frame = gtk_frame_new("Behaviour");
 	GtkWidget *opts_box   = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
@@ -2038,6 +2053,7 @@ static void on_settings_clicked(GtkButton *btn, gpointer data)
 	GtkWidget *cb_usb_debug  = gtk_check_button_new_with_label("USB debug logging");
 	GtkWidget *cb_fake_chk   = gtk_check_button_new_with_label("Detect fake flash drives");
 	GtkWidget *cb_boot_marker= gtk_check_button_new_with_label("Ignore boot marker");
+	GtkWidget *cb_plog       = gtk_check_button_new_with_label("Persistent log (Ctrl+P)");
 
 	BOOL cur_dark = (ReadSetting32(SETTING_DARK_MODE) == 2);
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_dark),       cur_dark);
@@ -2045,12 +2061,14 @@ static void on_settings_clicked(GtkButton *btn, gpointer data)
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_usb_debug),  usb_debug);
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_fake_chk),   detect_fakes);
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_boot_marker),ignore_boot_marker);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_plog),       persistent_log);
 
 	gtk_box_pack_start(GTK_BOX(opts_box), cb_dark,        FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(opts_box), cb_expert,      FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(opts_box), cb_usb_debug,   FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(opts_box), cb_fake_chk,    FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(opts_box), cb_boot_marker, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(opts_box), cb_plog,        FALSE, FALSE, 0);
 
 	gtk_widget_show_all(dlg);
 	int response = gtk_dialog_run(GTK_DIALOG(dlg));
@@ -2103,8 +2121,21 @@ static void on_settings_clicked(GtkButton *btn, gpointer data)
 			WriteSettingBool(SETTING_IGNORE_BOOT_MARKER, ignore_boot_marker);
 		}
 
-		uprintf("Settings saved: dark=%d expert=%d usb_debug=%d detect_fakes=%d ignore_boot_marker=%d",
-		        new_dark, expert_mode, usb_debug, detect_fakes, ignore_boot_marker);
+		/* Persistent log */
+		BOOL new_plog = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cb_plog));
+		if (new_plog != persistent_log) {
+			persistent_log = new_plog;
+			WriteSettingBool(SETTING_PERSISTENT_LOG, persistent_log);
+		}
+
+		/* Include beta updates */
+		BOOL new_betas = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cb_betas));
+		WriteSettingBool(SETTING_INCLUDE_BETAS, new_betas);
+
+		uprintf("Settings saved: dark=%d expert=%d usb_debug=%d detect_fakes=%d "
+		        "ignore_boot_marker=%d persistent_log=%d betas=%d",
+		        new_dark, expert_mode, usb_debug, detect_fakes, ignore_boot_marker,
+		        persistent_log, new_betas);
 	}
 
 	gtk_widget_destroy(dlg);
@@ -2456,6 +2487,16 @@ static void on_fast_zero_drive(GtkWidget *w, gpointer data)
 	uprintf("Zero drive requested (fast — skip empty blocks)");
 	/* Simulate Start button click */
 	gtk_button_clicked(GTK_BUTTON(rw.start_btn));
+}
+
+/* Ctrl+P: toggle persistent log (mirrors Windows Ctrl+P handler) */
+static void on_toggle_persistent_log(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	extern BOOL persistent_log;
+	kbdshortcut_result_t r = kbdshortcut_toggle_persistent_log(&persistent_log);
+	uprintf("Persistent log %s", r.new_value ? "enabled" : "disabled");
+	WriteSettingBool(SETTING_PERSISTENT_LOG, r.new_value);
 }
 
 static void on_cycle_port(GtkWidget *w, gpointer data)

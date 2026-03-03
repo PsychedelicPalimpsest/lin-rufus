@@ -209,12 +209,24 @@ kbdshortcut_result_t kbdshortcut_toggle_non_usb_removable(int *list_non_usb_remo
 }
 
 /* --------------------------------------------------------------------- *
+ * Persistent log toggle                                                  *
+ * --------------------------------------------------------------------- */
+
+/* Ctrl+P — toggle persistent log (auto-append log to disk on exit/format). */
+kbdshortcut_result_t kbdshortcut_toggle_persistent_log(int *persistent_log)
+{
+	kbdshortcut_result_t r = { 0 };
+	*persistent_log  = !*persistent_log;
+	r.new_value      = *persistent_log;
+	return r;
+}
+
+/* --------------------------------------------------------------------- *
  * Zero-drive helpers                                                     *
  * --------------------------------------------------------------------- */
 
 /* Alt+Z — zero the entire drive */
-void kbdshortcut_zero_drive(int *zero_drive, int *fast_zeroing)
-{
+void kbdshortcut_zero_drive(int *zero_drive, int *fast_zeroing) {
 	*zero_drive   = 1;
 	*fast_zeroing = 0;
 }

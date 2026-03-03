@@ -74,6 +74,13 @@ void kbdshortcut_zero_drive      (int *zero_drive, int *fast_zeroing);
 void kbdshortcut_fast_zero_drive (int *zero_drive, int *fast_zeroing);
 
 /*
+ * kbdshortcut_toggle_persistent_log - toggle persistent log on/off (Ctrl+P).
+ * Toggles *persistent_log and returns result.  Does not do I/O itself;
+ * the caller is responsible for persisting the value and showing the status.
+ */
+kbdshortcut_result_t kbdshortcut_toggle_persistent_log(int *persistent_log);
+
+/*
  * kbdshortcut_size_check_fails - returns non-zero when the image is too large
  * to fit on the target drive and the size check is enabled.
  *

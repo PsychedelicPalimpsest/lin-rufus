@@ -26,6 +26,12 @@ void parse_update(char *buf, size_t len)
 	/* In the test environment we don't parse anything. */
 }
 
+BOOL parse_update_into(char *buf, size_t len, RUFUS_UPDATE *out)
+{
+	(void)buf; (void)len; (void)out;
+	return FALSE;
+}
+
 /* ---- DownloadNewVersion stub ---- */
 void DownloadNewVersion(void) {}
 

@@ -651,22 +651,61 @@ static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 	DWORD downloaded = 0;
 	char url[256];
 
-	/* Try to fetch a Linux version file from the Rufus release server.
-	 * We attempt the generic "rufus_linux.ver" path. */
+	/* Fetch the stable Linux version file from the Rufus release server. */
 	snprintf(url, sizeof(url), "%s/rufus_linux.ver", RUFUS_URL);
 	downloaded = DownloadToFileOrBuffer(url, NULL, &buf, NULL, FALSE);
 
 	if (downloaded > 0 && buf != NULL) {
-		/* NUL-terminate (buf already has downloaded bytes) */
+		/* NUL-terminate */
 		uint8_t *tmp = realloc(buf, downloaded + 1);
-		if (tmp) {
-			buf = tmp;
-			buf[downloaded] = '\0';
+		if (tmp) { buf = tmp; buf[downloaded] = '\0'; }
+	}
+
+	/* If betas are enabled, also check the beta channel and use whichever
+	 * version is newer (mirrors the Windows channel[] logic in net.c). */
+	if (ReadSettingBool(SETTING_INCLUDE_BETAS)) {
+		uint8_t *beta_buf = NULL;
+		char beta_url[256];
+		snprintf(beta_url, sizeof(beta_url), "%s/rufus_linux_beta.ver", RUFUS_URL);
+		DWORD beta_dl = DownloadToFileOrBuffer(beta_url, NULL, &beta_buf, NULL, FALSE);
+		if (beta_dl > 0 && beta_buf != NULL) {
+			uint8_t *btmp = realloc(beta_buf, beta_dl + 1);
+			if (btmp) { beta_buf = btmp; beta_buf[beta_dl] = '\0'; }
+
+			/* Parse stable and beta into separate structs, keep the newer one */
+			RUFUS_UPDATE stable_update = { 0 };
+			RUFUS_UPDATE beta_update   = { 0 };
+			parse_update_into((char *)buf,      downloaded + 1, &stable_update);
+			parse_update_into((char *)beta_buf, beta_dl  + 1,  &beta_update);
+
+			if (rufus_is_newer_version(beta_update.version, stable_update.version)) {
+				/* Beta is newer: discard stable, use beta buffer */
+				safe_free(stable_update.download_url);
+				safe_free(stable_update.release_notes);
+				safe_free(stable_update.loc_url);
+				safe_free(buf);
+				buf        = beta_buf;
+				downloaded = beta_dl;
+				beta_buf   = NULL;
+				update     = beta_update;
+			} else {
+				/* Stable is newer (or equal): discard beta */
+				safe_free(beta_update.download_url);
+				safe_free(beta_update.release_notes);
+				safe_free(beta_update.loc_url);
+				update     = stable_update;
+			}
 		}
+		safe_free(beta_buf);
+	}
+
+	if (downloaded > 0 && buf != NULL) {
+		/* If beta comparison didn't already populate update, parse now */
+		if (!ReadSettingBool(SETTING_INCLUDE_BETAS))
+			parse_update((char *)buf, (size_t)downloaded + 1);
+
 		/* Record check time */
 		WriteSetting64(SETTING_LAST_UPDATE, (int64_t)time(NULL));
-		/* Parse version/URL out of the buffer */
-		parse_update((char *)buf, (size_t)downloaded + 1);
 
 		/* Check if locale bundle needs refreshing */
 		if (is_locale_update_needed())
@@ -675,7 +714,6 @@ static DWORD WINAPI CheckForUpdatesThread(LPVOID param)
 		if (rufus_is_newer_version(update.version, rufus_version)) {
 			uprintf("New version %d.%d.%d available!",
 			        update.version[0], update.version[1], update.version[2]);
-			/* Notify the main thread so it can show the update dialog */
 			PostMessage(hMainDialog, UM_NEW_VERSION, 0, 0);
 		} else {
 			uprintf("Rufus is up to date (%d.%d.%d).",
