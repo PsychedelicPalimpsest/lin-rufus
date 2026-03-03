@@ -387,21 +387,67 @@ BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive)
 	int dst_fd = (int)(intptr_t)hDrive;
 
 	if (bZeroDrive) {
-		/* Zero the entire drive */
+		/* Zero (or fast-zero) the entire drive.
+		 * fast_zeroing=TRUE: fill with 0xFF, read back each block and skip
+		 * if already uniform (all 0x00 or all 0xFF).  Throttle reads to one
+		 * per 16 writes to avoid wearing flash.  Mirrors Windows WriteDrive(). */
 		LONGLONG disk_size = SelectedDrive.DiskSize;
 		if (disk_size <= 0) return FALSE;
 		const size_t chunk = 4 * 1024 * 1024;  /* 4 MB chunks */
-		uint8_t *buf = (uint8_t*)calloc(1, chunk);
+		uint8_t *buf = (uint8_t*)malloc(chunk);
 		if (!buf) {
 			ErrorStatus = RUFUS_ERROR(ERROR_NOT_ENOUGH_MEMORY);
 			return FALSE;
 		}
+		memset(buf, fast_zeroing ? 0xFF : 0x00, chunk);
+
+		uint32_t *cmp_buf = NULL;
+		if (fast_zeroing) {
+			cmp_buf = (uint32_t*)malloc(chunk);
+			if (!cmp_buf) {
+				free(buf);
+				ErrorStatus = RUFUS_ERROR(ERROR_NOT_ENOUGH_MEMORY);
+				return FALSE;
+			}
+		}
+
 		LONGLONG off = 0;
+		int throttle = 0;
 		BOOL ok = TRUE;
+		uprintf(fast_zeroing ? "Fast-zeroing drive:" : "Zeroing drive:");
+		uprint_progress(0, 0);
 		while (off < disk_size) {
 			CHECK_FOR_USER_CANCEL;
 			size_t to_write = (size_t)((disk_size - off) < (LONGLONG)chunk
 			                           ? (disk_size - off) : (LONGLONG)chunk);
+
+			if (throttle) {
+				throttle--;
+			} else if (fast_zeroing) {
+				/* Read back and compare — skip if block is already uniform */
+				ssize_t nr = pread(dst_fd, cmp_buf, to_write, (off_t)off);
+				if (nr != (ssize_t)to_write) {
+					uprintf("Read error during fast-zero comparison");
+					ok = FALSE;
+					break;
+				}
+				uint32_t first = cmp_buf[0];
+				if (first == 0x00000000 || first == 0xFFFFFFFF) {
+					size_t n32 = to_write / sizeof(uint32_t);
+					size_t i;
+					for (i = 1; i < n32 && cmp_buf[i] == first; i++);
+					if (i >= n32) {
+						/* Block is already uniform — skip write */
+						off += (LONGLONG)to_write;
+						UpdateProgressWithInfo(OP_FORMAT, MSG_306,
+						                       (uint64_t)off, (uint64_t)disk_size);
+						uprint_progress((uint64_t)off, (uint64_t)disk_size);
+						continue;
+					}
+				}
+				throttle = 15;
+			}
+
 			ssize_t w = pwrite(dst_fd, buf, to_write, (off_t)off);
 			if (w != (ssize_t)to_write) {
 				LastWriteError = RUFUS_ERROR(ERROR_WRITE_FAULT);
@@ -409,9 +455,11 @@ BOOL format_linux_write_drive(HANDLE hDrive, BOOL bZeroDrive)
 				break;
 			}
 			off += (LONGLONG)to_write;
-			UpdateProgressWithInfo(OP_FILE_COPY, MSG_261,
+			UpdateProgressWithInfo(OP_FORMAT, fast_zeroing ? MSG_306 : MSG_286,
 			                       (uint64_t)off, (uint64_t)disk_size);
+			uprint_progress((uint64_t)off, (uint64_t)disk_size);
 		}
+		free(cmp_buf);
 		free(buf);
 		return ok;
 	}

@@ -601,6 +601,152 @@ TEST(write_drive_missing_gz_source_returns_false)
 }
 
 /* ================================================================
+ * Fast-zeroing tests
+ * ================================================================ */
+
+/* Regular zero fills with 0x00 bytes */
+TEST(zero_drive_fills_with_zeros)
+{
+	const size_t sz = 8192;
+	int dst = make_dst_fd(sz);
+	CHECK(dst >= 0);
+	/* Pre-fill with 0xAA so we can confirm the write happened */
+	{
+		uint8_t fill[sz];
+		memset(fill, 0xAA, sz);
+		pwrite(dst, fill, sz, 0);
+	}
+	SelectedDrive.DiskSize = (LONGLONG)sz;
+	fast_zeroing = FALSE;
+	ErrorStatus = 0;
+
+	BOOL ret = format_linux_write_drive((HANDLE)(intptr_t)dst, TRUE);
+	CHECK(ret == TRUE);
+
+	uint8_t out[sz];
+	CHECK(pread(dst, out, sz, 0) == (ssize_t)sz);
+	for (size_t i = 0; i < sz; i++)
+		CHECK(out[i] == 0x00);
+
+	close(dst);
+}
+
+/* Fast-zero fills with 0xFF bytes */
+TEST(fast_zero_drive_fills_with_0xff)
+{
+	const size_t sz = 8192;
+	int dst = make_dst_fd(sz);
+	CHECK(dst >= 0);
+	/* Pre-fill with 0xAA so we know the write is actually happening */
+	{
+		uint8_t fill[sz];
+		memset(fill, 0xAA, sz);
+		pwrite(dst, fill, sz, 0);
+	}
+	SelectedDrive.DiskSize = (LONGLONG)sz;
+	fast_zeroing = TRUE;
+	ErrorStatus = 0;
+
+	BOOL ret = format_linux_write_drive((HANDLE)(intptr_t)dst, TRUE);
+	fast_zeroing = FALSE;
+	CHECK(ret == TRUE);
+
+	uint8_t out[sz];
+	CHECK(pread(dst, out, sz, 0) == (ssize_t)sz);
+	for (size_t i = 0; i < sz; i++)
+		CHECK(out[i] == 0xFF);
+
+	close(dst);
+}
+
+/* Fast-zero skips blocks already all 0xFF */
+TEST(fast_zero_skips_already_ff_blocks)
+{
+	const size_t sz = 8192;
+	int dst = make_dst_fd(sz);
+	CHECK(dst >= 0);
+	/* Pre-fill with 0xFF → all blocks are "empty"; fast-zero should skip them */
+	{
+		uint8_t fill[sz];
+		memset(fill, 0xFF, sz);
+		pwrite(dst, fill, sz, 0);
+	}
+	SelectedDrive.DiskSize = (LONGLONG)sz;
+	fast_zeroing = TRUE;
+	ErrorStatus = 0;
+
+	BOOL ret = format_linux_write_drive((HANDLE)(intptr_t)dst, TRUE);
+	fast_zeroing = FALSE;
+	CHECK(ret == TRUE);
+
+	/* Result must still be all 0xFF */
+	uint8_t out[sz];
+	CHECK(pread(dst, out, sz, 0) == (ssize_t)sz);
+	for (size_t i = 0; i < sz; i++)
+		CHECK(out[i] == 0xFF);
+
+	close(dst);
+}
+
+/* Fast-zero skips blocks already all 0x00 (treated as empty) */
+TEST(fast_zero_skips_already_zero_blocks)
+{
+	const size_t sz = 8192;
+	int dst = make_dst_fd(sz);
+	CHECK(dst >= 0);
+	/* Pre-fill with 0x00 → already empty blocks; fast-zero skips them */
+	{
+		uint8_t fill[sz];
+		memset(fill, 0x00, sz);
+		pwrite(dst, fill, sz, 0);
+	}
+	SelectedDrive.DiskSize = (LONGLONG)sz;
+	fast_zeroing = TRUE;
+	ErrorStatus = 0;
+
+	BOOL ret = format_linux_write_drive((HANDLE)(intptr_t)dst, TRUE);
+	fast_zeroing = FALSE;
+	CHECK(ret == TRUE);
+
+	/* Content must remain 0x00 (skipped, not written as 0xFF) */
+	uint8_t out[sz];
+	CHECK(pread(dst, out, sz, 0) == (ssize_t)sz);
+	for (size_t i = 0; i < sz; i++)
+		CHECK(out[i] == 0x00);
+
+	close(dst);
+}
+
+/* Fast-zero overwrites blocks with mixed content → writes 0xFF */
+TEST(fast_zero_overwrites_nonempty_blocks)
+{
+	const size_t sz = 8192;
+	int dst = make_dst_fd(sz);
+	CHECK(dst >= 0);
+	/* Pre-fill with 0x55 — mixed content, not all-0 or all-FF */
+	{
+		uint8_t fill[sz];
+		memset(fill, 0x55, sz);
+		pwrite(dst, fill, sz, 0);
+	}
+	SelectedDrive.DiskSize = (LONGLONG)sz;
+	fast_zeroing = TRUE;
+	ErrorStatus = 0;
+
+	BOOL ret = format_linux_write_drive((HANDLE)(intptr_t)dst, TRUE);
+	fast_zeroing = FALSE;
+	CHECK(ret == TRUE);
+
+	/* Block was non-empty so it must have been overwritten with 0xFF */
+	uint8_t out[sz];
+	CHECK(pread(dst, out, sz, 0) == (ssize_t)sz);
+	for (size_t i = 0; i < sz; i++)
+		CHECK(out[i] == 0xFF);
+
+	close(dst);
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 
@@ -619,6 +765,11 @@ int main(void)
 	RUN(write_drive_gz_writes_from_offset_zero);
 	RUN(write_drive_corrupt_gz_returns_false);
 	RUN(write_drive_missing_gz_source_returns_false);
+	RUN(zero_drive_fills_with_zeros);
+	RUN(fast_zero_drive_fills_with_0xff);
+	RUN(fast_zero_skips_already_ff_blocks);
+	RUN(fast_zero_skips_already_zero_blocks);
+	RUN(fast_zero_overwrites_nonempty_blocks);
 
 	TEST_RESULTS();
 }
