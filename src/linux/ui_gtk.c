@@ -130,6 +130,10 @@ static BOOL user_changed_label = FALSE;
  * user_changed_label triggers from the "changed" signal. */
 static BOOL app_changed_label  = FALSE;
 
+/* Set TRUE while SetPersistenceSize() is updating the entry to avoid feedback loop. */
+static BOOL app_changed_persistence = FALSE;
+static void on_persistence_size_entry_changed(GtkWidget *w, gpointer data);
+
 /* Forward declaration for combo registration helper */
 static void combo_register_all(void);
 /* Forward declaration for initial combo population */
@@ -564,7 +568,10 @@ static GtkWidget *build_persistence_row(void)
 
 	GtkWidget *lbl = gtk_label_new("Persistent partition size");
 
-	rw.persistence_size  = gtk_label_new("0 MB");
+	rw.persistence_size  = gtk_entry_new();
+	gtk_entry_set_max_length(GTK_ENTRY(rw.persistence_size), 7);
+	gtk_entry_set_width_chars(GTK_ENTRY(rw.persistence_size), 7);
+	gtk_entry_set_text(GTK_ENTRY(rw.persistence_size), "0");
 	rw.persistence_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0, 100, 1);
 	gtk_widget_set_hexpand(rw.persistence_scale, TRUE);
 	gtk_scale_set_draw_value(GTK_SCALE(rw.persistence_scale), FALSE);
@@ -587,6 +594,8 @@ static GtkWidget *build_persistence_row(void)
 	                 G_CALLBACK(on_persistence_changed), NULL);
 	g_signal_connect(rw.persistence_units, "changed",
 	                 G_CALLBACK(on_persistence_changed), NULL);
+	g_signal_connect(rw.persistence_size, "changed",
+	                 G_CALLBACK(on_persistence_size_entry_changed), NULL);
 
 	return vbox;
 }
@@ -1665,6 +1674,36 @@ static void on_persistence_changed(GtkWidget *w, gpointer data)
 	SetPersistenceSize();
 }
 
+/*
+ * Called when the user types directly in the persistence size entry field.
+ * Mirrors Windows IDC_PERSISTENCE_SIZE EN_CHANGE: parses the typed value,
+ * clamps it to the slider range, updates persistence_size and the slider.
+ */
+static void on_persistence_size_entry_changed(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	if (app_changed_persistence) return;
+	if (!rw.persistence_scale || !rw.persistence_units || !rw.persistence_size) return;
+
+	const char *text = gtk_entry_get_text(GTK_ENTRY(rw.persistence_size));
+	char *end = NULL;
+	double val = strtod(text, &end);
+	if (end == text || val < 0) return; /* not a valid number */
+
+	double max = gtk_adjustment_get_upper(gtk_range_get_adjustment(GTK_RANGE(rw.persistence_scale)));
+	if (val > max) val = max;
+
+	int unit = gtk_combo_box_get_active(GTK_COMBO_BOX(rw.persistence_units));
+	uint64_t mult = (unit == 1) ? (1024ULL * 1024 * 1024) : (1024ULL * 1024);
+	persistence_size = (uint64_t)val * mult;
+	persistence_unit_selection = unit;
+
+	/* Update slider without triggering entry re-entry */
+	app_changed_persistence = TRUE;
+	gtk_range_set_value(GTK_RANGE(rw.persistence_scale), val);
+	app_changed_persistence = FALSE;
+}
+
 static void on_log_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
@@ -2294,11 +2333,13 @@ void SetPersistencePos(uint64_t pos)
 
 void SetPersistenceSize(void)
 {
-	if (!rw.persistence_size) return;
-	char buf[64];
+	if (!rw.persistence_size || !rw.persistence_scale || !rw.persistence_units) return;
+	char buf[32];
 	gdouble val = gtk_range_get_value(GTK_RANGE(rw.persistence_scale));
-	snprintf(buf, sizeof(buf), "%.0f MB", val);
-	gtk_label_set_text(GTK_LABEL(rw.persistence_size), buf);
+	snprintf(buf, sizeof(buf), "%.0f", val);
+	app_changed_persistence = TRUE;
+	gtk_entry_set_text(GTK_ENTRY(rw.persistence_size), buf);
+	app_changed_persistence = FALSE;
 }
 
 void TogglePersistenceControls(BOOL display)
@@ -3158,6 +3199,12 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 		CreateTooltip((HWND)rw.old_bios_check,    lmprintf(MSG_169), -1);
 	if (rw.list_usb_hdd_check)
 		CreateTooltip((HWND)rw.list_usb_hdd_check,lmprintf(MSG_170), -1);
+	if (rw.persistence_scale)
+		CreateTooltip((HWND)rw.persistence_scale, lmprintf(MSG_125), 30000);
+	if (rw.persistence_size)
+		CreateTooltip((HWND)rw.persistence_size,  lmprintf(MSG_125), 30000);
+	if (rw.persistence_units)
+		CreateTooltip((HWND)rw.persistence_units, lmprintf(MSG_126), 30000);
 
 	/* Set ATK accessible names on toolbar buttons so screen readers (Orca)
 	 * announce the button function rather than the emoji label glyph name.

@@ -62,7 +62,7 @@ typedef struct {
 	/* Persistence row (shown only for compatible images) */
 	GtkWidget *persistence_row;
 	GtkWidget *persistence_scale;   /* IDC_PERSISTENCE_SLIDER */
-	GtkWidget *persistence_size;    /* IDC_PERSISTENCE_SIZE (label) */
+	GtkWidget *persistence_size;    /* IDC_PERSISTENCE_SIZE (entry) */
 	GtkWidget *persistence_units;   /* IDC_PERSISTENCE_UNITS */
 
 	/* Image info panel (shown after ImageScanThread completes) */
