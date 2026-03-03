@@ -52,7 +52,9 @@
 #include "dos.h"
 #include "ms-sys/inc/file.h"
 #include "ms-sys/inc/br.h"
+#include "ms-sys/inc/fat16.h"
 #include "ms-sys/inc/fat32.h"
+#include "ms-sys/inc/ntfs.h"
 #include "ms-sys/inc/partition_info.h"
 #include "../../res/grub/grub_version.h"
 #include "drive_linux.h"
@@ -164,10 +166,29 @@ BOOL WritePBR_fs(HANDLE hLogicalVolume, int fs_type)
 	case FS_EXT4:
 		/* ext filesystems don't use a Windows-style partition boot record */
 		return TRUE;
-	case FS_NTFS:
 	case FS_EXFAT:
+		/* mkfs.exfat writes its own proper boot sectors; no PBR step needed */
+		return TRUE;
 	case FS_FAT16:
-		/* mkntfs / mkfs.exfat / mkfs.fat write their own boot sectors; no PBR step needed */
+		if (!is_fat_16_fs(fp)) {
+			uprintf("Volume does not have a FAT16 boot sector - aborting");
+			return FALSE;
+		}
+		if (boot_type == BT_FREEDOS) {
+			if (!write_fat_16_fd_br(fp, 0)) return FALSE;
+		} else if (boot_type == BT_REACTOS) {
+			if (!write_fat_16_ros_br(fp, 0)) return FALSE;
+		} else {
+			if (!write_fat_16_br(fp, 0)) return FALSE;
+		}
+		if (!write_partition_physical_disk_drive_id_fat16(fp)) return FALSE;
+		return TRUE;
+	case FS_NTFS:
+		if (!is_ntfs_fs(fp)) {
+			uprintf("Volume does not have an NTFS boot sector - aborting");
+			return FALSE;
+		}
+		if (!write_ntfs_br(fp)) return FALSE;
 		return TRUE;
 	default:
 		return FALSE;
@@ -1129,15 +1150,16 @@ DWORD WINAPI FormatThread(void* param)
 	}
 	UpdateProgress(OP_FIX_MBR, -1.0f);
 
-	/* Write partition boot record (PBR) */
-	hLogicalVolume = GetLogicalHandle(DriveIndex, part_offset, FALSE, TRUE, FALSE);
-	if (hLogicalVolume != INVALID_HANDLE_VALUE && hLogicalVolume != NULL) {
-		if (!WritePBR(hLogicalVolume)) {
-			if (!IS_ERROR(ErrorStatus))
-				ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
-			/* Non-fatal: continue */
+	/* Write partition boot record (PBR) — only for BIOS boot targets.
+	 * UEFI targets (TT_UEFI) and UEFI:NTFS (BT_UEFI_NTFS) boot from
+	 * the EFI System Partition or the UEFI:NTFS bridge, not a PBR. */
+	if (boot_type != BT_UEFI_NTFS && target_type != TT_UEFI) {
+		hLogicalVolume = GetLogicalHandle(DriveIndex, part_offset, FALSE, TRUE, FALSE);
+		if (hLogicalVolume != INVALID_HANDLE_VALUE && hLogicalVolume != NULL) {
+			if (!WritePBR(hLogicalVolume))
+				uprintf("WritePBR failed (non-fatal)");
+			safe_closehandle(hLogicalVolume);
 		}
-		safe_closehandle(hLogicalVolume);
 	}
 	CHECK_FOR_USER_CANCEL;
 

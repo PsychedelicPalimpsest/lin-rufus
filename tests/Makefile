@@ -130,6 +130,7 @@ FORMAT_MS_SRC := $(SRC_DIR)/ms-sys/file.c \
                  $(SRC_DIR)/ms-sys/br.c \
                  $(SRC_DIR)/ms-sys/fat16.c \
                  $(SRC_DIR)/ms-sys/fat32.c \
+                 $(SRC_DIR)/ms-sys/ntfs.c \
                  $(SRC_DIR)/ms-sys/partition_info.c
 CFLAGS_LINUX_test_format_linux := \
 	-D_RUFUS \

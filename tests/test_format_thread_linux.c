@@ -40,7 +40,9 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "format_linux.h"
 #include "resource.h"
 #include "ms-sys/inc/file.h"
+#include "ms-sys/inc/fat16.h"
 #include "ms-sys/inc/fat32.h"
+#include "ms-sys/inc/ntfs.h"
 #include "../res/grub/grub_version.h"
 
 /* ================================================================
@@ -2336,6 +2338,192 @@ TEST(write_pbr_fat32_kolibrios_matches_kos_vbr)
 }
 
 /* ================================================================
+ * WritePBR_fs FAT16 and NTFS VBR variant tests
+ * ================================================================ */
+
+/*
+ * create_fat16_sector - create a temp file with FAT16 signature at offset 0x36.
+ * The file is 512 bytes (one sector), matching what mkfs.fat -F 16 would write.
+ */
+static char *create_fat16_sector(void)
+{
+	char template[] = "/tmp/rufus_pbr16_XXXXXX";
+	int fd = mkstemp(template);
+	if (fd < 0) return NULL;
+	uint8_t buf[512];
+	memset(buf, 0, sizeof(buf));
+	/* "FAT16   " at offset 0x36 — what is_fat_16_fs() checks */
+	memcpy(buf + 0x36, "FAT16   ", 8);
+	if (write(fd, buf, 512) != 512) {
+		close(fd); unlink(template); return NULL;
+	}
+	close(fd);
+	return strdup(template);
+}
+
+/*
+ * create_ntfs_sector - create a temp file with NTFS signature at offset 0x03.
+ * The file is 512 bytes, matching what mkntfs would write.
+ */
+static char *create_ntfs_sector(void)
+{
+	char template[] = "/tmp/rufus_pbrntfs_XXXXXX";
+	int fd = mkstemp(template);
+	if (fd < 0) return NULL;
+	uint8_t buf[512];
+	memset(buf, 0, sizeof(buf));
+	/* "NTFS    " at offset 0x03 — what is_ntfs_fs() checks */
+	memcpy(buf + 0x03, "NTFS    ", 8);
+	if (write(fd, buf, 512) != 512) {
+		close(fd); unlink(template); return NULL;
+	}
+	close(fd);
+	return strdup(template);
+}
+
+TEST(write_pbr_fat16_generic_passes)
+{
+	/* BT_NON_BOOTABLE + FAT16 → generic FAT16 VBR written, returns TRUE */
+	char *path = create_fat16_sector();
+	CHECK(path != NULL);
+	reset_globals();
+	boot_type = BT_NON_BOOTABLE;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT16);
+	CHECK(r == TRUE);
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_fat16_generic_matches_vbr)
+{
+	/* BT_NON_BOOTABLE + FAT16 → entire_fat_16_br_matches verifies the VBR code */
+	char *path = create_fat16_sector();
+	CHECK(path != NULL);
+	reset_globals();
+	boot_type = BT_NON_BOOTABLE;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT16);
+	CHECK(r == TRUE);
+
+	int fd2 = open(path, O_RDONLY);
+	CHECK(fd2 >= 0);
+	FAKE_FD check; check._handle = (HANDLE)(intptr_t)fd2; check._offset = 0;
+	CHECK(entire_fat_16_br_matches((FILE*)&check));
+	close(fd2);
+
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_fat16_freedos_matches_fd_vbr)
+{
+	/* BT_FREEDOS + FAT16 → write_fat_16_fd_br() must be called */
+	char *path = create_fat16_sector();
+	CHECK(path != NULL);
+	reset_globals();
+	boot_type = BT_FREEDOS;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT16);
+	CHECK(r == TRUE);
+
+	int fd2 = open(path, O_RDONLY);
+	CHECK(fd2 >= 0);
+	FAKE_FD check; check._handle = (HANDLE)(intptr_t)fd2; check._offset = 0;
+	CHECK(entire_fat_16_fd_br_matches((FILE*)&check));
+	close(fd2);
+
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_fat16_reactos_matches_ros_vbr)
+{
+	/* BT_REACTOS + FAT16 → write_fat_16_ros_br() must be called */
+	char *path = create_fat16_sector();
+	CHECK(path != NULL);
+	reset_globals();
+	boot_type = BT_REACTOS;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT16);
+	CHECK(r == TRUE);
+
+	int fd2 = open(path, O_RDONLY);
+	CHECK(fd2 >= 0);
+	FAKE_FD check; check._handle = (HANDLE)(intptr_t)fd2; check._offset = 0;
+	CHECK(entire_fat_16_ros_br_matches((FILE*)&check));
+	close(fd2);
+
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_ntfs_passes)
+{
+	/* NTFS with valid NTFS signature → write_ntfs_br() called, returns TRUE */
+	char *path = create_ntfs_sector();
+	CHECK(path != NULL);
+	reset_globals();
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_NTFS);
+	CHECK(r == TRUE);
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_ntfs_matches_ntfs_br)
+{
+	/* NTFS VBR content must match the expected Rufus NTFS boot code */
+	char *path = create_ntfs_sector();
+	CHECK(path != NULL);
+	reset_globals();
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_NTFS);
+	CHECK(r == TRUE);
+
+	int fd2 = open(path, O_RDONLY);
+	CHECK(fd2 >= 0);
+	FAKE_FD check; check._handle = (HANDLE)(intptr_t)fd2; check._offset = 0;
+	CHECK(entire_ntfs_br_matches((FILE*)&check));
+	close(fd2);
+
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_fat16_no_fat16_sig_fails)
+{
+	/* A file without the FAT16 signature ("FAT16   " at 0x36) must fail */
+	char template[] = "/tmp/rufus_pbr16bad_XXXXXX";
+	int fd = mkstemp(template);
+	CHECK(fd >= 0);
+	uint8_t buf[512];
+	memset(buf, 0, sizeof(buf));
+	/* No FAT16 signature — just zeros */
+	CHECK(write(fd, buf, 512) == 512);
+	close(fd);
+
+	reset_globals();
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(template, FS_FAT16);
+	CHECK(r == FALSE);
+	unlink(template);
+}
+
+TEST(write_pbr_ntfs_no_ntfs_sig_fails)
+{
+	/* A file without the NTFS signature ("NTFS    " at 0x03) must fail */
+	char template[] = "/tmp/rufus_pbrntfsbad_XXXXXX";
+	int fd = mkstemp(template);
+	CHECK(fd >= 0);
+	uint8_t buf[512];
+	memset(buf, 0, sizeof(buf));
+	/* No NTFS signature — just zeros */
+	CHECK(write(fd, buf, 512) == 512);
+	close(fd);
+
+	reset_globals();
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(template, FS_NTFS);
+	CHECK(r == FALSE);
+	unlink(template);
+}
+
+/* ================================================================
  * ZIP extraction tests
  * ================================================================ */
 
@@ -2917,6 +3105,18 @@ int main(void)
 	RUN(write_pbr_fat32_bootmgr_matches_pe_vbr);
 	RUN(write_pbr_fat32_winpe_matches_nt_vbr);
 	RUN(write_pbr_fat32_kolibrios_matches_kos_vbr);
+
+	printf("\n=== WritePBR_fs FAT16 VBR variant tests ===\n");
+	RUN(write_pbr_fat16_generic_passes);
+	RUN(write_pbr_fat16_generic_matches_vbr);
+	RUN(write_pbr_fat16_freedos_matches_fd_vbr);
+	RUN(write_pbr_fat16_reactos_matches_ros_vbr);
+	RUN(write_pbr_fat16_no_fat16_sig_fails);
+
+	printf("\n=== WritePBR_fs NTFS VBR tests ===\n");
+	RUN(write_pbr_ntfs_passes);
+	RUN(write_pbr_ntfs_matches_ntfs_br);
+	RUN(write_pbr_ntfs_no_ntfs_sig_fails);
 
 	printf("\n=== FormatThread integration tests ===\n");
 	RUN(format_thread_bad_drive_index_fails);

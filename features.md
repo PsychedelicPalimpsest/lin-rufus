@@ -949,3 +949,24 @@ This is the most structurally significant porting gap.
     - **Parity gap**: When `write_as_esp=TRUE`, Windows sets the main partition to EFI System Partition type (0xEF on MBR, ESP GUID on GPT). Linux `CreatePartition` always used 0x0C (FAT32 LBA) on MBR and MS Basic Data GUID on GPT regardless of `write_as_esp`. This breaks UEFI firmware detection of ESP partitions on USBs written in ESP mode.
     - **Fix**: Added `extern BOOL write_as_esp;` to `src/linux/drive.c`. In MBR path: `e[4] = write_as_esp ? 0xEF : 0x0C`. In GPT path: `memcpy(pe + 0, write_as_esp ? esp_type : bd_type, 16)`. Cluster size is already 0 (auto) on Linux unconditionally, matching the Windows `write_as_esp` ClusterSize=0 override.
     - **Tests**: 4 new tests in `tests/test_partition_ops_linux.c`: MBR write_as_esp (0xEF), MBR normal (0x0C), GPT write_as_esp (ESP GUID), GPT normal (MS Basic Data GUID). 85 passed, 0 failed.
+
+181. ✅ DONE **FAT16 and NTFS PBR writing parity in `WritePBR_fs`** —
+    - **Parity gap**: Linux `WritePBR_fs` had a single `case FS_NTFS: case FS_EXFAT: case FS_FAT16: return TRUE;` block with comment "no PBR step needed". This was wrong for FAT16 and NTFS: `mkfs.fat` writes a generic non-bootable FAT16 VBR; for FreeDOS/ReactOS BIOS boot, `write_fat_16_fd_br`/`write_fat_16_ros_br` must be called. `mkntfs` writes an NTFS VBR that shows "NTLDR is missing"; for BIOS-bootable Windows installer images, `write_ntfs_br` must be called.
+    - **Fix** (`src/linux/format.c`):
+      - Added `#include "ms-sys/inc/fat16.h"` and `#include "ms-sys/inc/ntfs.h"`.
+      - Split the combined NTFS/exFAT/FAT16 no-op case into three proper implementations:
+        - `FS_EXFAT`: keeps `return TRUE` (mkfs.exfat writes its own proper boot sectors).
+        - `FS_FAT16`: calls `is_fat_16_fs(fp)` (fails if no FAT16 sig), then selects `write_fat_16_fd_br`/`write_fat_16_ros_br`/`write_fat_16_br` based on `boot_type`, then `write_partition_physical_disk_drive_id_fat16(fp)`.
+        - `FS_NTFS`: calls `is_ntfs_fs(fp)` (fails if no NTFS sig), then `write_ntfs_br(fp)`.
+      - Changed the `WritePBR` call in `FormatThread` to be gated on `boot_type != BT_UEFI_NTFS && target_type != TT_UEFI` — UEFI boots don't need a BIOS PBR (parity with Windows format.c lines 1796-1803). Failure is non-fatal and only logged (not counted as ErrorStatus), matching the pre-existing Linux non-fatal-continue behavior.
+    - **Fix** (`tests/Makefile`): Added `$(SRC_DIR)/ms-sys/ntfs.c` to `FORMAT_MS_SRC` (was missing; caused `entire_ntfs_br_matches` undefined reference).
+    - **Tests**: 8 new tests in `tests/test_format_thread_linux.c`:
+      - `write_pbr_fat16_generic_passes` — BT_NON_BOOTABLE + FAT16 → TRUE
+      - `write_pbr_fat16_generic_matches_vbr` — verifies `entire_fat_16_br_matches` after write
+      - `write_pbr_fat16_freedos_matches_fd_vbr` — BT_FREEDOS → FreeDOS VBR written
+      - `write_pbr_fat16_reactos_matches_ros_vbr` — BT_REACTOS → ReactOS VBR written
+      - `write_pbr_fat16_no_fat16_sig_fails` — no FAT16 magic → FALSE
+      - `write_pbr_ntfs_passes` — valid NTFS sector → TRUE
+      - `write_pbr_ntfs_matches_ntfs_br` — verifies `entire_ntfs_br_matches` after write
+      - `write_pbr_ntfs_no_ntfs_sig_fails` — no NTFS magic → FALSE
+      - 326 passed, 0 failed (vs 300 before)
