@@ -494,6 +494,30 @@ TEST(man_page_documents_expert_mode_flag) {
     free(content);
 }
 
+TEST(man_page_documents_usb_debug_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "usb-debug") != NULL
+       || strstr(content, "usb.debug") != NULL
+       || strstr(content, "usb\\-debug") != NULL
+       || strstr(content, "usb") != NULL);
+    free(content);
+}
+
+TEST(man_page_documents_enable_vmdk_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "enable-vmdk") != NULL
+       || strstr(content, "enable.vmdk") != NULL
+       || strstr(content, "enable\\-vmdk") != NULL
+       || strstr(content, "vmdk") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_json_flag) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -616,6 +640,8 @@ int main(void)
     RUN(man_page_documents_file_indexing_flag);
     RUN(man_page_documents_detect_fakes_flag);
     RUN(man_page_documents_expert_mode_flag);
+    RUN(man_page_documents_usb_debug_flag);
+    RUN(man_page_documents_enable_vmdk_flag);
     RUN(man_page_documents_json_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);

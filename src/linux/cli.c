@@ -77,6 +77,8 @@ extern BOOL ignore_boot_marker;
 extern BOOL enable_file_indexing;
 extern BOOL detect_fakes;
 extern BOOL expert_mode;
+extern BOOL usb_debug;
+extern BOOL enable_vmdk;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -185,6 +187,8 @@ void cli_print_usage(const char *prog)
 	       "  -n, --file-indexing       Enable NTFS file indexing on the formatted volume\n"
 	       "  -D, --detect-fakes        Detect fake/counterfeit drives during bad-block scan\n"
 	       "  -E, --expert-mode         Unlock expert-level features (advanced hash/SBAT options)\n"
+	       "  -g, --usb-debug           Enable verbose USB/SMART debug logging\n"
+	       "  -G, --enable-vmdk         Enable VMDK disk-image detection\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "  -j, --json                Output --list-devices results as JSON\n"
@@ -235,6 +239,8 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "file-indexing",   no_argument,       NULL, 'n' },
 		{ "detect-fakes",    no_argument,       NULL, 'D' },
 		{ "expert-mode",     no_argument,       NULL, 'E' },
+		{ "usb-debug",       no_argument,       NULL, 'g' },
+		{ "enable-vmdk",     no_argument,       NULL, 'G' },
 		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
@@ -251,7 +257,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemRxsInjDEL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemRxsInjDEgGL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -468,6 +474,14 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->expert_mode = 1;
 			break;
 
+		case 'g':
+			opts->usb_debug = 1;
+			break;
+
+		case 'G':
+			opts->enable_vmdk = 1;
+			break;
+
 		case 'j':
 			opts->json = 1;
 			break;
@@ -613,6 +627,12 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Enable expert mode (unlocks advanced hash/SBAT options) */
 	if (opts->expert_mode)
 		expert_mode = TRUE;
+	/* Enable verbose USB/SMART debug logging */
+	if (opts->usb_debug)
+		usb_debug = TRUE;
+	/* Enable VMDK disk-image detection */
+	if (opts->enable_vmdk)
+		enable_vmdk = TRUE;
 }
 
 /*

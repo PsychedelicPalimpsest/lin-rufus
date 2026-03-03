@@ -38,6 +38,8 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-file\-indexing\fR]
 [\fB\-\-detect\-fakes\fR]
 [\fB\-\-expert\-mode\fR]
+[\fB\-\-usb\-debug\fR]
+[\fB\-\-enable\-vmdk\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-json\fR]
 [\fB\-\-label\fR \fILABEL\fR]
@@ -269,6 +271,16 @@ normal read-after-write check.
 Unlock expert-level features that are hidden by default, including
 advanced hash algorithm selection and SBAT certificate inspection.
 Equivalent to pressing the keyboard shortcut in the GUI.
+.TP
+.BR \-g ", " \-\-usb\-debug
+Enable verbose USB/SMART debug logging.  When active, Rufus logs
+additional information about USB descriptor queries and SMART attribute
+reads to the status area.  Useful for diagnosing drive detection issues.
+.TP
+.BR \-G ", " \-\-enable\-vmdk
+Enable detection of VMDK (VMware Virtual Machine Disk) images in the
+image-selection file browser.  Without this flag VMDK files are not
+shown in the picker dialog.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

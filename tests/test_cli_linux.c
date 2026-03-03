@@ -1410,6 +1410,72 @@ static void test_expert_mode_default_is_off(void)
     CHECK(opts.expert_mode == 0);
 }
 
+/* ---- --usb-debug tests ---- */
+
+static void test_init_usb_debug_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.usb_debug == 0);
+}
+
+static void test_usb_debug_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --usb-debug", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.usb_debug != 0);
+}
+
+static void test_usb_debug_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -g", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.usb_debug != 0);
+}
+
+static void test_usb_debug_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.usb_debug == 0);
+}
+
+/* ---- --enable-vmdk tests ---- */
+
+static void test_init_enable_vmdk_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.enable_vmdk == 0);
+}
+
+static void test_enable_vmdk_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --enable-vmdk", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.enable_vmdk != 0);
+}
+
+static void test_enable_vmdk_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -G", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.enable_vmdk != 0);
+}
+
+static void test_enable_vmdk_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.enable_vmdk == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1643,6 +1709,18 @@ int main(void)
     RUN_TEST(test_expert_mode_long_flag);
     RUN_TEST(test_expert_mode_short_flag);
     RUN_TEST(test_expert_mode_default_is_off);
+
+    /* --usb-debug tests */
+    RUN_TEST(test_init_usb_debug_is_false);
+    RUN_TEST(test_usb_debug_long_flag);
+    RUN_TEST(test_usb_debug_short_flag);
+    RUN_TEST(test_usb_debug_default_is_off);
+
+    /* --enable-vmdk tests */
+    RUN_TEST(test_init_enable_vmdk_is_false);
+    RUN_TEST(test_enable_vmdk_long_flag);
+    RUN_TEST(test_enable_vmdk_short_flag);
+    RUN_TEST(test_enable_vmdk_default_is_off);
 
     TEST_RESULTS();
 }

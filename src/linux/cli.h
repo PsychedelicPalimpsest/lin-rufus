@@ -77,6 +77,8 @@ typedef struct {
     int  file_indexing;     /* --file-indexing/-n: enable NTFS file indexing (Windows: avoid NOT_CONTENT_INDEXED) */
     int  detect_fakes;      /* --detect-fakes/-D: detect fake/cloned drives during bad-block scan */
     int  expert_mode;       /* --expert-mode/-E: unlock expert-level features (advanced hash, SBAT) */
+    int  usb_debug;         /* --usb-debug/-g: enable verbose USB/SMART debug logging */
+    int  enable_vmdk;       /* --enable-vmdk/-G: enable VMDK disk-image detection */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */
