@@ -43,7 +43,7 @@ BOOL format_linux_clear_mbr_gpt(HANDLE hDrive, LONGLONG DiskSize, DWORD SectorSi
  * img_report, then writes only the boot code bytes (0–445) plus the
  * 0x55AA signature — partition table entries (bytes 446–509) are untouched.
  */
-BOOL format_linux_write_mbr(HANDLE hDrive);
+BOOL format_linux_write_mbr(HANDLE hDrive, BOOL needs_masquerading);
 
 /*
  * format_linux_write_drive - raw image write or zero-drive.

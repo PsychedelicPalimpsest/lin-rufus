@@ -233,8 +233,11 @@ BOOL format_linux_clear_mbr_gpt(HANDLE hDrive, LONGLONG DiskSize, DWORD SectorSi
  * Uses the ms-sys write_*_mbr() family which write only the boot code
  * (bytes 0–445) plus the 0x55AA signature — partition table entries
  * (bytes 446–509) are left untouched.
+ *
+ * When needs_masquerading is TRUE (WinPE without minint), the Rufus MBR
+ * is written instead of the Win7 MBR (matches Windows format.c behaviour).
  */
-BOOL format_linux_write_mbr(HANDLE hDrive)
+BOOL format_linux_write_mbr(HANDLE hDrive, BOOL needs_masquerading)
 {
 	if (!hDrive || hDrive == INVALID_HANDLE_VALUE) return FALSE;
 
@@ -305,7 +308,7 @@ BOOL format_linux_write_mbr(HANDLE hDrive)
 			r = write_kolibrios_mbr(fp);
 			break;
 		}
-		if (use_rufus_mbr) {
+		if (use_rufus_mbr || needs_masquerading) {
 			uprintf("Writing Rufus MBR");
 			r = write_rufus_mbr(fp);
 		} else {
@@ -768,6 +771,9 @@ DWORD WINAPI FormatThread(void* param)
 	PrintStatusInfo(FALSE, FALSE, 0, MSG_228);
 	BOOL mbr_is_bootable = (partition_type == PARTITION_STYLE_MBR) &&
 	                       (target_type == TT_UEFI ? FALSE : TRUE);
+	/* WinPE images without minint must masquerade as the second disk (0x81)
+	 * so that WinPE doesn't conflict with drive letter assignments. */
+	BOOL needs_masquerading = HAS_WINPE(img_report) && !img_report.uses_minint;
 	uint8_t extra_partitions = 0;
 	/* Detect Windows To Go: needs BT_IMAGE + IMOP_WINTOGO + HAS_WINTOGO + combo selection */
 	BOOL windows_to_go = (image_options & IMOP_WINTOGO) && (boot_type == BT_IMAGE) &&
@@ -786,6 +792,15 @@ DWORD WINAPI FormatThread(void* param)
 	                     mbr_is_bootable, extra_partitions)) {
 		ErrorStatus = RUFUS_ERROR(ERROR_PARTITION_FAILURE);
 		goto out;
+	}
+	/* WinPE masquerading: set the boot indicator in the first partition
+	 * entry to 0x81 (second disk) so WinPE avoids drive-letter conflicts */
+	if (needs_masquerading && partition_type == PARTITION_STYLE_MBR &&
+	    (int)(intptr_t)hPhysicalDrive >= 0) {
+		uint8_t indicator = 0x81;
+		int fd = (int)(intptr_t)hPhysicalDrive;
+		if (pwrite(fd, &indicator, 1, 446) != 1)
+			uprintf("WARNING: Could not write masquerading boot indicator");
 	}
 	UpdateProgress(OP_PARTITION, -1.0f);
 	CHECK_FOR_USER_CANCEL;
@@ -871,7 +886,7 @@ DWORD WINAPI FormatThread(void* param)
 	CHECK_FOR_USER_CANCEL;
 
 	/* Write MBR boot code */
-	if (!format_linux_write_mbr(hPhysicalDrive)) {
+	if (!format_linux_write_mbr(hPhysicalDrive, needs_masquerading)) {
 		if (!IS_ERROR(ErrorStatus))
 			ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
 		goto out;

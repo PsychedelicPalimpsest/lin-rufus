@@ -451,14 +451,14 @@ static BOOL do_write_mbr(const char *path)
 	int fd = open(path, O_RDWR);
 	if (fd < 0) return FALSE;
 	HANDLE h = (HANDLE)(intptr_t)fd;
-	BOOL r = format_linux_write_mbr(h);
+	BOOL r = format_linux_write_mbr(h, FALSE);
 	close(fd);
 	return r;
 }
 
 TEST(write_mbr_bad_handle_fails)
 {
-	BOOL r = format_linux_write_mbr(INVALID_HANDLE_VALUE);
+	BOOL r = format_linux_write_mbr(INVALID_HANDLE_VALUE, FALSE);
 	CHECK(r == FALSE);
 }
 
@@ -1929,6 +1929,107 @@ TEST(format_thread_iso_calls_copy_sku_si_policy)
 	unlink(path); free(path);
 }
 
+TEST(format_thread_winpe_nonminint_sets_masquerade_boot_indicator)
+{
+	/*
+	 * WinPE images that do NOT use minint (needs_masquerading=TRUE) must
+	 * set the boot indicator byte in the MBR partition entry to 0x81
+	 * (second-disk masquerading) rather than the standard 0x80.
+	 *
+	 * MBR layout: the partition entry 0 starts at offset 446 (0x1be),
+	 * byte 0 of the entry is the status/boot indicator.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_FAT32;
+	target_type            = TT_BIOS;
+	img_report.is_iso      = 1;
+	img_report.winpe       = WINPE_AMD64; /* HAS_WINPE: winpe==WINPE_AMD64 */
+	img_report.uses_minint = FALSE; /* needs_masquerading = TRUE */
+	write_as_image         = FALSE;
+	image_path             = path;
+	use_rufus_mbr          = FALSE;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	uint8_t boot_indicator;
+	CHECK(read_at(path, 446, &boot_indicator, 1) == 0);
+	CHECK_MSG(boot_indicator == 0x81,
+	          "WinPE non-minint must set boot indicator to 0x81 (masquerading)");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_winpe_minint_does_not_masquerade)
+{
+	/*
+	 * WinPE images that DO use minint (needs_masquerading=FALSE) must
+	 * use the standard boot indicator 0x80, not 0x81.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_FAT32;
+	target_type            = TT_BIOS;
+	img_report.is_iso      = 1;
+	img_report.winpe       = WINPE_AMD64; /* HAS_WINPE */
+	img_report.uses_minint = TRUE;  /* needs_masquerading = FALSE */
+	write_as_image         = FALSE;
+	image_path             = path;
+	use_rufus_mbr          = FALSE;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	uint8_t boot_indicator;
+	CHECK(read_at(path, 446, &boot_indicator, 1) == 0);
+	CHECK_MSG(boot_indicator == 0x80,
+	          "WinPE with minint must use standard boot indicator 0x80");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_winpe_nonminint_uses_rufus_mbr)
+{
+	/*
+	 * When needs_masquerading is TRUE (WinPE without minint), FormatThread
+	 * must write the Rufus MBR (first byte = 0x41) rather than Win7 MBR
+	 * (first byte = 0x33), matching Windows format.c behaviour.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_FAT32;
+	target_type            = TT_BIOS;
+	img_report.is_iso      = 1;
+	img_report.winpe       = WINPE_AMD64;
+	img_report.uses_minint = FALSE;
+	write_as_image         = FALSE;
+	image_path             = path;
+	use_rufus_mbr          = FALSE; /* explicit: no other Rufus MBR trigger */
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	uint8_t b0;
+	CHECK(read_at(path, 0, &b0, 1) == 0);
+	CHECK_MSG(b0 == 0x41,
+	          "WinPE non-minint must write Rufus MBR (first byte = 0x41)");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
 /* ================================================================
  * main
  * ================================================================ */
@@ -2010,6 +2111,11 @@ int main(void)
 	RUN(format_thread_win7_efi_uefi_calls_wimextractfile);
 	RUN(format_thread_non_win7_efi_skips_wimextractfile_for_efi);
 	RUN(format_thread_iso_calls_copy_sku_si_policy);
+
+	printf("\n=== FormatThread WinPE masquerading tests ===\n");
+	RUN(format_thread_winpe_nonminint_sets_masquerade_boot_indicator);
+	RUN(format_thread_winpe_minint_does_not_masquerade);
+	RUN(format_thread_winpe_nonminint_uses_rufus_mbr);
 
 	TEST_RESULTS();
 }
