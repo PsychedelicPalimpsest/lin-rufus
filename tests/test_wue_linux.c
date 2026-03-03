@@ -95,9 +95,11 @@ BOOL    WimExtractFile(const char* a, int b, const char* c, const char* d)
 	{ (void)a;(void)b;(void)c;(void)d; return FALSE; }
 BOOL    WimSplitFile(const char* a, const char* b)  { (void)a;(void)b; return FALSE; }
 static BOOL _mock_wim_apply_ok = FALSE;
+static char _mock_wim_apply_last_path[1024] = { 0 };  /* records the wim_path arg */
 BOOL    WimApplyImage(const char* a, int b, const char* c)
 {
-	(void)a; (void)b;
+	if (a) strncpy(_mock_wim_apply_last_path, a, sizeof(_mock_wim_apply_last_path) - 1);
+	(void)b;
 	if (_mock_wim_apply_ok && c != NULL) {
 		/* Simulate WIM apply: create Windows/Boot/EFI/bootmgfw.efi */
 		char path[512];
@@ -966,6 +968,48 @@ TEST(setup_wintogo_invalid_index_returns_false)
 	CHECK_MSG(r == FALSE, "Must return FALSE when wintogo_index is -1");
 
 	image_path = NULL;
+	_mock_wim_apply_ok = FALSE;
+	rmdir_tree(mount);
+	free(mount);
+}
+
+/*
+ * Verify that SetupWinToGo uses offset [1] (not [3]) for the Linux wininst_path.
+ * On Linux, wininst_path is stored as "/sources/install.wim" (leading '/').
+ * Offset [1] gives "sources/install.wim" (correct for wimlib ISO|path format).
+ * The old buggy offset [3] would give "rces/install.wim" (wrong).
+ */
+TEST(setup_wintogo_wim_path_uses_offset_1)
+{
+	char *mount = make_temp_dir();
+	SKIP_IF(mount == NULL);
+
+	/* Set up img_report as an ISO (not a .wim) with a known wininst_path */
+	memset(&img_report, 0, sizeof(img_report));
+	img_report.is_windows_img = FALSE; /* this triggers the path-append branch */
+	snprintf(img_report.wininst_path[0], sizeof(img_report.wininst_path[0]),
+	         "/sources/install.wim");
+
+	memset(_mock_wim_apply_last_path, 0, sizeof(_mock_wim_apply_last_path));
+	image_path = (char *)"/tmp/rufus-test-fake.iso";
+	wintogo_index = 1;
+	_mock_wim_apply_ok = TRUE;
+
+	SetupWinToGo(0, mount, FALSE);
+
+	/* The wim_path passed to WimApplyImage must end with "|sources/install.wim"
+	 * (offset [1]), NOT "|rces/install.wim" (offset [3]). */
+	const char *expected_suffix = "|sources/install.wim";
+	size_t plen = strlen(_mock_wim_apply_last_path);
+	size_t slen = strlen(expected_suffix);
+	BOOL suffix_ok = (plen >= slen) &&
+	                 (strcmp(_mock_wim_apply_last_path + plen - slen,
+	                         expected_suffix) == 0);
+	CHECK_MSG(suffix_ok,
+	          "WIM path must use offset [1] giving '|sources/install.wim'");
+
+	image_path = NULL;
+	wintogo_index = -1;
 	_mock_wim_apply_ok = FALSE;
 	rmdir_tree(mount);
 	free(mount);
@@ -2127,6 +2171,7 @@ int main(void)
 	RUN(stub_setup_winpe_returns_false);
 	RUN(setup_wintogo_null_drive_returns_false);
 	RUN(setup_wintogo_invalid_index_returns_false);
+	RUN(setup_wintogo_wim_path_uses_offset_1);
 	RUN(setup_wintogo_wim_apply_fails_returns_false);
 	RUN(setup_wintogo_creates_bcd_dir);
 	RUN(setup_wintogo_writes_bcd_file);

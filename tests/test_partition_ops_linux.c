@@ -63,6 +63,11 @@ static const uint8_t MSBD_GUID_LE[16] = {
 	0xA2,0xA0,0xD0,0xEB, 0xE5,0xB9, 0x33,0x44,
 	0x87,0xC0, 0x68,0xB6,0xB7,0x26,0x99,0xC7
 };
+/* Microsoft Reserved Partition: {E3C9E316-0B5C-4DB8-817D-F92DF00215AE} */
+static const uint8_t MSR_GUID_LE[16] = {
+	0x16,0xE3,0xC9,0xE3, 0x5C,0x0B, 0xB8,0x4D,
+	0x81,0x7D, 0xF9,0x2D,0xF0,0x02,0x15,0xAE
+};
 
 /* CRC-32 (IEEE 802.3 polynomial) used by GPT */
 static uint32_t crc32_table[256];
@@ -92,6 +97,8 @@ static uint32_t crc32_ieee(const void *buf, size_t len)
  * Helper: create a sparse temp image, register as drive 0, return path
  * --------------------------------------------------------------------- */
 #define IMG_SIZE (64ULL * 1024 * 1024)  /* 64 MB sparse image */
+/* Windows To Go requires ESP (260 MB) + MSR (128 MB), use 1 GB for those tests */
+#define IMG_SIZE_LARGE (1ULL * 1024 * 1024 * 1024)
 #define SECTOR   512
 #define DRIVE_IDX DRIVE_INDEX_MIN
 
@@ -112,6 +119,22 @@ static void setup_image(void)
 	drive_linux_reset_drives();
 	drive_linux_add_drive(g_path, "T", "TestDisk", IMG_SIZE);
 	SelectedDrive.DiskSize   = (LONGLONG)IMG_SIZE;
+	SelectedDrive.SectorSize = SECTOR;
+}
+
+static void setup_large_image(void)
+{
+	strcpy(g_path, "/tmp/rufus_partops_XXXXXX");
+	g_img_fd = mkstemp(g_path);
+	if (g_img_fd < 0) { perror("mkstemp"); abort(); }
+	if (ftruncate(g_img_fd, (off_t)IMG_SIZE_LARGE) != 0) { perror("ftruncate"); abort(); }
+
+	uint8_t sig[2] = { 0x55, 0xAA };
+	pwrite(g_img_fd, sig, 2, 510);
+
+	drive_linux_reset_drives();
+	drive_linux_add_drive(g_path, "T", "TestDisk", IMG_SIZE_LARGE);
+	SelectedDrive.DiskSize   = (LONGLONG)IMG_SIZE_LARGE;
 	SelectedDrive.SectorSize = SECTOR;
 }
 
@@ -617,6 +640,190 @@ TEST(toggle_esp_mbr_signature_preserved)
 }
 
 /* ============================================================
+ * 8. CreatePartition — XP_ESP / XP_MSR extra partitions
+ * ============================================================ */
+
+/* Helper: read a GPT entry from the entries array (128 bytes each, starts at LBA 2) */
+static void read_gpt_entry(int entry_idx, uint8_t out_type[16],
+                           uint64_t *out_start, uint64_t *out_end)
+{
+	uint8_t entry[128] = {0};
+	pread(g_img_fd, entry, 128, 1024 + (off_t)(entry_idx * 128));
+	if (out_type)  memcpy(out_type, entry, 16);
+	if (out_start) {
+		uint64_t v = 0;
+		for (int i = 0; i < 8; i++) v |= (uint64_t)entry[32+i] << (8*i);
+		*out_start = v;
+	}
+	if (out_end) {
+		uint64_t v = 0;
+		for (int i = 0; i < 8; i++) v |= (uint64_t)entry[40+i] << (8*i);
+		*out_end = v;
+	}
+}
+
+TEST(create_partition_gpt_with_esp_creates_two_partitions)
+{
+	setup_large_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	BOOL ok = CreatePartition(h, PARTITION_STYLE_GPT, FS_NTFS, FALSE, XP_ESP);
+	CloseHandle(h);
+	CHECK(ok == TRUE);
+
+	GetDrivePartitionData(DRIVE_IDX, NULL, 0, TRUE);
+	/* Should have 2 partitions: ESP + main */
+	CHECK_INT_EQ(2, (int)SelectedDrive.nPartitions);
+
+	teardown_image();
+}
+
+TEST(create_partition_gpt_with_esp_correct_type_guid)
+{
+	setup_large_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_GPT, FS_NTFS, FALSE, XP_ESP);
+	CloseHandle(h);
+
+	/* First GPT entry should be ESP type GUID */
+	uint8_t type[16];
+	read_gpt_entry(0, type, NULL, NULL);
+	CHECK_MSG(memcmp(type, ESP_GUID_LE, 16) == 0, "First partition must be ESP type GUID");
+
+	teardown_image();
+}
+
+TEST(create_partition_gpt_with_esp_correct_size)
+{
+	/* ESP must be 260 MB = 260 * 1024 * 1024 bytes */
+	setup_large_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_GPT, FS_NTFS, FALSE, XP_ESP);
+	CloseHandle(h);
+
+	uint64_t esp_start, esp_end;
+	read_gpt_entry(0, NULL, &esp_start, &esp_end);
+	uint64_t esp_sectors = esp_end - esp_start + 1;
+	uint64_t esp_bytes   = esp_sectors * 512;
+	uint64_t expected    = 260ULL * 1024 * 1024;
+	CHECK_MSG(esp_bytes == expected, "ESP must be exactly 260 MB");
+
+	teardown_image();
+}
+
+TEST(create_partition_gpt_with_msr_creates_two_partitions)
+{
+	setup_large_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	BOOL ok = CreatePartition(h, PARTITION_STYLE_GPT, FS_NTFS, FALSE, XP_MSR);
+	CloseHandle(h);
+	CHECK(ok == TRUE);
+
+	GetDrivePartitionData(DRIVE_IDX, NULL, 0, TRUE);
+	CHECK_INT_EQ(2, (int)SelectedDrive.nPartitions);
+
+	teardown_image();
+}
+
+TEST(create_partition_gpt_with_msr_correct_type_guid)
+{
+	setup_large_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_GPT, FS_NTFS, FALSE, XP_MSR);
+	CloseHandle(h);
+
+	uint8_t type[16];
+	read_gpt_entry(0, type, NULL, NULL);
+	CHECK_MSG(memcmp(type, MSR_GUID_LE, 16) == 0, "First partition must be MSR type GUID");
+
+	teardown_image();
+}
+
+TEST(create_partition_gpt_with_msr_correct_size)
+{
+	/* MSR must be 128 MB */
+	setup_large_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_GPT, FS_NTFS, FALSE, XP_MSR);
+	CloseHandle(h);
+
+	uint64_t msr_start, msr_end;
+	read_gpt_entry(0, NULL, &msr_start, &msr_end);
+	uint64_t msr_sectors = msr_end - msr_start + 1;
+	uint64_t msr_bytes   = msr_sectors * 512;
+	uint64_t expected    = 128ULL * 1024 * 1024;
+	CHECK_MSG(msr_bytes == expected, "MSR must be exactly 128 MB");
+
+	teardown_image();
+}
+
+TEST(create_partition_gpt_with_esp_and_msr_creates_three_partitions)
+{
+	setup_large_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	BOOL ok = CreatePartition(h, PARTITION_STYLE_GPT, FS_NTFS, FALSE, XP_ESP | XP_MSR);
+	CloseHandle(h);
+	CHECK(ok == TRUE);
+
+	GetDrivePartitionData(DRIVE_IDX, NULL, 0, TRUE);
+	/* Should have 3 partitions: ESP + MSR + main */
+	CHECK_INT_EQ(3, (int)SelectedDrive.nPartitions);
+
+	teardown_image();
+}
+
+TEST(create_partition_gpt_with_esp_and_msr_layout_order)
+{
+	/* ESP must come first, then MSR, then main data partition */
+	setup_large_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_GPT, FS_NTFS, FALSE, XP_ESP | XP_MSR);
+	CloseHandle(h);
+
+	uint8_t type0[16], type1[16], type2[16];
+	uint64_t start0, end0, start1, end1, start2;
+	read_gpt_entry(0, type0, &start0, &end0);
+	read_gpt_entry(1, type1, &start1, &end1);
+	read_gpt_entry(2, type2, &start2, NULL);
+
+	CHECK_MSG(memcmp(type0, ESP_GUID_LE,  16) == 0, "Entry 0 must be ESP");
+	CHECK_MSG(memcmp(type1, MSR_GUID_LE,  16) == 0, "Entry 1 must be MSR");
+	CHECK_MSG(memcmp(type2, MSBD_GUID_LE, 16) == 0, "Entry 2 must be Main Data");
+
+	/* Partitions must be contiguous and non-overlapping */
+	CHECK_MSG(start1 > end0, "MSR must start after ESP ends");
+	CHECK_MSG(start2 > end1, "Main must start after MSR ends");
+
+	teardown_image();
+}
+
+TEST(create_partition_gpt_with_esp_and_msr_main_partition_index)
+{
+	/* PI_MAIN must point to the main data partition (index 2 when ESP+MSR present) */
+	setup_large_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	CreatePartition(h, PARTITION_STYLE_GPT, FS_NTFS, FALSE, XP_ESP | XP_MSR);
+	CloseHandle(h);
+
+	/* PI_MAIN should point to offset that is AFTER ESP and MSR */
+	uint64_t esp_size = 260ULL * 1024 * 1024;
+	uint64_t msr_size = 128ULL * 1024 * 1024;
+	uint64_t expected_min_offset = 2048 * 512 + esp_size + msr_size;
+	CHECK_MSG(SelectedDrive.Partition[partition_index[PI_MAIN]].Offset >= expected_min_offset,
+	          "Main partition offset must be after ESP+MSR");
+
+	teardown_image();
+}
+
+/* ============================================================
  * main
  * ============================================================ */
 
@@ -668,6 +875,17 @@ int main(void)
 	RUN_TEST(toggle_esp_mbr_efi_becomes_fat32);
 	RUN_TEST(toggle_esp_mbr_roundtrip);
 	RUN_TEST(toggle_esp_mbr_signature_preserved);
+
+	printf("--- CreatePartition (XP_ESP / XP_MSR) ---\n");
+	RUN_TEST(create_partition_gpt_with_esp_creates_two_partitions);
+	RUN_TEST(create_partition_gpt_with_esp_correct_type_guid);
+	RUN_TEST(create_partition_gpt_with_esp_correct_size);
+	RUN_TEST(create_partition_gpt_with_msr_creates_two_partitions);
+	RUN_TEST(create_partition_gpt_with_msr_correct_type_guid);
+	RUN_TEST(create_partition_gpt_with_msr_correct_size);
+	RUN_TEST(create_partition_gpt_with_esp_and_msr_creates_three_partitions);
+	RUN_TEST(create_partition_gpt_with_esp_and_msr_layout_order);
+	RUN_TEST(create_partition_gpt_with_esp_and_msr_main_partition_index);
 
 	PRINT_RESULTS();
 	drive_linux_reset_drives();

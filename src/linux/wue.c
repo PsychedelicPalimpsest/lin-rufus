@@ -300,9 +300,9 @@ BOOL SetupWinToGo(DWORD di, const char* dn, BOOL use_esp)
 	assert(safe_strlen(image_path) < ARRAYSIZE(wim_path));
 	static_strcpy(wim_path, image_path);
 	if (!img_report.is_windows_img) {
-		assert(safe_strlen(image_path) + safe_strlen(&img_report.wininst_path[wininst_index][3]) + 1 < ARRAYSIZE(wim_path));
+		assert(safe_strlen(image_path) + safe_strlen(&img_report.wininst_path[wininst_index][1]) + 1 < ARRAYSIZE(wim_path));
 		static_strcat(wim_path, "|");
-		static_strcat(wim_path, &img_report.wininst_path[wininst_index][3]);
+		static_strcat(wim_path, &img_report.wininst_path[wininst_index][1]);
 	}
 
 	uprintf("Windows To Go: applying WIM '%s' (index %d) to '%s'", wim_path, wintogo_index, dn);

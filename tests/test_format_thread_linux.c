@@ -150,6 +150,10 @@ HWND hImageOption = NULL, hLogDialog = NULL;
 HWND hCapacity = NULL;
 WORD selected_langid = 0;
 
+/* WTG-test hook: when non-zero, SendMessageA returns this for CB_GETCURSEL/CB_GETITEMDATA
+ * calls on hImageOption, allowing tests to simulate "Windows To Go" being selected. */
+static int g_mock_image_option_data = 0;
+
 const char* FileSystemLabel[FS_MAX] = {
 	"FAT", "FAT32", "NTFS", "UDF", "exFAT", "ReFS", "ext2", "ext3", "ext4"
 };
@@ -163,6 +167,7 @@ unsigned long syslinux_ldlinux_len[2] = {0, 0};
 
 /* Exposed by format_thread_linux_glue.c for stub inspection */
 extern int install_syslinux_call_count;
+extern int setup_wintogo_call_count;
 
 /* ================================================================
  * Stub functions
@@ -209,6 +214,11 @@ void InitProgress(BOOL bOnlyFormatSection) { (void)bOnlyFormatSection; }
 void UpdateProgress(int op, float percent) { (void)op; (void)percent; }
 
 LRESULT SendMessageA(HWND h, UINT m, WPARAM w, LPARAM l) {
+	/* Allow tests to mock the image-option combo selection for WTG tests */
+	if (h == hImageOption && hImageOption != NULL && g_mock_image_option_data != 0) {
+		if (m == CB_GETCURSEL) return 0;          /* current index = 0 */
+		if (m == CB_GETITEMDATA) return (LRESULT)g_mock_image_option_data;
+	}
 	(void)h; (void)m; (void)w; (void)l; return 0;
 }
 BOOL PostMessageA(HWND h, UINT m, WPARAM w, LPARAM l) {
@@ -296,11 +306,15 @@ static void reset_globals(void)
 	zero_drive     = FALSE;
 	write_as_image = FALSE;
 	image_path     = NULL;
+	image_options  = 0;
 	ErrorStatus    = 0;
 	LastWriteError = 0;
 	img_report     = (RUFUS_IMG_REPORT){ 0 };
 	use_rufus_mbr  = TRUE;
 	install_syslinux_call_count = 0;
+	setup_wintogo_call_count    = 0;
+	g_mock_image_option_data    = 0;
+	hImageOption                = NULL;
 }
 
 /* Read bytes from a file at offset. Returns 0 on success, -1 on error. */
@@ -1515,6 +1529,116 @@ TEST(format_thread_uefi_ntfs_write_as_image_skips_uefi_ntfs)
 }
 
 /* ================================================================
+ * Windows To Go tests
+ * ================================================================ */
+
+/*
+ * Helper: set up the globals needed to trigger WTG detection in FormatThread.
+ * Uses a fake HWND for hImageOption so that SendMessageA returns IMOP_WIN_TO_GO.
+ */
+static void setup_wintogo_globals(const char *drive_path, uint64_t drive_size)
+{
+	setup_drive(drive_path, drive_size);
+	reset_globals();
+	/* WTG requires: BT_IMAGE, GPT, UEFI, NTFS */
+	boot_type      = BT_IMAGE;
+	partition_type = PARTITION_STYLE_GPT;
+	fs_type        = FS_NTFS;
+	target_type    = TT_UEFI;
+	/* HAS_WINTOGO = HAS_BOOTMGR && IS_EFI_BOOTABLE && HAS_WININST */
+	img_report.has_bootmgr     = TRUE;
+	img_report.has_bootmgr_efi = TRUE;
+	img_report.has_efi         = 1;
+	img_report.wininst_index   = 1;
+	img_report.is_iso          = 0;  /* skip ExtractISO so test can finish */
+	/* image_path must be non-NULL (WTG branch checks it); stub ignores the value */
+	image_path = (char *)drive_path;
+	/* image_options & IMOP_WINTOGO must be set */
+	image_options = IMOP_WINTOGO;
+	/* Use a non-NULL fake HWND so SendMessageA can return IMOP_WIN_TO_GO */
+	hImageOption             = (HWND)(uintptr_t)0xF001U;
+	g_mock_image_option_data = IMOP_WIN_TO_GO;
+}
+
+TEST(format_thread_wintogo_calls_setup_wintogo)
+{
+	/*
+	 * When all WTG conditions are met, FormatThread must call SetupWinToGo()
+	 * instead of ExtractISO(). The glue stub counts calls; verify == 1.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_wintogo_globals(path, IMG_512MB);
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(setup_wintogo_call_count == 1,
+	          "SetupWinToGo must be called exactly once for WTG");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_non_wintogo_does_not_call_setup_wintogo)
+{
+	/*
+	 * Standard BT_IMAGE (no WTG) must NOT call SetupWinToGo().
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type             = BT_IMAGE;
+	partition_type        = PARTITION_STYLE_GPT;
+	fs_type               = FS_NTFS;
+	target_type           = TT_UEFI;
+	img_report.has_efi    = 1;
+	img_report.is_iso     = 0;
+	/* No IMOP_WINTOGO flag → windows_to_go stays FALSE */
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(setup_wintogo_call_count == 0,
+	          "SetupWinToGo must NOT be called for non-WTG images");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_wintogo_creates_esp_msr_main_partitions)
+{
+	/*
+	 * For WTG + UEFI + GPT, FormatThread must request the ESP + MSR + main
+	 * partition layout.  The partition layout itself is fully verified in
+	 * test_partition_ops_linux.c; here we verify that the format thread:
+	 *   (a) completes without a fatal error,
+	 *   (b) reaches SetupWinToGo() exactly once (ESP+MSR flags set correctly).
+	 *
+	 * Note: FormatNTFS on an image file operates on the whole image (no loop
+	 * device) and therefore re-formats it after CreatePartition writes the
+	 * GPT.  The post-format GPT check is thus performed in the container
+	 * (root) test suite where a real loop device is available.
+	 */
+#define IMG_1GB ((uint64_t)1024 * 1024 * 1024)
+	char *path = create_temp_image(IMG_1GB);
+	CHECK(path != NULL);
+	setup_wintogo_globals(path, IMG_1GB);
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	/* No fatal error */
+	CHECK_MSG(!IS_ERROR(ErrorStatus),
+	          "WTG format thread must complete without a fatal error");
+	/* SetupWinToGo was called (verifies XP_ESP|XP_MSR path was taken) */
+	CHECK_MSG(setup_wintogo_call_count == 1,
+	          "SetupWinToGo must be called once for WTG");
+
+	teardown_drive();
+	unlink(path); free(path);
+#undef IMG_1GB
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 int main(void)
@@ -1576,6 +1700,11 @@ int main(void)
 	RUN(format_thread_image_efi_exfat_creates_uefi_ntfs_partition);
 	RUN(format_thread_image_efi_fat32_no_uefi_ntfs_partition);
 	RUN(format_thread_uefi_ntfs_write_as_image_skips_uefi_ntfs);
+
+	printf("\n=== FormatThread Windows To Go tests ===\n");
+	RUN(format_thread_wintogo_calls_setup_wintogo);
+	RUN(format_thread_non_wintogo_does_not_call_setup_wintogo);
+	RUN(format_thread_wintogo_creates_esp_msr_main_partitions);
 
 	TEST_RESULTS();
 }

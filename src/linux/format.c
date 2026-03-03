@@ -28,6 +28,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <inttypes.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -37,6 +38,7 @@
 
 #include "rufus.h"
 #include "resource.h"
+#include "compat/windowsx.h"
 #include "bled/bled.h"
 #include "localization.h"
 #include "drive.h"
@@ -757,10 +759,17 @@ DWORD WINAPI FormatThread(void* param)
 	BOOL mbr_is_bootable = (partition_type == PARTITION_STYLE_MBR) &&
 	                       (target_type == TT_UEFI ? FALSE : TRUE);
 	uint8_t extra_partitions = 0;
+	/* Detect Windows To Go: needs BT_IMAGE + IMOP_WINTOGO + HAS_WINTOGO + combo selection */
+	BOOL windows_to_go = (image_options & IMOP_WINTOGO) && (boot_type == BT_IMAGE) &&
+	    HAS_WINTOGO(img_report) &&
+	    (ComboBox_GetCurItemData(hImageOption) == IMOP_WIN_TO_GO);
 	if (boot_type == BT_IMAGE && !write_as_image &&
 	    HAS_PERSISTENCE(img_report) && persistence_size > 0)
 		extra_partitions |= XP_PERSISTENCE;
-	if (!write_as_image &&
+	/* For Windows To Go on UEFI/GPT, add ESP + MSR before the main partition */
+	if (windows_to_go && target_type == TT_UEFI && partition_type == PARTITION_STYLE_GPT)
+		extra_partitions |= XP_ESP | XP_MSR;
+	else if (!write_as_image &&
 	    uefi_ntfs_needs_extra_partition(boot_type, fs_type, target_type, &img_report))
 		extra_partitions |= XP_UEFI_NTFS;
 	if (!CreatePartition(hPhysicalDrive, partition_type, fs_type,
@@ -786,8 +795,17 @@ DWORD WINAPI FormatThread(void* param)
 	/* Re-read partition data so SelectedDrive.Partition[] is up to date */
 	GetDrivePartitionData(DriveIndex, fs_name, sizeof(fs_name), TRUE);
 
-	/* Main partition is always entry 0 in the simple single-partition case */
+	/* Re-locate main partition by its known offset in the (possibly re-ordered)
+	 * partition array returned by GetDrivePartitionData.  This is necessary
+	 * for multi-partition layouts (WTG: ESP→MSR→main) where the main partition
+	 * is not always at index 0.  Fall back to index 0 only if not found. */
 	partition_index[PI_MAIN] = 0;
+	for (int _pi = 0; _pi < (int)SelectedDrive.nPartitions; _pi++) {
+		if (SelectedDrive.Partition[_pi].Offset == main_part_off) {
+			partition_index[PI_MAIN] = _pi;
+			break;
+		}
+	}
 
 	if (SelectedDrive.nPartitions == 0 && partition_type == PARTITION_STYLE_MBR) {
 		/* Fallback: manually set the partition offset to LBA 2048 */
@@ -863,6 +881,32 @@ DWORD WINAPI FormatThread(void* param)
 	CHECK_FOR_USER_CANCEL;
 
 	/* Copy ISO files if in ISO boot mode */
+	if (boot_type == BT_IMAGE && !write_as_image && image_path != NULL && windows_to_go) {
+		/* Windows To Go: mount the target NTFS partition and apply the WIM */
+		UpdateProgress(OP_FILE_COPY, 0.0f);
+		PrintInfo(0, MSG_268);
+		char *wtg_mount = AltMountVolume(DriveIndex, part_offset, FALSE);
+		if (wtg_mount != NULL) {
+			if (!SetupWinToGo(DriveIndex, wtg_mount, (extra_partitions & XP_ESP) != 0)) {
+				if (!IS_ERROR(ErrorStatus))
+					ErrorStatus = RUFUS_ERROR(APPERR(ERROR_ISO_EXTRACT));
+			}
+			if (!IS_ERROR(ErrorStatus) && unattend_xml_path != NULL) {
+				wue_set_mount_path(wtg_mount);
+				if (!ApplyWindowsCustomization(0, unattend_xml_flags | UNATTEND_WINDOWS_TO_GO))
+					uprintf("WARNING: Windows customisation could not be applied to WTG drive");
+				wue_set_mount_path(NULL);
+			}
+			AltUnmountVolume(wtg_mount, FALSE);
+			free(wtg_mount);
+		} else {
+			uprintf("Windows To Go: failed to mount partition at offset 0x%" PRIx64, part_offset);
+			if (!IS_ERROR(ErrorStatus))
+				ErrorStatus = RUFUS_ERROR(APPERR(ERROR_ISO_EXTRACT));
+		}
+		if (IS_ERROR(ErrorStatus)) goto out;
+	}
+
 	if (boot_type == BT_IMAGE && !write_as_image && image_path != NULL
 	    && img_report.is_iso) {
 		UpdateProgress(OP_FILE_COPY, 0.0f);

@@ -138,8 +138,35 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
     (void)drive_letter; (void)flags; return TRUE;
 }
 
+int setup_wintogo_call_count = 0;
+
 BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
-{ (void)di; (void)dn; (void)use_esp; return TRUE; }
+{
+    setup_wintogo_call_count++;
+    (void)di; (void)dn; (void)use_esp;
+    return TRUE;
+}
+
+/* AltMountVolume/AltUnmountVolume stubs — for format_thread tests that use
+ * image files (not block devices), the real implementation rejects non-block
+ * paths.  Return a temporary directory so the WTG branch in format.c can
+ * reach SetupWinToGo() without a real block device. */
+#include <stdlib.h>
+char *AltMountVolume(DWORD di, uint64_t off, BOOL bSilent)
+{
+    (void)di; (void)off; (void)bSilent;
+    char template[] = "/tmp/rufus_wtg_XXXXXX";
+    char *dir = mkdtemp(template);
+    return dir ? strdup(dir) : NULL;
+}
+
+BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
+{
+    (void)bSilent;
+    if (!dn || dn[0] == '\0') return FALSE;
+    rmdir(dn);
+    return TRUE;
+}
 
 /* ExtractDOS is provided by dos.c which is only in DOS_LINUX_SRC / E2E tests.
  * For format_thread tests, use a no-op stub so the format path compiles and

@@ -514,6 +514,10 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
     uint32_t pers_sects  = has_persistence ? (uint32_t)(persistence_size / sector_size) : 0;
     BOOL has_uefi_ntfs   = (extra_partitions & XP_UEFI_NTFS) ? TRUE : FALSE;
     uint32_t uefi_sects  = has_uefi_ntfs ? (uint32_t)(1048576ULL / sector_size) : 0;
+    BOOL has_esp         = (extra_partitions & XP_ESP) ? TRUE : FALSE;
+    uint64_t esp_sects   = has_esp ? (260ULL * 1024 * 1024 / sector_size) : 0;
+    BOOL has_msr         = (extra_partitions & XP_MSR) ? TRUE : FALSE;
+    uint64_t msr_sects   = has_msr ? (128ULL * 1024 * 1024 / sector_size) : 0;
 
     if (PartitionStyle == PARTITION_STYLE_MBR) {
         uint8_t mbr[512] = { 0 };
@@ -618,7 +622,15 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         uint64_t last_usable  = (total_sects > first_usable + 34) ?
                                  total_sects - 34 : first_usable;
 
-        /* Build partition entry 0 (main) */
+        /* Type GUIDs */
+        static const uint8_t esp_type[16] = {
+            0x28,0x73,0x2A,0xC1, 0x1F,0xF8, 0xD2,0x11,
+            0xBA,0x4B, 0x00,0xA0,0xC9,0x3E,0xC9,0x3B
+        };
+        static const uint8_t msr_type[16] = {
+            0x16,0xE3,0xC9,0xE3, 0x5C,0x0B, 0xB8,0x4D,
+            0x81,0x7D, 0xF9,0x2D,0xF0,0x02,0x15,0xAE
+        };
         static const uint8_t bd_type[16] = {
             0xA2,0xA0,0xD0,0xEB, 0xE5,0xB9, 0x33,0x44,
             0x87,0xC0, 0x68,0xB6,0xB7,0x26,0x99,0xC7
@@ -639,14 +651,50 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
         if (has_uefi_ntfs)
             main_last -= uefi_sects;
 
-        uint8_t *pe = entries;
+        /* ESP and MSR go BEFORE the main partition (beginning of disk).
+         * Track the slot index so we can place subsequent entries correctly. */
+        int  entry_slot = 0;
+        uint64_t main_first = first_usable;
+
+        /* Build ESP entry (slot 0 when XP_ESP is set) */
+        if (has_esp) {
+            uint64_t esp_last = first_usable + esp_sects - 1;
+            uint8_t *pe_esp = entries + 128 * entry_slot;
+            memcpy(pe_esp + 0, esp_type, 16);
+            pe_esp[16] = 0x10 + entry_slot; /* simple unique GUID byte */
+            for (int i = 0; i < 8; i++) pe_esp[32 + i] = (first_usable >> (8*i)) & 0xFF;
+            for (int i = 0; i < 8; i++) pe_esp[40 + i] = (esp_last     >> (8*i)) & 0xFF;
+            SelectedDrive.Partition[PI_ESP].Offset = first_usable * sector_size;
+            SelectedDrive.Partition[PI_ESP].Size   = esp_sects * sector_size;
+            partition_index[PI_ESP] = entry_slot;
+            main_first += esp_sects;
+            entry_slot++;
+        }
+
+        /* Build MSR entry (after ESP if present) */
+        if (has_msr) {
+            uint64_t msr_first = main_first;
+            uint64_t msr_last  = msr_first + msr_sects - 1;
+            uint8_t *pe_msr = entries + 128 * entry_slot;
+            memcpy(pe_msr + 0, msr_type, 16);
+            pe_msr[16] = 0x11 + entry_slot; /* simple unique GUID byte */
+            for (int i = 0; i < 8; i++) pe_msr[32 + i] = (msr_first >> (8*i)) & 0xFF;
+            for (int i = 0; i < 8; i++) pe_msr[40 + i] = (msr_last  >> (8*i)) & 0xFF;
+            main_first += msr_sects;
+            entry_slot++;
+        }
+
+        /* Build main data partition entry */
+        uint8_t *pe = entries + 128 * entry_slot;
         memcpy(pe + 0,  bd_type,   16);
         memcpy(pe + 16, part_guid, 16);
-        for (int i = 0; i < 8; i++) pe[32 + i] = (first_usable >> (8*i)) & 0xFF;
-        for (int i = 0; i < 8; i++) pe[40 + i] = (main_last    >> (8*i)) & 0xFF;
+        for (int i = 0; i < 8; i++) pe[32 + i] = (main_first >> (8*i)) & 0xFF;
+        for (int i = 0; i < 8; i++) pe[40 + i] = (main_last  >> (8*i)) & 0xFF;
 
-        SelectedDrive.Partition[PI_MAIN].Offset = first_usable * sector_size;
-        SelectedDrive.Partition[PI_MAIN].Size   = (main_last - first_usable + 1) * sector_size;
+        partition_index[PI_MAIN] = entry_slot;
+        SelectedDrive.Partition[PI_MAIN].Offset = main_first * sector_size;
+        SelectedDrive.Partition[PI_MAIN].Size   = (main_last - main_first + 1) * sector_size;
+        entry_slot++;
 
         /* Build persistence partition entry (follows main) */
         if (has_persistence) {
@@ -664,18 +712,19 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
             }
             uint64_t p1_first = main_last + 1;
             uint64_t p1_last  = p1_first + pers_sects - 1;
-            uint8_t *pe1 = entries + 128;
+            uint8_t *pe1 = entries + 128 * entry_slot;
             memcpy(pe1 + 0,  linux_type, 16);
             memcpy(pe1 + 16, p1_guid,    16);
             for (int i = 0; i < 8; i++) pe1[32 + i] = (p1_first >> (8*i)) & 0xFF;
             for (int i = 0; i < 8; i++) pe1[40 + i] = (p1_last  >> (8*i)) & 0xFF;
             SelectedDrive.Partition[PI_CASPER].Offset = p1_first * sector_size;
             SelectedDrive.Partition[PI_CASPER].Size   = pers_sects * sector_size;
+            entry_slot++;
         }
 
         /* Build UEFI:NTFS EFI System partition at the very end of disk */
         if (has_uefi_ntfs) {
-            static const uint8_t esp_type[16] = {
+            static const uint8_t uefi_esp_type[16] = {
                 0x28,0x73,0x2A,0xC1, 0x1F,0xF8, 0xD2,0x11,
                 0xBA,0x4B, 0x00,0xA0,0xC9,0x3E,0xC9,0x3B
             };
@@ -689,15 +738,16 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
             }
             uint64_t un_first = last_usable - uefi_sects + 1;
             uint64_t un_last  = last_usable;
-            int slot = has_persistence ? 2 : 1;
-            uint8_t *peu = entries + 128 * slot;
-            memcpy(peu + 0,  esp_type, 16);
-            memcpy(peu + 16, un_guid,  16);
+            uint8_t *peu = entries + 128 * entry_slot;
+            memcpy(peu + 0,  uefi_esp_type, 16);
+            memcpy(peu + 16, un_guid,       16);
             for (int i = 0; i < 8; i++) peu[32 + i] = (un_first >> (8*i)) & 0xFF;
             for (int i = 0; i < 8; i++) peu[40 + i] = (un_last  >> (8*i)) & 0xFF;
             SelectedDrive.Partition[PI_UEFI_NTFS].Offset = un_first * sector_size;
             SelectedDrive.Partition[PI_UEFI_NTFS].Size   = uefi_sects * sector_size;
+            entry_slot++;
         }
+        (void)entry_slot; /* suppress unused-variable warning */
 
         uint32_t entries_crc = crc32_ieee(entries, entries_sz);
 
@@ -918,7 +968,7 @@ BOOL UnmountVolume(HANDLE hDrive)
     return TRUE;
 }
 
-BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
+__attribute__((weak)) BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
 {
     (void)bSilent;
     if (!dn || dn[0] == '\0') return FALSE;
@@ -1270,7 +1320,7 @@ BOOL MountVolume(char* dn, char* dg)
     return TRUE;
 }
 
-char* AltMountVolume(DWORD di, uint64_t off, BOOL s)
+__attribute__((weak)) char* AltMountVolume(DWORD di, uint64_t off, BOOL s)
 {
     (void)s;
 
