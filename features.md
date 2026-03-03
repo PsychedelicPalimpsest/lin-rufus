@@ -833,3 +833,10 @@ This is the most structurally significant porting gap.
     - `abort_format`: shows device count `MSG_208`/`MSG_209` after abort (mirrors Windows `aborted_start`)
     - `on_device_changed`: logs device count via `uprintf` (mirrors Windows `PrintStatusDebug` on `IDC_DEVICE CBN_SELCHANGE`)
     - Duplicate `GetDrivePartitionData` call in `on_device_changed` removed
+
+165. ✅ DONE **UI parity batch: tooltips, persistence entry, elapsed timer, DD combo, blocking timer** —
+    - Added missing tooltips: partition_combo (MSG_163), target_combo (MSG_150), bad_blocks_check (MSG_161), quick_format_check (MSG_162), uefi_validation_check (MSG_167), old_bios_check (MSG_169), list_usb_hdd_check (MSG_170), persistence_scale/size (MSG_125), persistence_units (MSG_126)
+    - `persistence_size` widget changed from GtkLabel to GtkEntry (max 7 chars), matching Windows IDC_PERSISTENCE_SIZE edit control; `on_persistence_size_entry_changed()` handles direct text input with slider sync; `app_changed_persistence` flag prevents re-entrant updates; `SetPersistenceSize()` updated to use `gtk_entry_set_text()`
+    - Elapsed time display: `elapsed_label` added to status row (right-aligned); `start_clock_timer()`/`stop_clock_timer()`/`clock_timer_cb()` mirror Windows ClockTimer (1 s interval, HH:MM:SS); `UM_TIMER_START` starts it, `UM_FORMAT_COMPLETED` and `UM_ENABLE_CONTROLS` stop it
+    - `EnableControls`: disable partition/target/fs/cluster combos when a pure DD image is loaded (mirrors Windows lines 895-902)
+    - Blocking I/O timer: `start_blocking_timer()`/`blocking_timer_cb()` mirror Windows BlockingTimer (3 s); fires when user cancels during ISO extraction (`iso_blocking_status >= 0`); shows MSG_048/MSG_080 notification if stuck
