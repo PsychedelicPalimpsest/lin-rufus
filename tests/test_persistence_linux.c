@@ -294,6 +294,38 @@ int NotificationEx(int type, const char *dont_display_setting,
     return IDOK;
 }
 
+/* Missing stubs for format.c + vhd.c dependencies */
+BOOL   ignore_boot_marker = FALSE;
+BOOL   has_ffu_support    = FALSE;
+FILE*    fd_md5sum          = NULL;
+uint64_t total_blocks = 0, extra_blocks = 0, nb_blocks = 0, last_nb_blocks = 0;
+BOOL HashFile(unsigned type, const char *path, uint8_t *sum)
+{ (void)type; (void)path; (void)sum; return FALSE; }
+void wuprintf(const wchar_t *fmt, ...) { (void)fmt; }
+BOOL SetupWinToGo(DWORD di, const char *dn, BOOL use_esp)
+{ (void)di; (void)dn; (void)use_esp; return FALSE; }
+BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return TRUE; }
+int64_t ExtractISOFile(const char *iso, const char *iso_file,
+                       const char *dest_file, uint32_t attributes)
+{ (void)iso; (void)iso_file; (void)dest_file; (void)attributes; return 0; }
+BOOL ExtractZip(const char *src_zip, const char *dest_dir)
+{ (void)src_zip; (void)dest_dir; return FALSE; }
+BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE; }
+void UpdateMD5Sum(const char *path, const char *name) { (void)path; (void)name; }
+/* wimlib stubs */
+#include "../src/wimlib/wimlib.h"
+int wimlib_open_wimU(const char *wim_file, int open_flags, WIMStruct **wim_ret)
+{ (void)wim_file; (void)open_flags; (void)wim_ret; return WIMLIB_ERR_OPEN; }
+int wimlib_extract_pathsU(WIMStruct *wim, int image, const char *target,
+    const char * const *paths, size_t num_paths, int extract_flags)
+{ (void)wim; (void)image; (void)target; (void)paths; (void)num_paths; (void)extract_flags; return WIMLIB_ERR_UNSUPPORTED; }
+int wimlib_splitU(WIMStruct *wim, const char *swm_name, uint64_t part_size,
+    int write_flags)
+{ (void)wim; (void)swm_name; (void)part_size; (void)write_flags; return WIMLIB_ERR_UNSUPPORTED; }
+int wimlib_extract_imageU(WIMStruct *wim, int image, const char *target,
+    int extract_flags)
+{ (void)wim; (void)image; (void)target; (void)extract_flags; return WIMLIB_ERR_UNSUPPORTED; }
+
 /* ================================================================
  * Test framework
  * ================================================================ */

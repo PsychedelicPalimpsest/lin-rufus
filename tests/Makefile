@@ -654,11 +654,13 @@ EXTRA_SRC_LINUX_test_badblocks_integration_linux := \
 CFLAGS_LINUX_test_persistence_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR)/bled \
+	-I$(SRC_DIR)/wimlib \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_persistence_linux := -lpthread -lblkid
+LDFLAGS_LINUX_test_persistence_linux := -lpthread -lblkid -lz -lxml2 -lm \
+	-Wl,--start-group $(CDIO_LIBS) $(WIM_LIB_EARLY) -Wl,--end-group
 EXTRA_SRC_LINUX_test_persistence_linux := \
-	$(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB)
+	$(FORMAT_THREAD_LINUX_SRC) $(EXT2FS_LIB) $(BLED_LIB) $(XML_SRC_EARLY)
 
 # process_linux tests: GetPPID, StartProcessSearch, SetProcessSearch,
 #                      GetProcessSearch, SearchProcessAlt (Linux /proc-based)
