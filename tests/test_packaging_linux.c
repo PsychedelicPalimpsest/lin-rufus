@@ -11,6 +11,8 @@
  *   packaging/flatpak/ie.akeo.rufus.yaml — Flatpak manifest
  *   packaging/arch/PKGBUILD   — Arch Linux package build script
  *   packaging/rpm/rufus.spec  — RPM spec file
+ *   packaging/appimage/build-appimage.sh — AppImage build script
+ *   packaging/snap/snapcraft.yaml        — Snap package manifest
  */
 #define RUFUS_TEST 1
 
@@ -400,6 +402,133 @@ TEST(rpm_spec_lists_binary) {
 }
 
 /* ------------------------------------------------------------------ */
+/* AppImage build script tests                                          */
+/* ------------------------------------------------------------------ */
+
+TEST(appimage_script_exists) {
+    const char *p = pkg_path("appimage/build-appimage.sh");
+    CHECK(p != NULL);
+    if (p) {
+        FILE *f = fopen(p, "r");
+        CHECK(f != NULL);
+        if (f) fclose(f);
+    }
+}
+
+TEST(appimage_script_has_linuxdeploy_download) {
+    char *c = slurp(pkg_path("appimage/build-appimage.sh"));
+    if (!c) return;
+    CHECK(strstr(c, "linuxdeploy") != NULL);
+    free(c);
+}
+
+TEST(appimage_script_has_gtk_plugin) {
+    char *c = slurp(pkg_path("appimage/build-appimage.sh"));
+    if (!c) return;
+    CHECK(strstr(c, "plugin gtk") != NULL || strstr(c, "plugin-gtk") != NULL);
+    free(c);
+}
+
+TEST(appimage_script_has_output_name) {
+    char *c = slurp(pkg_path("appimage/build-appimage.sh"));
+    if (!c) return;
+    CHECK(strstr(c, "AppImage") != NULL);
+    free(c);
+}
+
+TEST(appimage_script_bundles_locale_data) {
+    char *c = slurp(pkg_path("appimage/build-appimage.sh"));
+    if (!c) return;
+    CHECK(strstr(c, "embedded.loc") != NULL);
+    free(c);
+}
+
+TEST(appimage_script_bundles_desktop_file) {
+    char *c = slurp(pkg_path("appimage/build-appimage.sh"));
+    if (!c) return;
+    CHECK(strstr(c, ".desktop") != NULL);
+    free(c);
+}
+
+TEST(appimage_script_has_version_detection) {
+    char *c = slurp(pkg_path("appimage/build-appimage.sh"));
+    if (!c) return;
+    CHECK(strstr(c, "VERSION") != NULL);
+    free(c);
+}
+
+/* ------------------------------------------------------------------ */
+/* Snap package manifest tests                                          */
+/* ------------------------------------------------------------------ */
+
+TEST(snap_manifest_exists) {
+    const char *p = pkg_path("snap/snapcraft.yaml");
+    CHECK(p != NULL);
+    if (p) {
+        FILE *f = fopen(p, "r");
+        CHECK(f != NULL);
+        if (f) fclose(f);
+    }
+}
+
+TEST(snap_manifest_has_name) {
+    char *c = slurp(pkg_path("snap/snapcraft.yaml"));
+    if (!c) return;
+    CHECK(strstr(c, "name: rufus") != NULL);
+    free(c);
+}
+
+TEST(snap_manifest_has_strict_confinement) {
+    char *c = slurp(pkg_path("snap/snapcraft.yaml"));
+    if (!c) return;
+    CHECK(strstr(c, "confinement: strict") != NULL);
+    free(c);
+}
+
+TEST(snap_manifest_has_block_devices_plug) {
+    char *c = slurp(pkg_path("snap/snapcraft.yaml"));
+    if (!c) return;
+    CHECK(strstr(c, "block-devices") != NULL);
+    free(c);
+}
+
+TEST(snap_manifest_has_removable_media_plug) {
+    char *c = slurp(pkg_path("snap/snapcraft.yaml"));
+    if (!c) return;
+    CHECK(strstr(c, "removable-media") != NULL);
+    free(c);
+}
+
+TEST(snap_manifest_has_network_plug) {
+    char *c = slurp(pkg_path("snap/snapcraft.yaml"));
+    if (!c) return;
+    CHECK(strstr(c, "network") != NULL);
+    free(c);
+}
+
+TEST(snap_manifest_has_rufus_command) {
+    char *c = slurp(pkg_path("snap/snapcraft.yaml"));
+    if (!c) return;
+    CHECK(strstr(c, "command: bin/rufus") != NULL ||
+          strstr(c, "command: rufus") != NULL);
+    free(c);
+}
+
+TEST(snap_manifest_has_with_os_linux) {
+    char *c = slurp(pkg_path("snap/snapcraft.yaml"));
+    if (!c) return;
+    CHECK(strstr(c, "--with-os=linux") != NULL);
+    free(c);
+}
+
+TEST(snap_manifest_has_gtk_build_pkg) {
+    char *c = slurp(pkg_path("snap/snapcraft.yaml"));
+    if (!c) return;
+    CHECK(strstr(c, "libgtk") != NULL);
+    free(c);
+}
+
+/* ------------------------------------------------------------------ */
 
 int main(void)
 {
@@ -456,6 +585,26 @@ int main(void)
     RUN(rpm_spec_has_changelog);
     RUN(rpm_spec_has_license);
     RUN(rpm_spec_lists_binary);
+
+    printf("\n=== AppImage build script tests ===\n");
+    RUN(appimage_script_exists);
+    RUN(appimage_script_has_linuxdeploy_download);
+    RUN(appimage_script_has_gtk_plugin);
+    RUN(appimage_script_has_output_name);
+    RUN(appimage_script_bundles_locale_data);
+    RUN(appimage_script_bundles_desktop_file);
+    RUN(appimage_script_has_version_detection);
+
+    printf("\n=== Snap package manifest tests ===\n");
+    RUN(snap_manifest_exists);
+    RUN(snap_manifest_has_name);
+    RUN(snap_manifest_has_strict_confinement);
+    RUN(snap_manifest_has_block_devices_plug);
+    RUN(snap_manifest_has_removable_media_plug);
+    RUN(snap_manifest_has_network_plug);
+    RUN(snap_manifest_has_rufus_command);
+    RUN(snap_manifest_has_with_os_linux);
+    RUN(snap_manifest_has_gtk_build_pkg);
 
     TEST_RESULTS();
 }

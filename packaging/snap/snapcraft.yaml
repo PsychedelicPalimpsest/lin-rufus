@@ -1,0 +1,97 @@
+name: rufus
+title: Rufus
+version: '4.13'
+summary: The Reliable USB Formatting Utility
+description: |
+  Rufus is a utility that helps format and create bootable USB flash drives,
+  such as USB keys/pendrives, memory sticks, etc.
+
+  It can be especially useful for cases where:
+  • you need to create USB installation media from bootable ISOs
+    (Windows, Linux, UEFI, etc.)
+  • you need to work on a system that doesn't have an OS installed
+  • you need to flash a BIOS or other firmware from DOS
+  • you want to run a low-level utility
+
+  Features:
+  • Format USB, Flash card, Virtual drives to FAT/FAT32/NTFS/exFAT/ext2/3/4/UDF
+  • Create DOS bootable USB drives (using FreeDOS or MS-DOS)
+  • Create bootable USB drives from bootable ISOs (Linux, Windows, UEFI, etc.)
+  • Create BIOS or UEFI bootable USB drives
+  • Create GPT/MBR partition schemes
+  • Write ISO/img files to USB drives
+  • Compute MD5, SHA-1, SHA-256 and SHA-512 checksums of files
+  • Detect BadBlocks on USB drives
+
+grade: stable
+confinement: strict
+base: core22
+
+architectures:
+  - build-on: [amd64]
+    build-for: [amd64]
+
+apps:
+  rufus:
+    command: bin/rufus
+    plugs:
+      - block-devices       # raw /dev/sd* / /dev/nvme* access for formatting
+      - removable-media     # USB flash drives mounted under /media
+      - network             # download ISOs, check for updates, DBX updates
+      - home                # access files in $HOME (ISOs, etc.)
+      - desktop             # GTK window / Wayland portal
+      - desktop-legacy      # X11 fallback
+      - wayland             # Wayland window (native)
+      - x11                 # X11 window
+      - opengl              # GTK may use GL for rendering
+      - audio-playback      # not required; kept for completeness
+      - polkit              # re-launch via pkexec for privilege elevation
+    environment:
+      GTK_THEME: Adwaita
+      XDG_DATA_DIRS: $SNAP/usr/share:$XDG_DATA_DIRS
+      RUFUS_DATADIR: $SNAP/usr/share/rufus
+
+# Polkit action is installed from the binary package;
+# the .policy file is embedded in $SNAP/usr/share/polkit-1/actions/.
+
+parts:
+  rufus:
+    plugin: autotools
+    source: ../..
+    source-type: local
+    autotools-configure-parameters:
+      - --with-os=linux
+      - --prefix=/usr
+    build-packages:
+      - libgtk-3-dev
+      - libcurl4-openssl-dev
+      - libudev-dev
+      - libblkid-dev
+      - libwim-dev
+      - libssl-dev
+      - libfontconfig1-dev
+      - libfreetype-dev
+      - libnotify-dev
+      - libpolkit-gobject-1-dev
+      - pkg-config
+      - autoconf
+      - automake
+      - libtool
+    stage-packages:
+      - libgtk-3-0
+      - libcurl4
+      - libudev1
+      - libblkid1
+      - libwim15
+      - libssl3
+      - libfontconfig1
+      - libfreetype6
+      - libnotify4
+      - libpolkit-gobject-1-0
+      - ntfs-3g
+      - dosfstools
+      - e2fsprogs
+      - udftools
+      - exfatprogs
+      - polkit
+    after: []

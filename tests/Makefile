@@ -799,6 +799,14 @@ EXTRA_SRC_LINUX_test_cli_linux := \
 	$(SRC_DIR)/linux/cli.c \
 	cli_linux_glue.c
 
+# psapi_linux tests: compat psapi.h — GetProcessMemoryInfo, EnumProcessModules,
+# GetModuleInformation, GetModuleFileNameExA — all backed by /proc.
+CFLAGS_LINUX_test_psapi_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter \
+	-Wno-implicit-function-declaration -Wno-sign-compare
+WIN_EXCLUDE_SRCS += test_psapi_linux.c
+
 # compat_layer_linux tests: ABI / type-size / macro-value checks for linux/compat/
 # Pure header inclusion + value assertions — no extra .c sources needed.
 CFLAGS_LINUX_test_compat_layer := \

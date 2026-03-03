@@ -63,3 +63,21 @@ release: all
 	@upx --lzma --best $(TARGET)$(EXEEXT)
 	@mv $(TARGET)$(EXEEXT) $(TARGET)-$(VERSION)$(SUFFIX)$(EXEEXT)
 	@cmd.exe //c _sign.cmd $(TARGET)-$(VERSION)$(SUFFIX)$(EXEEXT)
+
+# AppImage packaging — requires a built Rufus binary.
+# Downloads linuxdeploy + linuxdeploy-plugin-gtk on first run (cached in
+# packaging/appimage/.tools/).  Output: Rufus-<VERSION>-x86_64.AppImage
+appimage: all
+	@bash $(srcdir)/packaging/appimage/build-appimage.sh
+
+.PHONY: appimage
+
+# Snap packaging — requires snapcraft.
+# Output: rufus_<VERSION>_amd64.snap
+snap:
+	@command -v snapcraft >/dev/null 2>&1 || { \
+	    echo "snapcraft not found; install with: sudo snap install snapcraft --classic"; \
+	    exit 1; }
+	cd $(srcdir)/packaging/snap && snapcraft --destructive-mode
+
+.PHONY: snap

@@ -7,8 +7,12 @@
  *   freedos_mbr_signature         — FormatThread BT_FREEDOS; verifies MBR 0x55AA.
  *   freedos_format_and_verify     — FormatThread BT_FREEDOS; mounts FAT32 partition;
  *                                   verifies KERNEL.SYS + COMMAND.COM are present.
+ *   cli_format_fat32_loop         — cli_run() with FAT32+MBR+non-bootable on a loop
+ *                                   device; verifies MBR 0x55AA boot signature.
+ *   cli_format_freedos_loop       — cli_run() with BT_FREEDOS on a loop device;
+ *                                   verifies MBR 0x55AA and KERNEL.SYS present.
  *
- * The first test is non-root; the last two require root (loopback + mount).
+ * The ISO test is non-root; the rest require root (loopback + mount).
  *
  * Linux-only.
  */
@@ -40,6 +44,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "dos.h"
 #include "resource.h"
 #include "localization.h"
+#include "../src/linux/cli.h"
 
 /* ================================================================
  * Required globals (defined in globals.c, included via DOS_LINUX_SRC)
@@ -477,6 +482,143 @@ TEST(freedos_format_and_verify)
 }
 
 /* ================================================================
+ * CLI E2E tests
+ * ================================================================ */
+
+/*
+ * cli_format_fat32_loop   (ROOT required)
+ *
+ * Exercises cli_run() as the entry point for a non-bootable FAT32 + MBR
+ * format on a loopback image.  Verifies that the MBR boot signature
+ * (0x55 0xAA at bytes 510–511) is present after the operation.
+ */
+TEST(cli_format_fat32_loop)
+{
+	SKIP_NOT_ROOT();
+	set_app_dir_to_project_root();
+
+	loop_ctx_t ctx;
+	if (!loop_setup(&ctx)) {
+		CHECK_MSG(0, "loop_setup for CLI FAT32 test");
+		return;
+	}
+
+	cli_options_t opts;
+	cli_options_init(&opts);
+	strncpy(opts.device, ctx.dev_path, sizeof(opts.device) - 1);
+	opts.fs          = FS_FAT32;
+	opts.part_scheme = PARTITION_STYLE_MBR;
+	opts.target      = TT_BIOS;
+	opts.quick       = 1;    /* quick format */
+	opts.no_prompt   = 1;    /* suppress confirmation dialogs */
+
+	/* Reset shared globals that cli_run() does not clear */
+	memset(partition_index, 0, sizeof(partition_index));
+	ErrorStatus = 0;
+
+	/* cli_run() opens the device, registers it, applies options, runs FormatThread */
+	int cli_rc = cli_run(&opts);
+
+	/* Read MBR boot signature */
+	uint8_t sig[2] = { 0, 0 };
+	if (ctx.img_fd >= 0) {
+		pread(ctx.img_fd, sig, 2, 510);
+	}
+
+	loop_teardown(&ctx);
+
+	CHECK_MSG(cli_rc == 0, "cli_run FAT32 must succeed (return 0)");
+	CHECK_MSG(sig[0] == 0x55 && sig[1] == 0xAA,
+	          "MBR must have 0x55AA boot signature after cli FAT32 format");
+}
+
+/*
+ * cli_format_freedos_loop   (ROOT required)
+ *
+ * Exercises cli_run() with a FreeDOS boot disk configuration.
+ * Verifies MBR 0x55AA signature and that KERNEL.SYS is present on the
+ * FAT32 partition after extraction.
+ */
+TEST(cli_format_freedos_loop)
+{
+	SKIP_NOT_ROOT();
+	set_app_dir_to_project_root();
+
+	loop_ctx_t ctx;
+	if (!loop_setup(&ctx)) {
+		CHECK_MSG(0, "loop_setup for CLI FreeDOS test");
+		return;
+	}
+
+	cli_options_t opts;
+	cli_options_init(&opts);
+	strncpy(opts.device, ctx.dev_path, sizeof(opts.device) - 1);
+	opts.fs          = FS_FAT32;
+	opts.part_scheme = PARTITION_STYLE_MBR;
+	opts.target      = TT_BIOS;
+	opts.boot_type   = BT_FREEDOS;
+	opts.quick       = 1;
+	opts.no_prompt   = 1;
+
+	memset(partition_index, 0, sizeof(partition_index));
+	ErrorStatus = 0;
+
+	int cli_rc = cli_run(&opts);
+
+	/* Read MBR boot signature */
+	uint8_t sig[2] = { 0, 0 };
+	if (ctx.img_fd >= 0)
+		pread(ctx.img_fd, sig, 2, 510);
+
+	/* Mount partition and verify KERNEL.SYS */
+	BOOL has_kernel = FALSE;
+	if (cli_rc == 0) {
+		char mnt_tmpl[] = "/tmp/rufus_e2e_cli_mnt_XXXXXX";
+		char *mnt = mkdtemp(mnt_tmpl);
+		if (mnt) {
+			char mount_cmd[512];
+			snprintf(mount_cmd, sizeof(mount_cmd),
+			         "mount -o offset=%llu,sizelimit=%llu %s %s 2>/dev/null",
+			         (unsigned long long)(2048ULL * 512),
+			         (unsigned long long)(LOOP_IMG_SIZE - 2048ULL * 512),
+			         ctx.img_path, mnt);
+			int mnt_rc = system(mount_cmd);
+			if (mnt_rc != 0) {
+				/* Fallback: partition device node created by BLKRRPART in FormatThread */
+				char part_dev[80];
+				snprintf(part_dev, sizeof(part_dev), "%sp1", ctx.dev_path);
+				if (access(part_dev, F_OK) == 0) {
+					char mount_cmd2[256];
+					snprintf(mount_cmd2, sizeof(mount_cmd2),
+					         "mount %s %s 2>/dev/null", part_dev, mnt);
+					mnt_rc = system(mount_cmd2);
+				}
+			}
+			if (mnt_rc == 0) {
+				char p[512];
+				snprintf(p, sizeof(p), "%s/KERNEL.SYS", mnt);
+				has_kernel = (access(p, F_OK) == 0);
+				if (!has_kernel) {
+					snprintf(p, sizeof(p), "%s/kernel.sys", mnt);
+					has_kernel = (access(p, F_OK) == 0);
+				}
+				char umount_cmd[256];
+				snprintf(umount_cmd, sizeof(umount_cmd), "umount %s 2>/dev/null", mnt);
+				system(umount_cmd);
+			}
+			rmdir(mnt);
+		}
+	}
+
+	loop_teardown(&ctx);
+
+	CHECK_MSG(cli_rc == 0, "cli_run FreeDOS must succeed (return 0)");
+	CHECK_MSG(sig[0] == 0x55 && sig[1] == 0xAA,
+	          "MBR must have 0x55AA boot signature after cli FreeDOS format");
+	CHECK_MSG(has_kernel, "KERNEL.SYS must be present after cli FreeDOS format");
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 
@@ -488,6 +630,8 @@ int main(void)
 	RUN(iso_dd_write_structure);
 	RUN(freedos_mbr_signature);
 	RUN(freedos_format_and_verify);
+	RUN(cli_format_fat32_loop);
+	RUN(cli_format_freedos_loop);
 
 	TEST_RESULTS();
 }
