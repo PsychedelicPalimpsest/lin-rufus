@@ -64,6 +64,8 @@ typedef struct {
     int  ntfs_compression;  /* --ntfs-compression: enable NTFS file compression */
     int  json;              /* --json: use JSON output format (for --list-devices) */
     int  win_to_go;         /* --win-to-go/-W: write Windows To Go (WTG) image */
+    int  write_as_image;    /* --write-as-image/-w: write image as raw DD (no extraction) */
+    int  fast_zeroing;      /* --fast-zeroing/-Z: with --zero-drive: 0xFF-fill and readback */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

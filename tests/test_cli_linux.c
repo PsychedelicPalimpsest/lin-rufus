@@ -972,6 +972,81 @@ static void test_win_to_go_combined_with_device_and_image(void)
     CHECK(strcmp(opts.image, "/tmp/win.iso") == 0);
 }
 
+/* ---- --write-as-image tests ---- */
+
+static void test_init_write_as_image_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.write_as_image == 0);
+}
+
+static void test_write_as_image_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --write-as-image", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.write_as_image != 0);
+}
+
+static void test_write_as_image_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -w", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.write_as_image != 0);
+}
+
+static void test_write_as_image_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.write_as_image == 0);
+}
+
+/* ---- --fast-zeroing tests ---- */
+
+static void test_init_fast_zeroing_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.fast_zeroing == 0);
+}
+
+static void test_fast_zeroing_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --fast-zeroing", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.fast_zeroing != 0);
+}
+
+static void test_fast_zeroing_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -Z", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.fast_zeroing != 0);
+}
+
+static void test_fast_zeroing_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.fast_zeroing == 0);
+}
+
+static void test_fast_zeroing_combined_with_zero_drive(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --zero-drive --fast-zeroing", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.zero_drive != 0);
+    CHECK(opts.fast_zeroing != 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1126,6 +1201,19 @@ int main(void)
     RUN_TEST(test_win_to_go_short_flag);
     RUN_TEST(test_win_to_go_default_is_off);
     RUN_TEST(test_win_to_go_combined_with_device_and_image);
+
+    /* --write-as-image tests */
+    RUN_TEST(test_init_write_as_image_is_false);
+    RUN_TEST(test_write_as_image_long_flag);
+    RUN_TEST(test_write_as_image_short_flag);
+    RUN_TEST(test_write_as_image_default_is_off);
+
+    /* --fast-zeroing tests */
+    RUN_TEST(test_init_fast_zeroing_is_false);
+    RUN_TEST(test_fast_zeroing_long_flag);
+    RUN_TEST(test_fast_zeroing_short_flag);
+    RUN_TEST(test_fast_zeroing_default_is_off);
+    RUN_TEST(test_fast_zeroing_combined_with_zero_drive);
 
     TEST_RESULTS();
 }

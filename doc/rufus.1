@@ -25,6 +25,8 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-force\-large\-fat32\fR]
 [\fB\-\-ntfs\-compression\fR]
 [\fB\-\-win\-to\-go\fR]
+[\fB\-\-write\-as\-image\fR]
+[\fB\-\-fast\-zeroing\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-json\fR]
 [\fB\-\-label\fR \fILABEL\fR]
@@ -181,6 +183,20 @@ Requires a Windows installation ISO that includes Windows To Go support
 Windows installation image).  Use with \fB\-\-partition\-scheme gpt\fR and
 \fB\-\-target uefi\fR for best results.  GPT+UEFI causes Rufus to create an
 ESP and MSR partition before the main partition.
+.TP
+.BR \-w ", " \-\-write\-as\-image
+Write the image file to the device as a raw byte-for-byte copy (equivalent
+to \fBdd if=IMAGE of=DEVICE\fR).  No filesystem is created and no boot
+records are installed beyond what the image itself contains.  Use this for
+\fI.img\fR, \fI.vhd\fR, and \fI.vhdx\fR files, or for any image that
+should be written verbatim without modification.
+.TP
+.BR \-Z ", " \-\-fast\-zeroing
+When combined with \fB\-\-zero\-drive\fR, use the fast-zeroing algorithm:
+write \fB0xFF\fR bytes, then read back each block and mark blocks that
+return \fB0xFF\fR as good (skipping them on subsequent passes).  This is
+faster than writing all zeros on devices that preserve unprogrammed values.
+Without \fB\-\-zero\-drive\fR this flag has no effect.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

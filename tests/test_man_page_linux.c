@@ -344,6 +344,26 @@ TEST(man_page_documents_win_to_go_flag) {
     free(content);
 }
 
+TEST(man_page_documents_write_as_image_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "write-as-image") != NULL || strstr(content, "write.as.image") != NULL
+       || strstr(content, "write\\-as\\-image") != NULL);
+    free(content);
+}
+
+TEST(man_page_documents_fast_zeroing_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "fast-zeroing") != NULL || strstr(content, "fast.zeroing") != NULL
+       || strstr(content, "fast\\-zeroing") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_json_flag) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -453,6 +473,8 @@ int main(void)
     RUN(man_page_documents_force_large_fat32_flag);
     RUN(man_page_documents_ntfs_compression_flag);
     RUN(man_page_documents_win_to_go_flag);
+    RUN(man_page_documents_write_as_image_flag);
+    RUN(man_page_documents_fast_zeroing_flag);
     RUN(man_page_documents_json_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);
