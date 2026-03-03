@@ -707,6 +707,13 @@ DWORD WINAPI FormatThread(void* param)
 		goto out;
 	}
 
+	/* Detect hardware write protection before attempting any write operation */
+	if (IsDeviceWriteProtected(DriveIndex)) {
+		uprintf("Media is write protected");
+		ErrorStatus = RUFUS_ERROR(ERROR_WRITE_PROTECT);
+		goto out;
+	}
+
 	/* ---------------------------------------------------------------
 	 * Zero-drive mode: wipe the whole device and exit
 	 * ------------------------------------------------------------- */

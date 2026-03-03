@@ -235,7 +235,7 @@ DRIVE_LINUX_SRC := $(SRC_DIR)/linux/drive.c $(COMMON)/drive.c \
 CFLAGS_LINUX_test_drive_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                    -I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
                                    -Wno-implicit-function-declaration -Wno-unused-function \
-                                   -Wno-sign-compare -Wno-unused-parameter
+                                   -Wno-sign-compare -Wno-unused-parameter -DRUFUS_TEST
 LDFLAGS_LINUX_test_drive_linux := -lblkid
 EXTRA_SRC_LINUX_test_drive_linux := $(DRIVE_LINUX_SRC) $(BLED_LIB)
 

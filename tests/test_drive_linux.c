@@ -1158,6 +1158,153 @@ TEST(is_filtered_drive_gpt_match_second_slot)
 }
 
 /* =========================================================================
+ * IsDeviceWriteProtected tests
+ * ====================================================================== */
+
+/* Helper: mkdir -p two levels (tmpdir/block/<devname>) then write ro file */
+static void make_sysfs_ro_file(const char *tmpdir, const char *devname, int val)
+{
+	char block_dir[256], dev_dir[256], ro_path[256];
+	snprintf(block_dir, sizeof(block_dir), "%s/block", tmpdir);
+	snprintf(dev_dir,   sizeof(dev_dir),   "%s/block/%s", tmpdir, devname);
+	snprintf(ro_path,   sizeof(ro_path),   "%s/block/%s/ro", tmpdir, devname);
+	mkdir(block_dir, 0755);
+	mkdir(dev_dir,   0755);
+	FILE *f = fopen(ro_path, "w");
+	if (f) { fprintf(f, "%d\n", val); fclose(f); }
+}
+
+/* Helper: recursively remove tmpdir/block/<devname>/ro and dirs */
+static void rm_sysfs_ro_file(const char *tmpdir, const char *devname)
+{
+	char ro_path[256], dev_dir[256], block_dir[256];
+	snprintf(ro_path,   sizeof(ro_path),   "%s/block/%s/ro",  tmpdir, devname);
+	snprintf(dev_dir,   sizeof(dev_dir),   "%s/block/%s",     tmpdir, devname);
+	snprintf(block_dir, sizeof(block_dir), "%s/block",        tmpdir);
+	unlink(ro_path);
+	rmdir(dev_dir);
+	rmdir(block_dir);
+}
+
+TEST(write_protect_invalid_drive_returns_false)
+{
+	/* Out-of-range DriveIndex → FALSE */
+	CHECK(IsDeviceWriteProtected(DRIVE_INDEX_MIN - 1) == FALSE);
+	CHECK(IsDeviceWriteProtected(DRIVE_INDEX_MAX + 1) == FALSE);
+}
+
+TEST(write_protect_no_sysfs_file_returns_false)
+{
+	/* Real device but no sysfs ro file → FALSE (safe default) */
+	char tmp[64];
+	strcpy(tmp, "/tmp/rufus_wp_XXXXXX");
+	int fd = mkstemp(tmp);
+	if (fd >= 0) close(fd);
+
+	drive_linux_reset_drives();
+	drive_linux_add_drive(tmp, "tmp", "0 B", 0ULL);
+
+	/* No sysfs ro file exists for this temp path → not write-protected */
+	CHECK(IsDeviceWriteProtected(DRIVE_INDEX_MIN) == FALSE);
+
+	drive_linux_reset_drives();
+	unlink(tmp);
+}
+
+TEST(write_protect_ro_zero_returns_false)
+{
+	char tmpdir[64], tmp[64];
+	strcpy(tmpdir, "/tmp/rufus_wp_XXXXXX");
+	if (!mkdtemp(tmpdir)) return;
+	strcpy(tmp, "/tmp/rufus_dev_XXXXXX");
+	int fd = mkstemp(tmp);
+	if (fd >= 0) close(fd);
+
+	/* Use a fake devname matching the basename of our temp file */
+	const char *devname = strrchr(tmp, '/') + 1;
+	make_sysfs_ro_file(tmpdir, devname, 0);
+	drive_linux_set_sysfs_root(tmpdir);
+
+	drive_linux_reset_drives();
+	drive_linux_add_drive(tmp, "tmp", "0 B", 0ULL);
+
+	CHECK(IsDeviceWriteProtected(DRIVE_INDEX_MIN) == FALSE);
+
+	drive_linux_set_sysfs_root("/sys");
+	drive_linux_reset_drives();
+	rm_sysfs_ro_file(tmpdir, devname);
+	rmdir(tmpdir);
+	unlink(tmp);
+}
+
+TEST(write_protect_ro_one_returns_true)
+{
+	char tmpdir[64], tmp[64];
+	strcpy(tmpdir, "/tmp/rufus_wp_XXXXXX");
+	if (!mkdtemp(tmpdir)) return;
+	strcpy(tmp, "/tmp/rufus_dev_XXXXXX");
+	int fd = mkstemp(tmp);
+	if (fd >= 0) close(fd);
+
+	const char *devname = strrchr(tmp, '/') + 1;
+	make_sysfs_ro_file(tmpdir, devname, 1);
+	drive_linux_set_sysfs_root(tmpdir);
+
+	drive_linux_reset_drives();
+	drive_linux_add_drive(tmp, "tmp", "0 B", 0ULL);
+
+	CHECK(IsDeviceWriteProtected(DRIVE_INDEX_MIN) == TRUE);
+
+	drive_linux_set_sysfs_root("/sys");
+	drive_linux_reset_drives();
+	rm_sysfs_ro_file(tmpdir, devname);
+	rmdir(tmpdir);
+	unlink(tmp);
+}
+
+TEST(write_protect_nvme_path_extracts_name)
+{
+	/* Simulate /dev/nvme0n1 as device path */
+	char tmpdir[64];
+	strcpy(tmpdir, "/tmp/rufus_wp_XXXXXX");
+	if (!mkdtemp(tmpdir)) return;
+
+	make_sysfs_ro_file(tmpdir, "nvme0n1", 1);
+	drive_linux_set_sysfs_root(tmpdir);
+
+	drive_linux_reset_drives();
+	drive_linux_add_drive("/dev/nvme0n1", "NVMe", "1 GB", 1ULL << 30);
+
+	CHECK(IsDeviceWriteProtected(DRIVE_INDEX_MIN) == TRUE);
+
+	drive_linux_set_sysfs_root("/sys");
+	drive_linux_reset_drives();
+	rm_sysfs_ro_file(tmpdir, "nvme0n1");
+	rmdir(tmpdir);
+}
+
+TEST(write_protect_sda_path_extracts_name)
+{
+	/* Simulate /dev/sda as device path, ro=0 */
+	char tmpdir[64];
+	strcpy(tmpdir, "/tmp/rufus_wp_XXXXXX");
+	if (!mkdtemp(tmpdir)) return;
+
+	make_sysfs_ro_file(tmpdir, "sda", 0);
+	drive_linux_set_sysfs_root(tmpdir);
+
+	drive_linux_reset_drives();
+	drive_linux_add_drive("/dev/sda", "SDA", "8 GB", 8ULL << 30);
+
+	CHECK(IsDeviceWriteProtected(DRIVE_INDEX_MIN) == FALSE);
+
+	drive_linux_set_sysfs_root("/sys");
+	drive_linux_reset_drives();
+	rm_sysfs_ro_file(tmpdir, "sda");
+	rmdir(tmpdir);
+}
+
+/* =========================================================================
  * Main
  * ====================================================================== */
 
@@ -1241,6 +1388,14 @@ int main(void)
 	RUN_TEST(is_filtered_drive_gpt_no_match);
 	RUN_TEST(is_filtered_drive_gpt_match);
 	RUN_TEST(is_filtered_drive_gpt_match_second_slot);
+
+	/* IsDeviceWriteProtected */
+	RUN_TEST(write_protect_invalid_drive_returns_false);
+	RUN_TEST(write_protect_no_sysfs_file_returns_false);
+	RUN_TEST(write_protect_ro_zero_returns_false);
+	RUN_TEST(write_protect_ro_one_returns_true);
+	RUN_TEST(write_protect_nvme_path_extracts_name);
+	RUN_TEST(write_protect_sda_path_extracts_name);
 
 	PRINT_RESULTS();
 	drive_linux_reset_drives();  /* free any drives added by the last test */

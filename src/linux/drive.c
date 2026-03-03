@@ -103,6 +103,16 @@ uint64_t linux_get_fd_part_size(int fd)
 int partition_index[PI_MAX]    = { 0 };
 RUFUS_DRIVE_INFO SelectedDrive = { 0 };
 
+/* Sysfs root for write-protect and drive-type queries (overridable in tests) */
+static const char *g_drive_sysfs_root = "/sys";
+
+#ifdef RUFUS_TEST
+void drive_linux_set_sysfs_root(const char *root)
+{
+    g_drive_sysfs_root = root ? root : "/sys";
+}
+#endif
+
 /* -------------------------------------------------------------------------
  * Internal helpers
  * --------------------------------------------------------------------- */
@@ -1236,7 +1246,7 @@ UINT GetDriveTypeFromIndex(DWORD DriveIndex)
 
     /* Read /sys/block/<devname>/removable */
     char sysfs_path[256];
-    snprintf(sysfs_path, sizeof(sysfs_path), "/sys/block/%s/removable", devname);
+    snprintf(sysfs_path, sizeof(sysfs_path), "%s/block/%s/removable", g_drive_sysfs_root, devname);
     FILE *f = fopen(sysfs_path, "r");
     if (f) {
         int removable = 0;
@@ -1246,7 +1256,7 @@ UINT GetDriveTypeFromIndex(DWORD DriveIndex)
         /* Check if the device is connected via USB by reading the uevent */
         char uevent_path[256];
         snprintf(uevent_path, sizeof(uevent_path),
-                 "/sys/block/%s/device/uevent", devname);
+                 "%s/block/%s/device/uevent", g_drive_sysfs_root, devname);
         FILE *uf = fopen(uevent_path, "r");
         if (uf) {
             char line[256];
@@ -1266,6 +1276,32 @@ UINT GetDriveTypeFromIndex(DWORD DriveIndex)
 
     /* sysfs not accessible (e.g. temp file in tests) */
     return DRIVE_UNKNOWN;
+}
+
+/* -------------------------------------------------------------------------
+ * IsDeviceWriteProtected — check /sys/block/<devname>/ro
+ *
+ * Returns TRUE if the sysfs 'ro' attribute reads non-zero.
+ * Returns FALSE for any error (no sysfs entry, invalid index, etc.)
+ * This is the safe default: if we cannot read the attribute, assume
+ * the device is writable rather than blocking the user needlessly.
+ * --------------------------------------------------------------------- */
+BOOL IsDeviceWriteProtected(DWORD DriveIndex)
+{
+    RUFUS_DRIVE *e = get_entry(DriveIndex);
+    if (!e || !e->id) return FALSE;
+
+    const char *devname = strrchr(e->id, '/');
+    devname = devname ? devname + 1 : e->id;
+
+    char ro_path[256];
+    snprintf(ro_path, sizeof(ro_path), "%s/block/%s/ro", g_drive_sysfs_root, devname);
+    FILE *f = fopen(ro_path, "r");
+    if (!f) return FALSE;
+    int val = 0;
+    fscanf(f, "%d", &val);
+    fclose(f);
+    return (val != 0) ? TRUE : FALSE;
 }
 
 char GetUnusedDriveLetter(void)                       { return 0; }

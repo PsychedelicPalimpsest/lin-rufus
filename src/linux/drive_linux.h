@@ -103,6 +103,20 @@ BOOL uefi_ntfs_needs_extra_partition(int boot_type, int fs_type,
  * Only available in RUFUS_TEST builds.
  */
 void automount_set_rule_file(const char *path);
+
+/*
+ * Override the sysfs root used by IsDeviceWriteProtected() and
+ * GetDriveTypeFromIndex() for unit tests (normally "/sys").
+ * Pass NULL to restore the default.
+ */
+void drive_linux_set_sysfs_root(const char *root);
 #endif
+
+/*
+ * Return TRUE if the sysfs /block/<dev>/ro attribute is non-zero,
+ * indicating hardware write protection.  Returns FALSE on any error
+ * (no sysfs entry, unknown device, invalid drive index).
+ */
+BOOL IsDeviceWriteProtected(DWORD DriveIndex);
 
 #endif /* !_WIN32 */
