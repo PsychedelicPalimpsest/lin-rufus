@@ -1112,20 +1112,20 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 		/* Compatibility checks — mirror Windows BootCheckThread */
 		if (boot_check_uefi_compat_fails(img_report, target_type)) {
 			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_090), lmprintf(MSG_091));
-			return;
+			goto abort_format;
 		}
 		if (boot_check_fat_4gb_fails(img_report, fs_type)) {
 			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_099), lmprintf(MSG_100));
-			return;
+			goto abort_format;
 		}
 		if (boot_check_fat16_kolibrios_fails(img_report, fs_type)) {
 			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_099), lmprintf(MSG_189));
-			return;
+			goto abort_format;
 		}
 		if (boot_check_fat_compat_fails(img_report, fs_type, target_type,
 		                                allow_dual_uefi_bios)) {
 			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_092), lmprintf(MSG_096));
-			return;
+			goto abort_format;
 		}
 
 		/* ISOHybrid / DD-mode selection */
@@ -1151,7 +1151,7 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 						choices.String, (int)choices.Index);
 					StrArrayDestroy(&choices);
 					if (isoh_choice < 0)
-						return;
+						goto abort_format;
 					write_as_esp   = (isoh_choice & 2) ? TRUE : FALSE;
 					write_as_image = (isoh_choice & 4) ? TRUE : FALSE;
 					esp_asked = TRUE;
@@ -1166,7 +1166,7 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 						choices.String, (int)choices.Index);
 					StrArrayDestroy(&choices);
 					if (isoh_choice < 0)
-						return;
+						goto abort_format;
 					write_as_image = (isoh_choice & 2) ? TRUE : FALSE;
 				}
 			}
@@ -1183,7 +1183,7 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 				int r = SelectionDialog(lmprintf(MSG_274, "ESP"),
 				                        lmprintf(MSG_310), choices, 2);
 				if (r < 0)
-					return;
+					goto abort_format;
 				write_as_esp = (r & 2) ? TRUE : FALSE;
 			}
 		}
@@ -1194,7 +1194,7 @@ start_format:
 	if (boot_type == BT_MSDOS) {
 		if (size_check && (ComboBox_GetCurItemData(hClusterSize) >= 65536)) {
 			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_111), lmprintf(MSG_110));
-			return;
+			goto abort_format;
 		}
 	}
 	/* UEFI:NTFS requires NTFS or exFAT */
@@ -1202,7 +1202,7 @@ start_format:
 		fs_type = (int)ComboBox_GetCurItemData(hFileSystem);
 		if (fs_type != FS_NTFS && fs_type != FS_EXFAT) {
 			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_092), lmprintf(MSG_097, "UEFI:NTFS"));
-			return;
+			goto abort_format;
 		}
 	}
 	if (format_thread == NULL) {
@@ -1216,6 +1216,15 @@ start_format:
 			rufus_gtk_update_status(lmprintf(MSG_212));
 			EnableControls(TRUE, FALSE);
 		}
+	}
+	return;
+
+abort_format:
+	/* User cancelled or validation failed — clean up any unattend XML created above */
+	zero_drive = FALSE;
+	if (unattend_xml_path != NULL) {
+		unlink(unattend_xml_path);
+		safe_free(unattend_xml_path);
 	}
 }
 static void on_select_clicked(GtkButton *btn, gpointer data)
@@ -2539,10 +2548,13 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 				GetDevices(0);
 		} else if (SCODE_CODE(ErrorStatus) == ERROR_CANCELLED) {
 			rufus_gtk_update_status(lmprintf(MSG_211));
+			Notification(MB_ICONINFORMATION | MB_CLOSE, lmprintf(MSG_211), lmprintf(MSG_041));
 		} else if (SCODE_CODE(ErrorStatus) == ERROR_BAD_SIGNATURE) {
 			rufus_gtk_update_status(lmprintf(MSG_283));
 		} else {
 			rufus_gtk_update_status(lmprintf(MSG_212));
+			Notification(MB_ICONERROR | MB_CLOSE, lmprintf(MSG_042),
+			             lmprintf(MSG_043, StrError(ErrorStatus, FALSE)));
 		}
 		save_image = FALSE;  /* reset after checking above */
 		uprintf("*** Format completed (success=%d) ***", (int)ok);
