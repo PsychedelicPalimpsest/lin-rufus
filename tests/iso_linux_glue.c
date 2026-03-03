@@ -43,3 +43,17 @@ BOOL __wrap_DumpFatDir(const char *path, int32_t cluster)
     g_dumpfatdir_last_path = path;
     return __real_DumpFatDir(path, cluster);
 }
+
+/* --wrap=GetWimVersion: intercept GetWimVersion calls from iso.c for testing */
+int g_getwimversion_call_count = 0;
+char g_getwimversion_last_path[512] = {0};
+uint32_t g_getwimversion_return_value = 0x000E0000; /* default: WIM version 14 */
+
+uint32_t __wrap_GetWimVersion(const char* image)
+{
+    g_getwimversion_call_count++;
+    if (image != NULL)
+        snprintf(g_getwimversion_last_path, sizeof(g_getwimversion_last_path),
+                 "%s", image);
+    return g_getwimversion_return_value;
+}

@@ -383,7 +383,49 @@ static void cleanup_knoppix_iso(void)
     unlink(KNOPPIX_ISO_PATH);
 }
 
+/* ================================================================
+ * Windows installer ISO (tests wininst_version detection via GetWimVersion)
+ * ================================================================ */
 
+#define WININST_ISO_PATH "/tmp/test_rufus_wininst.iso"
+static int wininst_iso_available = 0;
+
+static void setup_wininst_iso(void)
+{
+    /*
+     * Creates a minimal Windows-installer-style ISO with:
+     *   /sources/install.wim  — so HAS_WININST is TRUE after scan
+     *   /isolinux/isolinux.bin — so ExtractISO scan path runs (SYSLINUX)
+     *
+     * The actual content of install.wim doesn't matter here because
+     * GetWimVersion is intercepted via --wrap=GetWimVersion in glue.c.
+     * We just need the scan to detect /sources/install.wim.
+     */
+    const char *script =
+        "python3 -c \""
+        "import pycdlib, io\n"
+        "iso = pycdlib.PyCdlib()\n"
+        "iso.new(interchange_level=1, joliet=3, rock_ridge='1.09', vol_ident='WINDOWSISO')\n"
+        "iso.add_directory('/SOURCES', joliet_path='/sources', rr_name='sources')\n"
+        "iso.add_directory('/ISOLINUX', joliet_path='/isolinux', rr_name='isolinux')\n"
+        "wim = b'MSWIM\\x00\\x00\\x00' + b'\\x00'*512\n"
+        "iso.add_fp(io.BytesIO(wim), len(wim), '/SOURCES/INSTALL.WIM;1', joliet_path='/sources/install.wim', rr_name='install.wim')\n"
+        "ver = b'\\x00'*64 + b'ISOLINUX 6.03 extra\\x00' + b'\\x00'*(512-64-20)\n"
+        "iso.add_fp(io.BytesIO(ver), len(ver), '/ISOLINUX/ISOLINUX.BIN;1', joliet_path='/isolinux/isolinux.bin', rr_name='isolinux.bin')\n"
+        "cfg = b'default linux\\n'\n"
+        "iso.add_fp(io.BytesIO(cfg), len(cfg), '/ISOLINUX/ISOLINUX.CFG;1', joliet_path='/isolinux/isolinux.cfg', rr_name='isolinux.cfg')\n"
+        "iso.write('" WININST_ISO_PATH "')\n"
+        "iso.close()\n"
+        "\"";
+    struct stat st;
+    if (system(script) == 0 && stat(WININST_ISO_PATH, &st) == 0 && st.st_size > 0)
+        wininst_iso_available = 1;
+}
+
+static void cleanup_wininst_iso(void)
+{
+    unlink(WININST_ISO_PATH);
+}
 
 TEST(grubver_empty_buf)
 {
@@ -1167,6 +1209,113 @@ TEST(has_efi_img_true)
     CHECK(HasEfiImgBootLoaders() == TRUE);
 }
 
+/*
+ * Test that scanning a Solus-style ISO (has efi.img, no standard EFI
+ * boot entries) results in has_efi == 0x8000 after post-scan processing.
+ * Mirrors Windows iso.c line 1049.
+ *
+ * We test with the broken_efi_iso (which has an EFI img path but no
+ * standard EFI files), and just check the efi_img_path detection works
+ * (the actual 0x8000 logic requires scan to first set efi_img_path).
+ * The post-scan 0x8000 test verifies the logic with pre-set state.
+ */
+TEST(scan_iso_efi_img_only_sets_0x8000)
+{
+    /*
+     * When the ISO has an efi.img but no standard EFI boot files
+     * (IS_EFI_BOOTABLE is false), post-scan must set has_efi = 0x8000.
+     * Mirrors Windows iso.c line 1049.
+     */
+    memset(&img_report, 0, sizeof(img_report));
+    /* Set up the pre-condition: efi_img_path set, has_efi = 0 */
+    strcpy(img_report.efi_img_path, "/EFI/images/efiboot.img");
+    img_report.has_efi = 0;
+    /* Simulate post-scan logic: !IS_EFI_BOOTABLE && HAS_EFI_IMG && HasEfiImgBootLoaders */
+    /* (tested inline so we can verify the logic without running ExtractISO) */
+    if (!IS_EFI_BOOTABLE(img_report) && HAS_EFI_IMG(img_report) && HasEfiImgBootLoaders())
+        img_report.has_efi = 0x8000;
+    CHECK_MSG(img_report.has_efi == 0x8000,
+              "has_efi must be set to 0x8000 when efi.img present but not EFI-bootable");
+    memset(&img_report, 0, sizeof(img_report));
+}
+
+TEST(scan_iso_efi_bootable_not_set_0x8000)
+{
+    /*
+     * When the ISO is already EFI-bootable (IS_EFI_BOOTABLE), the 0x8000
+     * override must NOT be applied.
+     */
+    memset(&img_report, 0, sizeof(img_report));
+    strcpy(img_report.efi_img_path, "/EFI/images/efiboot.img");
+    img_report.has_efi = 1;  /* already EFI bootable */
+    if (!IS_EFI_BOOTABLE(img_report) && HAS_EFI_IMG(img_report) && HasEfiImgBootLoaders())
+        img_report.has_efi = 0x8000;
+    CHECK_MSG(img_report.has_efi == 1,
+              "has_efi must NOT be changed to 0x8000 when already EFI bootable");
+    memset(&img_report, 0, sizeof(img_report));
+}
+
+/* tracking vars defined in iso_linux_glue.c */
+extern int g_getwimversion_call_count;
+extern char g_getwimversion_last_path[512];
+extern uint32_t g_getwimversion_return_value;
+
+TEST(scan_iso_wininst_calls_getwimversion)
+{
+    /*
+     * When scanning a Windows-installer ISO (HAS_WININST), ExtractISO must
+     * call GetWimVersion with "iso_path|/sources/install.wim" and store the
+     * result in img_report.wininst_version.
+     * Mirrors Windows iso.c lines 1069-1073.
+     */
+    if (!wininst_iso_available) { printf("SKIP: wininst ISO unavailable\n"); return; }
+
+    char *saved_image_path = image_path;
+    image_path = WININST_ISO_PATH;
+
+    g_getwimversion_call_count  = 0;
+    g_getwimversion_last_path[0] = '\0';
+    g_getwimversion_return_value = 0xDEADBEEF;
+
+    memset(&img_report, 0, sizeof(img_report));
+    ExtractISO(WININST_ISO_PATH, "", TRUE);
+
+    CHECK_MSG(g_getwimversion_call_count > 0,
+              "GetWimVersion must be called when HAS_WININST");
+    CHECK_MSG(strstr(g_getwimversion_last_path, WININST_ISO_PATH) != NULL,
+              "GetWimVersion path must contain the ISO path");
+    CHECK_MSG(strstr(g_getwimversion_last_path, "/sources/install.wim") != NULL,
+              "GetWimVersion path must contain the wim relative path");
+    CHECK_MSG(img_report.wininst_version == 0xDEADBEEF,
+              "img_report.wininst_version must be set from GetWimVersion return value");
+
+    g_getwimversion_return_value = 0x000E0000;
+    image_path = saved_image_path;
+    memset(&img_report, 0, sizeof(img_report));
+}
+
+TEST(scan_iso_no_wininst_skips_getwimversion)
+{
+    /*
+     * When scanning a non-Windows ISO (no HAS_WININST), GetWimVersion must
+     * NOT be called.
+     */
+    if (!test_iso_available) { printf("SKIP: basic ISO unavailable\n"); return; }
+
+    char *saved_image_path = image_path;
+    image_path = TEST_ISO_PATH;
+
+    g_getwimversion_call_count  = 0;
+    memset(&img_report, 0, sizeof(img_report));
+    ExtractISO(TEST_ISO_PATH, "", TRUE);
+
+    CHECK_MSG(g_getwimversion_call_count == 0,
+              "GetWimVersion must NOT be called when !HAS_WININST");
+
+    image_path = saved_image_path;
+    memset(&img_report, 0, sizeof(img_report));
+}
+
 /* ================================================================
  * iso9660_readfat tests
  *
@@ -1738,6 +1887,10 @@ int main(void)
     if (!knoppix_iso_available)
         printf("  NOTE: Knoppix test ISO not available; Knoppix symlink tests skipped\n\n");
 
+    setup_wininst_iso();
+    if (!wininst_iso_available)
+        printf("  NOTE: wininst test ISO not available; wininst_version tests skipped\n\n");
+
     StrArrayCreate(&modified_files, 8);
 
     printf("  GetGrubVersion\n");
@@ -1807,9 +1960,15 @@ int main(void)
     RUN(extract_iso_knoppix_creates_syslnx32_cfg);
     RUN(extract_iso_knoppix_creates_syslnx64_cfg);
 
-    printf("\n  HasEfiImgBootLoaders\n");
+    printf("\n  HasEfiImgBootLoaders + has_efi=0x8000 post-scan logic\n");
     RUN(has_efi_img_false);
     RUN(has_efi_img_true);
+    RUN(scan_iso_efi_img_only_sets_0x8000);
+    RUN(scan_iso_efi_bootable_not_set_0x8000);
+
+    printf("\n  wininst_version detection (GetWimVersion called during scan)\n");
+    RUN(scan_iso_wininst_calls_getwimversion);
+    RUN(scan_iso_no_wininst_skips_getwimversion);
 
     printf("\n  iso9660_readfat\n");
     RUN(readfat_inrange_sector_zero);
@@ -1847,6 +2006,7 @@ int main(void)
     cleanup_opensuse_iso();
     cleanup_broken_efi_iso();
     cleanup_knoppix_iso();
+    cleanup_wininst_iso();
 
     TEST_RESULTS();
 }

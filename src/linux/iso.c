@@ -57,6 +57,8 @@
 #include "iso_scan.h"
 #include "../common/iso_config.h"
 
+extern uint32_t GetWimVersion(const char* image);
+
 /* ---- globals (defined here, extern in rufus.h or ui.h) ---- */
 FILE*    fd_md5sum          = NULL;
 int64_t  iso_blocking_status = -1;
@@ -1006,6 +1008,12 @@ out:
 		StrArrayDestroy(&isolinux_path);
 		StrArrayDestroy(&grub_filesystems);
 
+		/* Solus-style ISOs: EFI boot files are only in a FAT efi.img embedded
+		 * in the ISO, not as standard /EFI/boot/boot*.efi entries.
+		 * Mirrors Windows iso.c line 1049. */
+		if (!IS_EFI_BOOTABLE(img_report) && HAS_EFI_IMG(img_report) && HasEfiImgBootLoaders())
+			img_report.has_efi = 0x8000;
+
 		/* For WinPE 1.x images, check txtsetup.sif for /minint in OsLoadOptions.
 		 * This flag controls whether the disk ID byte in the MBR should be 0x80
 		 * or 0x81, so it must be detected during scan. */
@@ -1030,6 +1038,17 @@ out:
 				}
 				safe_free(pe_buf);
 			}
+		}
+
+		/* Detect Windows installer WIM version.
+		 * Mirrors Windows iso.c lines 1069-1073.
+		 * On Linux wininst_path[0] starts with '/', wimlib pipe syntax:
+		 * "iso_path|/sources/install.wim" */
+		if (HAS_WININST(img_report)) {
+			char wim_path[4 * MAX_PATH];
+			snprintf(wim_path, sizeof(wim_path), "%s|%s",
+			         image_path, img_report.wininst_path[0]);
+			img_report.wininst_version = GetWimVersion(wim_path);
 		}
 	} else {
 		if (fd_md5sum) { fclose(fd_md5sum); fd_md5sum = NULL; }
