@@ -59,6 +59,7 @@
 #include "drag_drop.h"
 #include "../../res/grub/grub_version.h"
 #include "../../res/grub2/grub2_version.h"
+#include "cli.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -71,6 +72,7 @@ extern BOOL CheckForUpdates(BOOL force);
 extern BOOL quick_format, zero_drive;
 extern BOOL enable_bad_blocks;
 extern BOOL enable_verify_write;
+extern DWORD selected_cluster_size;
 extern int  nb_passes_sel;
 extern BOOL write_as_image, write_as_esp;
 extern BOOL size_check;         /* globals.c */
@@ -1090,6 +1092,12 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	nb_passes_sel     = gtk_combo_box_get_active(GTK_COMBO_BOX(rw.nb_passes_combo));
 	if (nb_passes_sel < 0) nb_passes_sel = 0;
 	enable_verify_write = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.verify_write_check));
+
+	/* Read cluster size from hClusterSize combo (0 = default) */
+	{
+		DWORD cs = (DWORD)ComboBox_GetCurItemData(hClusterSize);
+		selected_cluster_size = (cs >= 512) ? cs : 0;
+	}
 
 	uprintf("Format started by user (drive=%u, fs=%d, part=%d, target=%d, boot=%d, quick=%d, bad_blocks=%d, passes_sel=%d)",
 	        di, fs_type, partition_type, target_type, boot_type, quick_format,
@@ -3856,6 +3864,28 @@ int main(int argc, char *argv[])
 	int status;
 
 	install_crash_handlers();
+
+	/*
+	 * CLI mode: if --device / -d is present, bypass the GTK window and run
+	 * in headless command-line mode exactly like the non-GTK binary does.
+	 * This allows the GTK build to be used from scripts, CI, and automation
+	 * without spawning a display or requiring a running desktop session.
+	 *
+	 * We scan argv manually before GTK parses it so that unknown-option
+	 * warnings from GLib are never triggered for Rufus-specific flags.
+	 */
+	for (int i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "--device") == 0 || strcmp(argv[i], "-d") == 0) {
+			cli_options_t opts;
+			rufus_init_paths();
+			int r = cli_parse_args(argc, argv, &opts);
+			if (r == CLI_PARSE_HELP)
+				return 0;
+			if (r != CLI_PARSE_OK)
+				return 1;
+			return cli_run(&opts);
+		}
+	}
 
 	/* Re-launch under pkexec if not already running as root.
 	 * rufus_try_pkexec() does not return on success; on failure (pkexec not
