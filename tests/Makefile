@@ -807,8 +807,23 @@ CFLAGS_LINUX_test_psapi_linux := \
 	-Wno-implicit-function-declaration -Wno-sign-compare
 WIN_EXCLUDE_SRCS += test_psapi_linux.c
 
-# compat_layer_linux tests: ABI / type-size / macro-value checks for linux/compat/
-# Pure header inclusion + value assertions — no extra .c sources needed.
+# reproducible_builds_linux: tests for SOURCE_DATE_EPOCH and -fmacro-prefix-map
+CFLAGS_LINUX_test_reproducible_builds_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter \
+	-Wno-implicit-function-declaration \
+	-DRUFUS_BUILD_EPOCH=0ULL
+WIN_EXCLUDE_SRCS += test_reproducible_builds_linux.c
+
+# arm64_compat_linux: compile-time checks for ARM64 ioctl header compatibility
+# and configure.ac --with-arch support
+CFLAGS_LINUX_test_arm64_compat_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter \
+	-Wno-implicit-function-declaration
+WIN_EXCLUDE_SRCS += test_arm64_compat_linux.c
+
+
 CFLAGS_LINUX_test_compat_layer := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-Wno-unused-function -Wno-unused-parameter \

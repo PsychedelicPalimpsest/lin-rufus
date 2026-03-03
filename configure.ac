@@ -13,6 +13,16 @@ AC_ARG_WITH([os],
 	[target_os=$withval],
 	[target_os='windows'])
 
+# Architecture / cross-compile support for Linux targets.
+# Pass --with-arch=aarch64 (or any GNU arch prefix like aarch64-linux-gnu) to
+# cross-compile for a non-native architecture.  When --with-arch is given and
+# CC is not already set, the toolchain is derived as <arch>-linux-gnu-gcc.
+AC_ARG_WITH([arch],
+	[AS_HELP_STRING([--with-arch=ARCH],
+		[cross-compile for ARCH (e.g. aarch64); Linux only; sets CC to ARCH-linux-gnu-gcc])],
+	[target_arch=$withval],
+	[target_arch=''])
+
 if test "x$target_os" = "xwindows"; then
   # Default to MinGW cross-compiler when targeting Windows and CC is not set
   if test "x${CC+set}" != "xset"; then
@@ -27,7 +37,17 @@ if test "x$target_os" = "xwindows"; then
   fi
   AC_MSG_NOTICE([Targeting Windows; CC=${CC}])
 else
-  AC_MSG_NOTICE([Targeting Linux])
+  if test "x$target_arch" != "x"; then
+    # Normalise: strip any trailing "-linux-gnu" that the user may have supplied
+    _arch_base=$(echo "$target_arch" | sed 's/-linux-gnu.*//')
+    _cross_prefix="${_arch_base}-linux-gnu"
+    if test "x${CC+set}" != "xset"; then
+      CC="${_cross_prefix}-gcc"
+    fi
+    AC_MSG_NOTICE([Targeting Linux/${_arch_base} (cross); CC=${CC}])
+  else
+    AC_MSG_NOTICE([Targeting Linux])
+  fi
 fi
 
 AC_PROG_CC
@@ -85,7 +105,30 @@ fi
 AC_MSG_RESULT([enabling Large File Support (ISO support)])
 AM_CFLAGS="$AM_CFLAGS -D_FILE_OFFSET_BITS=64 -D_OFF_T_ -D_off_t=off64_t -Doff_t=off64_t -Doff32_t=long"
 
-# Check for -Wno-pointer-sign compiler support (GCC >= 4)
+# Reproducible builds: strip build-path prefixes and honour SOURCE_DATE_EPOCH
+# -fmacro-prefix-map=OLD=NEW rewrites __FILE__ and related macros so that paths
+# relative to the source tree do not leak into the binary.
+AC_MSG_CHECKING([for -fmacro-prefix-map support])
+saved_CFLAGS="${CFLAGS}"
+CFLAGS="$CFLAGS -fmacro-prefix-map=./=./"
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])],
+  [macro_prefix_map="-fmacro-prefix-map=\$(abs_top_srcdir)/="], [macro_prefix_map=""])
+CFLAGS="${saved_CFLAGS}"
+AC_MSG_RESULT([${macro_prefix_map:-no}])
+AM_CFLAGS="$AM_CFLAGS $macro_prefix_map"
+
+# Propagate SOURCE_DATE_EPOCH into the binary as RUFUS_BUILD_EPOCH so the
+# --version output can be reproduced exactly.  Falls back to 0 when not set.
+AC_MSG_CHECKING([for SOURCE_DATE_EPOCH in environment])
+if test -n "${SOURCE_DATE_EPOCH+x}"; then
+  AM_CFLAGS="$AM_CFLAGS -DRUFUS_BUILD_EPOCH=${SOURCE_DATE_EPOCH}ULL"
+  AC_MSG_RESULT([${SOURCE_DATE_EPOCH}])
+else
+  AM_CFLAGS="$AM_CFLAGS -DRUFUS_BUILD_EPOCH=0ULL"
+  AC_MSG_RESULT([not set; using 0])
+fi
+
+
 saved_CFLAGS="${CFLAGS}"
 CFLAGS="$CFLAGS -Wno-pointer-sign"
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])],

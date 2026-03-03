@@ -2,9 +2,13 @@
 #pragma once
 #ifndef _WIN32
 #include "windows.h"
+/* x86intrin.h and cpuid.h are x86/x86_64-only; on other architectures
+ * we skip them and provide only the portable GCC built-in equivalents. */
+#if defined(__x86_64__) || defined(__i386__)
 #include <x86intrin.h>
 /* Note: cpuid.h defines __cpuid/__cpuidex as macros on Linux - no need to redefine */
 #include <cpuid.h>
+#endif
 
 #ifndef _BitScanForward
 #define _BitScanForward(idx,v)  ({ unsigned long _i; _i=__builtin_ctz(v); *(idx)=_i; (v)!=0; })
