@@ -876,18 +876,26 @@ out:
 		img_report.projected_size =
 			(uint64_t)((double)total_blocks * ISO_BLOCKSIZE * 1.01);
 
-		/* Choose shortest config path */
+		/* Choose config path: OpenSUSE priority, then shortest/latest (Tails fix) */
 		if (!IsStrArrayEmpty(config_path)) {
 			size_t j;
+			size_t pfx_len = psz_extract_dir ? strlen(psz_extract_dir) : 0;
 			memset(img_report.cfg_path, '_', sizeof(img_report.cfg_path) - 1);
 			img_report.cfg_path[sizeof(img_report.cfg_path) - 1] = 0;
 			for (j = 0; j < config_path.Index; j++) {
-				if (safe_strlen(config_path.String[j]) <
-				    safe_strlen(img_report.cfg_path))
-					safe_strcpy(img_report.cfg_path,
-					            sizeof(img_report.cfg_path),
-					            config_path.String[j]);
+				const char *iso_path = config_path.String[j] + pfx_len;
+				/* OpenSUSE Live: prioritize loader path — see Windows iso.c lines 985-994 */
+				if (strcasecmp(iso_path, "/boot/i386/loader/isolinux.cfg") == 0 ||
+				    strcasecmp(iso_path, "/boot/x86_64/loader/isolinux.cfg") == 0) {
+					safe_strcpy(img_report.cfg_path, sizeof(img_report.cfg_path), iso_path);
+					img_report.needs_syslinux_overwrite = TRUE;
+					break;
+				}
+				/* Tails: at equal length pick the latest (>= not <) */
+				if (safe_strlen(iso_path) <= safe_strlen(img_report.cfg_path))
+					safe_strcpy(img_report.cfg_path, sizeof(img_report.cfg_path), iso_path);
 			}
+			uprintf("  Will use '%s' for Syslinux", img_report.cfg_path);
 		}
 
 		/* Detect Syslinux/Isolinux version from isolinux.bin — mirrors Windows iso.c */
@@ -1013,6 +1021,43 @@ out:
 	} else {
 		if (fd_md5sum) { fclose(fd_md5sum); fd_md5sum = NULL; }
 		safe_free(md5sum_data);
+
+		/* Create syslinux.cfg redirector — mirrors Windows iso.c lines 1141-1169 */
+		if (HAS_SYSLINUX(img_report)) {
+			char sysl_path[512], sysl_org[512];
+			snprintf(sysl_path, sizeof(sysl_path), "%s/syslinux.cfg", dest_dir);
+			snprintf(sysl_org,  sizeof(sysl_org),  "%s/syslinux.org", dest_dir);
+			FILE *fd = fopen(sysl_path, "r");
+			if (fd != NULL && img_report.needs_syslinux_overwrite) {
+				fclose(fd);
+				fd = NULL;
+				uprintf("Renaming: %s → %s", sysl_path, sysl_org);
+				rename(sysl_path, sysl_org);
+			}
+			if (fd == NULL) {
+				fd = fopen(sysl_path, "w");
+				if (fd == NULL) {
+					uprintf("Unable to create %s - booting from USB will not work",
+					        sysl_path);
+					ret = 1;
+				} else {
+					fprintf(fd, "DEFAULT loadconfig\n\nLABEL loadconfig\n  CONFIG %s\n",
+					        img_report.cfg_path);
+					int i = (int)safe_strlen(img_report.cfg_path);
+					while (i > 0 && img_report.cfg_path[i] != '/') i--;
+					if (i > 0) {
+						img_report.cfg_path[i] = 0;
+						fprintf(fd, "  APPEND %s/\n", img_report.cfg_path);
+						img_report.cfg_path[i] = '/';
+					}
+					uprintf("Created: %s → %s", sysl_path, img_report.cfg_path);
+					fclose(fd);
+					fd = NULL;
+				}
+			}
+			if (fd != NULL)
+				fclose(fd);
+		}
 	}
 
 	udf_dirent_free(p_udf_root);

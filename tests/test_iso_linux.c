@@ -249,6 +249,53 @@ static void cleanup_grub2_iso(void)
 }
 
 /* ================================================================
+ * OpenSUSE ISO (tests config_path OpenSUSE priority + syslinux.cfg creation)
+ * ================================================================ */
+
+#define OPENSUSE_ISO_PATH "/tmp/test_rufus_opensuse.iso"
+static int opensuse_iso_available = 0;
+
+static void setup_opensuse_iso(void)
+{
+    /*
+     * Creates an ISO with:
+     *   /isolinux/isolinux.cfg          — standard path (shorter)
+     *   /isolinux/isolinux.bin          — so HAS_SYSLINUX is TRUE
+     *   /boot/i386/loader/isolinux.cfg  — OpenSUSE-priority path (longer)
+     *
+     * When scanned, Linux iso.c should:
+     *   1. Select /boot/i386/loader/isolinux.cfg as cfg_path (overrides shortest)
+     *   2. Set needs_syslinux_overwrite = TRUE
+     */
+    const char *script =
+        "python3 -c \""
+        "import pycdlib, io\n"
+        "iso = pycdlib.PyCdlib()\n"
+        "iso.new(interchange_level=1, joliet=3, rock_ridge='1.09', vol_ident='OPENSUSE')\n"
+        "iso.add_directory('/ISOLINUX', joliet_path='/isolinux', rr_name='isolinux')\n"
+        "iso.add_directory('/BOOT', joliet_path='/boot', rr_name='boot')\n"
+        "iso.add_directory('/BOOT/I386', joliet_path='/boot/i386', rr_name='i386')\n"
+        "iso.add_directory('/BOOT/I386/LOADER', joliet_path='/boot/i386/loader', rr_name='loader')\n"
+        "cfg1 = b'default linux\\n'\n"
+        "iso.add_fp(io.BytesIO(cfg1), len(cfg1), '/ISOLINUX/ISOLINUX.CFG;1', joliet_path='/isolinux/isolinux.cfg', rr_name='isolinux.cfg')\n"
+        "ver = b'\\x00'*64 + b'ISOLINUX 6.03 extra\\x00' + b'\\x00'*(512-64-20)\n"
+        "iso.add_fp(io.BytesIO(ver), len(ver), '/ISOLINUX/ISOLINUX.BIN;1', joliet_path='/isolinux/isolinux.bin', rr_name='isolinux.bin')\n"
+        "cfg2 = b'default opensuse\\n'\n"
+        "iso.add_fp(io.BytesIO(cfg2), len(cfg2), '/BOOT/I386/LOADER/ISOLINUX.CFG;1', joliet_path='/boot/i386/loader/isolinux.cfg', rr_name='isolinux.cfg')\n"
+        "iso.write('" OPENSUSE_ISO_PATH "')\n"
+        "iso.close()\n"
+        "\"";
+    struct stat st;
+    if (system(script) == 0 && stat(OPENSUSE_ISO_PATH, &st) == 0 && st.st_size > 0)
+        opensuse_iso_available = 1;
+}
+
+static void cleanup_opensuse_iso(void)
+{
+    unlink(OPENSUSE_ISO_PATH);
+}
+
+/* ================================================================
  * GetGrubVersion tests (pure buffer scan — no ISO needed)
  * ================================================================ */
 
@@ -730,6 +777,140 @@ TEST(extract_iso_scan_grub2_has_grub2_set)
               "has_grub2 must be 1 for /boot/grub/i386-pc");
 }
 
+
+/* ================================================================
+ * OpenSUSE config_path selection + syslinux.cfg creation tests
+ * ================================================================ */
+
+TEST(extract_iso_scan_opensuse_sets_needs_syslinux_overwrite)
+{
+    /*
+     * For OpenSUSE Live ISOs that have both /isolinux/isolinux.cfg (shorter)
+     * and /boot/i386/loader/isolinux.cfg (longer, but OpenSUSE-priority),
+     * iso.c must select the OpenSUSE path and set needs_syslinux_overwrite=TRUE.
+     *
+     * This mirrors Windows iso.c lines 990-994.
+     */
+    if (!opensuse_iso_available) { printf("  (skipped: no OpenSUSE test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    BOOL r = ExtractISO(OPENSUSE_ISO_PATH, "", TRUE);
+    CHECK(r == TRUE);
+    CHECK_MSG(strcmp(img_report.cfg_path, "/boot/i386/loader/isolinux.cfg") == 0,
+              "cfg_path must be /boot/i386/loader/isolinux.cfg for OpenSUSE");
+    CHECK_MSG(img_report.needs_syslinux_overwrite == TRUE,
+              "needs_syslinux_overwrite must be TRUE for OpenSUSE");
+}
+
+TEST(extract_iso_scan_standard_syslinux_no_overwrite)
+{
+    /* Standard Syslinux ISO (no OpenSUSE path) must NOT set needs_syslinux_overwrite */
+    if (!syslinux_iso_available) { printf("  (skipped: no syslinux test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    ExtractISO(SYSLINUX_ISO_PATH, "", TRUE);
+    CHECK_MSG(img_report.needs_syslinux_overwrite == FALSE,
+              "needs_syslinux_overwrite must be FALSE for standard syslinux");
+    CHECK_MSG(strcmp(img_report.cfg_path, "/isolinux/isolinux.cfg") == 0,
+              "cfg_path must be /isolinux/isolinux.cfg for standard syslinux");
+}
+
+TEST(extract_iso_extract_creates_syslinux_cfg)
+{
+    /*
+     * After extracting a Syslinux-based ISO, iso.c must create
+     * <dest_dir>/syslinux.cfg that points to img_report.cfg_path.
+     *
+     * This is required for Syslinux-based distros to boot from USB.
+     * Windows iso.c lines 1141-1169 implement this; Linux was missing it.
+     */
+    if (!syslinux_iso_available) { printf("  (skipped: no syslinux test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+    system("mkdir -p " TEST_EXTRACT_DIR);
+    /* Scan with empty dest_dir to populate img_report.cfg_path correctly */
+    ExtractISO(SYSLINUX_ISO_PATH, "", TRUE);
+    /* Extract to disk */
+    BOOL r = ExtractISO(SYSLINUX_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    CHECK(r == TRUE);
+    /* syslinux.cfg must have been created */
+    struct stat st;
+    char sysl_cfg[256];
+    snprintf(sysl_cfg, sizeof(sysl_cfg), "%s/syslinux.cfg", TEST_EXTRACT_DIR);
+    CHECK_MSG(stat(sysl_cfg, &st) == 0, "syslinux.cfg must be created after extraction");
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
+
+TEST(extract_iso_extract_syslinux_cfg_contents)
+{
+    /* syslinux.cfg must contain "CONFIG <cfg_path>" and "APPEND <dir>/" */
+    if (!syslinux_iso_available) { printf("  (skipped: no syslinux test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+    system("mkdir -p " TEST_EXTRACT_DIR);
+    ExtractISO(SYSLINUX_ISO_PATH, "", TRUE);
+    ExtractISO(SYSLINUX_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    /* Read syslinux.cfg */
+    char sysl_cfg[256];
+    snprintf(sysl_cfg, sizeof(sysl_cfg), "%s/syslinux.cfg", TEST_EXTRACT_DIR);
+    FILE *f = fopen(sysl_cfg, "r");
+    if (f == NULL) { printf("  (syslinux.cfg not found)\n"); return; }
+    char contents[512];
+    size_t n = fread(contents, 1, sizeof(contents) - 1, f);
+    fclose(f);
+    contents[n] = '\0';
+    CHECK_MSG(strstr(contents, "CONFIG /isolinux/isolinux.cfg") != NULL,
+              "syslinux.cfg must contain 'CONFIG /isolinux/isolinux.cfg'");
+    CHECK_MSG(strstr(contents, "APPEND /isolinux/") != NULL,
+              "syslinux.cfg must contain 'APPEND /isolinux/'");
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
+
+TEST(extract_iso_extract_opensuse_renames_existing_syslinux_cfg)
+{
+    /*
+     * For OpenSUSE (needs_syslinux_overwrite=TRUE), if syslinux.cfg already
+     * exists in dest_dir, it must be renamed to syslinux.org before creating
+     * the new syslinux.cfg. Mirrors Windows iso.c lines 1145-1150.
+     */
+    if (!opensuse_iso_available) { printf("  (skipped: no OpenSUSE test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+    system("mkdir -p " TEST_EXTRACT_DIR);
+    /* Scan to set needs_syslinux_overwrite */
+    ExtractISO(OPENSUSE_ISO_PATH, "", TRUE);
+    /* Pre-create syslinux.cfg with sentinel content */
+    char sysl_cfg[256], sysl_org[256];
+    snprintf(sysl_cfg, sizeof(sysl_cfg), "%s/syslinux.cfg", TEST_EXTRACT_DIR);
+    snprintf(sysl_org, sizeof(sysl_org), "%s/syslinux.org", TEST_EXTRACT_DIR);
+    FILE *f = fopen(sysl_cfg, "w");
+    CHECK(f != NULL);
+    fprintf(f, "OLD_SYSLINUX_CFG\n");
+    fclose(f);
+    /* Extract — should rename old syslinux.cfg → syslinux.org */
+    ExtractISO(OPENSUSE_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    /* syslinux.org must exist (renamed from old syslinux.cfg) */
+    struct stat st;
+    CHECK_MSG(stat(sysl_org, &st) == 0, "syslinux.org must exist after overwrite rename");
+    /* Read syslinux.org — must contain the sentinel */
+    f = fopen(sysl_org, "r");
+    char buf[64];
+    if (f) { fgets(buf, sizeof(buf), f); fclose(f); }
+    CHECK_MSG(strstr(buf, "OLD_SYSLINUX_CFG") != NULL,
+              "syslinux.org must contain original syslinux.cfg content");
+    /* New syslinux.cfg must exist and point to the OpenSUSE cfg */
+    f = fopen(sysl_cfg, "r");
+    char contents[512];
+    size_t n = fread(contents, 1, sizeof(contents) - 1, f);
+    fclose(f);
+    contents[n] = '\0';
+    CHECK_MSG(strstr(contents, "CONFIG /boot/i386/loader/isolinux.cfg") != NULL,
+              "new syslinux.cfg must reference the OpenSUSE cfg path");
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
 
 TEST(has_efi_img_false)
 {
@@ -1303,6 +1484,10 @@ int main(void)
     if (!grub2_iso_available)
         printf("  NOTE: GRUB2 test ISO not available (pycdlib not installed?); GRUB2 version tests skipped\n\n");
 
+    setup_opensuse_iso();
+    if (!opensuse_iso_available)
+        printf("  NOTE: OpenSUSE test ISO not available (pycdlib not installed?); OpenSUSE cfg tests skipped\n\n");
+
     StrArrayCreate(&modified_files, 8);
 
     printf("  GetGrubVersion\n");
@@ -1355,6 +1540,13 @@ int main(void)
     RUN(extract_iso_scan_grub2_version_non_grub_iso_stays_empty);
     RUN(extract_iso_scan_grub2_has_grub2_set);
 
+    printf("\n  OpenSUSE config_path + syslinux.cfg creation\n");
+    RUN(extract_iso_scan_opensuse_sets_needs_syslinux_overwrite);
+    RUN(extract_iso_scan_standard_syslinux_no_overwrite);
+    RUN(extract_iso_extract_creates_syslinux_cfg);
+    RUN(extract_iso_extract_syslinux_cfg_contents);
+    RUN(extract_iso_extract_opensuse_renames_existing_syslinux_cfg);
+
     printf("\n  HasEfiImgBootLoaders\n");
     RUN(has_efi_img_false);
     RUN(has_efi_img_true);
@@ -1392,6 +1584,7 @@ int main(void)
     cleanup_md5_iso();
     cleanup_syslinux_iso();
     cleanup_grub2_iso();
+    cleanup_opensuse_iso();
 
     TEST_RESULTS();
 }
