@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <string.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -147,6 +148,7 @@ void cli_print_usage(const char *prog)
 	       "  -B, --bad-blocks          Scan device for bad blocks before formatting\n"
 	       "  -N, --nb-passes N         Number of bad-block scan passes: 1-4 (requires -B)\n"
 	       "  -l, --label LABEL         Volume label\n"
+	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "      --quick               Quick format (default)\n"
 	       "      --no-quick            Full format (zero-fill)\n"
 	       "      --verify              Verify write after image write\n"
@@ -175,6 +177,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "persistence",      required_argument, NULL, 'P' },
 		{ "bad-blocks",       no_argument,       NULL, 'B' },
 		{ "nb-passes",        required_argument, NULL, 'N' },
+		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
@@ -188,7 +191,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:L",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -325,6 +328,9 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			break;
 		}
 
+		case 'L':
+			return CLI_PARSE_LIST;
+
 		case 'h':
 			cli_print_usage(argv[0]);
 			return CLI_PARSE_HELP;
@@ -402,6 +408,30 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Number of bad-block scan passes (0 = not set, use default) */
 	if (opts->nb_passes > 0)
 		nb_passes_sel = opts->nb_passes - 1; /* 0-based index used by format.c */
+}
+
+/*
+ * cli_print_devices — scan available removable drives and print each one.
+ *
+ * Output format (one drive per line, tab-separated):
+ *   <device_path>\t<display_name>\t<size_bytes>
+ *
+ * Calls GetDevices(0) to populate rufus_drive[], then iterates the list.
+ * Returns 0 if at least one drive was found, 1 if none were found.
+ */
+int cli_print_devices(void)
+{
+	extern RUFUS_DRIVE rufus_drive[MAX_DRIVES];
+	GetDevices(0);
+	int found = 0;
+	for (int i = 0; i < MAX_DRIVES && rufus_drive[i].id != NULL; i++) {
+		printf("%s\t%s\t%" PRIu64 "\n",
+		       rufus_drive[i].id,
+		       rufus_drive[i].display_name ? rufus_drive[i].display_name : "",
+		       (uint64_t)rufus_drive[i].size);
+		found++;
+	}
+	return found > 0 ? 0 : 1;
 }
 
 int cli_run(const cli_options_t *opts)

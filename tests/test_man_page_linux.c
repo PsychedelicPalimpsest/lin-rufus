@@ -274,6 +274,16 @@ TEST(man_page_documents_nb_passes_flag) {
     free(content);
 }
 
+TEST(man_page_documents_list_devices_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "list-devices") != NULL || strstr(content, "list.devices") != NULL
+       || strstr(content, "list\\-devices") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_fat32) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -366,6 +376,7 @@ int main(void)
     RUN(man_page_documents_persistence_flag);
     RUN(man_page_documents_bad_blocks_flag);
     RUN(man_page_documents_nb_passes_flag);
+    RUN(man_page_documents_list_devices_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);
     RUN(man_page_documents_mbr);

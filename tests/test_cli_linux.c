@@ -706,6 +706,38 @@ static void test_nb_passes_with_bad_blocks(void)
     CHECK(opts.bad_blocks != 0);
 }
 
+/* ---- --list-devices tests ---- */
+
+static void test_list_devices_returns_list_code(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --list-devices", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+}
+
+static void test_list_devices_does_not_require_device(void)
+{
+    /* --list-devices is valid without --device */
+    cli_options_t opts;
+    int r = parse("rufus --list-devices", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+}
+
+static void test_list_devices_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus -L", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+}
+
+static void test_list_devices_ignores_other_options(void)
+{
+    /* --list-devices should still work if combined with --device */
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --list-devices", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -812,6 +844,12 @@ int main(void)
     RUN_TEST(test_nb_passes_alpha_is_error);
     RUN_TEST(test_nb_passes_requires_bad_blocks);
     RUN_TEST(test_nb_passes_with_bad_blocks);
+
+    /* --list-devices tests */
+    RUN_TEST(test_list_devices_returns_list_code);
+    RUN_TEST(test_list_devices_does_not_require_device);
+    RUN_TEST(test_list_devices_short_form);
+    RUN_TEST(test_list_devices_ignores_other_options);
 
     TEST_RESULTS();
 }

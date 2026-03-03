@@ -34,6 +34,7 @@
 #define CLI_PARSE_OK       0   /* parsed successfully */
 #define CLI_PARSE_HELP     1   /* --help requested (printed, do not run) */
 #define CLI_PARSE_VERSION  2   /* --version requested (printed, do not run) */
+#define CLI_PARSE_LIST     3   /* --list-devices requested (printed, do not run) */
 #define CLI_PARSE_ERROR   -1   /* bad argument (message printed to stderr) */
 /*
  * cli_options_t — collects all user-supplied format options.
@@ -80,6 +81,16 @@ void cli_print_usage(const char *prog);
  * launching FormatThread.
  */
 void cli_apply_options(const cli_options_t *opts);
+
+/*
+ * cli_print_devices — enumerate available removable drives (calls GetDevices).
+ *
+ * Prints one drive per line to stdout in tab-separated format:
+ *   <device_path>\t<display_name>\t<size_bytes>
+ *
+ * Returns 0 if drives were found, 1 if none.
+ */
+int cli_print_devices(void);
 
 /*
  * cli_run — register the target device, apply options, launch FormatThread,

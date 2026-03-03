@@ -3875,12 +3875,15 @@ int main(int argc, char *argv[])
 	 * warnings from GLib are never triggered for Rufus-specific flags.
 	 */
 	for (int i = 1; i < argc; i++) {
-		if (strcmp(argv[i], "--device") == 0 || strcmp(argv[i], "-d") == 0) {
+		if (strcmp(argv[i], "--device") == 0 || strcmp(argv[i], "-d") == 0 ||
+		    strcmp(argv[i], "--list-devices") == 0 || strcmp(argv[i], "-L") == 0) {
 			cli_options_t opts;
 			rufus_init_paths();
 			int r = cli_parse_args(argc, argv, &opts);
-			if (r == CLI_PARSE_HELP)
+			if (r == CLI_PARSE_HELP || r == CLI_PARSE_VERSION)
 				return 0;
+			if (r == CLI_PARSE_LIST)
+				return cli_print_devices();
 			if (r != CLI_PARSE_OK)
 				return 1;
 			return cli_run(&opts);

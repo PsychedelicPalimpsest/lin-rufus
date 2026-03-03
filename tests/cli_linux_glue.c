@@ -38,6 +38,7 @@ void drive_linux_reset_drives(void) { }
 void drive_linux_add_drive(const char *id, const char *name,
                            const char *display_name, uint64_t size)
 { (void)id; (void)name; (void)display_name; (void)size; }
+BOOL GetDevices(DWORD devnum) { (void)devnum; return FALSE; }
 
 /* FormatThread stub */
 DWORD FormatThread(void *param) { (void)param; return 0; }

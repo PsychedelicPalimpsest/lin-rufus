@@ -56,12 +56,8 @@ enum ArchType MachineToArch(WORD machine) {
 }
 
 void ClrAlertPromptHook(void) {}
-/* SetFSFromISO / SetPartitionSchemeAndTargetSystem are provided by
- * ui_combo_logic.c in GTK builds; we only need stubs for CLI/test builds. */
-#ifndef USE_GTK
-void SetFSFromISO(void)                                    {}
-void SetPartitionSchemeAndTargetSystem(BOOL b)             { (void)b; }
-#endif
+/* SetFSFromISO / SetPartitionSchemeAndTargetSystem are always provided by
+ * ui_combo_logic.c for all builds. */
 HANDLE CreatePreallocatedFile(const char* path, DWORD access, DWORD share,
     LPSECURITY_ATTRIBUTES sa, DWORD disp, DWORD flags, LONGLONG size)
     { (void)path;(void)access;(void)share;(void)sa;(void)disp;(void)flags;(void)size; return INVALID_HANDLE_VALUE; }
@@ -252,6 +248,10 @@ int main(int argc, char *argv[])
 	r = cli_parse_args(argc, argv, &opts);
 	if (r == CLI_PARSE_HELP)
 		return 0;
+	if (r == CLI_PARSE_VERSION)
+		return 0;
+	if (r == CLI_PARSE_LIST)
+		return cli_print_devices();
 	if (r != CLI_PARSE_OK)
 		return 1;
 
