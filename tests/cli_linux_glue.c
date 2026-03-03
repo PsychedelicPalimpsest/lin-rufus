@@ -45,6 +45,7 @@ BOOL   size_check            = TRUE;
 BOOL   ignore_boot_marker    = FALSE;
 BOOL   enable_file_indexing  = FALSE;
 BOOL   detect_fakes          = FALSE;
+BOOL   expert_mode           = FALSE;
 char  *image_path        = NULL;
 char   app_dir[MAX_PATH] = "/tmp";
 DWORD  ErrorStatus       = 0;

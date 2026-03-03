@@ -1377,6 +1377,39 @@ static void test_detect_fakes_default_is_off(void)
     CHECK(opts.detect_fakes == 0);
 }
 
+/* ---- --expert-mode tests ---- */
+
+static void test_init_expert_mode_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.expert_mode == 0);
+}
+
+static void test_expert_mode_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --expert-mode", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.expert_mode != 0);
+}
+
+static void test_expert_mode_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -E", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.expert_mode != 0);
+}
+
+static void test_expert_mode_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.expert_mode == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1604,6 +1637,12 @@ int main(void)
     RUN_TEST(test_detect_fakes_long_flag);
     RUN_TEST(test_detect_fakes_short_flag);
     RUN_TEST(test_detect_fakes_default_is_off);
+
+    /* --expert-mode tests */
+    RUN_TEST(test_init_expert_mode_is_false);
+    RUN_TEST(test_expert_mode_long_flag);
+    RUN_TEST(test_expert_mode_short_flag);
+    RUN_TEST(test_expert_mode_default_is_off);
 
     TEST_RESULTS();
 }

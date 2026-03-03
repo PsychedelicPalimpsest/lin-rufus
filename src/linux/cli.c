@@ -76,6 +76,7 @@ extern BOOL size_check;
 extern BOOL ignore_boot_marker;
 extern BOOL enable_file_indexing;
 extern BOOL detect_fakes;
+extern BOOL expert_mode;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -183,6 +184,7 @@ void cli_print_usage(const char *prog)
 	       "  -I, --ignore-boot-marker  Ignore missing boot signature in VHD/image files\n"
 	       "  -n, --file-indexing       Enable NTFS file indexing on the formatted volume\n"
 	       "  -D, --detect-fakes        Detect fake/counterfeit drives during bad-block scan\n"
+	       "  -E, --expert-mode         Unlock expert-level features (advanced hash/SBAT options)\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "  -j, --json                Output --list-devices results as JSON\n"
@@ -232,6 +234,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "ignore-boot-marker", no_argument,   NULL, 'I' },
 		{ "file-indexing",   no_argument,       NULL, 'n' },
 		{ "detect-fakes",    no_argument,       NULL, 'D' },
+		{ "expert-mode",     no_argument,       NULL, 'E' },
 		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
@@ -248,7 +251,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemRxsInjDL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWwZoAemRxsInjDEL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -461,6 +464,10 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->detect_fakes = 1;
 			break;
 
+		case 'E':
+			opts->expert_mode = 1;
+			break;
+
 		case 'j':
 			opts->json = 1;
 			break;
@@ -603,6 +610,9 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Enable fake drive detection during bad-block scan */
 	if (opts->detect_fakes)
 		detect_fakes = TRUE;
+	/* Enable expert mode (unlocks advanced hash/SBAT options) */
+	if (opts->expert_mode)
+		expert_mode = TRUE;
 }
 
 /*

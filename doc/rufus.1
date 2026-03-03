@@ -37,6 +37,7 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-ignore\-boot\-marker\fR]
 [\fB\-\-file\-indexing\fR]
 [\fB\-\-detect\-fakes\fR]
+[\fB\-\-expert\-mode\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-json\fR]
 [\fB\-\-label\fR \fILABEL\fR]
@@ -263,6 +264,11 @@ a distinct pattern to each block and verifies that reads return the
 same data from the \fIsame physical address\fR; drives that remap
 writes (counterfeit/cloned drives) fail this test even if they pass a
 normal read-after-write check.
+.TP
+.BR \-E ", " \-\-expert\-mode
+Unlock expert-level features that are hidden by default, including
+advanced hash algorithm selection and SBAT certificate inspection.
+Equivalent to pressing the keyboard shortcut in the GUI.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length
