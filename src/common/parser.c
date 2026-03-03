@@ -1054,7 +1054,7 @@ uint8_t* RvaToPhysical(uint8_t* buf, uint32_t rva)
  * format.  This avoids sizeof(wchar_t) portability issues (4 bytes on Linux
  * vs. 2 bytes on Windows). */
 static BOOL FoundResourceRva_flag = FALSE;
-uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* dir, uint32_t* len)
+uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* root_end, uint8_t* dir, uint32_t* len)
 {
 	uint32_t i, rva;
 	IMAGE_RESOURCE_DIRECTORY* _dir = (IMAGE_RESOURCE_DIRECTORY*)dir;
@@ -1064,7 +1064,11 @@ uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* dir, uint
 	size_t nlen, k;
 	BOOL match;
 
-	if (root == NULL || dir == NULL || name == NULL)
+	if (root == NULL || root_end == NULL || dir == NULL || name == NULL)
+		return 0;
+
+	/* Guard: the directory header itself must be within the buffer */
+	if ((uint8_t*)(&dir_entry[0]) > root_end)
 		return 0;
 
 	/* Initial invocation always starts at the root */
@@ -1072,13 +1076,22 @@ uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* dir, uint
 		FoundResourceRva_flag = FALSE;
 
 	for (i = 0; i < (uint32_t)_dir->NumberOfNamedEntries + _dir->NumberOfIdEntries; i++) {
+		/* Guard: each dir_entry[i] must be within the buffer */
+		if ((uint8_t*)(&dir_entry[i + 1]) > root_end)
+			break;
 		if (!FoundResourceRva_flag && i < _dir->NumberOfNamedEntries) {
 			/* The PE resource name is stored as: WORD Length; uint16_t NameString[].
 			 * We access it as a raw byte pointer to avoid wchar_t size issues
 			 * (sizeof(wchar_t) is 4 on Linux but PE always uses 2-byte UTF-16). */
 			const uint8_t* name_blob = root + dir_entry[i].NameOffset;
+			/* Guard: name_blob + 2 (WORD) must be within buffer */
+			if (name_blob + sizeof(WORD) > root_end)
+				continue;
 			WORD pe_len = *(const WORD*)name_blob;
 			pe_str = (const uint16_t*)(name_blob + sizeof(WORD));
+			/* Guard: the name string itself must be within buffer */
+			if ((const uint8_t*)(pe_str + pe_len) > root_end)
+				continue;
 			/* Count length of the caller's name */
 			for (nlen = 0; name[nlen]; nlen++);
 			if (pe_len != (WORD)nlen)
@@ -1092,10 +1105,16 @@ uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* dir, uint
 			FoundResourceRva_flag = TRUE;
 		}
 		if (dir_entry[i].OffsetToData & IMAGE_RESOURCE_DATA_IS_DIRECTORY) {
-			rva = FindResourceRva(name, root, &root[dir_entry[i].OffsetToDirectory], len);
+			/* Guard: sub-directory offset must be within buffer */
+			if (root + dir_entry[i].OffsetToDirectory + sizeof(IMAGE_RESOURCE_DIRECTORY) > root_end)
+				continue;
+			rva = FindResourceRva(name, root, root_end, &root[dir_entry[i].OffsetToDirectory], len);
 			if (rva != 0)
 				return rva;
 		} else if (FoundResourceRva_flag) {
+			/* Guard: data entry must be within buffer */
+			if (root + dir_entry[i].OffsetToData + sizeof(IMAGE_RESOURCE_DATA_ENTRY) > root_end)
+				return 0;
 			data_entry = (IMAGE_RESOURCE_DATA_ENTRY*)(root + dir_entry[i].OffsetToData);
 			if (len != NULL)
 				*len = data_entry->Size;

@@ -1175,6 +1175,40 @@ check-cppcheck:
 	cppcheck $(CPPCHECK_FLAGS) $(CPPCHECK_SRCS)
 	@echo "cppcheck: no issues found."
 
+# ============================================================================
+# Fuzz targets — require clang with libFuzzer support
+# Build with: make fuzz-parser  OR  make fuzz-pe  OR  make fuzz-iso
+# Run with:   mkdir -p corpus/X && ./fuzz_X corpus/X/ -max_total_time=60
+# ============================================================================
+
+CLANG      ?= clang
+FUZZ_FLAGS  = -fsanitize=fuzzer,address -g -D_GNU_SOURCE \
+              -I$(SRC_DIR)/linux/compat -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+              -I$(SRC_DIR) -I$(SRC_DIR)/common
+FUZZ_LIBS   = -L/usr/lib/gcc/x86_64-linux-gnu/14 -lfontconfig
+
+FUZZ_COMMON_SRC = $(COMMON)/parser.c $(COMMON)/localization.c \
+                  $(SRC_DIR)/linux/stdfn.c $(SRC_DIR)/linux/parser.c \
+                  fuzz_parser_glue.c
+
+fuzz-parser: fuzz_parser
+fuzz_parser: fuzz_parser.c $(FUZZ_COMMON_SRC)
+	$(CLANG) $(FUZZ_FLAGS) \
+	    fuzz_parser.c $(FUZZ_COMMON_SRC) \
+	    $(FUZZ_LIBS) -o fuzz_parser
+
+fuzz-pe: fuzz_pe
+fuzz_pe: fuzz_pe.c $(FUZZ_COMMON_SRC)
+	$(CLANG) $(FUZZ_FLAGS) \
+	    fuzz_pe.c $(FUZZ_COMMON_SRC) \
+	    $(FUZZ_LIBS) -o fuzz_pe
+
+fuzz-iso: fuzz_iso
+fuzz_iso: fuzz_iso.c $(FUZZ_COMMON_SRC)
+	$(CLANG) $(FUZZ_FLAGS) \
+	    fuzz_iso.c $(FUZZ_COMMON_SRC) \
+	    $(FUZZ_LIBS) -o fuzz_iso
+
 clean:
 	rm -f $(LINUX_BINS) $(WIN_BINS) $(ASAN_BINS)
 

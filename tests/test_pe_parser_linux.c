@@ -30,7 +30,7 @@
 #include <stdarg.h>
 void uprintf(const char *fmt, ...) { (void)fmt; }
 windows_version_t WindowsVersion = {0};
-RUFUS_UPDATE update = {{0}, {0}, NULL, NULL};
+RUFUS_UPDATE update = {{0}, {0}, NULL, NULL, NULL, 0};
 BOOL en_msg_mode = FALSE;
 BOOL right_to_left_mode = FALSE;
 
@@ -40,7 +40,7 @@ BOOL right_to_left_mode = FALSE;
 extern uint16_t  GetPeArch(uint8_t* buf);
 extern uint8_t*  GetPeSection(uint8_t* buf, const char* name, uint32_t* len);
 extern uint8_t*  RvaToPhysical(uint8_t* buf, uint32_t rva);
-extern uint32_t  FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* dir, uint32_t* len);
+extern uint32_t  FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* root_end, uint8_t* dir, uint32_t* len);
 extern uint8_t*  GetPeSignatureData(uint8_t* buf);
 
 /* -------------------------------------------------------------------------
@@ -463,9 +463,9 @@ TEST(find_resource_rva_null_args)
 {
     uint8_t buf[256] = {0};
     static const uint16_t u16x[] = { 'X', 0 };
-    CHECK_INT_EQ(0, (int)FindResourceRva(NULL, buf, buf, NULL));
-    CHECK_INT_EQ(0, (int)FindResourceRva(u16x, NULL, buf, NULL));
-    CHECK_INT_EQ(0, (int)FindResourceRva(u16x, buf, NULL, NULL));
+    CHECK_INT_EQ(0, (int)FindResourceRva(NULL, buf, buf + sizeof(buf), buf, NULL));
+    CHECK_INT_EQ(0, (int)FindResourceRva(u16x, NULL, buf + sizeof(buf), buf, NULL));
+    CHECK_INT_EQ(0, (int)FindResourceRva(u16x, buf, buf + sizeof(buf), NULL, NULL));
 }
 
 TEST(find_resource_rva_empty_directory)
@@ -474,7 +474,7 @@ TEST(find_resource_rva_empty_directory)
     uint8_t buf[sizeof(IMAGE_RESOURCE_DIRECTORY)] = {0};
     uint32_t len = 0;
     static const uint16_t u16missing[] = { 'M','I','S','S','I','N','G', 0 };
-    CHECK_INT_EQ(0, (int)FindResourceRva(u16missing, buf, buf, &len));
+    CHECK_INT_EQ(0, (int)FindResourceRva(u16missing, buf, buf + sizeof(buf), buf, &len));
 }
 
 TEST(find_resource_rva_name_not_found)
@@ -515,9 +515,43 @@ TEST(find_resource_rva_name_not_found)
 
     static const uint16_t u16bar[] = { 'B', 'A', 'R', 0 };
     uint32_t len = 0;
-    uint32_t rva = FindResourceRva(u16bar, root, root, &len);
+    uint32_t rva = FindResourceRva(u16bar, root, root + total, root, &len);
     CHECK_INT_EQ(0, (int)rva);
     free(root);
+}
+
+/* Regression test: 4-byte crafted input that previously caused a
+ * heap-buffer-overflow via unchecked dir_entry iteration.
+ * Input \xc4\x0a\xc4\x0a decodes as NumberOfNamedEntries=0x0ac4 (2756)
+ * + NumberOfIdEntries=0x0ac4 (2756) = 5512 iterations, crashing via OOB. */
+TEST(find_resource_rva_crash_regression)
+{
+    const uint8_t crash_input[] = { 0xc4, 0x0a, 0xc4, 0x0a };
+    static const uint16_t name[] = { 'X', 0 };
+    uint32_t len = 0;
+    /* Must return 0 without crashing */
+    uint32_t rva = FindResourceRva(name, (uint8_t*)crash_input,
+                                   (uint8_t*)crash_input + sizeof(crash_input),
+                                   (uint8_t*)crash_input, &len);
+    CHECK_INT_EQ(0, (int)rva);
+}
+
+/* Regression test: NULL root_end guard must return 0 immediately */
+TEST(find_resource_rva_null_root_end)
+{
+    uint8_t buf[16] = {0};
+    static const uint16_t name[] = { 'X', 0 };
+    uint32_t len = 0;
+    CHECK_INT_EQ(0, (int)FindResourceRva(name, buf, NULL, buf, &len));
+}
+
+/* Regression test: root_end exactly at start of buffer (zero-size) returns 0 */
+TEST(find_resource_rva_zero_size_buffer)
+{
+    uint8_t buf[16] = {0};
+    static const uint16_t name[] = { 'X', 0 };
+    uint32_t len = 0;
+    CHECK_INT_EQ(0, (int)FindResourceRva(name, buf, buf, buf, &len));
 }
 
 /* =========================================================================
@@ -558,6 +592,9 @@ int main(void)
     RUN(find_resource_rva_null_args);
     RUN(find_resource_rva_empty_directory);
     RUN(find_resource_rva_name_not_found);
+    RUN(find_resource_rva_crash_regression);
+    RUN(find_resource_rva_null_root_end);
+    RUN(find_resource_rva_zero_size_buffer);
 
     TEST_RESULTS();
 }

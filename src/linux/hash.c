@@ -302,7 +302,7 @@ static BOOL IsRevokedBySvn(uint8_t* buf, uint32_t len)
 		if (root == NULL)
 			continue;
 
-		rsrc_rva = FindResourceRva(rsrc_name, root, root, &rsrc_len);
+		rsrc_rva = FindResourceRva(rsrc_name, root, root + img_data_dir.Size, root, &rsrc_len);
 		if (rsrc_rva == 0)
 			continue;
 

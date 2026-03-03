@@ -938,7 +938,11 @@ extern uint16_t GetPeArch(uint8_t* buf);
 extern uint8_t* GetPeSection(uint8_t* buf, const char* name, uint32_t* len);
 extern uint8_t* GetPeSignatureData(uint8_t* buf);
 extern uint8_t* RvaToPhysical(uint8_t* buf, uint32_t rva);
-extern uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* dir, uint32_t* len);
+#ifdef _WIN32
+extern uint32_t FindResourceRva(const wchar_t* name, uint8_t* root, uint8_t* dir, uint32_t* len);
+#else
+extern uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* root_end, uint8_t* dir, uint32_t* len);
+#endif
 extern DWORD ListDirectoryContent(StrArray* arr, char* dir, uint8_t type);
 extern BOOL TakeOwnership(LPCSTR lpszOwnFile);
 extern enum ArchType MachineToArch(WORD machine);
