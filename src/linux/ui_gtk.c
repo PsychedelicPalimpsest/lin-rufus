@@ -168,6 +168,7 @@ static void on_toggle_vmdk(GtkWidget *w, gpointer data);
 static void on_toggle_force_update(GtkWidget *w, gpointer data);
 static void on_zero_drive(GtkWidget *w, gpointer data);
 static void on_fast_zero_drive(GtkWidget *w, gpointer data);
+static void on_cycle_port(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
 static void on_save_clicked(GtkButton *btn, gpointer data);
 static void on_persistence_changed(GtkWidget *w, gpointer data);
@@ -744,6 +745,10 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_b,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_toggle_detect_fakes), NULL, NULL));
+	/* Alt+C: cycle (reset) USB port for currently selected device */
+	gtk_accel_group_connect(accel, GDK_KEY_c,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_cycle_port), NULL, NULL));
 	/* Alt+E: toggle dual UEFI/BIOS mode */
 	gtk_accel_group_connect(accel, GDK_KEY_e,
 	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
@@ -850,7 +855,7 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 
 	/* Read format options from checkboxes */
 	quick_format     = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.quick_format_check));
-	zero_drive       = FALSE;  /* future: read from UI when zero-drive option added */
+	zero_drive       = FALSE;  /* set to TRUE by Alt+Z / Ctrl+Alt+Z keyboard shortcut */
 	enable_bad_blocks = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.bad_blocks_check));
 	nb_passes_sel     = gtk_combo_box_get_active(GTK_COMBO_BOX(rw.nb_passes_combo));
 	if (nb_passes_sel < 0) nb_passes_sel = 0;
@@ -1779,6 +1784,14 @@ static void on_fast_zero_drive(GtkWidget *w, gpointer data)
 	gtk_button_clicked(GTK_BUTTON(rw.start_btn));
 }
 
+static void on_cycle_port(GtkWidget *w, gpointer data)
+{
+	(void)w; (void)data;
+	int index = ComboBox_GetCurSel(hDeviceList);
+	if (index >= 0)
+		CyclePort(index);
+}
+
 /* Callback invoked when the GTK dark-theme preference changes (either by the
  * user via Ctrl+Alt+D or because the desktop environment changed the system
  * theme).  Keeps is_darkmode_enabled in sync with the actual GTK state. */
@@ -2540,6 +2553,25 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 			unattend_xml_mask &= ~(int)mask;
 			unattend_xml_mask |= (int)(wue_options & mask);
 		}
+	}
+
+	/* Restore persisted cheat-mode settings (mirrors Windows startup) */
+	{
+		extern BOOL detect_fakes, ignore_boot_marker, usb_debug;
+		extern BOOL enable_file_indexing, persistent_log;
+		use_rufus_mbr         = !ReadSettingBool(SETTING_DISABLE_RUFUS_MBR);
+		detect_fakes          = !ReadSettingBool(SETTING_DISABLE_FAKE_DRIVES_CHECK);
+		allow_dual_uefi_bios  =  ReadSettingBool(SETTING_ENABLE_WIN_DUAL_EFI_BIOS);
+		force_large_fat32     =  ReadSettingBool(SETTING_FORCE_LARGE_FAT32_FORMAT);
+		enable_vmdk           =  ReadSettingBool(SETTING_ENABLE_VMDK_DETECTION);
+		enable_file_indexing  =  ReadSettingBool(SETTING_ENABLE_FILE_INDEXING);
+		enable_VHDs           = !ReadSettingBool(SETTING_DISABLE_VHDS);
+		enable_extra_hashes   =  ReadSettingBool(SETTING_ENABLE_EXTRA_HASHES);
+		ignore_boot_marker    =  ReadSettingBool(SETTING_IGNORE_BOOT_MARKER);
+		persistent_log        =  ReadSettingBool(SETTING_PERSISTENT_LOG);
+		preserve_timestamps   =  ReadSettingBool(SETTING_PRESERVE_TIMESTAMPS);
+		use_fake_units        = !ReadSettingBool(SETTING_USE_PROPER_SIZE_UNITS);
+		usb_debug             =  ReadSettingBool(SETTING_ENABLE_USB_DEBUG);
 	}
 
 	/* Apply saved dark mode preference (0=system, 1=light, 2=dark) */

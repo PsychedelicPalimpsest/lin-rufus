@@ -46,6 +46,7 @@ HWND hMainDialog  = NULL;
 BOOL enable_HDDs  = FALSE;
 BOOL enable_VHDs  = TRUE;
 BOOL right_to_left_mode = FALSE;
+BOOL use_fake_units = FALSE;
 
 /* msg_dispatch stub — provide SendMessageA directly */
 LRESULT SendMessageA(HWND h, UINT m, WPARAM w, LPARAM l)
