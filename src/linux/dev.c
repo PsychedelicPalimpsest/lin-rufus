@@ -43,6 +43,7 @@ extern RUFUS_DRIVE rufus_drive[MAX_DRIVES];
 extern HWND hDeviceList;
 extern HWND hMainDialog;
 extern BOOL enable_HDDs;
+extern BOOL use_fake_units;  /* globals.c: controls GB vs GiB display */
 
 /* Read a sysfs attribute for a block device, trim trailing whitespace.
  * Returns TRUE on success. */
@@ -201,7 +202,7 @@ BOOL GetDevicesWithRoot(DWORD devnum, const char* sysfs_root, const char* dev_ro
 		/* Build display name: "SIZE NAME" */
 		char display_name[512];
 		snprintf(display_name, sizeof(display_name), "%s %s",
-		         SizeToHumanReadable(size, FALSE, FALSE), dev_name);
+		         SizeToHumanReadable(size, FALSE, use_fake_units), dev_name);
 
 		/* Drive index will be assigned after sorting */
 		rufus_drive[num_drives].id           = safe_strdup(dev_node);

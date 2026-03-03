@@ -53,6 +53,7 @@
 #include "multidev.h"
 #include "ventoy_detect.h"
 #include "kbd_shortcuts.h"
+#include "ui_enable_opts.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -82,6 +83,7 @@ extern BOOL user_deleted_rufus_dir;   /* globals.c */
 extern BOOL previous_enable_HDDs;     /* globals.c */
 extern BOOL list_non_usb_removable_drives; /* globals.c */
 extern BOOL enable_file_indexing; /* globals.c */
+extern uint8_t image_options;     /* globals.c */
 
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
@@ -125,6 +127,8 @@ static void combo_register_all(void);
 static void populate_boot_combo(void);
 /* Forward declaration for EnableControls (defined later in this file) */
 void EnableControls(BOOL enable, BOOL remove_checkboxes);
+/* Forward declaration for update_advanced_controls (defined later in this file) */
+void update_advanced_controls(void);
 
 /* Idle callback: update progress bar from main thread. */
 static gboolean idle_update_progress(gpointer data)
@@ -156,6 +160,8 @@ static void on_toggle_expert_mode(GtkWidget *w, gpointer data);
 static void on_toggle_joliet(GtkWidget *w, gpointer data);
 static void on_toggle_rockridge(GtkWidget *w, gpointer data);
 static void on_toggle_usb_hdd(GtkWidget *w, gpointer data);
+static void on_list_usb_hdd_toggled(GtkToggleButton *btn, gpointer data);
+static void on_uefi_validation_toggled(GtkToggleButton *btn, gpointer data);
 /* New Alt+key shortcuts */
 static void on_toggle_rufus_mbr(GtkWidget *w, gpointer data);
 static void on_toggle_detect_fakes(GtkWidget *w, gpointer data);
@@ -482,6 +488,10 @@ static GtkWidget *build_drive_properties(void)
 	GtkWidget *adv_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
 	rw.list_usb_hdd_check    = gtk_check_button_new_with_label("List USB Hard Drives");
 	rw.uefi_validation_check = gtk_check_button_new_with_label("Enable UEFI media validation");
+	g_signal_connect(rw.list_usb_hdd_check,    "toggled",
+		G_CALLBACK(on_list_usb_hdd_toggled), NULL);
+	g_signal_connect(rw.uefi_validation_check, "toggled",
+		G_CALLBACK(on_uefi_validation_toggled), NULL);
 	gtk_box_pack_start(GTK_BOX(adv_box), rw.list_usb_hdd_check,    FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(adv_box), rw.uefi_validation_check, FALSE, FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(rw.adv_device_expander), adv_box);
@@ -1381,6 +1391,9 @@ static void on_boot_changed(GtkComboBox *combo, gpointer data)
 	/* Repopulate FS combo and apply smart default for the current image */
 	populate_fs_combo();
 	SetFSFromISO();
+
+	/* Update advanced-options checkbox sensitivity */
+	update_advanced_controls();
 }
 
 static void on_fs_changed(GtkComboBox *combo, gpointer data)
@@ -1394,6 +1407,9 @@ static void on_fs_changed(GtkComboBox *combo, gpointer data)
 		fs_type = (int)ComboBox_GetItemData(hFileSystem, sel);
 		populate_cluster_combo(fs_type);
 	}
+
+	/* Update advanced-options checkbox sensitivity (quick format depends on fs_type) */
+	update_advanced_controls();
 }
 
 /* Update the CSM help label visibility and tooltip when the target combo changes */
@@ -1409,6 +1425,9 @@ static void on_target_changed(GtkComboBox *combo, gpointer data)
 	} else {
 		gtk_widget_hide(rw.csm_help_label);
 	}
+
+	/* Update advanced-options checkbox sensitivity (old BIOS / UEFI val depend on target) */
+	update_advanced_controls();
 }
 
 static void on_persistence_changed(GtkWidget *w, gpointer data)
@@ -1667,7 +1686,28 @@ static void on_toggle_usb_hdd(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	enable_HDDs = !enable_HDDs;
 	uprintf("USB HDD detection: %s", enable_HDDs ? "enabled" : "disabled");
+	/* Sync the Advanced Drive Properties checkbox */
+	if (rw.list_usb_hdd_check)
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.list_usb_hdd_check), enable_HDDs);
 	GetDevices(0);
+}
+
+/* Checkbox handler: list USB HDDs checkbox in Advanced Drive Properties */
+static void on_list_usb_hdd_toggled(GtkToggleButton *btn, gpointer data)
+{
+	(void)data;
+	enable_HDDs = gtk_toggle_button_get_active(btn) ? TRUE : FALSE;
+	uprintf("USB HDD detection: %s", enable_HDDs ? "enabled" : "disabled");
+	GetDevices(0);
+}
+
+/* Checkbox handler: UEFI media validation checkbox in Advanced Drive Properties */
+static void on_uefi_validation_toggled(GtkToggleButton *btn, gpointer data)
+{
+	(void)data;
+	extern BOOL validate_md5sum;
+	validate_md5sum = gtk_toggle_button_get_active(btn) ? TRUE : FALSE;
+	uprintf("UEFI media validation (md5sum): %s", validate_md5sum ? "enabled" : "disabled");
 }
 
 /* --- New Alt+key cheat-mode toggle handlers --- */
@@ -1864,6 +1904,9 @@ static void on_toggle_non_usb_removable(GtkWidget *w, gpointer data)
 		uprintf("CAUTION: Listing of non-USB removable drives enabled — you may lose data!");
 	else
 		uprintf("Listing of non-USB removable drives disabled");
+	/* Sync the list-USB-HDDs checkbox to the new enable_HDDs value */
+	if (rw.list_usb_hdd_check)
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.list_usb_hdd_check), enable_HDDs);
 	if (r.refresh_devs)
 		GetDevices(0);
 }
@@ -2069,6 +2112,63 @@ void ToggleImageOptions(void)
 
 void CreateSmallButtons(HWND hDlg)    { (void)hDlg; }
 void CreateAdditionalControls(HWND hDlg) { (void)hDlg; }
+
+/*
+ * update_advanced_controls() — mirrors Windows EnableBootOptions().
+ * Enables/disables and optionally resets advanced-options checkboxes
+ * based on the current boot type, partition scheme, target system,
+ * filesystem type, and scanned image report.
+ *
+ * Called from on_boot_changed(), on_fs_changed(), on_target_changed(),
+ * the UM_IMAGE_SCANNED handler, and on_partition_changed() (via combo logic).
+ */
+void update_advanced_controls(void)
+{
+	extern BOOL validate_md5sum;
+	int imop_sel = (hImageOption != NULL) ?
+		(int)ComboBox_GetItemData(hImageOption, ComboBox_GetCurSel(hImageOption)) :
+		IMOP_WIN_STANDARD;
+
+	/* --- UEFI media validation --- */
+	if (rw.uefi_validation_check) {
+		BOOL en = should_enable_uefi_validation(boot_type, target_type,
+		                                        (int)image_options, imop_sel,
+		                                        allow_dual_uefi_bios, &img_report);
+		gtk_widget_set_sensitive(rw.uefi_validation_check, en ? TRUE : FALSE);
+		if (!en) {
+			/* Force-uncheck when disabled, remember state via validate_md5sum */
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.uefi_validation_check), FALSE);
+		} else {
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.uefi_validation_check),
+			                             validate_md5sum ? TRUE : FALSE);
+		}
+	}
+
+	/* --- Old BIOS fixes --- */
+	if (rw.old_bios_check) {
+		BOOL en = should_enable_old_bios(partition_type, target_type,
+		                                  boot_type, &img_report);
+		gtk_widget_set_sensitive(rw.old_bios_check, en ? TRUE : FALSE);
+		if (!en)
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.old_bios_check), FALSE);
+	}
+
+	/* --- Quick format --- */
+	if (rw.quick_format_check) {
+		BOOL force = should_force_quick_format(fs_type, force_large_fat32,
+		                                        SelectedDrive.DiskSize);
+		BOOL en = should_enable_quick_format(fs_type, boot_type, force_large_fat32,
+		                                      SelectedDrive.DiskSize, &img_report);
+		if (force) {
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.quick_format_check), TRUE);
+			gtk_widget_set_sensitive(rw.quick_format_check, FALSE);
+		} else {
+			gtk_widget_set_sensitive(rw.quick_format_check, en ? TRUE : FALSE);
+			if (!en)
+				gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.quick_format_check), FALSE);
+		}
+	}
+}
 
 void EnableControls(BOOL enable, BOOL remove_checkboxes)
 {
@@ -2372,6 +2472,9 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 			gtk_widget_show(rw.img_info_expander);
 			gtk_widget_show(rw.img_info_label);
 		}
+
+		/* Update advanced-options checkbox sensitivity based on scanned image */
+		update_advanced_controls();
 		break;
 	}
 

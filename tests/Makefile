@@ -303,6 +303,13 @@ CFLAGS_LINUX_test_img_info_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR
                                      -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_img_info_linux := $(SRC_DIR)/linux/img_info.c
 
+# ui_enable_opts_linux tests: should_enable_* predicates for advanced checkbox sensitivity
+CFLAGS_LINUX_test_ui_enable_opts_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                           -D_GNU_SOURCE -DRUFUS_TEST \
+                                           -Wno-unused-function -Wno-sign-compare \
+                                           -Wno-unused-parameter -Wno-implicit-function-declaration \
+                                           $(FONTCONFIG_CFLAGS)
+
 # iso_report_linux tests: log_iso_report() — common ISO scan results logger
 CFLAGS_LINUX_test_iso_report_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                        -I$(SRC_DIR) -I$(COMMON) \

@@ -332,6 +332,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 |--------------------|--------|-------|
 | GTK window and all widgets | ✅ | Window, all dropdowns, buttons, progress, log dialog |
 | `EnableControls()` | ✅ | Disables/re-enables all input widgets |
+| `EnableBootOptions` parity (`update_advanced_controls`) | ✅ | `src/linux/ui_enable_opts.c`: 5 pure-C predicates (`should_enable_old_bios`, `should_enable_uefi_validation`, `should_enable_extended_label`, `should_enable_quick_format`, `should_force_quick_format`); `update_advanced_controls()` wired into `on_boot_changed`, `on_fs_changed`, `on_target_changed`, `UM_IMAGE_SCANNED`; conditionally grays out UEFI-validation / old-BIOS-fixes / quick-format checkboxes based on image type, boot type, partition scheme and FS; 38 tests in `test_ui_enable_opts_linux.c` pass |
 | `UpdateProgress()` / `_UpdateProgressWithInfo()` | ✅ | Thread-safe via `g_idle_add` |
 | `InitProgress()` | ✅ | Resets progress bar |
 | `TogglePersistenceControls()` | ✅ | Show/hide persistence row |
@@ -758,4 +759,12 @@ This is the most structurally significant porting gap.
     - **Alt+Z**: zero the drive (sets `zero_drive=TRUE`, `fast_zeroing=FALSE`, simulates Start click)
     - **Ctrl+Alt+Z**: fast zero (skip empty blocks: `zero_drive=TRUE`, `fast_zeroing=TRUE`)
     - **Ctrl+Alt+E**: expert mode (pre-existing; now Alt+E is separate for dual-UEFI-BIOS)
-    Pure-C toggle logic extracted to `src/linux/kbd_shortcuts.c` + `src/linux/kbd_shortcuts.h`; 73 tests in `tests/test_kbd_shortcuts_linux.c` all pass; binary builds clean.
+    - **Alt+C**: cycle USB port for currently selected device via `CyclePort(index)`
+    - **Alt+. (period)**: toggle `usb_debug` (USB enumeration debug) + refresh devs — persisted via `SETTING_ENABLE_USB_DEBUG`
+    - **Alt+, (comma)**: toggle `lock_drive` (physical drive locking); new global `BOOL lock_drive = TRUE`
+    - **Alt+D**: delete app data files directory (`$app_data_dir/FILES_DIR`), sets `user_deleted_rufus_dir = TRUE`
+    - **Alt+Q**: toggle `enable_file_indexing` — persisted via `SETTING_ENABLE_FILE_INDEXING`
+    - **Ctrl+Alt+D**: toggle dark mode (pre-existing)
+    - **Ctrl+Alt+F**: toggle `list_non_usb_removable_drives`; saves/restores `enable_HDDs` via `previous_enable_HDDs`; triggers `GetDevices(0)`
+    - **Ctrl+Alt+Y**: force update strict mode (`force_update=2`, ignores timestamp errors)
+    Pure-C toggle logic extracted to `src/linux/kbd_shortcuts.c` + `src/linux/kbd_shortcuts.h`; 109 tests in `tests/test_kbd_shortcuts_linux.c` all pass; binary builds clean.
