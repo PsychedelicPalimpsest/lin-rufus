@@ -21,6 +21,7 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-nb\-passes\fR \fIN\fR]
 [\fB\-\-unattend\-xml\fR \fIPATH\fR]
 [\fB\-\-include\-hdds\fR]
+[\fB\-\-zero\-drive\fR]
 [\fB\-\-list\-devices\fR]
 [\fB\-\-label\fR \fILABEL\fR]
 [\fB\-\-quick\fR|\fB\-\-no\-quick\fR]
@@ -152,6 +153,13 @@ enumeration.  By default only removable drives appear in
 .BR \-\-list\-devices
 output and are accepted by
 .BR \-\-device .
+.TP
+.BR \-z ", " \-\-zero\-drive
+Wipe the entire device by writing zeros to every sector, then exit.  This
+is equivalent to running
+.B dd if=/dev/zero of=DEVICE
+but uses Rufus's own I/O layer and progress reporting.  Does not perform
+any filesystem formatting.
 .TP
 .BR \-l ", " \-\-label " " \fILABEL\fR
 Volume label to assign to the formatted filesystem.  Maximum length

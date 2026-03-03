@@ -813,6 +813,39 @@ static void test_include_hdds_default_is_off(void)
     CHECK(opts.include_hdds == 0);
 }
 
+/* ---- --zero-drive tests ---- */
+
+static void test_init_zero_drive_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.zero_drive == 0);
+}
+
+static void test_zero_drive_sets_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --zero-drive", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.zero_drive != 0);
+}
+
+static void test_zero_drive_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -z", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.zero_drive != 0);
+}
+
+static void test_zero_drive_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.zero_drive == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -938,6 +971,12 @@ int main(void)
     RUN_TEST(test_include_hdds_sets_flag);
     RUN_TEST(test_include_hdds_short_form);
     RUN_TEST(test_include_hdds_default_is_off);
+
+    /* --zero-drive tests */
+    RUN_TEST(test_init_zero_drive_is_false);
+    RUN_TEST(test_zero_drive_sets_flag);
+    RUN_TEST(test_zero_drive_short_form);
+    RUN_TEST(test_zero_drive_default_is_off);
 
     TEST_RESULTS();
 }

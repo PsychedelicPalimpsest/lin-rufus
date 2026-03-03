@@ -304,6 +304,16 @@ TEST(man_page_documents_include_hdds_flag) {
     free(content);
 }
 
+TEST(man_page_documents_zero_drive_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "zero-drive") != NULL || strstr(content, "zero.drive") != NULL
+       || strstr(content, "zero\\-drive") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_fat32) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -399,6 +409,7 @@ int main(void)
     RUN(man_page_documents_list_devices_flag);
     RUN(man_page_documents_unattend_xml_flag);
     RUN(man_page_documents_include_hdds_flag);
+    RUN(man_page_documents_zero_drive_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);
     RUN(man_page_documents_mbr);

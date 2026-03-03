@@ -60,6 +60,7 @@ extern BOOL enable_bad_blocks;
 extern int  nb_passes_sel;
 extern char *unattend_xml_path;
 extern BOOL enable_HDDs;
+extern BOOL zero_drive;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -151,6 +152,7 @@ void cli_print_usage(const char *prog)
 	       "  -N, --nb-passes N         Number of bad-block scan passes: 1-4 (requires -B)\n"
 	       "  -u, --unattend-xml PATH   Inject a pre-built unattend.xml for Windows setup\n"
 	       "  -H, --include-hdds        Include hard drives in device enumeration (default: removable only)\n"
+	       "  -z, --zero-drive          Wipe the entire device with zeros (skip formatting)\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "      --quick               Quick format (default)\n"
@@ -183,6 +185,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "nb-passes",        required_argument, NULL, 'N' },
 		{ "unattend-xml",     required_argument, NULL, 'u' },
 		{ "include-hdds",     no_argument,       NULL, 'H' },
+		{ "zero-drive",       no_argument,       NULL, 'z' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -197,7 +200,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -346,6 +349,10 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->include_hdds = 1;
 			break;
 
+		case 'z':
+			opts->zero_drive = 1;
+			break;
+
 		case 'L':
 			return CLI_PARSE_LIST;
 
@@ -434,6 +441,9 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Include hard drives in device enumeration */
 	if (opts->include_hdds)
 		enable_HDDs = TRUE;
+	/* Zero-wipe mode */
+	if (opts->zero_drive)
+		zero_drive = TRUE;
 }
 
 /*
