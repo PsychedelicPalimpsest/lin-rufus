@@ -473,6 +473,20 @@ static int iso_extract_files(iso9660_t* p_iso, const char* psz_path)
 		}
 
 		if (p_statbuf->type == _STAT_DIR) {
+			/* Rock Ridge deep directory detection.
+			 * ISOs like OPNsense use relocated directories (PL field) that
+			 * exceed the ISO 9660 8-level limit. Mirrors Windows iso.c lines
+			 * 603-620: log the condition, cut scan short and add a block. */
+			if (scan_only && (p_statbuf->rr.b3_rock == yep) && enable_rockridge &&
+			    (p_statbuf->rr.u_su_fields & ISO_ROCK_SUF_PL)) {
+				if (!img_report.has_deep_directories)
+					uprintf("  Note: Rock Ridge 'deep directories' detected;"
+					        " scan may be slow");
+				img_report.has_deep_directories = TRUE;
+				total_blocks++;
+				r = -1;
+				goto out;
+			}
 			if (!scan_only) {
 				psz_sanpath = sanitize_filename(psz_fullpath, &is_identical);
 				if (psz_sanpath) { mkdirp(psz_sanpath); safe_free(psz_sanpath); }
@@ -485,6 +499,14 @@ static int iso_extract_files(iso9660_t* p_iso, const char* psz_path)
 
 			if (check_iso_props(psz_path, file_length, psz_basename_ptr,
 			                    psz_fullpath, &props)) {
+				/* Mint LMDE: 'live → casper' symlink means working symlinks
+				 * are required, which requires NTFS.
+				 * Mirrors Windows iso.c lines 666-669. */
+				if ((p_statbuf->rr.b3_rock == yep) &&
+				    p_statbuf->rr.psz_symlink && file_length == 0 &&
+				    strcasecmp(p_statbuf->filename, "live") == 0 &&
+				    strcasecmp(p_statbuf->rr.psz_symlink, "casper") == 0)
+					img_report.needs_ntfs = TRUE;
 				continue; /* scan_only or skip */
 			}
 
