@@ -23,6 +23,7 @@ int    partition_type    = 0; /* PARTITION_STYLE_MBR == 0 */
 int    target_type       = 0; /* TT_BIOS == 0 */
 BOOL   quick_format      = TRUE;
 BOOL   enable_verify_write = FALSE;
+DWORD  selected_cluster_size = 0;
 char  *image_path        = NULL;
 char   app_dir[MAX_PATH] = "/tmp";
 DWORD  ErrorStatus       = 0;

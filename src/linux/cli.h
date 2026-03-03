@@ -30,9 +30,10 @@
 #include "compat/windows.h"
 
 /* Return codes from cli_parse_args() */
-#define CLI_PARSE_OK      0   /* parsed successfully */
-#define CLI_PARSE_HELP    1   /* --help requested (printed, do not run) */
-#define CLI_PARSE_ERROR  -1   /* bad argument (message printed to stderr) */
+#define CLI_PARSE_OK       0   /* parsed successfully */
+#define CLI_PARSE_HELP     1   /* --help requested (printed, do not run) */
+#define CLI_PARSE_VERSION  2   /* --version requested (printed, do not run) */
+#define CLI_PARSE_ERROR   -1   /* bad argument (message printed to stderr) */
 /*
  * cli_options_t — collects all user-supplied format options.
  *
@@ -50,6 +51,7 @@ typedef struct {
     int  verify;            /* --verify: 1=yes, 0=no(default) */
     int  no_prompt;         /* --no-prompt: 1=auto-accept all dialogs, 0=interactive */
     int  boot_type;         /* BT_* constant; -1 = auto (BT_IMAGE if image set, else BT_NON_BOOTABLE) */
+    DWORD cluster_size;     /* --cluster-size N bytes; 0 = default (auto) */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */

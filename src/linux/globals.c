@@ -80,6 +80,7 @@ BOOL zero_drive = FALSE, list_non_usb_removable_drives = FALSE;
 BOOL quick_format = TRUE;
 BOOL enable_bad_blocks = FALSE;
 BOOL enable_verify_write = FALSE;
+DWORD selected_cluster_size = 0; /* 0 = default cluster size; set by CLI --cluster-size */
 int  nb_passes_sel = 0;   /* raw nb-passes combo index (0-4) */
 BOOL enable_file_indexing = FALSE;
 BOOL write_as_image = FALSE, write_as_esp = FALSE;

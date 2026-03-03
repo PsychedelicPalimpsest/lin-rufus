@@ -119,7 +119,7 @@ automatically the run step is transparently escalated via `sudo podman`.
 | Test system (`tests/`, `run_tests.sh`) | ✅ | Runs native + Wine + privileged container (root tests) |
 | GCC 15 compound-literal regression fix in `cregex_compile.c` | ✅ | Static node lifetimes replaced with local vars |
 | GTK3 UI backend (`-DUSE_GTK`) | ✅ | Window builds and launches |
-| Non-GTK console fallback (`src/linux/rufus.c main()`) | ✅ | Full CLI mode via `cli.c`; `cli_parse_args` + `cli_run`; all `--device`, `--image`, `--fs`, etc. flags; 64 tests pass (see item 46) |
+| Non-GTK console fallback (`src/linux/rufus.c main()`) | ✅ | Full CLI mode via `cli.c`; `cli_parse_args` + `cli_run`; flags: `--device`, `--image`, `--fs`, `--partition-scheme`, `--target`, `--boot-type`, `--cluster-size`, `--label`, `--quick`/`--no-quick`, `--verify`, `--no-prompt`, `--version`, `--help`; `selected_cluster_size` global wired into `format.c` `FormatThread`; 98 tests pass |
 
 ---
 

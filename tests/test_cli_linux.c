@@ -411,6 +411,149 @@ static void test_no_args_is_error(void)
     CHECK(r == CLI_PARSE_ERROR);
 }
 
+/* ---- --version tests ---- */
+
+static void test_version_returns_version_code(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --version", &opts);
+    CHECK(r == CLI_PARSE_VERSION);
+}
+
+/* ---- --boot-type tests ---- */
+
+static void test_init_boot_type_is_minus1(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.boot_type == -1);
+}
+
+static void test_boot_type_non_bootable(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --boot-type non-bootable", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.boot_type == BT_NON_BOOTABLE);
+}
+
+static void test_boot_type_image(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --boot-type image", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.boot_type == BT_IMAGE);
+}
+
+static void test_boot_type_freedos(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --boot-type freedos", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.boot_type == BT_FREEDOS);
+}
+
+static void test_boot_type_msdos(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --boot-type msdos", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.boot_type == BT_MSDOS);
+}
+
+static void test_boot_type_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus -d /dev/sda -b freedos", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.boot_type == BT_FREEDOS);
+}
+
+static void test_boot_type_unknown_is_error(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --boot-type foobar", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_boot_type_case_insensitive(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --boot-type FreeDOS", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.boot_type == BT_FREEDOS);
+}
+
+/* ---- --cluster-size tests ---- */
+
+static void test_init_cluster_size_is_zero(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.cluster_size == 0);
+}
+
+static void test_cluster_size_512(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --cluster-size 512", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.cluster_size == 512);
+}
+
+static void test_cluster_size_4096(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --cluster-size 4096", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.cluster_size == 4096);
+}
+
+static void test_cluster_size_65536(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --cluster-size 65536", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.cluster_size == 65536);
+}
+
+static void test_cluster_size_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus -d /dev/sda -c 4096", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.cluster_size == 4096);
+}
+
+static void test_cluster_size_zero_is_error(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --cluster-size 0", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_cluster_size_not_power_of_two_is_error(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --cluster-size 1000", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_cluster_size_alpha_is_error(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --cluster-size abc", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
+static void test_cluster_size_too_large_is_error(void)
+{
+    /* Cluster sizes > 2MB are not valid */
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --cluster-size 4194304", &opts);
+    CHECK(r == CLI_PARSE_ERROR);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -468,6 +611,30 @@ int main(void)
 
     RUN_TEST(test_all_options_combined);
     RUN_TEST(test_no_args_is_error);
+
+    /* --version tests */
+    RUN_TEST(test_version_returns_version_code);
+
+    /* --boot-type tests */
+    RUN_TEST(test_init_boot_type_is_minus1);
+    RUN_TEST(test_boot_type_non_bootable);
+    RUN_TEST(test_boot_type_image);
+    RUN_TEST(test_boot_type_freedos);
+    RUN_TEST(test_boot_type_msdos);
+    RUN_TEST(test_boot_type_short_form);
+    RUN_TEST(test_boot_type_unknown_is_error);
+    RUN_TEST(test_boot_type_case_insensitive);
+
+    /* --cluster-size tests */
+    RUN_TEST(test_init_cluster_size_is_zero);
+    RUN_TEST(test_cluster_size_512);
+    RUN_TEST(test_cluster_size_4096);
+    RUN_TEST(test_cluster_size_65536);
+    RUN_TEST(test_cluster_size_short_form);
+    RUN_TEST(test_cluster_size_zero_is_error);
+    RUN_TEST(test_cluster_size_not_power_of_two_is_error);
+    RUN_TEST(test_cluster_size_alpha_is_error);
+    RUN_TEST(test_cluster_size_too_large_is_error);
 
     TEST_RESULTS();
 }

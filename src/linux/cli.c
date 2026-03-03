@@ -52,6 +52,7 @@ extern void drive_linux_add_drive(const char *id, const char *name,
                                    const char *display_name, uint64_t size);
 extern DWORD ErrorStatus;
 extern DWORD FormatThread(void *param);
+extern DWORD selected_cluster_size;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -89,6 +90,30 @@ static int parse_target(const char *s)
 	return -1;
 }
 
+static int parse_boot_type(const char *s)
+{
+	if (strcasecmp(s, "non-bootable") == 0) return BT_NON_BOOTABLE;
+	if (strcasecmp(s, "msdos")        == 0) return BT_MSDOS;
+	if (strcasecmp(s, "freedos")      == 0) return BT_FREEDOS;
+	if (strcasecmp(s, "image")        == 0) return BT_IMAGE;
+	return -1;
+}
+
+/* Valid cluster sizes: powers of 2 from 512 to 2 MB */
+#define CLUSTER_SIZE_MAX (2 * 1024 * 1024U)
+
+static int parse_cluster_size(const char *s, DWORD *out)
+{
+	if (!s || !*s) return -1;
+	char *end;
+	unsigned long v = strtoul(s, &end, 10);
+	if (*end != '\0' || v == 0 || v > CLUSTER_SIZE_MAX) return -1;
+	/* Must be a power of two */
+	if ((v & (v - 1)) != 0) return -1;
+	*out = (DWORD)v;
+	return 0;
+}
+
 /* ---- public API ---- */
 
 void cli_options_init(cli_options_t *opts)
@@ -99,6 +124,7 @@ void cli_options_init(cli_options_t *opts)
 	opts->target      = -1;
 	opts->quick       = -1; /* means "use default" (quick format on) */
 	opts->boot_type   = -1; /* auto: BT_IMAGE if image set, else BT_NON_BOOTABLE */
+	opts->cluster_size = 0; /* 0 = default cluster size */
 }
 
 void cli_print_usage(const char *prog)
@@ -111,11 +137,14 @@ void cli_print_usage(const char *prog)
 	       "  -f, --fs FS               Filesystem: fat16 fat32 ntfs udf exfat ext2 ext3 ext4\n"
 	       "  -p, --partition-scheme S  Partition scheme: mbr gpt\n"
 	       "  -t, --target T            Boot target: bios uefi\n"
+	       "  -b, --boot-type TYPE      Boot type: non-bootable image freedos msdos\n"
+	       "  -c, --cluster-size N      Cluster size in bytes (must be power of 2, e.g. 4096)\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "      --quick               Quick format (default)\n"
 	       "      --no-quick            Full format (zero-fill)\n"
 	       "      --verify              Verify write after image write\n"
 	       "      --no-prompt           Auto-accept all confirmation dialogs\n"
+	       "      --version             Print version and exit\n"
 	       "  -h, --help                Show this help\n",
 	       prog ? prog : "rufus");
 }
@@ -128,25 +157,37 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "fs",               required_argument, NULL, 'f' },
 		{ "partition-scheme", required_argument, NULL, 'p' },
 		{ "target",           required_argument, NULL, 't' },
+		{ "boot-type",        required_argument, NULL, 'b' },
+		{ "cluster-size",     required_argument, NULL, 'c' },
 		{ "label",            required_argument, NULL, 'l' },
 		{ "quick",            no_argument,       NULL, 'q' },
 		{ "no-quick",         no_argument,       NULL, 'Q' },
 		{ "verify",           no_argument,       NULL, 'V' },
 		{ "no-prompt",        no_argument,       NULL, 'y' },
+		{ "version",          no_argument,       NULL,  0  },
 		{ "help",             no_argument,       NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
 
 	int c;
 	int tmp;
+	int opt_index;
 
 	/* Reset getopt state for re-entrant tests */
 	optind = 1;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:l:hqQVy",
-	                        long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVy",
+	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
+		case 0:
+			/* Long-only option: check which one by name */
+			if (strcmp(long_opts[opt_index].name, "version") == 0) {
+				printf("rufus %s\n", RUFUS_VERSION_STR);
+				return CLI_PARSE_VERSION;
+			}
+			break;
+
 		case 'd':
 			if (!optarg || !*optarg) {
 				fprintf(stderr, "rufus: --device requires a path\n");
@@ -189,6 +230,27 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			}
 			opts->target = tmp;
 			break;
+
+		case 'b':
+			tmp = parse_boot_type(optarg ? optarg : "");
+			if (tmp < 0) {
+				fprintf(stderr, "rufus: unknown boot type '%s'\n", optarg);
+				return CLI_PARSE_ERROR;
+			}
+			opts->boot_type = tmp;
+			break;
+
+		case 'c': {
+			DWORD cs = 0;
+			if (parse_cluster_size(optarg ? optarg : "", &cs) < 0) {
+				fprintf(stderr, "rufus: invalid cluster size '%s' "
+				        "(must be a power of 2 between 512 and 2097152)\n",
+				        optarg ? optarg : "");
+				return CLI_PARSE_ERROR;
+			}
+			opts->cluster_size = cs;
+			break;
+		}
 
 		case 'l':
 			if (!optarg || !*optarg) {
@@ -271,6 +333,9 @@ void cli_apply_options(const cli_options_t *opts)
 	 * set, which callers should avoid; override only when opts->boot_type >= 0) */
 	if (opts->boot_type >= 0)
 		boot_type = opts->boot_type;
+
+	/* Cluster size (0 = default) */
+	selected_cluster_size = opts->cluster_size;
 }
 
 int cli_run(const cli_options_t *opts)

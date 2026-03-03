@@ -122,6 +122,7 @@ BOOL InstallSyslinux(DWORD drive_index, char drive_letter, int file_system)
  */
 BOOL enable_bad_blocks = FALSE;
 BOOL enable_verify_write = FALSE;
+DWORD selected_cluster_size = 0;
 BOOL use_old_bios_fixes = FALSE;
 BOOL use_extended_label = FALSE;
 int  nb_passes_sel     = 0;

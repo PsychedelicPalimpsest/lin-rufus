@@ -60,6 +60,7 @@ GUID *StringToGuid(const char *str) { (void)str; return NULL; }
 
 /* ---- verify.c / wue.c stubs ---- */
 BOOL enable_verify_write = FALSE;
+DWORD selected_cluster_size = 0;
 uint64_t persistence_size = 0;
 BOOL verify_write_pass(const char *source_path, int device_fd, uint64_t written_size)
 { (void)source_path; (void)device_fd; (void)written_size; return TRUE; }

@@ -67,6 +67,7 @@ extern BOOL use_rufus_mbr;
 extern BOOL quick_format;
 extern BOOL enable_bad_blocks;
 extern BOOL enable_verify_write;
+extern DWORD selected_cluster_size;
 extern BOOL use_old_bios_fixes;
 extern BOOL use_extended_label;
 extern int  nb_passes_sel;
@@ -1131,7 +1132,7 @@ DWORD WINAPI FormatThread(void* param)
 		fmt_flags |= FP_QUICK;
 	if ((fs_type == FS_NTFS) && enable_ntfs_compression)
 		fmt_flags |= FP_COMPRESSION;
-	if (!FormatPartition(DriveIndex, part_offset, 0, fs_type, label, fmt_flags)) {
+	if (!FormatPartition(DriveIndex, part_offset, selected_cluster_size, fs_type, label, fmt_flags)) {
 		uprintf("Format error: %s", WindowsErrorString());
 		if (!IS_ERROR(ErrorStatus))
 			ErrorStatus = RUFUS_ERROR(ERROR_WRITE_FAULT);
