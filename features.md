@@ -500,33 +500,38 @@ This is the most structurally significant porting gap.
 | `device_combo.c` (`device_open_in_fm_build_cmd`) tests | ✅ | 7 tests in `test_ui_linux.c`: basic, sdc, nvme, null path, empty path, buffer too small, null output buffer |
 | `hyperlink.c` (`hyperlink_build_markup`) tests | ✅ | 7 tests in `test_ui_linux.c`: basic, null text falls back to url, XML escape, null url/buf/bufsz error cases, empty text |
 | `proposed_label.c` (`get_iso_proposed_label`) tests | ✅ | 8 tests in `test_ui_linux.c`: all branches covered |
-| `ntfsfix.c` (`RunNtfsFix`) tests | ❌ | No test coverage; needs mock for `system()` |
-| `dump_fat.c` (`DumpFatDir`) tests | ❌ | No test coverage; complex ISO+FAT interaction |
+| `ntfsfix.c` (`RunNtfsFix`) tests | ✅ | 24 tests in `test_ntfsfix_linux.c`: null/empty path, command format + quoting, return values, hook replacement, overflow safety; `ntfsfix_set_system_hook()` added to `ntfsfix.c` |
+| `dump_fat.c` (`DumpFatDir`) tests | ✅ | 15 tests in `test_dump_fat_linux.c`: 9 unit tests for `wchar16_to_utf8` (empty, ASCII, 2-byte, 3-byte UTF-8, surrogate pairs, mixed, null-terminated, FAT name, ASCII range), 3 guard tests (null path, null image path, nonexistent image), 3 integration tests using real FAT12+ISO (extract single file, skip existing, extract multiple files); `dump_fat_wchar16_to_utf8()` test wrapper added to `dump_fat.c` |
 
 ---
 
 ## Pending Work
 
-* Feature 188: Test the cli directly by calling the rufus executable (both via wine and linux)
+* ~~Feature 188~~: **RESOLVED** — `test_exe_cli_linux.c` invokes `src/rufus` (GTK binary) as a subprocess
+  via `popen()` and checks exit codes + error messages for: nonexistent device, /dev/null device
+  (no size), bad filesystem name, bad partition-scheme, bad target, and `--help`.  Wine/rufus.exe
+  `--help` is also tested (4 Wine tests: exits 0, contains "Usage:", lists --iso/-i, lists --filesystem/-f).
+  14 Linux tests + 4 Wine tests = 24 total; all pass.
 
-* Feature 189: GTK binary CLI integration — the GTK build currently rejects all Rufus
-  CLI flags (`--device`, `--image`, `--fs`, etc.) because `g_application_run()` processes
-  them before Rufus code runs.  Fix: register Rufus options via
-  `g_application_add_main_option_entries()` + `handle-local-options` signal so that
-  `--device` bypasses the GTK activate path entirely and invokes `cli_run()` instead.
-  Until this is fixed, the man page (`doc/rufus.1`) inaccurately describes the GTK
-  binary's CLI behaviour.  See QA.md for details.
+* ~~Feature 189~~: **RESOLVED** — GTK binary (`src/rufus`) now intercepts `--device`/`-d` in `main()`
+  before `g_application_run()` is called.  When `--device` is detected, `rufus_init_paths()` +
+  `cli_parse_args()` + `cli_run()` are invoked directly (headless CLI mode); GTK is never
+  initialised.  No display, no window, no X11/Wayland required.  `cli.h` included in `ui_gtk.c`.
 
-* Feature 190: Non-GTK CLI binary build path — building without GTK (`--with-ui` ≠ gtk)
-  currently fails because `windows/darkmode.c` includes `<dwmapi.h>` unconditionally.
-  The non-GTK Linux build should use `linux/darkmode.c` (stub) instead.  Add a
-  `--with-ui=cli` configure option (or similar) and ensure the non-GTK source set is
-  selected correctly in `src/Makefile.am`.
+* ~~Feature 190~~: **RESOLVED** — Non-GTK CLI binary now builds successfully with
+  `./configure --with-os=linux --with-ui=none && make`.  Root causes fixed:
+  1. `src/linux/localization.c`: `#include <gtk/gtk.h>` guard changed from `#ifndef RUFUS_TEST`
+     to `#ifdef USE_GTK`; `apply_localization()` non-GTK branch similarly guarded.
+  2. `src/linux/ui.c`: `UpdateProgress()`/`_UpdateProgressWithInfo()` made `__attribute__((weak))`
+     so the real implementations in `rufus.c` (`#ifndef USE_GTK`) win in the CLI binary, while
+     test builds (which don't link `rufus.c`) fall back to the stubs.
+  3. `src/linux/rufus.c`: Removed duplicate `SetFSFromISO()`/`SetPartitionSchemeAndTargetSystem()`
+     stubs (always provided by `ui_combo_logic.c` for all builds).
+  The resulting non-GTK binary is a headless CLI tool at `src/rufus`; `--help` prints usage.
 
-* Feature 191: Add unit tests for `ntfsfix.c` (`RunNtfsFix`).  This file currently
-  has no test coverage.  The `ntfsfix` test should use a mock/override for `system()`.
-  Note: `device_combo.c` (`device_open_in_fm_build_cmd`) is now covered by 7 tests in
-  `tests/test_ui_linux.c`.
+* ~~Feature 191~~: **RESOLVED** — `test_ntfsfix_linux.c` provides 24 unit tests for `RunNtfsFix()`.
+  `ntfsfix_set_system_hook()` added to `ntfsfix.c` (and declared in `format_linux.h`) allows
+  tests to replace `system()` with a mock that captures the command string without executing it.
 
 * ~~Feature 192~~: **RESOLVED** — `device_open_in_fm_build_cmd()` now quotes the device
   path (`xdg-open '%s'`).  The 3 stale tests expecting the old unquoted format were

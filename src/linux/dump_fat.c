@@ -120,6 +120,11 @@ static char *wchar16_to_utf8(const wchar_t *wsrc)
 	return buf;
 }
 
+/* Expose wchar16_to_utf8 for unit tests via a non-static wrapper */
+#ifdef RUFUS_TEST
+char *dump_fat_wchar16_to_utf8(const wchar_t *wsrc) { return wchar16_to_utf8(wsrc); }
+#endif
+
 /* write_all — write exactly n bytes, retrying on EINTR */
 static BOOL dump_write_all(int fd, const void *buf, size_t n)
 {

@@ -267,7 +267,7 @@ CFLAGS_LINUX_test_drive2_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR)/ms-sys/inc -I$(SRC_DIR) -I$(SRC_DIR)/bled \
 	-Wno-implicit-function-declaration -Wno-unused-function \
-	-Wno-sign-compare -Wno-unused-parameter
+	-Wno-sign-compare -Wno-unused-parameter -DRUFUS_TEST
 LDFLAGS_LINUX_test_drive2_linux := -lblkid
 EXTRA_SRC_LINUX_test_drive2_linux := $(DRIVE2_LINUX_SRC) $(BLED_LIB)
 
@@ -770,6 +770,43 @@ CFLAGS_LINUX_test_smart_linux := \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_smart_linux :=
 EXTRA_SRC_LINUX_test_smart_linux := $(SRC_DIR)/linux/smart.c
+
+# ntfsfix_linux tests: RunNtfsFix() with a mock system() hook
+CFLAGS_LINUX_test_ntfsfix_linux := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_ntfsfix_linux :=
+EXTRA_SRC_LINUX_test_ntfsfix_linux := $(SRC_DIR)/linux/ntfsfix.c
+
+# exe_cli_linux tests: end-to-end subprocess invocation of the rufus binary.
+# No special includes needed — only uses standard POSIX headers + popen.
+CFLAGS_LINUX_test_exe_cli_linux  := -D_GNU_SOURCE
+LDFLAGS_LINUX_test_exe_cli_linux :=
+EXTRA_SRC_LINUX_test_exe_cli_linux :=
+
+# dump_fat_linux tests: DumpFatDir (FAT extraction from ISO) + wchar16_to_utf8
+DUMP_FAT_LINUX_SRC := \
+	$(SRC_DIR)/linux/dump_fat.c \
+	$(SRC_DIR)/linux/stdfn.c \
+	$(SRC_DIR)/linux/stdio.c \
+	$(SRC_DIR)/linux/ui.c \
+	$(SRC_DIR)/linux/globals.c \
+	$(SRC_DIR)/linux/localization.c \
+	$(SRC_DIR)/linux/parser.c \
+	$(COMMON)/parser.c \
+	$(COMMON)/localization.c
+CFLAGS_LINUX_test_dump_fat_linux := \
+	-D_RUFUS -DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR) -I$(SRC_DIR)/libcdio -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
+	-I$(SRC_DIR)/syslinux/libinstaller \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS_LINUX_test_dump_fat_linux = $(CDIO_LIBS) $(LIBFAT_LIB) \
+	-lpthread -lz -lm $(shell pkg-config --libs fontconfig 2>/dev/null)
+EXTRA_SRC_LINUX_test_dump_fat_linux := $(DUMP_FAT_LINUX_SRC) $(BLED_LIB) dump_fat_linux_glue.c
 
 # pki_linux tests: PKI/certificate functions via OpenSSL
 CFLAGS_LINUX_test_pki_linux := \
