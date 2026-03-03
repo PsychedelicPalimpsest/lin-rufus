@@ -1347,6 +1347,25 @@ static void on_select_clicked(GtkButton *btn, gpointer data)
 	(void)btn; (void)data;
 	extern BOOL has_ffu_support;
 
+	/* Ctrl+click: select a supplemental ZIP archive (mirrors Windows Ctrl+SELECT) */
+	GdkEvent *ev = gtk_get_current_event();
+	if (ev) {
+		guint mods = 0;
+		gdk_event_get_state(ev, (GdkModifierType *)&mods);
+		gdk_event_free(ev);
+		if (mods & GDK_CONTROL_MASK) {
+			EXT_DECL(arch_ext, NULL, __VA_GROUP__("*.zip"),
+			         __VA_GROUP__(lmprintf(MSG_309)));
+			char *p = FileDialog(FALSE, NULL, &arch_ext, NULL);
+			if (p != NULL) {
+				safe_free(archive_path);
+				archive_path = p;
+				uprintf("Using archive: %s", archive_path);
+			}
+			return;
+		}
+	}
+
 	/* Build the extension string, matching Windows rufus.c */
 	char extensions[160] = "*.iso;*.img;*.vhd;*.vhdx;*.usb;*.bz2;*.bzip2;*.gz;*.lzma;*.xz;*.Z;*.zip;*.zst;*.wic;*.wim;*.esd;*.vtsi";
 	if (has_ffu_support)
