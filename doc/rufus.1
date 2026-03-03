@@ -25,6 +25,7 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-force\-large\-fat32\fR]
 [\fB\-\-ntfs\-compression\fR]
 [\fB\-\-list\-devices\fR]
+[\fB\-\-json\fR]
 [\fB\-\-label\fR \fILABEL\fR]
 [\fB\-\-quick\fR|\fB\-\-no\-quick\fR]
 [\fB\-\-verify\fR]
@@ -203,6 +204,16 @@ Enumerate all available removable drives and print them to standard output,
 one drive per line in tab-separated format:
 .IR device_path \t display_name \t size_bytes .
 Exits with status 0 if any drives were found, 1 if none.
+.TP
+.BR \-j ", " \-\-json
+Output the
+.BR \-\-list\-devices
+results as a JSON array of objects instead of the default tab-separated
+format.  Each object has the keys
+.BR device ,
+.BR name ,
+and
+.BR size .
 .TP
 .BR \-h ", " \-\-help
 Print a brief usage summary and exit.

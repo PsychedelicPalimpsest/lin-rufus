@@ -738,6 +738,39 @@ static void test_list_devices_ignores_other_options(void)
     CHECK(r == CLI_PARSE_LIST);
 }
 
+/* ---- --json tests ---- */
+
+static void test_init_json_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.json == 0);
+}
+
+static void test_json_sets_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --list-devices --json", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+    CHECK(opts.json != 0);
+}
+
+static void test_json_short_form(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --list-devices -j", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+    CHECK(opts.json != 0);
+}
+
+static void test_json_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --list-devices", &opts);
+    CHECK(r == CLI_PARSE_LIST);
+    CHECK(opts.json == 0);
+}
+
 /* ---- --unattend-xml tests ---- */
 
 static void test_init_unattend_xml_is_empty(void)
@@ -1008,6 +1041,12 @@ int main(void)
     RUN_TEST(test_list_devices_does_not_require_device);
     RUN_TEST(test_list_devices_short_form);
     RUN_TEST(test_list_devices_ignores_other_options);
+
+    /* --json tests */
+    RUN_TEST(test_init_json_is_false);
+    RUN_TEST(test_json_sets_flag);
+    RUN_TEST(test_json_short_form);
+    RUN_TEST(test_json_default_is_off);
 
     /* --unattend-xml tests */
     RUN_TEST(test_init_unattend_xml_is_empty);

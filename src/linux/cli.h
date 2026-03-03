@@ -62,6 +62,7 @@ typedef struct {
     int  zero_drive;        /* --zero-drive: 1=wipe entire drive with zeros and exit */
     int  force_large_fat32; /* --force-large-fat32: bypass size limit for FAT32 on large drives */
     int  ntfs_compression;  /* --ntfs-compression: enable NTFS file compression */
+    int  json;              /* --json: use JSON output format (for --list-devices) */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */
@@ -90,12 +91,14 @@ void cli_apply_options(const cli_options_t *opts);
 /*
  * cli_print_devices — enumerate available removable drives (calls GetDevices).
  *
- * Prints one drive per line to stdout in tab-separated format:
+ * With json=0 prints one drive per line to stdout in tab-separated format:
  *   <device_path>\t<display_name>\t<size_bytes>
+ *
+ * With json=1 prints a JSON array of drive objects.
  *
  * Returns 0 if drives were found, 1 if none.
  */
-int cli_print_devices(void);
+int cli_print_devices(int json);
 
 /*
  * cli_run — register the target device, apply options, launch FormatThread,

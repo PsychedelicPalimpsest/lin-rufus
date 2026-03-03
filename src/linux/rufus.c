@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
 	if (r == CLI_PARSE_VERSION)
 		return 0;
 	if (r == CLI_PARSE_LIST)
-		return cli_print_devices();
+		return cli_print_devices(opts.json);
 	if (r != CLI_PARSE_OK)
 		return 1;
 

@@ -159,6 +159,7 @@ void cli_print_usage(const char *prog)
 	       "  -C, --ntfs-compression    Enable NTFS file compression on the formatted volume\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
+	       "  -j, --json                Output --list-devices results as JSON\n"
 	       "      --quick               Quick format (default)\n"
 	       "      --no-quick            Full format (zero-fill)\n"
 	       "      --verify              Verify write after image write\n"
@@ -192,6 +193,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "zero-drive",       no_argument,       NULL, 'z' },
 		{ "force-large-fat32", no_argument,      NULL, 'F' },
 		{ "ntfs-compression", no_argument,       NULL, 'C' },
+		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -200,13 +202,14 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	int c;
 	int tmp;
 	int opt_index;
+	int list_devices = 0; /* deferred return for --list-devices (allows --json to parse too) */
 
 	/* Reset getopt state for re-entrant tests.
 	 * On glibc, optind=0 forces full reinitialization (resets nextchar). */
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCjL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -367,8 +370,13 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->ntfs_compression = 1;
 			break;
 
+		case 'j':
+			opts->json = 1;
+			break;
+
 		case 'L':
-			return CLI_PARSE_LIST;
+			list_devices = 1;
+			break;
 
 		case 'h':
 			cli_print_usage(argv[0]);
@@ -381,6 +389,10 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			return CLI_PARSE_ERROR;
 		}
 	}
+
+	/* --list-devices: device is not required */
+	if (list_devices)
+		return CLI_PARSE_LIST;
 
 	/* --device is mandatory */
 	if (opts->device[0] == '\0') {
@@ -469,24 +481,38 @@ void cli_apply_options(const cli_options_t *opts)
 /*
  * cli_print_devices — scan available removable drives and print each one.
  *
- * Output format (one drive per line, tab-separated):
+ * Output format (tab-separated, one drive per line):
  *   <device_path>\t<display_name>\t<size_bytes>
+ *
+ * With json=1, outputs a JSON array:
+ *   [{"device": "...", "name": "...", "size": ...}, ...]
  *
  * Calls GetDevices(0) to populate rufus_drive[], then iterates the list.
  * Returns 0 if at least one drive was found, 1 if none were found.
  */
-int cli_print_devices(void)
+int cli_print_devices(int json)
 {
 	extern RUFUS_DRIVE rufus_drive[MAX_DRIVES];
 	GetDevices(0);
 	int found = 0;
+	if (json)
+		printf("[\n");
 	for (int i = 0; i < MAX_DRIVES && rufus_drive[i].id != NULL; i++) {
-		printf("%s\t%s\t%" PRIu64 "\n",
-		       rufus_drive[i].id,
-		       rufus_drive[i].display_name ? rufus_drive[i].display_name : "",
-		       (uint64_t)rufus_drive[i].size);
+		const char *id = rufus_drive[i].id;
+		const char *name = rufus_drive[i].display_name ? rufus_drive[i].display_name : "";
+		uint64_t sz = (uint64_t)rufus_drive[i].size;
+		if (json) {
+			if (found > 0)
+				printf(",\n");
+			printf("  {\"device\": \"%s\", \"name\": \"%s\", \"size\": %" PRIu64 "}",
+			       id, name, sz);
+		} else {
+			printf("%s\t%s\t%" PRIu64 "\n", id, name, sz);
+		}
 		found++;
 	}
+	if (json)
+		printf("%s]\n", found > 0 ? "\n" : "");
 	return found > 0 ? 0 : 1;
 }
 
