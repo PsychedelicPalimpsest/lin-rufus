@@ -246,6 +246,7 @@ static void on_boot_changed(GtkComboBox *combo, gpointer data);
 static void on_fs_changed(GtkComboBox *combo, gpointer data);
 static void on_target_changed(GtkComboBox *combo, gpointer data);
 static void on_partition_changed(GtkComboBox *combo, gpointer data);
+static void on_image_option_changed(GtkComboBox *combo, gpointer data);
 static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 static void on_settings_clicked(GtkButton *btn, gpointer data);
@@ -522,6 +523,9 @@ static GtkWidget *build_image_option_row(void)
 
 	rw.image_option_row = hbox;
 	gtk_widget_set_no_show_all(hbox, TRUE); /* hidden until needed */
+
+	g_signal_connect(rw.image_option_combo, "changed",
+	                 G_CALLBACK(on_image_option_changed), NULL);
 	return hbox;
 }
 
@@ -1710,6 +1714,21 @@ static void on_fs_changed(GtkComboBox *combo, gpointer data)
 	}
 
 	/* Update advanced-options checkbox sensitivity (quick format depends on fs_type) */
+	update_advanced_controls();
+}
+
+/*
+ * Image option combo changed — mirrors Windows IDC_IMAGE_OPTION CBN_SELCHANGE.
+ * Updates filesystem combo and UEFI validation checkbox for the new mode.
+ */
+static void on_image_option_changed(GtkComboBox *combo, gpointer data)
+{
+	(void)combo; (void)data;
+	if (!hImageOption) return;
+	/* Refresh FS combo for the new image option (e.g. WinToGo needs NTFS) */
+	populate_fs_combo();
+	SetFSFromISO();
+	/* UEFI media validation sensitivity depends on image option */
 	update_advanced_controls();
 }
 
