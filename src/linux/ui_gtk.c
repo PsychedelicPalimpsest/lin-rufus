@@ -892,6 +892,7 @@ static void on_close_clicked(GtkButton *btn, gpointer data)
 static void on_start_clicked(GtkButton *btn, gpointer data)
 {
 	(void)btn; (void)data;
+	extern RUFUS_DRIVE_INFO SelectedDrive;
 	int sel = ComboBox_GetCurSel(hDeviceList);
 	if (sel < 0) {
 		rufus_gtk_update_status("No device selected");
@@ -925,7 +926,6 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 
 	/* Enforce image size check (Alt+S disables this) */
 	if (boot_type == BT_IMAGE) {
-		extern RUFUS_DRIVE_INFO SelectedDrive;
 		if (kbdshortcut_size_check_fails((int)size_check,
 		                                 img_report.projected_size,
 		                                 (unsigned long long)SelectedDrive.DiskSize)) {
@@ -944,6 +944,39 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 		if (Notification(MB_OKCANCEL | MB_ICONWARNING, APPLICATION_NAME,
 		                 lmprintf(MSG_003, dev_name)) != IDOK)
 			return;
+		/* Multiple partition warning — mirrors Windows UM_FORMAT_START */
+		if (SelectedDrive.nPartitions > 1
+		    && Notification(MB_OKCANCEL | MB_ICONWARNING, lmprintf(MSG_094),
+		                    lmprintf(MSG_093)) != IDOK)
+			return;
+		/* Non-512-byte sector warning */
+		if (!zero_drive && boot_type != BT_NON_BOOTABLE
+		    && SelectedDrive.SectorSize != 512
+		    && Notification(MB_OKCANCEL | MB_ICONWARNING, lmprintf(MSG_197),
+		                    lmprintf(MSG_196, SelectedDrive.SectorSize)) != IDOK)
+			return;
+		/* MBR on > 2 TB disk */
+		if (partition_type == PARTITION_STYLE_MBR
+		    && (uint64_t)SelectedDrive.DiskSize > 2ULL * TB
+		    && Notification(MB_YESNO | MB_ICONWARNING,
+		                    lmprintf(MSG_128, "MBR"),
+		                    lmprintf(MSG_134,
+		                             SizeToHumanReadable(
+		                                 (uint64_t)SelectedDrive.DiskSize - 2ULL * TB,
+		                                 FALSE, FALSE))) != IDYES)
+			return;
+		/* UDF formatting can take a very long time — warn the user */
+		if (!zero_drive && fs_type == FS_UDF) {
+			uint32_t dur_secs = (uint32_t)(((double)SelectedDrive.DiskSize)
+			                               / 1073741824.0f / UDF_FORMAT_SPEED);
+			if (dur_secs > UDF_FORMAT_WARN) {
+				uint32_t dur_mins = dur_secs / 60;
+				dur_secs -= dur_mins * 60;
+				Notification(MB_OK | MB_ICONINFORMATION,
+				             lmprintf(MSG_113),
+				             lmprintf(MSG_112, dur_mins, dur_secs));
+			}
+		}
 	}
 
 	/* Warn if any UEFI bootloader in the image has been revoked */
