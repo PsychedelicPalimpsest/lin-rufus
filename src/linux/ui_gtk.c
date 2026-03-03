@@ -198,6 +198,7 @@ static void on_zero_drive(GtkWidget *w, gpointer data);
 static void on_fast_zero_drive(GtkWidget *w, gpointer data);
 static void on_cycle_port(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
+void InitProgress(BOOL bOnlyFormat);
 static void on_save_clicked(GtkButton *btn, gpointer data);
 static void on_persistence_changed(GtkWidget *w, gpointer data);
 static void on_multi_write_clicked(GtkButton *btn, gpointer data);
@@ -926,13 +927,8 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 
 	/* Enforce image size check (Alt+S disables this) */
 	if (boot_type == BT_IMAGE) {
-		if (kbdshortcut_size_check_fails((int)size_check,
-		                                 img_report.projected_size,
-		                                 (unsigned long long)SelectedDrive.DiskSize)) {
-			uprintf("Image is larger than the target drive — aborting (use Alt+S to bypass)");
-			Notification(MB_OK | MB_ICONERROR, APPLICATION_NAME,
-			             "The selected image is larger than the target drive.\n"
-			             "Press Alt+S to disable the size check if you know what you are doing.");
+		if (size_check && img_report.projected_size > (uint64_t)SelectedDrive.DiskSize) {
+			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_088), lmprintf(MSG_089));
 			return;
 		}
 	}
@@ -992,10 +988,74 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 			return;
 	}
 
-	/* Windows User Experience dialog — show before formatting a Windows 10/11 image */
+	/* Windows User Experience dialog — show before formatting a Windows 10/11 image.
+	 * WinToGo path has different options from the standard installer path. */
 	if (boot_type == BT_IMAGE && IS_WINDOWS_1X(img_report)) {
-		if (img_report.has_panther_unattend) {
-			uprintf("NOTICE: A '/sources/$OEM$/$$/Panther/unattend.xml' was detected on the ISO. "
+		BOOL is_windows_to_go = (image_options & IMOP_WINTOGO)
+		    && (hImageOption != NULL)
+		    && (ComboBox_GetCurItemData(hImageOption) == IMOP_WIN_TO_GO);
+
+		if (is_windows_to_go) {
+			/* WinToGo requires NTFS */
+			if (fs_type != FS_NTFS) {
+				Notification(MB_OK | MB_ICONERROR,
+				             lmprintf(MSG_092), lmprintf(MSG_097, "Windows To Go"));
+				return;
+			}
+			/* Let the user pick the Windows edition (shows dialog if multiple) */
+			switch (SetWinToGoIndex()) {
+			case -1:
+				Notification(MB_OK | MB_ICONERROR,
+				             lmprintf(MSG_291), lmprintf(MSG_073));
+				/* fall through */
+			case -2:
+				return;
+			default:
+				break;
+			}
+			/* WinToGo WUE dialog */
+			if (!img_report.has_panther_unattend) {
+				StrArray options;
+				int arch = _log2(img_report.has_efi >> 1);
+				uint16_t map[16] = { 0 }, b = 1;
+				int username_index = -1;
+				StrArrayCreate(&options, 8);
+				StrArrayAdd(&options, lmprintf(MSG_332), TRUE);
+				MAP_BIT(UNATTEND_OFFLINE_INTERNAL_DRIVES);
+				if (img_report.win_version.build >= 22500) {
+					StrArrayAdd(&options, lmprintf(MSG_330), TRUE);
+					MAP_BIT(UNATTEND_NO_ONLINE_ACCOUNT);
+				}
+				StrArrayAdd(&options, lmprintf(MSG_333), TRUE);
+				username_index = _log2(b);
+				MAP_BIT(UNATTEND_SET_USER);
+				StrArrayAdd(&options, lmprintf(MSG_334), TRUE);
+				MAP_BIT(UNATTEND_DUPLICATE_LOCALE);
+				StrArrayAdd(&options, lmprintf(MSG_331), TRUE);
+				MAP_BIT(UNATTEND_NO_DATA_COLLECTION);
+				if (expert_mode) {
+					StrArrayAdd(&options, lmprintf(MSG_346), TRUE);
+					MAP_BIT(UNATTEND_FORCE_S_MODE);
+				}
+				int i = CustomSelectionDialog(BS_AUTOCHECKBOX,
+				        lmprintf(MSG_327), lmprintf(MSG_328),
+				        options.String, options.Index,
+				        remap16(unattend_xml_mask, map, FALSE),
+				        username_index);
+				StrArrayDestroy(&options);
+				if (i < 0)
+					return;
+				i = remap16((uint16_t)i, map, TRUE);
+				free(unattend_xml_path);
+				unattend_xml_path = CreateUnattendXml(arch,
+				                        i | UNATTEND_WINDOWS_TO_GO);
+				unattend_xml_mask &= ~((int)remap16(0x1ff, map, TRUE));
+				unattend_xml_mask |= i;
+				WriteSetting32(SETTING_WUE_OPTIONS,
+				               (UNATTEND_DEFAULT_MASK << 16) | unattend_xml_mask);
+			}
+		} else if (img_report.has_panther_unattend) {
+			uprintf("NOTICE: A '/sources/$OEM$/$$/Panther/unattend.xml' was detected. "
 			        "The Windows User Experience dialog will not be displayed.");
 		} else {
 			StrArray options;
@@ -1130,10 +1190,26 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	}
 
 start_format:
+	/* MS-DOS: cannot boot from 64 KiB cluster size */
+	if (boot_type == BT_MSDOS) {
+		if (size_check && (ComboBox_GetCurItemData(hClusterSize) >= 65536)) {
+			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_111), lmprintf(MSG_110));
+			return;
+		}
+	}
+	/* UEFI:NTFS requires NTFS or exFAT */
+	if (boot_type == BT_UEFI_NTFS) {
+		fs_type = (int)ComboBox_GetCurItemData(hFileSystem);
+		if (fs_type != FS_NTFS && fs_type != FS_EXFAT) {
+			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_092), lmprintf(MSG_097, "UEFI:NTFS"));
+			return;
+		}
+	}
 	if (format_thread == NULL) {
 		op_in_progress = TRUE;
 		ErrorStatus = 0;
 		EnableControls(FALSE, FALSE);
+		InitProgress(zero_drive || write_as_image);
 		format_thread = CreateThread(NULL, 0, FormatThread, (void*)(uintptr_t)di, 0, NULL);
 		if (format_thread == NULL) {
 			op_in_progress = FALSE;

@@ -809,3 +809,12 @@ This is the most structurally significant porting gap.
     - **FAT16 + KolibriOS check**: → MSG_099/MSG_189
     - **Status messages**: `UM_FORMAT_COMPLETED` and `UM_ENABLE_CONTROLS` now use `lmprintf(MSG_210/211/212/283)` ("READY"/"Cancelled"/"Failed"/"Invalid signature") instead of hardcoded English strings
     - All predicates extracted to `src/linux/boot_validation.h/.c`; 29 tests in `test_boot_validation_linux.c` all pass
+
+161. ✅ DONE **Windows To Go pre-format validation in `on_start_clicked`** — Ported WinToGo-specific validation from Windows `BootCheckThread` to Linux `on_start_clicked`:
+    - `is_windows_to_go` computed as `(image_options & IMOP_WINTOGO) && hImageOption != NULL && ComboBox_GetCurItemData(hImageOption) == IMOP_WIN_TO_GO`
+    - NTFS-only check: if `is_windows_to_go && fs_type != FS_NTFS` → MSG_092/MSG_097 error and abort
+    - `SetWinToGoIndex()` called (already implemented in Feature 57); -1 = scan failure → error + abort; -2 = user cancel → abort
+    - Separate WinToGo WUE dialog with WinToGo-specific options: MSG_332 (prevent access to internal disks = `UNATTEND_OFFLINE_INTERNAL_DRIVES`) + MSG_330/333/334/331/346 (no-online-account, set-user, locale, no-data-collection, force-S-mode); `CreateUnattendXml` called with `i | UNATTEND_WINDOWS_TO_GO` flag
+    - `has_panther_unattend` for non-WinToGo path: now logs "detected" notice correctly (condition was inverted bug fixed)
+    - WUE dialog block restructured to `if (is_windows_to_go) {...} else if (img_report.has_panther_unattend) { log } else { standard WUE dialog }`
+    - All existing 81 Linux tests continue to pass

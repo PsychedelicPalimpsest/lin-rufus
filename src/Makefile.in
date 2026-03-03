@@ -148,6 +148,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-syslinux.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	$(am__objects_2) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-ui_combo_logic.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-ui_enable_opts.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-vhd.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-window_text_bridge.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-status_history.$(OBJEXT) \
@@ -168,7 +169,8 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-multidev.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-ventoy_detect.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-kbd_shortcuts.$(OBJEXT) \
-@TARGET_WINDOWS_FALSE@	linux/rufus-ui_enable_opts.$(OBJEXT)
+@TARGET_WINDOWS_FALSE@	linux/rufus-proposed_label.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-boot_validation.$(OBJEXT)
 @TARGET_WINDOWS_TRUE@am__objects_3 =  \
 @TARGET_WINDOWS_TRUE@	windows/rufus-badblocks.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-darkmode.$(OBJEXT) \
@@ -481,7 +483,7 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/img_info.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -609,6 +611,7 @@ linux/rufus-syslinux.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui_gtk.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ui_combo_logic.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-ui_enable_opts.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-vhd.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-window_text_bridge.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-status_history.$(OBJEXT): linux/$(am__dirstamp)
@@ -629,6 +632,8 @@ linux/rufus-csm_help.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-multidev.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-ventoy_detect.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-kbd_shortcuts.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-proposed_label.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-boot_validation.$(OBJEXT): linux/$(am__dirstamp)
 windows/$(am__dirstamp):
 	@$(MKDIR_P) windows
 	@: >>windows/$(am__dirstamp)
@@ -961,6 +966,12 @@ linux/rufus-ui_combo_logic.o: linux/ui_combo_logic.c
 linux/rufus-ui_combo_logic.obj: linux/ui_combo_logic.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ui_combo_logic.obj `if test -f 'linux/ui_combo_logic.c'; then $(CYGPATH_W) 'linux/ui_combo_logic.c'; else $(CYGPATH_W) '$(srcdir)/linux/ui_combo_logic.c'; fi`
 
+linux/rufus-ui_enable_opts.o: linux/ui_enable_opts.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ui_enable_opts.o `test -f 'linux/ui_enable_opts.c' || echo '$(srcdir)/'`linux/ui_enable_opts.c
+
+linux/rufus-ui_enable_opts.obj: linux/ui_enable_opts.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ui_enable_opts.obj `if test -f 'linux/ui_enable_opts.c'; then $(CYGPATH_W) 'linux/ui_enable_opts.c'; else $(CYGPATH_W) '$(srcdir)/linux/ui_enable_opts.c'; fi`
+
 linux/rufus-vhd.o: linux/vhd.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-vhd.o `test -f 'linux/vhd.c' || echo '$(srcdir)/'`linux/vhd.c
 
@@ -1081,12 +1092,17 @@ linux/rufus-kbd_shortcuts.o: linux/kbd_shortcuts.c
 linux/rufus-kbd_shortcuts.obj: linux/kbd_shortcuts.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-kbd_shortcuts.obj `if test -f 'linux/kbd_shortcuts.c'; then $(CYGPATH_W) 'linux/kbd_shortcuts.c'; else $(CYGPATH_W) '$(srcdir)/linux/kbd_shortcuts.c'; fi`
 
-linux/rufus-ui_enable_opts.o: linux/ui_enable_opts.c
-	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ui_enable_opts.o `test -f 'linux/ui_enable_opts.c' || echo '$(srcdir)/'`linux/ui_enable_opts.c
+linux/rufus-proposed_label.o: linux/proposed_label.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-proposed_label.o `test -f 'linux/proposed_label.c' || echo '$(srcdir)/'`linux/proposed_label.c
 
-linux/rufus-ui_enable_opts.obj: linux/ui_enable_opts.c
-	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-ui_enable_opts.obj `if test -f 'linux/ui_enable_opts.c'; then $(CYGPATH_W) 'linux/ui_enable_opts.c'; else $(CYGPATH_W) '$(srcdir)/linux/ui_enable_opts.c'; fi`
+linux/rufus-proposed_label.obj: linux/proposed_label.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-proposed_label.obj `if test -f 'linux/proposed_label.c'; then $(CYGPATH_W) 'linux/proposed_label.c'; else $(CYGPATH_W) '$(srcdir)/linux/proposed_label.c'; fi`
 
+linux/rufus-boot_validation.o: linux/boot_validation.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-boot_validation.o `test -f 'linux/boot_validation.c' || echo '$(srcdir)/'`linux/boot_validation.c
+
+linux/rufus-boot_validation.obj: linux/boot_validation.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-boot_validation.obj `if test -f 'linux/boot_validation.c'; then $(CYGPATH_W) 'linux/boot_validation.c'; else $(CYGPATH_W) '$(srcdir)/linux/boot_validation.c'; fi`
 
 windows/rufus-badblocks.o: windows/badblocks.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-badblocks.o `test -f 'windows/badblocks.c' || echo '$(srcdir)/'`windows/badblocks.c
