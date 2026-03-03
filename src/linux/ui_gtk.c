@@ -161,6 +161,7 @@ static void on_device_changed(GtkComboBox *combo, gpointer data);
 static void on_boot_changed(GtkComboBox *combo, gpointer data);
 static void on_fs_changed(GtkComboBox *combo, gpointer data);
 static void on_target_changed(GtkComboBox *combo, gpointer data);
+static void on_partition_changed(GtkComboBox *combo, gpointer data);
 static void on_log_clicked(GtkButton *btn, gpointer data);
 static void on_about_clicked(GtkButton *btn, gpointer data);
 static void on_settings_clicked(GtkButton *btn, gpointer data);
@@ -452,6 +453,7 @@ static GtkWidget *build_drive_properties(void)
 	rw.partition_type_label = gtk_label_new("Partition scheme");
 	rw.partition_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.partition_combo, TRUE);
+	g_signal_connect(rw.partition_combo, "changed", G_CALLBACK(on_partition_changed), NULL);
 	rw.target_system_label = gtk_label_new("Target system");
 	rw.target_combo = gtk_combo_box_text_new();
 	gtk_widget_set_hexpand(rw.target_combo, TRUE);
@@ -1611,6 +1613,11 @@ static void on_fs_changed(GtkComboBox *combo, gpointer data)
 static void on_target_changed(GtkComboBox *combo, gpointer data)
 {
 	(void)combo; (void)data;
+
+	/* Update target_type global from combo */
+	int sel = ComboBox_GetCurSel(hTargetSystem);
+	if (sel >= 0)
+		target_type = (int)ComboBox_GetItemData(hTargetSystem, sel);
 	if (!rw.csm_help_label)
 		return;
 	if (csm_help_should_show(target_type, has_uefi_csm)) {
@@ -1622,6 +1629,26 @@ static void on_target_changed(GtkComboBox *combo, gpointer data)
 	}
 
 	/* Update advanced-options checkbox sensitivity (old BIOS / UEFI val depend on target) */
+	update_advanced_controls();
+}
+
+/* Partition scheme changed — refresh target system and filesystem combos.
+ * Mirrors Windows IDC_PARTITION_TYPE CBN_SELCHANGE handler. */
+static void on_partition_changed(GtkComboBox *combo, gpointer data)
+{
+	(void)combo; (void)data;
+
+	/* Update partition_type global */
+	int sel = ComboBox_GetCurSel(hPartitionScheme);
+	if (sel >= 0)
+		partition_type = (int)ComboBox_GetItemData(hPartitionScheme, sel);
+
+	/* Refresh target system options and filesystem/cluster combos */
+	SetPartitionSchemeAndTargetSystem(TRUE);
+	populate_fs_combo();
+	SetFSFromISO();
+
+	/* Update advanced-options checkbox sensitivity */
 	update_advanced_controls();
 }
 
