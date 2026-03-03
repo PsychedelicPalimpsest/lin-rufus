@@ -1959,6 +1959,19 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	CreateTooltip((HWND)rw.select_btn,       lmprintf(MSG_165), -1);
 	CreateTooltip((HWND)rw.start_btn,        lmprintf(MSG_171), -1);
 
+	/* Set ATK accessible names on toolbar buttons so screen readers (Orca)
+	 * announce the button function rather than the emoji label glyph name.
+	 * Mirrors what SetAccessibleName() does for the Windows toolbar buttons. */
+	SetAccessibleName((HWND)rw.lang_btn,     "Language");
+	SetAccessibleName((HWND)rw.about_btn,    "About");
+	SetAccessibleName((HWND)rw.settings_btn, "Settings");
+	SetAccessibleName((HWND)rw.log_btn,      "Log");
+	SetAccessibleName((HWND)rw.save_btn,     lmprintf(MSG_313));
+	SetAccessibleName((HWND)rw.hash_btn,     lmprintf(MSG_314));
+	SetAccessibleName((HWND)rw.select_btn,   lmprintf(MSG_165));
+	SetAccessibleName((HWND)rw.start_btn,    lmprintf(MSG_171));
+	SetAccessibleName((HWND)rw.close_btn,    "Close");
+
 	/* Enumerate attached block devices and fill the device list. */
 	GetDevices(0);
 
