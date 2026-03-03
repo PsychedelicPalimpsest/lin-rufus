@@ -818,3 +818,18 @@ This is the most structurally significant porting gap.
     - `has_panther_unattend` for non-WinToGo path: now logs "detected" notice correctly (condition was inverted bug fixed)
     - WUE dialog block restructured to `if (is_windows_to_go) {...} else if (img_report.has_panther_unattend) { log } else { standard WUE dialog }`
     - All existing 81 Linux tests continue to pass
+
+162. ✅ DONE **BT_MSDOS and BT_UEFI:NTFS pre-format validation + size check parity** — Three missing validations from Windows `BootCheckThread` added to `on_start_clicked`:
+    - `BT_MSDOS`: if `size_check && ComboBox_GetCurItemData(hClusterSize) >= 65536` → MSG_111/110 error ("MS-DOS cannot boot from 64 KiB cluster size")
+    - `BT_UEFI_NTFS`: if `fs_type != FS_NTFS && fs_type != FS_EXFAT` → MSG_092/097 error ("UEFI:NTFS requires NTFS or exFAT")
+    - Image size check now uses `MSG_088`/`MSG_089` strings instead of hardcoded English text
+    - `InitProgress(zero_drive || write_as_image)` called before `CreateThread` (was missing)
+    - `abort_format` label added: all post-WUE early exits `goto abort_format` to clean up `unattend_xml_path` + reset `zero_drive` (mirrors Windows `aborted_start` cleanup)
+
+163. ✅ DONE **Various small parity fixes batch** — 
+    - `UM_FORMAT_COMPLETED` error path: `Notification(MB_ICONERROR, MSG_042, MSG_043)` added for format failures (mirrors Windows error dialog)
+    - `UM_FORMAT_COMPLETED` cancel path: `Notification(MB_ICONINFORMATION, MSG_211, MSG_041)` added for user-cancelled format
+    - `on_close_clicked`: uses `MSG_201` ("Cancelling - Please wait...") instead of hardcoded English
+    - `abort_format`: shows device count `MSG_208`/`MSG_209` after abort (mirrors Windows `aborted_start`)
+    - `on_device_changed`: logs device count via `uprintf` (mirrors Windows `PrintStatusDebug` on `IDC_DEVICE CBN_SELCHANGE`)
+    - Duplicate `GetDrivePartitionData` call in `on_device_changed` removed

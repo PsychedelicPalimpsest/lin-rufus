@@ -1543,7 +1543,6 @@ static void on_device_changed(GtkComboBox *combo, gpointer data)
 	/* Read partition / FS data for the selected drive */
 	char fs_name[32] = "";
 	GetDrivePartitionData(di, fs_name, sizeof(fs_name), TRUE);
-	GetDrivePartitionData(di, fs_name, sizeof(fs_name), TRUE);
 
 	/* Ventoy detection — warn the user if the selected device has a
 	 * Ventoy installation so they don't accidentally overwrite it. */
