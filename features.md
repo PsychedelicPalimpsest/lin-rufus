@@ -798,3 +798,14 @@ This is the most structurally significant porting gap.
 158. ✅ DONE **`SetProposedLabel` on Linux: populate label entry after ISO scan** — After an ISO scan, the label entry is now populated with `img_report.label`, matching Windows `SetProposedLabel()`. Implementation: `src/linux/proposed_label.c` (pure `get_iso_proposed_label()` helper); `src/linux/ui_gtk.c` adds `SetProposedLabel()`, `_label_user_changed_handler()`, `user_changed_label`/`app_changed_label` statics; `user_changed_label` cleared + `SetProposedLabel()` called from `UM_IMAGE_SCANNED`. 8 new tests in `tests/test_ui_linux.c` (56 pass total).
 
 159. ✅ DONE **UI flow parity batch**: (a) `ToggleImageOptions()` wired to `UM_IMAGE_SCANNED` and `on_boot_changed()` (was defined but never called). (b) `SetProposedLabel()` called from `on_device_changed()` and `on_boot_changed()` (mirrors Windows calls). (c) `on_select_clicked()` now uses `FileDialog()` with GtkFileChooserNative/XDG portal support instead of raw GtkFileChooserDialog; same extension list as Windows including FFU; old image path preserved on cancel; `archive_path` cleared on new selection. (d) `UM_FORMAT_COMPLETED`: added `zero_drive=FALSE` + `save_image=FALSE` reset, `unattend_xml_path` unlink+free, `GetDevices(0)` after success (skipped when `save_image` was TRUE, matching Windows). All tests pass.
+
+160. ✅ DONE **on_start_clicked validation and ISOHybrid parity** — Ported the full Windows `BootCheckThread` pre-format validation logic to `on_start_clicked`:
+    - `write_as_image = FALSE` / `write_as_esp = FALSE` now reset at the *start* of `on_start_clicked` (previously only reset in `on_select_clicked`)
+    - **Pure DD images** (`IS_DD_BOOTABLE && !is_iso`): automatically set `write_as_image = TRUE` without prompting, matching Windows BootCheckThread behaviour
+    - **ISOHybrid ISO→ESP option**: when image is ≤ 1 GB, has EFI, and GPT+FAT is selected, the 3-option dialog ("ISO Image" / "ISO → ESP" / "DD Image") is shown; otherwise standalone ESP dialog offered after ISOHybrid choice
+    - **UEFI compatibility check**: if `target_type == TT_UEFI && !IS_EFI_BOOTABLE` → show MSG_090/MSG_091 error and abort
+    - **FAT + 4 GB file check**: if `IS_FAT && has_4GB_file != 0 && has_4GB_file != 0x11` → show MSG_099/MSG_100 and abort
+    - **FAT + boot compatibility check**: three-clause Windows check (NTFS without Windows/Grub/Syslinux6; FAT without any boot method; FAT + Windows without allow_dual) → MSG_092/MSG_096
+    - **FAT16 + KolibriOS check**: → MSG_099/MSG_189
+    - **Status messages**: `UM_FORMAT_COMPLETED` and `UM_ENABLE_CONTROLS` now use `lmprintf(MSG_210/211/212/283)` ("READY"/"Cancelled"/"Failed"/"Invalid signature") instead of hardcoded English strings
+    - All predicates extracted to `src/linux/boot_validation.h/.c`; 29 tests in `test_boot_validation_linux.c` all pass

@@ -54,6 +54,7 @@
 #include "ventoy_detect.h"
 #include "kbd_shortcuts.h"
 #include "ui_enable_opts.h"
+#include "boot_validation.h"
 
 /* Log handler registration — implemented in linux/stdio.c */
 extern void rufus_set_log_handler(void (*fn)(const char *msg));
@@ -911,6 +912,8 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 	/* Read format options from checkboxes */
 	quick_format     = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.quick_format_check));
 	zero_drive       = FALSE;  /* set to TRUE by Alt+Z / Ctrl+Alt+Z keyboard shortcut */
+	write_as_image   = FALSE;  /* may be set below by ISOHybrid logic */
+	write_as_esp     = FALSE;
 	enable_bad_blocks = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(rw.bad_blocks_check));
 	nb_passes_sel     = gtk_combo_box_get_active(GTK_COMBO_BOX(rw.nb_passes_combo));
 	if (nb_passes_sel < 0) nb_passes_sel = 0;
@@ -1012,30 +1015,88 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 		}
 	}
 
-	/* ISOHybrid detection: if the selected image has an MBR boot signature
-	 * AND is also an ISO, ask the user whether to write it in ISO mode
-	 * (file extraction, recommended) or DD mode (raw block copy).
-	 * This preserves the exact boot geometry embedded by the ISO author. */
-	if (boot_type == BT_IMAGE && IS_DD_BOOTABLE(img_report)
-	    && img_report.is_iso && persistence_size == 0) {
-		char *iso_image = lmprintf(MSG_036);   /* "ISO Image" */
-		char *dd_image  = lmprintf(MSG_095);   /* "DD Image" */
-		StrArray choices;
-		StrArrayCreate(&choices, 2);
-		StrArrayAdd(&choices, lmprintf(MSG_276, iso_image), TRUE);
-		StrArrayAdd(&choices, lmprintf(MSG_277, dd_image),  TRUE);
-		int isoh_choice = SelectionDialog(
-			lmprintf(MSG_274, "ISOHybrid"),
-			lmprintf(MSG_275, iso_image, dd_image, iso_image, dd_image),
-			choices.String, (int)choices.Index);
-		StrArrayDestroy(&choices);
-		if (isoh_choice < 0) {
-			/* User cancelled — abort */
+	if (boot_type == BT_IMAGE) {
+		/* Compatibility checks — mirror Windows BootCheckThread */
+		if (boot_check_uefi_compat_fails(img_report, target_type)) {
+			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_090), lmprintf(MSG_091));
 			return;
 		}
-		write_as_image = (isoh_choice & 2) ? TRUE : FALSE;
+		if (boot_check_fat_4gb_fails(img_report, fs_type)) {
+			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_099), lmprintf(MSG_100));
+			return;
+		}
+		if (boot_check_fat16_kolibrios_fails(img_report, fs_type)) {
+			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_099), lmprintf(MSG_189));
+			return;
+		}
+		if (boot_check_fat_compat_fails(img_report, fs_type, target_type,
+		                                allow_dual_uefi_bios)) {
+			Notification(MB_OK | MB_ICONERROR, lmprintf(MSG_092), lmprintf(MSG_096));
+			return;
+		}
+
+		/* ISOHybrid / DD-mode selection */
+		if (IS_DD_BOOTABLE(img_report)) {
+			BOOL esp_asked = FALSE;
+			if (!img_report.is_iso) {
+				/* Pure DD image (raw USB dump etc.) — write as DD, no dialog */
+				write_as_image = TRUE;
+			} else if (persistence_size == 0) {
+				/* ISOHybrid: ask ISO vs DD; offer ISO→ESP when applicable */
+				char *iso_image = lmprintf(MSG_036);
+				char *dd_image  = lmprintf(MSG_095);
+				int isoh_choice;
+				if (boot_check_can_write_as_esp(img_report, partition_type, fs_type)) {
+					StrArray choices;
+					StrArrayCreate(&choices, 3);
+					StrArrayAdd(&choices, lmprintf(MSG_276, iso_image), TRUE);
+					StrArrayAdd(&choices, lmprintf(MSG_277, "ISO \xe2\x86\x92 ESP"), TRUE);
+					StrArrayAdd(&choices, lmprintf(MSG_277, dd_image), TRUE);
+					isoh_choice = SelectionDialog(
+						lmprintf(MSG_274, "ISOHybrid"),
+						lmprintf(MSG_275, iso_image, dd_image, iso_image, dd_image),
+						choices.String, (int)choices.Index);
+					StrArrayDestroy(&choices);
+					if (isoh_choice < 0)
+						return;
+					write_as_esp   = (isoh_choice & 2) ? TRUE : FALSE;
+					write_as_image = (isoh_choice & 4) ? TRUE : FALSE;
+					esp_asked = TRUE;
+				} else {
+					StrArray choices;
+					StrArrayCreate(&choices, 2);
+					StrArrayAdd(&choices, lmprintf(MSG_276, iso_image), TRUE);
+					StrArrayAdd(&choices, lmprintf(MSG_277, dd_image),  TRUE);
+					isoh_choice = SelectionDialog(
+						lmprintf(MSG_274, "ISOHybrid"),
+						lmprintf(MSG_275, iso_image, dd_image, iso_image, dd_image),
+						choices.String, (int)choices.Index);
+					StrArrayDestroy(&choices);
+					if (isoh_choice < 0)
+						return;
+					write_as_image = (isoh_choice & 2) ? TRUE : FALSE;
+				}
+			}
+			if (write_as_image) {
+				/* DD write — skip further ISO→ESP check */
+				goto start_format;
+			}
+			/* Offer standalone ISO→ESP when ESP dialog wasn't already shown */
+			if (!esp_asked && boot_check_can_write_as_esp(img_report,
+			                                              partition_type, fs_type)) {
+				char *iso_image = lmprintf(MSG_036);
+				char *choices[2] = { lmprintf(MSG_276, iso_image),
+				                     lmprintf(MSG_277, "ISO \xe2\x86\x92 ESP") };
+				int r = SelectionDialog(lmprintf(MSG_274, "ESP"),
+				                        lmprintf(MSG_310), choices, 2);
+				if (r < 0)
+					return;
+				write_as_esp = (r & 2) ? TRUE : FALSE;
+			}
+		}
 	}
 
+start_format:
 	if (format_thread == NULL) {
 		op_in_progress = TRUE;
 		ErrorStatus = 0;
@@ -1043,7 +1104,7 @@ static void on_start_clicked(GtkButton *btn, gpointer data)
 		format_thread = CreateThread(NULL, 0, FormatThread, (void*)(uintptr_t)di, 0, NULL);
 		if (format_thread == NULL) {
 			op_in_progress = FALSE;
-			rufus_gtk_update_status("Failed to start format thread");
+			rufus_gtk_update_status(lmprintf(MSG_212));
 			EnableControls(TRUE, FALSE);
 		}
 	}
@@ -2362,13 +2423,17 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 
 		EnableControls(ok, TRUE);
 		if (ok) {
-			rufus_gtk_update_status("Format completed successfully.");
+			rufus_gtk_update_status(lmprintf(MSG_210));
 			/* Refresh device list so the new drive label is shown.
 			 * Mirrors Windows: skip the refresh when saving an image to disk. */
 			if (!save_image)
 				GetDevices(0);
+		} else if (SCODE_CODE(ErrorStatus) == ERROR_CANCELLED) {
+			rufus_gtk_update_status(lmprintf(MSG_211));
+		} else if (SCODE_CODE(ErrorStatus) == ERROR_BAD_SIGNATURE) {
+			rufus_gtk_update_status(lmprintf(MSG_283));
 		} else {
-			rufus_gtk_update_status("Format failed.");
+			rufus_gtk_update_status(lmprintf(MSG_212));
 		}
 		save_image = FALSE;  /* reset after checking above */
 		uprintf("*** Format completed (success=%d) ***", (int)ok);
@@ -2384,6 +2449,14 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 	}
 
 	case UM_ENABLE_CONTROLS:
+		if (!IS_ERROR(ErrorStatus))
+			rufus_gtk_update_status(lmprintf(MSG_210));
+		else if (SCODE_CODE(ErrorStatus) == ERROR_CANCELLED)
+			rufus_gtk_update_status(lmprintf(MSG_211));
+		else if (SCODE_CODE(ErrorStatus) == ERROR_BAD_SIGNATURE)
+			rufus_gtk_update_status(lmprintf(MSG_283));
+		else
+			rufus_gtk_update_status(lmprintf(MSG_212));
 		EnableControls(TRUE, TRUE);
 		break;
 

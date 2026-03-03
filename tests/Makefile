@@ -304,6 +304,13 @@ EXTRA_SRC_LINUX_test_ui_linux := $(SRC_DIR)/linux/globals.c \
                                   $(SRC_DIR)/linux/hyperlink.c \
                                   $(SRC_DIR)/linux/proposed_label.c
 
+# boot_validation_linux tests: pure predicates for on_start_clicked validation
+CFLAGS_LINUX_test_boot_validation_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                            -D_GNU_SOURCE -DRUFUS_TEST \
+                                            -Wno-unused-function -Wno-sign-compare \
+                                            -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_boot_validation_linux := $(SRC_DIR)/linux/boot_validation.c
+
 # csm_help_linux tests: CSM help label logic (csm_help_should_show, csm_help_get_msg_id)
 CFLAGS_LINUX_test_csm_help_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                      -D_GNU_SOURCE -DRUFUS_TEST \
