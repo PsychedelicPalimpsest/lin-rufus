@@ -137,3 +137,6 @@ FILE*    fd_md5sum    = NULL;
 uint64_t total_blocks = 0, extra_blocks = 0, nb_blocks = 0, last_nb_blocks = 0;
 BOOL HashFile(unsigned type, const char* path, uint8_t* sum)
 { (void)type; (void)path; (void)sum; return FALSE; }
+
+/* RunNtfsFix stub — ntfsfix.c is not linked in e2e tests. */
+BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE; }

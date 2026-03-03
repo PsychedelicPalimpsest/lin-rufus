@@ -127,3 +127,5 @@ BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return FALSE; }
 /* ExtractZip stub — stdio.c is not linked in loopback tests. */
 BOOL ExtractZip(const char* src_zip, const char* dest_dir)
 { (void)src_zip; (void)dest_dir; return TRUE; }
+/* RunNtfsFix stub — ntfsfix.c is not linked in loopback tests. */
+BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE; }

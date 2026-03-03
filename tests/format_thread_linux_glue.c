@@ -265,3 +265,18 @@ BOOL ExtractZip(const char* src_zip, const char* dest_dir)
     (void)src_zip;
     return TRUE;
 }
+
+/* RunNtfsFix runs ntfsfix on a partition path to make WinPE/AIK NTFS images
+ * bootable.  The stub records calls so tests can verify call behaviour.
+ * ntfsfix.c is NOT linked in format_thread tests; this stub replaces it. */
+int  run_ntfs_fix_call_count   = 0;
+char run_ntfs_fix_last_path[PATH_MAX] = "";
+
+BOOL RunNtfsFix(const char *partition_path)
+{
+    run_ntfs_fix_call_count++;
+    if (partition_path)
+        snprintf(run_ntfs_fix_last_path, sizeof(run_ntfs_fix_last_path),
+                 "%s", partition_path);
+    return TRUE;
+}

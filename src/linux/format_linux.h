@@ -183,6 +183,14 @@ BOOL FormatUDF(DWORD DriveIndex, uint64_t PartitionOffset,
 BOOL format_linux_write_sbr(HANDLE hDrive);
 
 /*
+ * RunNtfsFix - run ntfsfix on a partition to ensure NTFS boot integrity.
+ *
+ * Called after NTFS formatting of BT_IMAGE ISO images so that WinPE/AIK
+ * images can boot correctly.  Mirrors Windows format.c CheckDisk().
+ */
+BOOL RunNtfsFix(const char *partition_path);
+
+/*
  * format_udf_build_cmd - build a mkudffs command string (testable helper).
  *
  *   tool         - absolute path to mkudffs binary

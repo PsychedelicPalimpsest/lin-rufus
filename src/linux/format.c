@@ -844,6 +844,8 @@ DWORD WINAPI FormatThread(void* param)
 	else if (!write_as_image &&
 	    uefi_ntfs_needs_extra_partition(boot_type, fs_type, target_type, &img_report))
 		extra_partitions |= XP_UEFI_NTFS;
+	if (IsChecked(IDC_OLD_BIOS_FIXES))
+		extra_partitions |= XP_COMPAT;
 	if (!CreatePartition(hPhysicalDrive, partition_type, fs_type,
 	                     mbr_is_bootable, extra_partitions)) {
 		ErrorStatus = RUFUS_ERROR(ERROR_PARTITION_FAILURE);
@@ -1183,6 +1185,18 @@ DWORD WINAPI FormatThread(void* param)
 	}
 
 	UpdateProgress(OP_FINALIZE, -1.0f);
+
+	/* NTFS fixup: WinPE/AIK images don't boot without an extra ntfsfix pass.
+	 * Mirrors Windows format.c CheckDisk() call. */
+	if (!IS_ERROR(ErrorStatus) &&
+	    (boot_type == BT_IMAGE) && img_report.is_iso && (fs_type == FS_NTFS)) {
+		char *ntfs_part = GetExtPartitionName(DriveIndex, part_offset);
+		if (ntfs_part != NULL) {
+			RunNtfsFix(ntfs_part);
+			free(ntfs_part);
+		}
+		UpdateProgress(OP_FINALIZE, -1.0f);
+	}
 
 	/* Extract any additional files from an optional ZIP archive */
 	if (!IS_ERROR(ErrorStatus) && archive_path != NULL && fs_type < FS_EXT2) {

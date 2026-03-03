@@ -824,6 +824,123 @@ TEST(create_partition_gpt_with_esp_and_msr_main_partition_index)
 }
 
 /* ============================================================
+ * CreatePartition — XP_COMPAT (BIOS Compatibility partition)
+ *
+ * XP_COMPAT reserves one track (default 63 sectors when SectorsPerTrack==0)
+ * at the end of the disk as a placeholder for old BIOS compatibility.
+ * The main partition is shrunk accordingly.
+ * ============================================================ */
+
+/* Default track size when SelectedDrive.SectorsPerTrack == 0 */
+#define COMPAT_DEFAULT_SECTS  63
+
+TEST(create_partition_mbr_with_compat_shrinks_main)
+{
+	/* Main partition must be 63 sectors smaller than without compat */
+	setup_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	SelectedDrive.SectorsPerTrack = 0; /* use default of 63 */
+	CreatePartition(h, PARTITION_STYLE_MBR, FS_FAT32, TRUE, XP_COMPAT);
+	CloseHandle(h);
+
+	uint64_t total_sects = IMG_SIZE / SECTOR;
+	uint64_t main_start  = 2048;
+	uint64_t expected_main_size = (total_sects - main_start - COMPAT_DEFAULT_SECTS) * SECTOR;
+	uint64_t actual_size = SelectedDrive.Partition[PI_MAIN].Size;
+	CHECK_MSG(actual_size == expected_main_size,
+	          "Main partition must be shrunk by compat_sects");
+	teardown_image();
+}
+
+TEST(create_partition_mbr_with_compat_partition_at_end)
+{
+	/* The compat partition entry must start near the end of the disk */
+	setup_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	SelectedDrive.SectorsPerTrack = 0;
+	CreatePartition(h, PARTITION_STYLE_MBR, FS_FAT32, TRUE, XP_COMPAT);
+	CloseHandle(h);
+
+	/* Read second MBR partition entry */
+	uint8_t mbr[512];
+	pread(g_img_fd, mbr, 512, 0);
+	uint8_t *e1 = mbr + 446 + 16;
+	uint32_t compat_start = (uint32_t)e1[8] | ((uint32_t)e1[9] << 8) |
+	                        ((uint32_t)e1[10] << 16) | ((uint32_t)e1[11] << 24);
+	uint64_t total_sects  = IMG_SIZE / SECTOR;
+	uint64_t expected_start = total_sects - COMPAT_DEFAULT_SECTS;
+	CHECK_MSG(compat_start == expected_start,
+	          "Compat partition must start at total_sects - compat_sects");
+	teardown_image();
+}
+
+TEST(create_partition_mbr_with_compat_partition_size)
+{
+	/* The compat partition entry must be exactly compat_sects sectors */
+	setup_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	SelectedDrive.SectorsPerTrack = 0;
+	CreatePartition(h, PARTITION_STYLE_MBR, FS_FAT32, TRUE, XP_COMPAT);
+	CloseHandle(h);
+
+	uint8_t mbr[512];
+	pread(g_img_fd, mbr, 512, 0);
+	uint8_t *e1 = mbr + 446 + 16;
+	uint32_t compat_size = (uint32_t)e1[12] | ((uint32_t)e1[13] << 8) |
+	                       ((uint32_t)e1[14] << 16) | ((uint32_t)e1[15] << 24);
+	CHECK_MSG(compat_size == COMPAT_DEFAULT_SECTS,
+	          "Compat partition must be exactly compat_sects sectors");
+	teardown_image();
+}
+
+TEST(create_partition_mbr_with_compat_custom_track_size)
+{
+	/* When SectorsPerTrack > 0, use it for compat partition size */
+	setup_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	SelectedDrive.SectorsPerTrack = 128;
+	CreatePartition(h, PARTITION_STYLE_MBR, FS_FAT32, TRUE, XP_COMPAT);
+	CloseHandle(h);
+
+	uint8_t mbr[512];
+	pread(g_img_fd, mbr, 512, 0);
+	uint8_t *e1 = mbr + 446 + 16;
+	uint32_t compat_size = (uint32_t)e1[12] | ((uint32_t)e1[13] << 8) |
+	                       ((uint32_t)e1[14] << 16) | ((uint32_t)e1[15] << 24);
+	CHECK_MSG(compat_size == 128,
+	          "Compat partition size must use SectorsPerTrack when set");
+	teardown_image();
+}
+
+TEST(create_partition_mbr_with_compat_main_contiguous)
+{
+	/* Main partition end + compat start must be contiguous */
+	setup_image();
+	HANDLE h = GetPhysicalHandle(DRIVE_IDX, FALSE, TRUE, FALSE);
+	CHECK(h != INVALID_HANDLE_VALUE);
+	SelectedDrive.SectorsPerTrack = 0;
+	CreatePartition(h, PARTITION_STYLE_MBR, FS_FAT32, TRUE, XP_COMPAT);
+	CloseHandle(h);
+
+	uint64_t main_start = SelectedDrive.Partition[PI_MAIN].Offset / SECTOR;
+	uint64_t main_sects = SelectedDrive.Partition[PI_MAIN].Size   / SECTOR;
+	uint64_t main_end   = main_start + main_sects;
+
+	uint8_t mbr[512];
+	pread(g_img_fd, mbr, 512, 0);
+	uint8_t *e1 = mbr + 446 + 16;
+	uint32_t compat_start = (uint32_t)e1[8] | ((uint32_t)e1[9] << 8) |
+	                        ((uint32_t)e1[10] << 16) | ((uint32_t)e1[11] << 24);
+	CHECK_MSG(compat_start == main_end,
+	          "Compat partition must start where main partition ends");
+	teardown_image();
+}
+
+/* ============================================================
  * main
  * ============================================================ */
 
@@ -886,6 +1003,13 @@ int main(void)
 	RUN_TEST(create_partition_gpt_with_esp_and_msr_creates_three_partitions);
 	RUN_TEST(create_partition_gpt_with_esp_and_msr_layout_order);
 	RUN_TEST(create_partition_gpt_with_esp_and_msr_main_partition_index);
+
+	printf("--- CreatePartition (XP_COMPAT) ---\n");
+	RUN_TEST(create_partition_mbr_with_compat_shrinks_main);
+	RUN_TEST(create_partition_mbr_with_compat_partition_at_end);
+	RUN_TEST(create_partition_mbr_with_compat_partition_size);
+	RUN_TEST(create_partition_mbr_with_compat_custom_track_size);
+	RUN_TEST(create_partition_mbr_with_compat_main_contiguous);
 
 	PRINT_RESULTS();
 	drive_linux_reset_drives();

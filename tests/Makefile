@@ -111,6 +111,7 @@ FORMAT_LINUX_SRC := $(SRC_DIR)/linux/format.c \
                     $(SRC_DIR)/linux/format_fat32.c \
                     $(SRC_DIR)/linux/format_ext.c \
                     $(SRC_DIR)/linux/format_ext_tools.c \
+                    $(SRC_DIR)/linux/ntfsfix.c \
                     $(SRC_DIR)/linux/drive.c \
                     $(SRC_DIR)/linux/vhd.c \
                     $(COMMON)/drive.c \

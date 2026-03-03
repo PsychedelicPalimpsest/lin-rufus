@@ -179,7 +179,8 @@ extern int     copy_sku_si_policy_call_count;
 extern char    g_test_mount_path[PATH_MAX];
 extern int     extract_zip_call_count;
 extern char    extract_zip_last_dst[PATH_MAX];
-
+extern int     run_ntfs_fix_call_count;
+extern char    run_ntfs_fix_last_path[PATH_MAX];
 /* ================================================================
  * Stub functions
  * ================================================================ */
@@ -332,6 +333,8 @@ static void reset_globals(void)
 	g_test_mount_path[0]        = '\0';
 	extract_zip_call_count      = 0;
 	extract_zip_last_dst[0]     = '\0';
+	run_ntfs_fix_call_count     = 0;
+	run_ntfs_fix_last_path[0]   = '\0';
 	g_mock_image_option_data    = 0;
 	hImageOption                = NULL;
 }
@@ -2409,8 +2412,123 @@ TEST(format_thread_skips_zip_for_ext_fs)
 }
 
 /* ================================================================
- * main
+ * FormatThread NTFS fixup tests (ntfsfix for WinPE/AIK images)
  * ================================================================ */
+
+TEST(format_thread_ntfs_iso_runs_ntfsfix)
+{
+	/*
+	 * When BT_IMAGE + is_iso + fs_type==FS_NTFS, FormatThread must call
+	 * RunNtfsFix() to run ntfsfix on the freshly-written partition.
+	 * This is required for WinPE/AIK images to boot from NTFS.
+	 * (Mirrors Windows format.c: CheckDisk call for BT_IMAGE+is_iso+FS_NTFS)
+	 *
+	 * g_test_mount_path is used to make __wrap_GetExtPartitionName return
+	 * a known path, ensuring RunNtfsFix is called with a non-NULL argument.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type         = BT_IMAGE;
+	partition_type    = PARTITION_STYLE_MBR;
+	fs_type           = FS_NTFS;
+	target_type       = TT_BIOS;
+	img_report.is_iso = 1;
+	write_as_image    = FALSE;
+	image_path        = path;
+	/* Set a non-empty mount path so GetExtPartitionName returns a valid path */
+	snprintf(g_test_mount_path, sizeof(g_test_mount_path), "/tmp/rufus_ntfsfix_test");
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(run_ntfs_fix_call_count >= 1,
+	          "RunNtfsFix must be called for BT_IMAGE + is_iso + FS_NTFS");
+
+	g_test_mount_path[0] = '\0';
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_non_ntfs_iso_skips_ntfsfix)
+{
+	/*
+	 * When fs_type != FS_NTFS (e.g. FAT32), RunNtfsFix must NOT be called,
+	 * even for BT_IMAGE + is_iso images.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type         = BT_IMAGE;
+	partition_type    = PARTITION_STYLE_MBR;
+	fs_type           = FS_FAT32;
+	target_type       = TT_BIOS;
+	img_report.is_iso = 1;
+	write_as_image    = FALSE;
+	image_path        = path;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(run_ntfs_fix_call_count == 0,
+	          "RunNtfsFix must NOT be called for non-NTFS filesystems");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_non_iso_ntfs_skips_ntfsfix)
+{
+	/*
+	 * When img_report.is_iso == 0 (e.g. WIM or VHD image), RunNtfsFix
+	 * must NOT be called even with BT_IMAGE + FS_NTFS.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type         = BT_IMAGE;
+	partition_type    = PARTITION_STYLE_MBR;
+	fs_type           = FS_NTFS;
+	target_type       = TT_BIOS;
+	img_report.is_iso = 0;
+	write_as_image    = FALSE;
+	image_path        = path;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(run_ntfs_fix_call_count == 0,
+	          "RunNtfsFix must NOT be called for non-ISO images");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
+TEST(format_thread_non_image_ntfs_skips_ntfsfix)
+{
+	/*
+	 * When boot_type != BT_IMAGE (e.g. BT_SYSLINUX_V5), RunNtfsFix
+	 * must NOT be called even with FS_NTFS.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type         = BT_SYSLINUX_V6;
+	partition_type    = PARTITION_STYLE_MBR;
+	fs_type           = FS_NTFS;
+	target_type       = TT_BIOS;
+	img_report.is_iso = 1;
+	write_as_image    = FALSE;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	CHECK_MSG(run_ntfs_fix_call_count == 0,
+	          "RunNtfsFix must NOT be called for non-BT_IMAGE boot types");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
 int main(void)
 {
 	printf("=== ClearMBRGPT tests ===\n");
@@ -2513,6 +2631,12 @@ int main(void)
 	RUN(format_thread_extracts_zip_when_archive_path_set);
 	RUN(format_thread_skips_zip_when_archive_path_null);
 	RUN(format_thread_skips_zip_for_ext_fs);
+
+	printf("\n=== FormatThread NTFS fixup (ntfsfix) tests ===\n");
+	RUN(format_thread_ntfs_iso_runs_ntfsfix);
+	RUN(format_thread_non_ntfs_iso_skips_ntfsfix);
+	RUN(format_thread_non_iso_ntfs_skips_ntfsfix);
+	RUN(format_thread_non_image_ntfs_skips_ntfsfix);
 
 	TEST_RESULTS();
 }

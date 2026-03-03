@@ -52,3 +52,6 @@ BOOL ApplyWindowsCustomization(char drive_letter, int flags)
 }
 
 BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }
+
+/* RunNtfsFix stub */
+BOOL RunNtfsFix(const char *partition_path) { (void)partition_path; return TRUE; }

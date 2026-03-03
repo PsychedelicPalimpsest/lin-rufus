@@ -518,6 +518,9 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
     uint64_t esp_sects   = has_esp ? (260ULL * 1024 * 1024 / sector_size) : 0;
     BOOL has_msr         = (extra_partitions & XP_MSR) ? TRUE : FALSE;
     uint64_t msr_sects   = has_msr ? (128ULL * 1024 * 1024 / sector_size) : 0;
+    BOOL has_compat      = (extra_partitions & XP_COMPAT) ? TRUE : FALSE;
+    uint32_t compat_sects = has_compat ?
+        (SelectedDrive.SectorsPerTrack > 0 ? SelectedDrive.SectorsPerTrack : 63) : 0;
 
     if (PartitionStyle == PARTITION_STYLE_MBR) {
         uint8_t mbr[512] = { 0 };
@@ -531,6 +534,8 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
             lba_size -= pers_sects;
         if (has_uefi_ntfs && lba_size > uefi_sects)
             lba_size -= uefi_sects;
+        if (has_compat && lba_size > compat_sects)
+            lba_size -= compat_sects;
 
         uint8_t *e = mbr + 446;
         e[0] = bMBRIsBootable ? 0x80 : 0x00;
@@ -587,6 +592,23 @@ BOOL CreatePartition(HANDLE hDrive, int PartitionStyle, int FileSystem,
             eu[15] = (uefi_sects >> 24) & 0xFF;
             SelectedDrive.Partition[PI_UEFI_NTFS].Offset = (uint64_t)un_start * sector_size;
             SelectedDrive.Partition[PI_UEFI_NTFS].Size   = (uint64_t)uefi_sects * sector_size;
+        }
+
+        /* BIOS Compatibility placeholder partition at end of disk (mutually exclusive with UEFI_NTFS) */
+        if (has_compat) {
+            uint32_t compat_start = (uint32_t)(total_sects - compat_sects);
+            int slot = has_persistence ? 2 : 1;
+            uint8_t *ec = mbr + 446 + 16 * slot;
+            /* type 0x00 = empty/unused placeholder */
+            ec[4] = 0x00;
+            ec[8]  = (compat_start)        & 0xFF;
+            ec[9]  = (compat_start >> 8)   & 0xFF;
+            ec[10] = (compat_start >> 16)  & 0xFF;
+            ec[11] = (compat_start >> 24)  & 0xFF;
+            ec[12] = (compat_sects)        & 0xFF;
+            ec[13] = (compat_sects >> 8)   & 0xFF;
+            ec[14] = (compat_sects >> 16)  & 0xFF;
+            ec[15] = (compat_sects >> 24)  & 0xFF;
         }
 
         BOOL mbr_ok = (pwrite(fd, mbr, 512, 0) == 512);
