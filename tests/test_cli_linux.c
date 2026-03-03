@@ -929,6 +929,49 @@ static void test_ntfs_compression_default_is_off(void)
     CHECK(opts.ntfs_compression == 0);
 }
 
+/* ---- --win-to-go tests ---- */
+
+static void test_init_win_to_go_is_false(void)
+{
+    cli_options_t opts;
+    cli_options_init(&opts);
+    CHECK(opts.win_to_go == 0);
+}
+
+static void test_win_to_go_long_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --win-to-go", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.win_to_go != 0);
+}
+
+static void test_win_to_go_short_flag(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda -W", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.win_to_go != 0);
+}
+
+static void test_win_to_go_default_is_off(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.win_to_go == 0);
+}
+
+static void test_win_to_go_combined_with_device_and_image(void)
+{
+    cli_options_t opts;
+    int r = parse("rufus --device /dev/sda --image /tmp/win.iso --win-to-go", &opts);
+    CHECK(r == CLI_PARSE_OK);
+    CHECK(opts.win_to_go != 0);
+    CHECK(strcmp(opts.device, "/dev/sda") == 0);
+    CHECK(strcmp(opts.image, "/tmp/win.iso") == 0);
+}
+
 /* ---- test suite ---- */
 
 int main(void)
@@ -1076,6 +1119,13 @@ int main(void)
     RUN_TEST(test_init_ntfs_compression_is_false);
     RUN_TEST(test_ntfs_compression_sets_flag);
     RUN_TEST(test_ntfs_compression_default_is_off);
+
+    /* --win-to-go tests */
+    RUN_TEST(test_init_win_to_go_is_false);
+    RUN_TEST(test_win_to_go_long_flag);
+    RUN_TEST(test_win_to_go_short_flag);
+    RUN_TEST(test_win_to_go_default_is_off);
+    RUN_TEST(test_win_to_go_combined_with_device_and_image);
 
     TEST_RESULTS();
 }

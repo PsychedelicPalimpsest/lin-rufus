@@ -61,6 +61,7 @@ HWND hAdvancedDeviceToolbar = NULL, hAdvancedFormatToolbar = NULL;
 
 /* Boolean flags */
 BOOL zero_drive             = FALSE;
+BOOL cli_win_to_go         = FALSE;
 BOOL fast_zeroing           = FALSE;
 BOOL force_large_fat32      = FALSE;
 BOOL enable_ntfs_compression= FALSE;

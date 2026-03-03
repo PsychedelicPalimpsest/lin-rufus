@@ -77,6 +77,7 @@ BOOL enable_vmdk = FALSE, force_large_fat32 = FALSE;
 BOOL use_fake_units = FALSE, preserve_timestamps = FALSE;
 BOOL fast_zeroing = FALSE, app_changed_size = FALSE;
 BOOL zero_drive = FALSE, list_non_usb_removable_drives = FALSE;
+BOOL cli_win_to_go = FALSE; /* set by --win-to-go CLI flag to bypass combo check in format.c */
 BOOL quick_format = TRUE;
 BOOL enable_bad_blocks = FALSE;
 BOOL enable_verify_write = FALSE;

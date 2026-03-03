@@ -90,6 +90,7 @@ BOOL write_as_esp              = FALSE;
 BOOL write_as_image            = FALSE;
 BOOL lock_drive                = FALSE;
 BOOL zero_drive                = FALSE;
+BOOL cli_win_to_go         = FALSE;
 BOOL fast_zeroing              = FALSE;
 BOOL force_large_fat32         = FALSE;
 BOOL enable_ntfs_compression   = FALSE;

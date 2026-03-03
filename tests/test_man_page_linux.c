@@ -334,6 +334,16 @@ TEST(man_page_documents_ntfs_compression_flag) {
     free(content);
 }
 
+TEST(man_page_documents_win_to_go_flag) {
+    const char *p = find_man_page();
+    if (!p) { return; }
+    char *content = read_file_to_str(p);
+    CHECK(content != NULL);
+    CHECK(strstr(content, "win-to-go") != NULL || strstr(content, "win.to.go") != NULL
+       || strstr(content, "win\\-to\\-go") != NULL || strstr(content, "WinToGo") != NULL);
+    free(content);
+}
+
 TEST(man_page_documents_json_flag) {
     const char *p = find_man_page();
     if (!p) { return; }
@@ -442,6 +452,7 @@ int main(void)
     RUN(man_page_documents_zero_drive_flag);
     RUN(man_page_documents_force_large_fat32_flag);
     RUN(man_page_documents_ntfs_compression_flag);
+    RUN(man_page_documents_win_to_go_flag);
     RUN(man_page_documents_json_flag);
     RUN(man_page_documents_fat32);
     RUN(man_page_documents_gpt);

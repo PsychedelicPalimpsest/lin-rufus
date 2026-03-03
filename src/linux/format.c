@@ -62,6 +62,7 @@
 
 extern const char* FileSystemLabel[FS_MAX];
 extern BOOL force_large_fat32, enable_ntfs_compression, lock_drive, zero_drive, fast_zeroing;
+extern BOOL cli_win_to_go;
 extern BOOL write_as_image, write_as_esp;
 extern BOOL use_rufus_mbr;
 extern BOOL quick_format;
@@ -1022,10 +1023,11 @@ DWORD WINAPI FormatThread(void* param)
 	 * so that WinPE doesn't conflict with drive letter assignments. */
 	BOOL needs_masquerading = HAS_WINPE(img_report) && !img_report.uses_minint;
 	uint8_t extra_partitions = 0;
-	/* Detect Windows To Go: needs BT_IMAGE + IMOP_WINTOGO + HAS_WINTOGO + combo selection */
+	/* Detect Windows To Go: needs BT_IMAGE + IMOP_WINTOGO + HAS_WINTOGO + combo selection.
+	 * In CLI mode, cli_win_to_go bypasses the combo check (hImageOption is NULL). */
 	BOOL windows_to_go = (image_options & IMOP_WINTOGO) && (boot_type == BT_IMAGE) &&
 	    HAS_WINTOGO(img_report) &&
-	    (ComboBox_GetCurItemData(hImageOption) == IMOP_WIN_TO_GO);
+	    (cli_win_to_go || (ComboBox_GetCurItemData(hImageOption) == IMOP_WIN_TO_GO));
 	if (boot_type == BT_IMAGE && !write_as_image &&
 	    HAS_PERSISTENCE(img_report) && persistence_size > 0)
 		extra_partitions |= XP_PERSISTENCE;

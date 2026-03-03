@@ -63,6 +63,7 @@ extern BOOL enable_HDDs;
 extern BOOL zero_drive;
 extern BOOL force_large_fat32;
 extern BOOL enable_ntfs_compression;
+extern BOOL cli_win_to_go;
 
 /* Alert hook — stdlg.c (item 131) */
 extern void alert_set_hook(BOOL (*hook)(int type));
@@ -157,6 +158,7 @@ void cli_print_usage(const char *prog)
 	       "  -z, --zero-drive          Wipe the entire device with zeros (skip formatting)\n"
 	       "  -F, --force-large-fat32   Force FAT32 on drives > 32 GiB\n"
 	       "  -C, --ntfs-compression    Enable NTFS file compression on the formatted volume\n"
+	       "  -W, --win-to-go           Write Windows To Go (WTG) bootable USB (requires Windows ISO)\n"
 	       "  -l, --label LABEL         Volume label\n"
 	       "  -L, --list-devices        List available removable drives and exit\n"
 	       "  -j, --json                Output --list-devices results as JSON\n"
@@ -193,6 +195,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 		{ "zero-drive",       no_argument,       NULL, 'z' },
 		{ "force-large-fat32", no_argument,      NULL, 'F' },
 		{ "ntfs-compression", no_argument,       NULL, 'C' },
+		{ "win-to-go",        no_argument,       NULL, 'W' },
 		{ "json",             no_argument,       NULL, 'j' },
 		{ "list-devices",     no_argument,       NULL, 'L' },
 		{ "help",             no_argument,       NULL, 'h' },
@@ -209,7 +212,7 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 	optind = 0;
 	opterr = 0; /* suppress default error messages — we print our own */
 
-	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCjL",
+	while ((c = getopt_long(argc, argv, "d:i:f:p:t:b:c:l:hqQVyP:BN:u:HzFCWjL",
 	                        long_opts, &opt_index)) != -1) {
 		switch (c) {
 		case 0:
@@ -370,6 +373,10 @@ int cli_parse_args(int argc, char *argv[], cli_options_t *opts)
 			opts->ntfs_compression = 1;
 			break;
 
+		case 'W':
+			opts->win_to_go = 1;
+			break;
+
 		case 'j':
 			opts->json = 1;
 			break;
@@ -476,6 +483,9 @@ void cli_apply_options(const cli_options_t *opts)
 	/* Enable NTFS compression */
 	if (opts->ntfs_compression)
 		enable_ntfs_compression = TRUE;
+	/* Windows To Go mode: bypass combo-box check in format.c */
+	if (opts->win_to_go)
+		cli_win_to_go = TRUE;
 }
 
 /*

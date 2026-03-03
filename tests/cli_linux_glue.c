@@ -32,6 +32,7 @@ BOOL   enable_HDDs       = FALSE;
 BOOL   zero_drive        = FALSE;
 BOOL   force_large_fat32 = FALSE;
 BOOL   enable_ntfs_compression = FALSE;
+BOOL   cli_win_to_go     = FALSE;
 char  *image_path        = NULL;
 char   app_dir[MAX_PATH] = "/tmp";
 DWORD  ErrorStatus       = 0;

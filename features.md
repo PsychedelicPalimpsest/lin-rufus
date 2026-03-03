@@ -119,7 +119,7 @@ automatically the run step is transparently escalated via `sudo podman`.
 | Test system (`tests/`, `run_tests.sh`) | ✅ | Runs native + Wine + privileged container (root tests) |
 | GCC 15 compound-literal regression fix in `cregex_compile.c` | ✅ | Static node lifetimes replaced with local vars |
 | GTK3 UI backend (`-DUSE_GTK`) | ✅ | Window builds and launches |
-| Non-GTK console fallback (`src/linux/rufus.c main()`) | ✅ | Full CLI mode via `cli.c`; `cli_parse_args` + `cli_run`; flags: `--device`, `--image`, `--fs`, `--partition-scheme`, `--target`, `--boot-type`, `--cluster-size`, `--persistence`, `--bad-blocks`, `--nb-passes`, `--label`, `--quick`/`--no-quick`, `--verify`, `--no-prompt`, `--version`, `--help`; `selected_cluster_size`, `persistence_size`, `enable_bad_blocks`, `nb_passes_sel` globals wired; `optind=0` re-entrant reset; 129 tests pass |
+| Non-GTK console fallback (`src/linux/rufus.c main()`) | ✅ | Full CLI mode via `cli.c`; `cli_parse_args` + `cli_run`; flags: `--device`, `--image`, `--fs`, `--partition-scheme`, `--target`, `--boot-type`, `--cluster-size`, `--persistence`, `--bad-blocks`, `--nb-passes`, `--unattend-xml`, `--include-hdds`, `--zero-drive`, `--force-large-fat32`, `--ntfs-compression`, `--win-to-go`/`-W` (WTG mode via `cli_win_to_go` bypass in `format.c`), `--list-devices`/`-L` (tab-sep drive table), `--json`/`-j`, `--label`, `--quick`/`--no-quick`, `--verify`, `--no-prompt`, `--version`, `--help`; all relevant globals wired via `cli_apply_options()`; `optind=0` re-entrant reset; `cli_print_devices()` calls `GetDevices(0)` + prints tab-separated drive table; 182 tests pass |
 
 ---
 
@@ -541,4 +541,12 @@ This is the most structurally significant porting gap.
   `--cluster-size`/`-c`, `--persistence`/`-P`, `--bad-blocks`/`-B`, `--nb-passes`/`-N`;
   `optind=0` re-entrant reset; all 6 options wired via `cli_apply_options()` into globals;
   man page documented; 129 CLI tests + 54 man-page tests pass.
+
+* ~~Feature 194~~: **RESOLVED** — `--win-to-go`/`-W` CLI flag.
+  In GUI mode, `windows_to_go` detection in `format.c` requires the user to select
+  "Windows To Go" in the image-option combo box (hImageOption).  In CLI mode the combo
+  is NULL, so the check always evaluated to false.  Fix: added `BOOL cli_win_to_go` global
+  (in `globals.c`); `cli_apply_options()` sets it when `--win-to-go` is requested;
+  `format.c` now checks `cli_win_to_go || (combo == IMOP_WIN_TO_GO)`.  5 new CLI tests
+  (182 total), 1 new man-page test (73 total).  All tests pass.
 

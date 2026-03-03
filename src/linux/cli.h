@@ -63,6 +63,7 @@ typedef struct {
     int  force_large_fat32; /* --force-large-fat32: bypass size limit for FAT32 on large drives */
     int  ntfs_compression;  /* --ntfs-compression: enable NTFS file compression */
     int  json;              /* --json: use JSON output format (for --list-devices) */
+    int  win_to_go;         /* --win-to-go/-W: write Windows To Go (WTG) image */
 } cli_options_t;
 
 /* Initialise opts to default values (empty device/image, -1 for enums). */
