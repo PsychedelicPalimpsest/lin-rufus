@@ -168,6 +168,8 @@ unsigned long syslinux_ldlinux_len[2] = {0, 0};
 /* Exposed by format_thread_linux_glue.c for stub inspection */
 extern int install_syslinux_call_count;
 extern int setup_wintogo_call_count;
+extern int64_t extract_iso_file_call_count;
+extern char    extract_iso_file_last_src[256];
 
 /* ================================================================
  * Stub functions
@@ -313,6 +315,8 @@ static void reset_globals(void)
 	use_rufus_mbr  = TRUE;
 	install_syslinux_call_count = 0;
 	setup_wintogo_call_count    = 0;
+	extract_iso_file_call_count = 0;
+	extract_iso_file_last_src[0] = '\0';
 	g_mock_image_option_data    = 0;
 	hImageOption                = NULL;
 }
@@ -652,6 +656,83 @@ TEST(write_mbr_preserves_partition_table)
 	CHECK(check == 0xDE);   /* still intact */
 
 	unlink(path); free(path);
+}
+
+TEST(write_mbr_image_kolibrios_fat_writes_kolibri_code)
+{
+	/*
+	 * BT_IMAGE + has_kolibrios + FAT32 → KolibriOS MBR.
+	 * The KolibriOS MBR starts with 0x33 0xC0 (XOR EAX,EAX).
+	 */
+	char* path = create_temp_image(IMG_4MB);
+	CHECK(path != NULL);
+
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	target_type            = TT_BIOS;
+	fs_type                = FS_FAT32;
+	img_report.has_kolibrios = TRUE;
+	SelectedDrive.SectorSize = 512;
+
+	BOOL r = do_write_mbr(path);
+	CHECK(r == TRUE);
+
+	/* KolibriOS MBR first byte must be 0x33 */
+	uint8_t b0;
+	CHECK(read_at(path, 0, &b0, 1) == 0);
+	CHECK(b0 == 0x33);
+
+	uint8_t sig[2];
+	CHECK(read_at(path, 510, sig, 2) == 0);
+	CHECK(sig[0] == 0x55 && sig[1] == 0xAA);
+
+	unlink(path); free(path);
+}
+
+TEST(write_mbr_image_kolibrios_ntfs_does_not_write_kolibri_code)
+{
+	/*
+	 * BT_IMAGE + has_kolibrios + NTFS → KolibriOS MBR must NOT be used
+	 * (falls through to default Rufus/Win7 MBR).  KolibriOS only boots
+	 * from FAT volumes, so NTFS should use the default MBR path.
+	 */
+	char* path_ntfs    = create_temp_image(IMG_4MB);
+	char* path_kolibri = create_temp_image(IMG_4MB);
+	CHECK(path_ntfs != NULL && path_kolibri != NULL);
+
+	/* Write a KolibriOS MBR directly as a reference */
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	target_type            = TT_BIOS;
+	fs_type                = FS_FAT32;
+	img_report.has_kolibrios = TRUE;
+	SelectedDrive.SectorSize = 512;
+	BOOL r1 = do_write_mbr(path_kolibri);
+	CHECK(r1 == TRUE);
+
+	/* Now write with NTFS — should NOT get the KolibriOS MBR */
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	target_type            = TT_BIOS;
+	fs_type                = FS_NTFS;
+	img_report.has_kolibrios = TRUE;
+	use_rufus_mbr          = TRUE;   /* force a known default */
+	SelectedDrive.SectorSize = 512;
+	BOOL r2 = do_write_mbr(path_ntfs);
+	CHECK(r2 == TRUE);
+
+	/* Compare boot codes: they must differ */
+	uint8_t mbr_kolibri[446], mbr_ntfs[446];
+	int fd1 = open(path_kolibri, O_RDONLY);
+	int fd2 = open(path_ntfs,    O_RDONLY);
+	CHECK(fd1 >= 0 && fd2 >= 0);
+	CHECK(pread(fd1, mbr_kolibri, sizeof(mbr_kolibri), 0) == (ssize_t)sizeof(mbr_kolibri));
+	CHECK(pread(fd2, mbr_ntfs,    sizeof(mbr_ntfs),    0) == (ssize_t)sizeof(mbr_ntfs));
+	close(fd1); close(fd2);
+	CHECK(memcmp(mbr_kolibri, mbr_ntfs, sizeof(mbr_kolibri)) != 0);
+
+	unlink(path_kolibri); free(path_kolibri);
+	unlink(path_ntfs);    free(path_ntfs);
 }
 
 /* ================================================================
@@ -1638,6 +1719,44 @@ TEST(format_thread_wintogo_creates_esp_msr_main_partitions)
 #undef IMG_1GB
 }
 
+TEST(format_thread_kolibrios_installs_loader_via_extractisofile)
+{
+	/*
+	 * When BT_IMAGE + has_kolibrios + FAT32 + is_iso is set,
+	 * FormatThread must call ExtractISOFile with the KolibriOS loader
+	 * path "HD_Load/USB_Boot/MTLD_F32" after ISO extraction.
+	 *
+	 * ExtractISO is stubbed (returns TRUE), and ExtractISOFile is stubbed
+	 * in format_thread_linux_glue.c; we check that it was called with the
+	 * correct source path.
+	 */
+	char *path = create_temp_image(IMG_512MB);
+	CHECK(path != NULL);
+	setup_drive(path, IMG_512MB);
+	reset_globals();
+	boot_type              = BT_IMAGE;
+	partition_type         = PARTITION_STYLE_MBR;
+	fs_type                = FS_FAT32;
+	target_type            = TT_BIOS;
+	img_report.has_kolibrios = TRUE;
+	img_report.is_iso      = 1;  /* enter ISO extraction section */
+	write_as_image         = FALSE;
+	/* image_path must be non-NULL so the ISO copy branch is entered */
+	image_path             = path;
+
+	run_format_thread(DRIVE_INDEX_MIN);
+
+	/* ExtractISOFile must have been called with the KolibriOS loader path */
+	CHECK_MSG(extract_iso_file_call_count >= 1,
+	          "ExtractISOFile must be called for KolibriOS loader installation");
+	CHECK_MSG(strcmp(extract_iso_file_last_src,
+	                 "HD_Load/USB_Boot/MTLD_F32") == 0,
+	          "ExtractISOFile must be called with KolibriOS loader src path");
+
+	teardown_drive();
+	unlink(path); free(path);
+}
+
 /* ================================================================
  * main
  * ================================================================ */
@@ -1658,6 +1777,8 @@ int main(void)
 	RUN(write_mbr_image_with_grub4dos_writes_grub4dos_code);
 	RUN(write_mbr_win7_default);
 	RUN(write_mbr_preserves_partition_table);
+	RUN(write_mbr_image_kolibrios_fat_writes_kolibri_code);
+	RUN(write_mbr_image_kolibrios_ntfs_does_not_write_kolibri_code);
 
 	printf("\n=== InstallGrub2 tests ===\n");
 	RUN(install_grub2_null_dev_returns_false);
@@ -1705,6 +1826,9 @@ int main(void)
 	RUN(format_thread_wintogo_calls_setup_wintogo);
 	RUN(format_thread_non_wintogo_does_not_call_setup_wintogo);
 	RUN(format_thread_wintogo_creates_esp_msr_main_partitions);
+
+	printf("\n=== FormatThread KolibriOS tests ===\n");
+	RUN(format_thread_kolibrios_installs_loader_via_extractisofile);
 
 	TEST_RESULTS();
 }

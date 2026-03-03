@@ -295,6 +295,12 @@ BOOL format_linux_write_mbr(HANDLE hDrive)
 		r = write_reactos_mbr(fp);
 		break;
 	default:
+		/* KolibriOS: uses its own MBR but only on FAT volumes */
+		if (boot_type == BT_IMAGE && HAS_KOLIBRIOS(img_report) && IS_FAT(fs_type)) {
+			uprintf("Writing KolibriOS MBR");
+			r = write_kolibrios_mbr(fp);
+			break;
+		}
 		if (use_rufus_mbr) {
 			uprintf("Writing Rufus MBR");
 			r = write_rufus_mbr(fp);
@@ -956,6 +962,16 @@ DWORD WINAPI FormatThread(void* param)
 					if (!InstallGrub4DOS(mount_path))
 						uprintf("Grub4DOS grldr not found in ISO and not in cache; BIOS boot may not work");
 				}
+			}
+
+			/* KolibriOS: install the USB loader from the ISO */
+			if (!IS_ERROR(ErrorStatus) && HAS_KOLIBRIOS(img_report)) {
+				char kolibri_dst[MAX_PATH];
+				snprintf(kolibri_dst, sizeof(kolibri_dst), "%s/MTLD_F32", mount_path);
+				uprintf("Installing: %s (KolibriOS loader)", kolibri_dst);
+				if (ExtractISOFile(image_path, "HD_Load/USB_Boot/MTLD_F32",
+				                   kolibri_dst, 0) == 0)
+					uprintf("WARNING: Loader installation failed - KolibriOS will not boot!");
 			}
 
 			free(mount_path);

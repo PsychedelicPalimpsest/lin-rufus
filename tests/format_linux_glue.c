@@ -96,3 +96,10 @@ uint64_t total_blocks = 0, extra_blocks = 0, nb_blocks = 0, last_nb_blocks = 0;
 BOOL HashFile(unsigned type, const char* path, uint8_t* sum)
 { (void)type; (void)path; (void)sum; return FALSE; }
 void wuprintf(const wchar_t *fmt, ...) { (void)fmt; }
+
+/* ExtractISOFile stub — format_linux tests don't exercise KolibriOS loader
+ * installation; return 0 (not found) so format.c just logs a warning. */
+#include <stdint.h>
+int64_t ExtractISOFile(const char *iso, const char *iso_file,
+                       const char *dest_file, uint32_t attributes)
+{ (void)iso; (void)iso_file; (void)dest_file; (void)attributes; return 0; }

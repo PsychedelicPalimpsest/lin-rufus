@@ -173,6 +173,23 @@ BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
  * returns success without actually extracting any files. */
 BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }
 
+/* ExtractISOFile is provided by iso.c which is not linked in format_thread
+ * tests.  The stub returns 0 (failure) so that HAS_KOLIBRIOS loader
+ * installation just logs a warning but does not crash. */
+int64_t extract_iso_file_call_count = 0;
+char    extract_iso_file_last_src[256] = "";
+
+int64_t ExtractISOFile(const char *iso, const char *iso_file,
+                       const char *dest_file, DWORD attributes)
+{
+    extract_iso_file_call_count++;
+    if (iso_file)
+        snprintf(extract_iso_file_last_src, sizeof(extract_iso_file_last_src),
+                 "%s", iso_file);
+    (void)iso; (void)dest_file; (void)attributes;
+    return 0; /* simulate "not found" */
+}
+
 /* vhd.c symbols needed when vhd.c is linked into format thread tests */
 BOOL   ignore_boot_marker = FALSE;
 BOOL   has_ffu_support    = FALSE;
