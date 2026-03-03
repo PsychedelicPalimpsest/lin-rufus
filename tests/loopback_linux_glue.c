@@ -117,3 +117,7 @@ void wuprintf(const wchar_t *fmt, ...) { (void)fmt; }
 int64_t ExtractISOFile(const char *iso, const char *iso_file,
                        const char *dest_file, uint32_t attributes)
 { (void)iso; (void)iso_file; (void)dest_file; (void)attributes; return 0; }
+
+/* UpdateMD5Sum stub — hash.c is not linked in loopback tests. */
+void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg)
+{ (void)dest_dir; (void)md5sum_name_arg; }

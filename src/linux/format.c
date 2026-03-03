@@ -67,6 +67,8 @@ extern BOOL enable_bad_blocks;
 extern BOOL enable_verify_write;
 extern int  nb_passes_sel;
 extern char *image_path;
+extern const char *md5sum_name[2];
+extern void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg);
 
 /* Updated by FormatPartition so that WritePBR knows which FS was formatted */
 static int actual_fs_type = FS_FAT32;
@@ -973,6 +975,11 @@ DWORD WINAPI FormatThread(void* param)
 				                   kolibri_dst, 0) == 0)
 					uprintf("WARNING: Loader installation failed - KolibriOS will not boot!");
 			}
+
+			/* Update MD5 sums for any modified files */
+			if (!IS_ERROR(ErrorStatus) && !windows_to_go)
+				UpdateMD5Sum(mount_path,
+				             md5sum_name[img_report.has_md5sum ? img_report.has_md5sum - 1 : 0]);
 
 			free(mount_path);
 		}

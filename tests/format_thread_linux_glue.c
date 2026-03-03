@@ -173,6 +173,16 @@ BOOL AltUnmountVolume(const char *dn, BOOL bSilent)
  * returns success without actually extracting any files. */
 BOOL ExtractDOS(const char *path) { (void)path; return TRUE; }
 
+/* UpdateMD5Sum is provided by hash.c which is not linked in format_thread
+ * tests.  The stub records call count so tests can verify it is called. */
+int update_md5sum_call_count = 0;
+
+void UpdateMD5Sum(const char *dest_dir, const char *md5sum_name_arg)
+{
+    update_md5sum_call_count++;
+    (void)dest_dir; (void)md5sum_name_arg;
+}
+
 /* ExtractISOFile is provided by iso.c which is not linked in format_thread
  * tests.  The stub returns 0 (failure) so that HAS_KOLIBRIOS loader
  * installation just logs a warning but does not crash. */
