@@ -3,6 +3,7 @@
 #include "../src/linux/version.h"
 #include "../src/linux/device_combo.h"
 #include "../src/linux/hyperlink.h"
+#include "../src/linux/proposed_label.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -278,6 +279,70 @@ TEST(isohybrid_dialog_skipped_for_raw_img)
     CHECK_MSG(!show_dialog, "ISOHybrid dialog must be skipped for non-ISO images");
 }
 
+/* ---- SetProposedLabel / get_iso_proposed_label tests ---- */
+
+TEST(proposed_label_iso_label_returned)
+{
+    /* Normal case: ISO has a label → return it */
+    const char *result = get_iso_proposed_label(FALSE, "/tmp/ubuntu.iso", "UBUNTU_JAMMY");
+    CHECK_MSG(result != NULL, "should not return NULL when user has not changed label");
+    CHECK_MSG(strcmp(result, "UBUNTU_JAMMY") == 0, "should return ISO label");
+}
+
+TEST(proposed_label_user_changed_returns_null)
+{
+    /* User manually edited the label → preserve it (return NULL) */
+    const char *result = get_iso_proposed_label(TRUE, "/tmp/ubuntu.iso", "UBUNTU_JAMMY");
+    CHECK_MSG(result == NULL, "should return NULL when user_changed=TRUE");
+}
+
+TEST(proposed_label_empty_img_label_returns_empty)
+{
+    /* ISO has no volume label → clear the entry */
+    const char *result = get_iso_proposed_label(FALSE, "/tmp/nolabel.iso", "");
+    CHECK_MSG(result != NULL, "should not return NULL");
+    CHECK_MSG(result[0] == '\0', "should return empty string when img_label is empty");
+}
+
+TEST(proposed_label_null_img_label_returns_empty)
+{
+    /* img_label is NULL (shouldn't happen but be robust) */
+    const char *result = get_iso_proposed_label(FALSE, "/tmp/nolabel.iso", NULL);
+    CHECK_MSG(result != NULL, "should not return NULL for null img_label");
+    CHECK_MSG(result[0] == '\0', "should return empty string when img_label is NULL");
+}
+
+TEST(proposed_label_null_image_path_returns_empty)
+{
+    /* No image is selected → clear */
+    const char *result = get_iso_proposed_label(FALSE, NULL, "SOMEISO");
+    CHECK_MSG(result != NULL, "should not return NULL when image_path is NULL");
+    CHECK_MSG(result[0] == '\0', "should return empty string when image_path is NULL");
+}
+
+TEST(proposed_label_empty_image_path_returns_empty)
+{
+    /* Empty image_path → clear */
+    const char *result = get_iso_proposed_label(FALSE, "", "SOMEISO");
+    CHECK_MSG(result != NULL, "should not return NULL when image_path is empty");
+    CHECK_MSG(result[0] == '\0', "should return empty string when image_path is empty");
+}
+
+TEST(proposed_label_not_user_changed_returns_label)
+{
+    /* user_changed=FALSE but was previously TRUE — now cleared: label is returned */
+    const char *result = get_iso_proposed_label(FALSE, "/tmp/arch.iso", "ARCH_202401");
+    CHECK_MSG(result != NULL, "must not return NULL");
+    CHECK_MSG(strcmp(result, "ARCH_202401") == 0, "must return the ISO label");
+}
+
+TEST(proposed_label_user_changed_ignores_label_change)
+{
+    /* Even if the ISO label is different, user_changed prevents update */
+    const char *result = get_iso_proposed_label(TRUE, "/tmp/mint.iso", "LMDE_6");
+    CHECK_MSG(result == NULL, "user_changed must block any label update");
+}
+
 int main(void)
 {
     printf("=== version tests ===\n");
@@ -314,6 +379,16 @@ int main(void)
     RUN(is_dd_only_raw_image);
     RUN(isohybrid_dialog_condition);
     RUN(isohybrid_dialog_skipped_for_raw_img);
+
+    printf("\n=== SetProposedLabel / get_iso_proposed_label tests ===\n");
+    RUN(proposed_label_iso_label_returned);
+    RUN(proposed_label_user_changed_returns_null);
+    RUN(proposed_label_empty_img_label_returns_empty);
+    RUN(proposed_label_null_img_label_returns_empty);
+    RUN(proposed_label_null_image_path_returns_empty);
+    RUN(proposed_label_empty_image_path_returns_empty);
+    RUN(proposed_label_not_user_changed_returns_label);
+    RUN(proposed_label_user_changed_ignores_label_change);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;

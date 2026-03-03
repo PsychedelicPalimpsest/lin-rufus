@@ -794,3 +794,14 @@ This is the most structurally significant porting gap.
 156. ✅ DONE **`SetFSFromISO` needs_ntfs parity: prefer NTFS when `needs_ntfs=TRUE`** — The Linux `SetFSFromISO` in `ui_combo_logic.c` doesn't check `IS_FAT32_COMPAT(img_report)` (which includes `needs_ntfs`). When `needs_ntfs=TRUE` (e.g. Mint LMDE), NTFS should be the strongly preferred filesystem, mirroring Windows rufus.c lines 193-209 where only NTFS is added to the FS combo for non-FAT32-compatible images.
 
 157. ✅ DONE **UDF scan-mode parity + UDF scan_only fix** — Two bugs fixed: (a) `udf_extract_files()` had no `scan_only` guard: in scan mode it would try to write files to the filesystem (absolute paths like `/test/file.txt`), causing EACCES. Fixed by adding `if (scan_only) { total_blocks += ...; safe_free(psz_fullpath); continue; }` mirroring the ISO9660 scan path. (b) `ExtractISO` did a double-free of `p_udf_root` after `udf_extract_files` returned, because `udf_readdir()` already freed it; fixed by setting `p_udf_root = NULL` after the call. UDF symlink detection (`has_symlinks = SYMLINKS_UDF`) previously added now works correctly. 2 new tests: `scan_udf_symlink_sets_has_symlinks`, `scan_udf_no_symlink_has_no_symlinks`. 12453 total tests pass.
+
+158. **`SetProposedLabel` on Linux: populate label entry after ISO scan** — When an ISO is scanned and `img_report.label` is populated, the label entry field in the UI should be updated with the ISO's volume label. Windows rufus.c does this in `SetProposedLabel()` (called after UM_IMAGE_SCANNED). On Linux, the label entry is never updated after scan — it stays blank or shows the previous device label. Needs: (1) `user_changed_label` bool tracking (set when user manually edits label field, cleared on new ISO scan), (2) `SetProposedLabel()` implementation, (3) call from UM_IMAGE_SCANNED handler and from device change handler.
+
+## Feature 158: SetProposedLabel on Linux ✅ DONE
+
+After an ISO scan, the label entry is now populated with the ISO's volume label (`img_report.label`), matching Windows `SetProposedLabel()` behaviour.
+
+Implementation:
+- `src/linux/proposed_label.h` / `proposed_label.c`: pure `get_iso_proposed_label()` helper (testable without GTK)
+- `src/linux/ui_gtk.c`: `SetProposedLabel()` + `_label_user_changed_handler()` + `user_changed_label` / `app_changed_label` statics; called from `UM_IMAGE_SCANNED` after resetting `user_changed_label = FALSE`
+- 8 new tests in `tests/test_ui_linux.c` (56 pass total in that suite)

@@ -120,6 +120,13 @@ extern BOOL enable_rockridge;   /* iso.c */
 
 #include "ui_combo_logic.h"   /* populate_fs_combo, populate_cluster_combo,
                                 * SetFSFromISO, SetPartitionSchemeAndTargetSystem */
+#include "proposed_label.h"   /* get_iso_proposed_label */
+
+/* Tracks whether the user has manually edited the label since the last scan. */
+static BOOL user_changed_label = FALSE;
+/* Set TRUE while SetProposedLabel() is updating the entry to avoid false
+ * user_changed_label triggers from the "changed" signal. */
+static BOOL app_changed_label  = FALSE;
 
 /* Forward declaration for combo registration helper */
 static void combo_register_all(void);
@@ -2307,6 +2314,31 @@ static void msg_gtk_scheduler(void (*fn)(void *), void *data)
  * etc.) to hMainDialog.  Runs on the GTK main thread — safe to touch
  * any widget here.
  * --------------------------------------------------------------------- */
+
+/* Update the label entry with the ISO volume label after a scan.
+ * Mirrors Windows SetProposedLabel(): if the user manually edited the field
+ * the update is skipped.  user_changed_label must be cleared by the caller
+ * before calling this for a fresh scan. */
+static void SetProposedLabel(void)
+{
+	const char *proposed = get_iso_proposed_label(
+	    user_changed_label, image_path, img_report.label);
+	if (proposed == NULL)
+		return;  /* user changed the label — don't overwrite */
+	app_changed_label = TRUE;
+	gtk_entry_set_text(GTK_ENTRY(rw.label_entry), proposed);
+}
+
+/* "changed" signal handler for the label entry.
+ * Sets user_changed_label when the user (not the app) edits the field. */
+static void _label_user_changed_handler(GtkEditable *editable, gpointer data)
+{
+	(void)editable; (void)data;
+	if (!app_changed_label)
+		user_changed_label = TRUE;
+	app_changed_label = FALSE;
+}
+
 static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 {
 	(void)hwnd; (void)l;
@@ -2422,6 +2454,12 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		SetFSFromISO();
 		SetPartitionSchemeAndTargetSystem(FALSE);
 		TogglePersistenceControls(HAS_PERSISTENCE(img_report));
+
+		/* Populate the label entry with the ISO volume label.
+		 * A fresh scan always overrides any previous auto-fill; only a
+		 * manual user edit (tracked via user_changed_label) is preserved. */
+		user_changed_label = FALSE;
+		SetProposedLabel();
 
 		/* For Windows images, report host TPM and Secure Boot status so
 		 * the user can tell if the target machine meets requirements. */
@@ -2827,6 +2865,12 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	window_text_register_gtk(hLabel, rw.label_entry);
 	g_signal_connect(rw.label_entry, "changed",
 	                 G_CALLBACK(window_text_on_entry_changed), (gpointer)hLabel);
+
+	/* Track user-initiated label edits so SetProposedLabel() doesn't clobber them.
+	 * app_changed_label is set TRUE by SetProposedLabel() before it calls
+	 * gtk_entry_set_text(), preventing the signal from setting user_changed_label. */
+	g_signal_connect(rw.label_entry, "changed",
+	                 G_CALLBACK(_label_user_changed_handler), NULL);
 
 	/* Check for root privileges: Rufus requires them to write to block devices.
 	 * Warn the user — but still let the app run so they can browse options.
