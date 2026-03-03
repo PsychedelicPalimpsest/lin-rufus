@@ -367,6 +367,7 @@ EXTRA_SRC_LINUX_test_stdlg_linux := $(STDLG_LINUX_SRC)
 
 # iso_linux tests: ISO image scanning and extraction via system libcdio
 ISO_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
+                 $(SRC_DIR)/linux/dump_fat.c \
                  $(SRC_DIR)/linux/stdfn.c \
                  $(SRC_DIR)/linux/stdio.c \
                  $(SRC_DIR)/linux/ui.c \
@@ -382,7 +383,8 @@ CFLAGS_LINUX_test_iso_linux := \
 	-I$(SRC_DIR) -I$(SRC_DIR)/libcdio -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS_LINUX_test_iso_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a
+LDFLAGS_LINUX_test_iso_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a \
+	-Wl,--wrap=DumpFatDir
 EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) iso_linux_glue.c $(COMMON)/iso_scan.c $(SRC_DIR)/linux/sl_version.c
 
 # test_iso_save_linux — OpticalDiscSaveImage / iso_save_run_sync tests
@@ -390,6 +392,7 @@ EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) iso_linux_glue.c 
 # file can provide its own tracking stubs for _UpdateProgressWithInfo and
 # PostMessageA without conflicts.
 ISO_SAVE_LINUX_SRC := $(SRC_DIR)/linux/iso.c \
+                      $(SRC_DIR)/linux/dump_fat.c \
                       $(SRC_DIR)/linux/stdfn.c \
                       $(SRC_DIR)/linux/stdio.c \
                       $(SRC_DIR)/linux/localization.c \

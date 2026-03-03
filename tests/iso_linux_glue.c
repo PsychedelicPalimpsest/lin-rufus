@@ -31,3 +31,15 @@ windows_version_t WindowsVersion = { 0 };
 
 /* Syslinux embedded fallback versions (normally set at startup from bundled ldlinux files) */
 uint16_t embedded_sl_version[2] = { 0, 0 };
+
+/* --wrap=DumpFatDir: intercept DumpFatDir calls from iso.c for testing */
+int g_dumpfatdir_call_count = 0;
+const char *g_dumpfatdir_last_path = NULL;
+
+BOOL __real_DumpFatDir(const char *path, int32_t cluster);
+BOOL __wrap_DumpFatDir(const char *path, int32_t cluster)
+{
+    g_dumpfatdir_call_count++;
+    g_dumpfatdir_last_path = path;
+    return __real_DumpFatDir(path, cluster);
+}

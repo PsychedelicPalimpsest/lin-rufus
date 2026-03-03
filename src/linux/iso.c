@@ -495,6 +495,19 @@ static int iso_extract_files(iso9660_t* p_iso, const char* psz_path)
 			/* Handle symlinks on Linux: create real symlink */
 			if ((p_statbuf->rr.b3_rock == yep) && p_statbuf->rr.psz_symlink &&
 			    file_length == 0) {
+				/* Knoppix special case: syslinux → isolinux symlink.
+				 * Record it so we can replace it with a real dir post-extraction.
+				 * Mirrors Windows iso.c lines 711-716. */
+				const char *base = strrchr(psz_sanpath, '/');
+				base = base ? base + 1 : psz_sanpath;
+				if (strcasecmp(base, "syslinux") == 0 &&
+				    strcasecmp(p_statbuf->rr.psz_symlink, "isolinux") == 0) {
+					strncpy(symlinked_syslinux, psz_sanpath,
+					        sizeof(symlinked_syslinux) - 1);
+					symlinked_syslinux[sizeof(symlinked_syslinux) - 1] = '\0';
+					uprintf("  Found Rock Ridge symbolic link to '%s'",
+					        p_statbuf->rr.psz_symlink);
+				}
 				/* Create symlink relative to directory */
 				if (symlink(p_statbuf->rr.psz_symlink, psz_sanpath) < 0 &&
 				    errno != EEXIST)
@@ -1022,6 +1035,19 @@ out:
 		if (fd_md5sum) { fclose(fd_md5sum); fd_md5sum = NULL; }
 		safe_free(md5sum_data);
 
+		/* Solus/Mint broken UEFI bootloader workaround.
+		 * Mirrors Windows iso.c lines 1133-1140. */
+		if (img_report.has_efi & 0xc000) {
+			if (img_report.has_efi & 0x4000) {
+				char bootx64_path[512];
+				uprintf("Broken UEFI bootloader detected - Applying workaround:");
+				snprintf(bootx64_path, sizeof(bootx64_path),
+				         "%s/EFI/boot/bootx64.efi", dest_dir);
+				unlink(bootx64_path);
+			}
+			DumpFatDir(dest_dir, 0);
+		}
+
 		/* Create syslinux.cfg redirector — mirrors Windows iso.c lines 1141-1169 */
 		if (HAS_SYSLINUX(img_report)) {
 			char sysl_path[512], sysl_org[512];
@@ -1057,6 +1083,54 @@ out:
 			}
 			if (fd != NULL)
 				fclose(fd);
+
+			/* Knoppix workaround: replace syslinux → isolinux symlink with a real
+			 * directory containing syslnx32/64.cfg config redirectors.
+			 * Mirrors Windows iso.c lines 1172-1203. */
+			if (symlinked_syslinux[0] != 0) {
+				static const char *efi_cfg_name[] = { "syslnx32.cfg", "syslnx64.cfg" };
+				size_t slen = strlen(symlinked_syslinux);
+				char isolinux_dir[MAX_PATH];
+				strncpy(isolinux_dir, symlinked_syslinux, sizeof(isolinux_dir) - 1);
+				isolinux_dir[sizeof(isolinux_dir) - 1] = '\0';
+				/* ".../syslinux" → ".../isolinux" (replace last 8 chars "syslinux"
+				 * with "isolinux"; "sys" → "iso" only, "linux" is shared) */
+				if (slen >= 8) {
+					isolinux_dir[slen - 8] = 'i';
+					isolinux_dir[slen - 7] = 's';
+					isolinux_dir[slen - 6] = 'o';
+				}
+				/* Replace the dangling symlink with a real directory */
+				unlink(symlinked_syslinux);
+				mkdir(symlinked_syslinux, 0755);
+				/* Create syslnx32/64.cfg config redirectors */
+				size_t prefix_len = strlen(dest_dir);
+				for (int k = 0; k < 2; k++) {
+					char ipath[512], spath[512];
+					snprintf(ipath, sizeof(ipath), "%s/%s",
+					         isolinux_dir, efi_cfg_name[k]);
+					if (access(ipath, F_OK) != 0)
+						continue;
+					snprintf(spath, sizeof(spath), "%s/%s",
+					         symlinked_syslinux, efi_cfg_name[k]);
+					FILE *fd2 = fopen(spath, "w");
+					if (fd2 == NULL) {
+						uprintf("Unable to create %s - booting from USB may not work",
+						        spath);
+						ret = 1;
+						continue;
+					}
+					/* Write paths relative to USB root (strip dest_dir prefix) */
+					fprintf(fd2,
+					        "DEFAULT loadconfig\n\nLABEL loadconfig\n"
+					        "  CONFIG %s\n  APPEND %s\n",
+					        &ipath[prefix_len],
+					        &isolinux_dir[prefix_len]);
+					fclose(fd2);
+					uprintf("Created: %s/%s → %s", symlinked_syslinux,
+					        efi_cfg_name[k], &ipath[prefix_len]);
+				}
+			}
 		}
 	}
 
@@ -1071,206 +1145,9 @@ out:
 /* Stubs for functions not yet implemented or N/A on Linux              */
 /* ------------------------------------------------------------------ */
 
-/*
- * iso9660_readfat - libfat sector-reader callback.
- *
- * Reads sectors from a FAT image residing on an ISO-9660 filesystem.
- * The private structure caches ISO_NB_BLOCKS contiguous ISO blocks so that
- * sequential FAT reads avoid re-reading the ISO for every sector.
- *
- * Returns secsize on success, 0 on error (matches libfat contract).
- */
-int iso9660_readfat(intptr_t pp, void *buf, size_t secsize, libfat_sector_t sec)
-{
-	iso9660_readfat_private *p = (iso9660_readfat_private *)(void *)pp;
-
-	if (sizeof(p->buf) % secsize != 0) {
-		uprintf("iso9660_readfat: sector size %zu is not a divisor of %zu",
-		        secsize, sizeof(p->buf));
-		return 0;
-	}
-
-	libfat_sector_t slots = (libfat_sector_t)(sizeof(p->buf) / secsize);
-	if (sec < p->sec_start || sec >= p->sec_start + slots) {
-		/* Sector is outside the cache window — reload */
-		p->sec_start = (libfat_sector_t)(((sec * secsize) / ISO_BLOCKSIZE)
-		               * ISO_BLOCKSIZE / secsize);
-		ssize_t nr = iso9660_iso_seek_read(p->p_iso, p->buf,
-		             p->lsn + (lsn_t)((p->sec_start * secsize) / ISO_BLOCKSIZE),
-		             ISO_NB_BLOCKS);
-		if (nr != (ssize_t)(ISO_NB_BLOCKS * ISO_BLOCKSIZE)) {
-			uprintf("iso9660_readfat: read error at LSN %lu",
-			        (long unsigned int)(p->lsn + p->sec_start * secsize / ISO_BLOCKSIZE));
-			return 0;
-		}
-	}
-
-	memcpy(buf, &p->buf[(sec - p->sec_start) * secsize], secsize);
-	return (int)secsize;
-}
-
-/*
- * wchar16_to_utf8 - Convert a wchar_t[] array containing UTF-16 code units
- * (as stored by libfat's read16() calls on Linux where wchar_t is 4 bytes)
- * to a UTF-8 string.  Returns a pointer to a static buffer (not thread-safe).
- */
-static char *wchar16_to_utf8(const wchar_t *wsrc)
-{
-	static char buf[1024];
-	size_t n = 0;
-	for (int i = 0; wsrc[i] && n < sizeof(buf) - 4; i++) {
-		uint32_t c = (uint32_t)(uint16_t)wsrc[i];
-		/* Decode surrogate pair if present */
-		if (c >= 0xD800 && c <= 0xDBFF && wsrc[i + 1]) {
-			uint32_t low = (uint32_t)(uint16_t)wsrc[i + 1];
-			if (low >= 0xDC00 && low <= 0xDFFF) {
-				c = 0x10000u + ((c - 0xD800u) << 10) + (low - 0xDC00u);
-				i++;
-			}
-		}
-		if (c < 0x80) {
-			buf[n++] = (char)c;
-		} else if (c < 0x800) {
-			buf[n++] = (char)(0xC0 | (c >> 6));
-			buf[n++] = (char)(0x80 | (c & 0x3F));
-		} else if (c < 0x10000) {
-			buf[n++] = (char)(0xE0 | (c >> 12));
-			buf[n++] = (char)(0x80 | ((c >> 6) & 0x3F));
-			buf[n++] = (char)(0x80 | (c & 0x3F));
-		} else {
-			buf[n++] = (char)(0xF0 | (c >> 18));
-			buf[n++] = (char)(0x80 | ((c >> 12) & 0x3F));
-			buf[n++] = (char)(0x80 | ((c >> 6) & 0x3F));
-			buf[n++] = (char)(0x80 | (c & 0x3F));
-		}
-	}
-	buf[n] = '\0';
-	return buf;
-}
-
-BOOL DumpFatDir(const char* path, int32_t cluster)
-{
-	/* No concurrent calls — a static lf_fs is safe (mirrors the Windows impl). */
-	static struct libfat_filesystem *lf_fs = NULL;
-	void *buf;
-	char *target = NULL, *name = NULL;
-	BOOL ret = FALSE;
-	int fd = -1;
-	DWORD written;
-	libfat_diritem_t diritem = { 0 };
-	libfat_dirpos_t dirpos = { cluster, -1, 0 };
-	libfat_sector_t s;
-	iso9660_t *p_iso = NULL;
-	iso9660_stat_t *p_statbuf = NULL;
-	iso9660_readfat_private *p_private = NULL;
-
-	if (path == NULL)
-		return FALSE;
-
-	if (cluster == 0) {
-		/* Root dir — open ISO and mount the FAT image from img_report.efi_img_path */
-		if (image_path == NULL)
-			return FALSE;
-		p_iso = iso9660_open_ext(image_path, ISO_EXTENSION_MASK);
-		if (p_iso == NULL) {
-			uprintf("Could not open image '%s' as an ISO-9660 file system", image_path);
-			goto out;
-		}
-		p_statbuf = iso9660_ifs_stat_translate(p_iso, img_report.efi_img_path);
-		if (p_statbuf == NULL) {
-			uprintf("Could not get ISO-9660 file information for file %s", img_report.efi_img_path);
-			goto out;
-		}
-		p_private = malloc(sizeof(iso9660_readfat_private));
-		if (p_private == NULL)
-			goto out;
-		p_private->p_iso = p_iso;
-		p_private->lsn = p_statbuf->lsn;
-		p_private->sec_start = 0;
-		if (iso9660_iso_seek_read(p_private->p_iso, p_private->buf, p_private->lsn, ISO_NB_BLOCKS)
-		    != ISO_NB_BLOCKS * ISO_BLOCKSIZE) {
-			uprintf("Error reading ISO-9660 file %s at LSN %lu",
-			        img_report.efi_img_path, (long unsigned int)p_private->lsn);
-			goto out;
-		}
-		lf_fs = libfat_open(iso9660_readfat, (intptr_t)p_private);
-		if (lf_fs == NULL) {
-			uprintf("FAT access error");
-			goto out;
-		}
-	}
-
-	do {
-		dirpos.cluster = libfat_dumpdir(lf_fs, &dirpos, &diritem);
-		if (dirpos.cluster >= 0) {
-			name = safe_strdup(wchar16_to_utf8(diritem.name));
-			target = malloc(strlen(path) + safe_strlen(name) + 2);
-			if ((name == NULL) || (target == NULL)) {
-				uprintf("Could not allocate buffer");
-				goto out;
-			}
-			strcpy(target, path);
-			strcat(target, "/");
-			strcat(target, name);
-			if (diritem.attributes & 0x10) {
-				/* Directory entry */
-				if (mkdir(target, 0755) != 0 && errno != EEXIST) {
-					uprintf_errno("Could not create directory '%s'", target);
-					/* continue rather than abort */
-				} else if (!DumpFatDir(target, dirpos.cluster)) {
-					goto out;
-				}
-			} else if (access(target, F_OK) != 0) {
-				/* File does not yet exist — extract it */
-				uprintf("Extracting: %s (from '%s', %s)", target,
-				        img_report.efi_img_path,
-				        SizeToHumanReadable(diritem.size, FALSE, FALSE));
-				fd = open(target, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-				if (fd < 0) {
-					uprintf_errno("Could not create '%s'", target);
-					/* continue */
-				} else {
-					written = 0;
-					s = libfat_clustertosector(lf_fs, dirpos.cluster);
-					while ((s != 0) && (s < 0xFFFFFFFFULL) && (written < diritem.size)) {
-						buf = libfat_get_sector(lf_fs, s);
-						if (buf == NULL)
-							ErrorStatus = RUFUS_ERROR(ERROR_SECTOR_NOT_FOUND);
-						if (IS_ERROR(ErrorStatus))
-							goto out;
-						DWORD size = MIN(LIBFAT_SECTOR_SIZE, diritem.size - written);
-						if (!write_all(fd, buf, size)) {
-							uprintf_errno("Could not write '%s'", target);
-							break;
-						}
-						written += size;
-						s = libfat_nextsector(lf_fs, s);
-						libfat_flush(lf_fs);
-					}
-					close(fd); fd = -1;
-				}
-			}
-			safe_free(target);
-			safe_free(name);
-		}
-	} while (dirpos.cluster >= 0);
-	ret = TRUE;
-
-out:
-	if (cluster == 0) {
-		if (lf_fs != NULL) {
-			libfat_close(lf_fs);
-			lf_fs = NULL;
-		}
-		iso9660_stat_free(p_statbuf);
-		iso9660_close(p_iso);
-		safe_free(p_private);
-	}
-	if (fd >= 0) { close(fd); fd = -1; }
-	safe_free(target);
-	safe_free(name);
-	return ret;
-}
+/* DumpFatDir, iso9660_readfat, and wchar16_to_utf8 have been moved to
+ * src/linux/dump_fat.c so that --wrap=DumpFatDir works in unit tests
+ * (intra-TU calls cannot be intercepted by the linker --wrap mechanism). */
 
 /* -----------------------------------------------------------------------
  * OpticalDiscSaveImage implementation

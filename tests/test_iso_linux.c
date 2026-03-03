@@ -296,8 +296,94 @@ static void cleanup_opensuse_iso(void)
 }
 
 /* ================================================================
- * GetGrubVersion tests (pure buffer scan — no ISO needed)
+ * Broken UEFI bootloader ISO (tests has_efi & 0xc000 → DumpFatDir call)
  * ================================================================ */
+
+#define BROKEN_EFI_ISO_PATH "/tmp/test_rufus_broken_efi.iso"
+static int broken_efi_iso_available = 0;
+
+static void setup_broken_efi_iso(void)
+{
+    /*
+     * Creates a minimal Syslinux ISO so ExtractISO extraction mode runs
+     * through the HAS_SYSLINUX branch.  No actual EFI img is needed since
+     * we set has_efi manually and DumpFatDir is intercepted via --wrap.
+     */
+    const char *script =
+        "python3 -c \""
+        "import pycdlib, io\n"
+        "iso = pycdlib.PyCdlib()\n"
+        "iso.new(interchange_level=1, joliet=3, rock_ridge='1.09', vol_ident='BROKENEFI')\n"
+        "iso.add_directory('/ISOLINUX', joliet_path='/isolinux', rr_name='isolinux')\n"
+        "ver = b'\\x00'*64 + b'ISOLINUX 6.03 extra\\x00' + b'\\x00'*(512-64-20)\n"
+        "iso.add_fp(io.BytesIO(ver), len(ver), '/ISOLINUX/ISOLINUX.BIN;1', joliet_path='/isolinux/isolinux.bin', rr_name='isolinux.bin')\n"
+        "cfg = b'default linux\\n'\n"
+        "iso.add_fp(io.BytesIO(cfg), len(cfg), '/ISOLINUX/ISOLINUX.CFG;1', joliet_path='/isolinux/isolinux.cfg', rr_name='isolinux.cfg')\n"
+        "iso.write('" BROKEN_EFI_ISO_PATH "')\n"
+        "iso.close()\n"
+        "\"";
+    struct stat st;
+    if (system(script) == 0 && stat(BROKEN_EFI_ISO_PATH, &st) == 0 && st.st_size > 0)
+        broken_efi_iso_available = 1;
+}
+
+static void cleanup_broken_efi_iso(void)
+{
+    unlink(BROKEN_EFI_ISO_PATH);
+}
+
+/* ================================================================
+ * Knoppix ISO (tests symlinked_syslinux → real directory + syslnx cfg)
+ * ================================================================ */
+
+#define KNOPPIX_ISO_PATH "/tmp/test_rufus_knoppix.iso"
+static int knoppix_iso_available = 0;
+
+static void setup_knoppix_iso(void)
+{
+    /*
+     * Creates an ISO with:
+     *   /boot/isolinux/isolinux.bin     — so HAS_SYSLINUX is TRUE
+     *   /boot/isolinux/isolinux.cfg     — triggers config_path
+     *   /boot/isolinux/syslnx32.cfg     — Knoppix EFI syslinux config files
+     *   /boot/isolinux/syslnx64.cfg
+     *   /boot/syslinux → "isolinux"     — Rock Ridge symlink (the Knoppix case)
+     *
+     * When extracted, iso.c should:
+     *   1. Detect the syslinux → isolinux symlink and set symlinked_syslinux
+     *   2. After extraction, replace the symlink with a real directory
+     *   3. Create syslnx32.cfg and syslnx64.cfg in the new directory
+     */
+    const char *script =
+        "python3 -c \""
+        "import pycdlib, io\n"
+        "iso = pycdlib.PyCdlib()\n"
+        "iso.new(interchange_level=1, joliet=3, rock_ridge='1.09', vol_ident='KNOPPIX')\n"
+        "iso.add_directory('/BOOT', joliet_path='/boot', rr_name='boot')\n"
+        "iso.add_directory('/BOOT/ISOLINUX', joliet_path='/boot/isolinux', rr_name='isolinux')\n"
+        "ver = b'\\x00'*64 + b'ISOLINUX 6.03 extra\\x00' + b'\\x00'*(512-64-20)\n"
+        "iso.add_fp(io.BytesIO(ver), len(ver), '/BOOT/ISOLINUX/ISOLINUX.BIN;1', joliet_path='/boot/isolinux/isolinux.bin', rr_name='isolinux.bin')\n"
+        "cfg = b'default linux\\n'\n"
+        "iso.add_fp(io.BytesIO(cfg), len(cfg), '/BOOT/ISOLINUX/ISOLINUX.CFG;1', joliet_path='/boot/isolinux/isolinux.cfg', rr_name='isolinux.cfg')\n"
+        "s32 = b'default linux32\\n'\n"
+        "iso.add_fp(io.BytesIO(s32), len(s32), '/BOOT/ISOLINUX/SYSLNX32.CFG;1', joliet_path='/boot/isolinux/syslnx32.cfg', rr_name='syslnx32.cfg')\n"
+        "s64 = b'default linux64\\n'\n"
+        "iso.add_fp(io.BytesIO(s64), len(s64), '/BOOT/ISOLINUX/SYSLNX64.CFG;1', joliet_path='/boot/isolinux/syslnx64.cfg', rr_name='syslnx64.cfg')\n"
+        "iso.add_symlink(symlink_path='/BOOT/SYSLINUX;1', rr_symlink_name='syslinux', rr_path='isolinux', joliet_path='/boot/syslinux')\n"
+        "iso.write('" KNOPPIX_ISO_PATH "')\n"
+        "iso.close()\n"
+        "\"";
+    struct stat st;
+    if (system(script) == 0 && stat(KNOPPIX_ISO_PATH, &st) == 0 && st.st_size > 0)
+        knoppix_iso_available = 1;
+}
+
+static void cleanup_knoppix_iso(void)
+{
+    unlink(KNOPPIX_ISO_PATH);
+}
+
+
 
 TEST(grubver_empty_buf)
 {
@@ -912,6 +998,162 @@ TEST(extract_iso_extract_opensuse_renames_existing_syslinux_cfg)
     system("rm -rf " TEST_EXTRACT_DIR);
 }
 
+/* tracking vars defined in iso_linux_glue.c */
+extern int g_dumpfatdir_call_count;
+extern const char *g_dumpfatdir_last_path;
+
+TEST(extract_iso_extract_efi_img_calls_dumpfatdir)
+{
+    /*
+     * When has_efi & 0x8000 (Solus-style: EFI only in FAT efi.img),
+     * ExtractISO extraction mode must call DumpFatDir(dest_dir, 0).
+     * Mirrors Windows iso.c lines 1133-1140.
+     */
+    if (!broken_efi_iso_available) { printf("  (skipped: no broken_efi test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+    system("mkdir -p " TEST_EXTRACT_DIR);
+    /* Scan first to populate img_report */
+    ExtractISO(BROKEN_EFI_ISO_PATH, "", TRUE);
+    /* Force-set the Solus EFI flag */
+    img_report.has_efi = 0x8000;
+    g_dumpfatdir_call_count = 0;
+    ExtractISO(BROKEN_EFI_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    CHECK_MSG(g_dumpfatdir_call_count > 0,
+              "DumpFatDir must be called when has_efi & 0x8000");
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
+
+TEST(extract_iso_extract_broken_efi_deletes_bootx64)
+{
+    /*
+     * When has_efi & 0x4000 (broken bootx64.efi symlink, e.g. Mint),
+     * ExtractISO extraction mode must:
+     *   1. Delete <dest_dir>/EFI/boot/bootx64.efi
+     *   2. Call DumpFatDir(dest_dir, 0)
+     * Mirrors Windows iso.c lines 1134-1139.
+     */
+    if (!broken_efi_iso_available) { printf("  (skipped: no broken_efi test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+    system("mkdir -p " TEST_EXTRACT_DIR "/EFI/boot");
+    /* Pre-create the broken bootx64.efi */
+    char bootx64[256];
+    snprintf(bootx64, sizeof(bootx64), "%s/EFI/boot/bootx64.efi", TEST_EXTRACT_DIR);
+    FILE *f = fopen(bootx64, "w");
+    if (f) { fprintf(f, "broken\n"); fclose(f); }
+    /* Scan first */
+    ExtractISO(BROKEN_EFI_ISO_PATH, "", TRUE);
+    /* Force-set the broken-bootx64 EFI flag (0x4000 also implies DumpFatDir) */
+    img_report.has_efi = 0xc000;
+    g_dumpfatdir_call_count = 0;
+    ExtractISO(BROKEN_EFI_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    /* bootx64.efi must have been deleted */
+    struct stat st;
+    CHECK_MSG(stat(bootx64, &st) != 0,
+              "bootx64.efi must be deleted when has_efi & 0x4000");
+    CHECK_MSG(g_dumpfatdir_call_count > 0,
+              "DumpFatDir must be called when has_efi & 0x4000");
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
+
+TEST(extract_iso_extract_no_efi_img_skips_dumpfatdir)
+{
+    /*
+     * When has_efi has no 0xc000 bits, DumpFatDir must NOT be called.
+     */
+    if (!broken_efi_iso_available) { printf("  (skipped: no broken_efi test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+    system("mkdir -p " TEST_EXTRACT_DIR);
+    ExtractISO(BROKEN_EFI_ISO_PATH, "", TRUE);
+    /* has_efi stays as-is from scan (likely 0) */
+    g_dumpfatdir_call_count = 0;
+    ExtractISO(BROKEN_EFI_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    CHECK_MSG(g_dumpfatdir_call_count == 0,
+              "DumpFatDir must NOT be called when has_efi has no 0xc000 bits");
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
+
+TEST(extract_iso_knoppix_symlink_replaced_by_dir)
+{
+    /*
+     * Knoppix ISOs have a Rock Ridge symlink /boot/syslinux → isolinux.
+     * After extraction, the symlink must be replaced by a real directory.
+     * Mirrors Windows iso.c lines 1183-1184.
+     */
+    if (!knoppix_iso_available) { printf("  (skipped: no Knoppix test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+    system("mkdir -p " TEST_EXTRACT_DIR);
+    ExtractISO(KNOPPIX_ISO_PATH, "", TRUE);
+    ExtractISO(KNOPPIX_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    char syslinux_dir[256];
+    snprintf(syslinux_dir, sizeof(syslinux_dir), "%s/boot/syslinux", TEST_EXTRACT_DIR);
+    struct stat st;
+    CHECK_MSG(lstat(syslinux_dir, &st) == 0,
+              "boot/syslinux must exist after Knoppix extraction");
+    CHECK_MSG(S_ISDIR(st.st_mode),
+              "boot/syslinux must be a real directory (not a symlink)");
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
+
+TEST(extract_iso_knoppix_creates_syslnx32_cfg)
+{
+    /*
+     * After replacing the syslinux symlink, iso.c must create
+     * boot/syslinux/syslnx32.cfg pointing to boot/isolinux/syslnx32.cfg.
+     * Mirrors Windows iso.c lines 1186-1201.
+     */
+    if (!knoppix_iso_available) { printf("  (skipped: no Knoppix test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+    system("mkdir -p " TEST_EXTRACT_DIR);
+    ExtractISO(KNOPPIX_ISO_PATH, "", TRUE);
+    ExtractISO(KNOPPIX_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    char syslnx32[256];
+    snprintf(syslnx32, sizeof(syslnx32), "%s/boot/syslinux/syslnx32.cfg", TEST_EXTRACT_DIR);
+    struct stat st;
+    CHECK_MSG(stat(syslnx32, &st) == 0,
+              "boot/syslinux/syslnx32.cfg must be created after Knoppix extraction");
+    /* Must contain CONFIG pointing to isolinux/syslnx32.cfg */
+    FILE *f = fopen(syslnx32, "r");
+    if (f) {
+        char contents[512];
+        size_t n = fread(contents, 1, sizeof(contents) - 1, f);
+        fclose(f);
+        contents[n] = '\0';
+        CHECK_MSG(strstr(contents, "syslnx32.cfg") != NULL,
+                  "syslnx32.cfg must reference syslnx32.cfg path");
+    }
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
+
+TEST(extract_iso_knoppix_creates_syslnx64_cfg)
+{
+    /*
+     * Same as above, but for syslnx64.cfg.
+     */
+    if (!knoppix_iso_available) { printf("  (skipped: no Knoppix test ISO)\n"); return; }
+    memset(&img_report, 0, sizeof(img_report));
+    enable_iso = TRUE;
+    system("rm -rf " TEST_EXTRACT_DIR);
+    system("mkdir -p " TEST_EXTRACT_DIR);
+    ExtractISO(KNOPPIX_ISO_PATH, "", TRUE);
+    ExtractISO(KNOPPIX_ISO_PATH, TEST_EXTRACT_DIR, FALSE);
+    char syslnx64[256];
+    snprintf(syslnx64, sizeof(syslnx64), "%s/boot/syslinux/syslnx64.cfg", TEST_EXTRACT_DIR);
+    struct stat st;
+    CHECK_MSG(stat(syslnx64, &st) == 0,
+              "boot/syslinux/syslnx64.cfg must be created after Knoppix extraction");
+    system("rm -rf " TEST_EXTRACT_DIR);
+}
+
 TEST(has_efi_img_false)
 {
     memset(&img_report, 0, sizeof(img_report));
@@ -1488,6 +1730,14 @@ int main(void)
     if (!opensuse_iso_available)
         printf("  NOTE: OpenSUSE test ISO not available (pycdlib not installed?); OpenSUSE cfg tests skipped\n\n");
 
+    setup_broken_efi_iso();
+    if (!broken_efi_iso_available)
+        printf("  NOTE: broken_efi test ISO not available; EFI workaround tests skipped\n\n");
+
+    setup_knoppix_iso();
+    if (!knoppix_iso_available)
+        printf("  NOTE: Knoppix test ISO not available; Knoppix symlink tests skipped\n\n");
+
     StrArrayCreate(&modified_files, 8);
 
     printf("  GetGrubVersion\n");
@@ -1547,6 +1797,16 @@ int main(void)
     RUN(extract_iso_extract_syslinux_cfg_contents);
     RUN(extract_iso_extract_opensuse_renames_existing_syslinux_cfg);
 
+    printf("\n  Broken UEFI bootloader workaround (Solus/Mint)\n");
+    RUN(extract_iso_extract_efi_img_calls_dumpfatdir);
+    RUN(extract_iso_extract_broken_efi_deletes_bootx64);
+    RUN(extract_iso_extract_no_efi_img_skips_dumpfatdir);
+
+    printf("\n  Knoppix symlinked_syslinux workaround\n");
+    RUN(extract_iso_knoppix_symlink_replaced_by_dir);
+    RUN(extract_iso_knoppix_creates_syslnx32_cfg);
+    RUN(extract_iso_knoppix_creates_syslnx64_cfg);
+
     printf("\n  HasEfiImgBootLoaders\n");
     RUN(has_efi_img_false);
     RUN(has_efi_img_true);
@@ -1585,6 +1845,8 @@ int main(void)
     cleanup_syslinux_iso();
     cleanup_grub2_iso();
     cleanup_opensuse_iso();
+    cleanup_broken_efi_iso();
+    cleanup_knoppix_iso();
 
     TEST_RESULTS();
 }
