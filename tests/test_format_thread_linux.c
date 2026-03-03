@@ -39,6 +39,8 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "format.h"
 #include "format_linux.h"
 #include "resource.h"
+#include "ms-sys/inc/file.h"
+#include "ms-sys/inc/fat32.h"
 #include "../res/grub/grub_version.h"
 
 /* ================================================================
@@ -2035,6 +2037,166 @@ TEST(format_thread_winpe_nonminint_uses_rufus_mbr)
 }
 
 /* ================================================================
+ * WritePBR_fs tests — FAT32 VBR variant selection
+ * ================================================================ */
+
+/*
+ * Create a minimal file with the FAT32 OEM string "FAT32   " at offset 0x52
+ * so that is_fat_32_fs() passes, and the VBR write functions can be called.
+ * Returns the path (must be free()d) or NULL on failure.
+ */
+static char *create_fat32_sector(void)
+{
+	char template[] = "/tmp/rufus_pbr_XXXXXX";
+	int fd = mkstemp(template);
+	if (fd < 0) return NULL;
+	/*
+	 * Allocate 0x4000 bytes filled with zeros.
+	 * FAT32 VBR is written twice: primary (sector 0) and backup (sector 6 = offset 3072).
+	 * The ReactOS VBR writes an extension at 0x1c00, so the backup copy writes
+	 * at 3072 + 0x1c00 = 10240 (0x2800). Use 0x4000 to give ample headroom.
+	 */
+	uint8_t *buf = calloc(0x4000, 1);
+	if (!buf) { close(fd); unlink(template); return NULL; }
+	/* "FAT32   " at offset 0x52 (primary) and 6*512+0x52 (backup sector 6) */
+	memcpy(buf + 0x52, "FAT32   ", 8);
+	memcpy(buf + 6 * 512 + 0x52, "FAT32   ", 8);
+	if (write(fd, buf, 0x4000) != 0x4000) {
+		free(buf); close(fd); unlink(template); return NULL;
+	}
+	free(buf);
+	close(fd);
+	return strdup(template);
+}
+
+/* Helper: call WritePBR_fs on a pre-prepared FAT32 sector file */
+static BOOL do_write_pbr_fs(const char *path, int fs)
+{
+	int fd = open(path, O_RDWR);
+	if (fd < 0) return FALSE;
+	HANDLE h = (HANDLE)(intptr_t)fd;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = WritePBR_fs(h, fs);
+	close(fd);
+	return r;
+}
+
+TEST(write_pbr_fat32_generic_passes)
+{
+	/* Smoke test: generic FAT32 boot (BT_NON_BOOTABLE) writes VBR OK */
+	char *path = create_fat32_sector();
+	CHECK(path != NULL);
+	reset_globals();
+	boot_type = BT_NON_BOOTABLE;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT32);
+	CHECK(r == TRUE);
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_fat32_reactos_matches_ros_vbr)
+{
+	/*
+	 * BT_REACTOS + FAT32 → write_fat_32_ros_br() must be called.
+	 * Verify with entire_fat_32_ros_br_matches().
+	 */
+	char *path = create_fat32_sector();
+	CHECK(path != NULL);
+
+	reset_globals();
+	boot_type = BT_REACTOS;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT32);
+	CHECK(r == TRUE);
+
+	int fd2 = open(path, O_RDONLY);
+	CHECK(fd2 >= 0);
+	FAKE_FD check; check._handle = (HANDLE)(intptr_t)fd2; check._offset = 0;
+	CHECK(entire_fat_32_ros_br_matches((FILE*)&check));
+	close(fd2);
+
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_fat32_bootmgr_matches_pe_vbr)
+{
+	/*
+	 * BT_IMAGE + HAS_BOOTMGR + FAT32 → write_fat_32_pe_br() must be called.
+	 * Verify with entire_fat_32_pe_br_matches().
+	 */
+	char *path = create_fat32_sector();
+	CHECK(path != NULL);
+
+	reset_globals();
+	boot_type = BT_IMAGE;
+	img_report.has_bootmgr = 1; /* HAS_BOOTMGR_BIOS */
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT32);
+	CHECK(r == TRUE);
+
+	int fd2 = open(path, O_RDONLY);
+	CHECK(fd2 >= 0);
+	FAKE_FD check; check._handle = (HANDLE)(intptr_t)fd2; check._offset = 0;
+	CHECK(entire_fat_32_pe_br_matches((FILE*)&check));
+	close(fd2);
+
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_fat32_winpe_matches_nt_vbr)
+{
+	/*
+	 * BT_IMAGE + HAS_WINPE (but NOT HAS_BOOTMGR) + FAT32 →
+	 * write_fat_32_nt_br() must be called.
+	 * Verify with entire_fat_32_nt_br_matches().
+	 */
+	char *path = create_fat32_sector();
+	CHECK(path != NULL);
+
+	reset_globals();
+	boot_type = BT_IMAGE;
+	img_report.winpe = WINPE_AMD64; /* HAS_WINPE */
+	img_report.has_bootmgr = 0;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT32);
+	CHECK(r == TRUE);
+
+	int fd2 = open(path, O_RDONLY);
+	CHECK(fd2 >= 0);
+	FAKE_FD check; check._handle = (HANDLE)(intptr_t)fd2; check._offset = 0;
+	CHECK(entire_fat_32_nt_br_matches((FILE*)&check));
+	close(fd2);
+
+	unlink(path); free(path);
+}
+
+TEST(write_pbr_fat32_kolibrios_matches_kos_vbr)
+{
+	/*
+	 * BT_IMAGE + HAS_KOLIBRIOS + FAT32 → write_fat_32_kos_br() must be called.
+	 * Verify with entire_fat_32_kos_br_matches().
+	 */
+	char *path = create_fat32_sector();
+	CHECK(path != NULL);
+
+	reset_globals();
+	boot_type = BT_IMAGE;
+	/* Set KolibriOS: has_kolibrios flag */
+	img_report.has_kolibrios = TRUE;
+	SelectedDrive.SectorSize = 512;
+	BOOL r = do_write_pbr_fs(path, FS_FAT32);
+	CHECK(r == TRUE);
+
+	int fd2 = open(path, O_RDONLY);
+	CHECK(fd2 >= 0);
+	FAKE_FD check; check._handle = (HANDLE)(intptr_t)fd2; check._offset = 0;
+	CHECK(entire_fat_32_kos_br_matches((FILE*)&check));
+	close(fd2);
+
+	unlink(path); free(path);
+}
+
+/* ================================================================
  * ZIP extraction tests
  * ================================================================ */
 
@@ -2156,6 +2318,13 @@ int main(void)
 	RUN(write_drive_zero_zeroes_entire_drive);
 	RUN(write_drive_image_copies_content);
 	RUN(write_drive_image_null_path_fails);
+
+	printf("\n=== WritePBR_fs FAT32 VBR variant tests ===\n");
+	RUN(write_pbr_fat32_generic_passes);
+	RUN(write_pbr_fat32_reactos_matches_ros_vbr);
+	RUN(write_pbr_fat32_bootmgr_matches_pe_vbr);
+	RUN(write_pbr_fat32_winpe_matches_nt_vbr);
+	RUN(write_pbr_fat32_kolibrios_matches_kos_vbr);
 
 	printf("\n=== FormatThread integration tests ===\n");
 	RUN(format_thread_bad_drive_index_fails);

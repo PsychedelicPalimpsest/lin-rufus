@@ -142,6 +142,14 @@ BOOL WritePBR_fs(HANDLE hLogicalVolume, int fs_type)
 			/* Choose VBR based on boot type, matching Windows format.c logic */
 			if (boot_type == BT_FREEDOS) {
 				if (!write_fat_32_fd_br(fp, 0)) return FALSE;
+			} else if (boot_type == BT_REACTOS) {
+				if (!write_fat_32_ros_br(fp, 0)) return FALSE;
+			} else if ((boot_type == BT_IMAGE) && HAS_KOLIBRIOS(img_report)) {
+				if (!write_fat_32_kos_br(fp, 0)) return FALSE;
+			} else if ((boot_type == BT_IMAGE) && HAS_BOOTMGR(img_report)) {
+				if (!write_fat_32_pe_br(fp, 0)) return FALSE;
+			} else if ((boot_type == BT_IMAGE) && HAS_WINPE(img_report)) {
+				if (!write_fat_32_nt_br(fp, 0)) return FALSE;
 			} else {
 				if (!write_fat_32_br(fp, 0)) return FALSE;
 			}
