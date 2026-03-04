@@ -27,6 +27,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 /* Pull in every compat header we want to verify */
 #include "../src/linux/compat/windows.h"
 #include "../src/linux/compat/winioctl.h"
+#include "../src/linux/compat/shlwapi.h"
 
 /* ==========================================================================
  * Primitive integer type sizes
@@ -650,6 +651,68 @@ TEST(wide_to_multibyte_null_input_returns_zero)
 }
 
 /* ==========================================================================
+ * CreateDirectoryA / RemoveDirectoryA / DeleteFileA / MoveFileExA
+ * ========================================================================== */
+
+TEST(create_and_remove_directory)
+{
+	const char *dir = "/tmp/rufus_test_dir_compat_layer";
+	/* Remove if it exists from a previous failed run */
+	rmdir(dir);
+
+	BOOL ok = CreateDirectoryA(dir, NULL);
+	CHECK_MSG(ok, "CreateDirectoryA must succeed on valid path");
+	CHECK_MSG(PathFileExistsA(dir), "Directory must exist after CreateDirectoryA");
+
+	BOOL ok2 = RemoveDirectoryA(dir);
+	CHECK_MSG(ok2, "RemoveDirectoryA must succeed on empty directory");
+	CHECK_MSG(!PathFileExistsA(dir), "Directory must not exist after RemoveDirectoryA");
+}
+
+TEST(create_directory_already_exists_returns_false)
+{
+	/* /tmp always exists */
+	BOOL ok = CreateDirectoryA("/tmp", NULL);
+	CHECK_MSG(!ok, "CreateDirectoryA must fail if directory already exists");
+}
+
+TEST(delete_file_a_success)
+{
+	/* Create a temp file then delete it */
+	char tmpf[MAX_PATH] = {0};
+	GetTempFileNameA("/tmp", "ruf", 0, tmpf);
+	CHECK_MSG(tmpf[0] != '\0', "GetTempFileNameA must provide a path");
+
+	BOOL ok = DeleteFileA(tmpf);
+	CHECK_MSG(ok, "DeleteFileA must succeed on existing file");
+	CHECK_MSG(!PathFileExistsA(tmpf), "File must not exist after DeleteFileA");
+}
+
+TEST(delete_file_a_missing_returns_false)
+{
+	BOOL ok = DeleteFileA("/tmp/rufus_nonexistent_file_xyzzy_99.txt");
+	CHECK_MSG(!ok, "DeleteFileA must fail on non-existent file");
+}
+
+TEST(move_file_ex_a_rename)
+{
+	char src[MAX_PATH] = {0};
+	const char *dst = "/tmp/rufus_test_moved_compat.tmp";
+	GetTempFileNameA("/tmp", "ruf", 0, src);
+	CHECK_MSG(src[0] != '\0', "GetTempFileNameA must provide source path");
+
+	/* Remove destination if it exists */
+	unlink(dst);
+
+	BOOL ok = MoveFileExA(src, dst, 0);
+	CHECK_MSG(ok, "MoveFileExA must succeed");
+	CHECK_MSG(!PathFileExistsA(src), "Source must not exist after MoveFileExA");
+	CHECK_MSG(PathFileExistsA(dst), "Destination must exist after MoveFileExA");
+
+	unlink(dst);
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -756,6 +819,12 @@ int main(void)
 	RUN_TEST(wide_to_multibyte_ascii_roundtrip);
 	RUN_TEST(wide_to_multibyte_query_size);
 	RUN_TEST(wide_to_multibyte_null_input_returns_zero);
+
+	RUN_TEST(create_and_remove_directory);
+	RUN_TEST(create_directory_already_exists_returns_false);
+	RUN_TEST(delete_file_a_success);
+	RUN_TEST(delete_file_a_missing_returns_false);
+	RUN_TEST(move_file_ex_a_rename);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
