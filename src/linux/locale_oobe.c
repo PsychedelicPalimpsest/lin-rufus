@@ -150,6 +150,7 @@ static const KbEntry kb_map[] = {
 	{ "pl",   "0415:00000415" },
 	{ "nl",   "0413:00000413" },
 	{ "be",   "080c:0000080c" },
+	{ "ca",   "0c0c:00000c0c" },  /* French (Canada) — XKB 'ca' default is French Canadian */
 	{ "ch",   "0807:00000807" },
 	{ "at",   "0c07:00000c07" },
 	{ "au",   "0c09:00000409" },  /* English (Australia) / US keyboard */

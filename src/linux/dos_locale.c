@@ -54,6 +54,7 @@ typedef struct {
 static const xkb_to_dos_t xkb_dos_table[] = {
     { "al",  "sq",  852 },  /* Albanian */
     { "am",  "hy",  899 },  /* Armenian */
+    { "ara", "ar",  864 },  /* Arabic */
     { "at",  "gr",  850 },  /* Austrian German */
     { "au",  "us",  437 },  /* Australian English */
     { "az",  "az",  850 },  /* Azerbaijani */
@@ -64,6 +65,7 @@ static const xkb_to_dos_t xkb_dos_table[] = {
     { "by",  "bl",  855 },  /* Belarusian */
     { "ca",  "cf",  850 },  /* Canadian French */
     { "ch",  "sg",  850 },  /* Swiss German */
+    { "cn",  "us",  936 },  /* Chinese (Simplified) — no FreeDOS keyboard */
     { "cz",  "cz",  852 },  /* Czech */
     { "de",  "gr",  850 },  /* German */
     { "dk",  "dk",  850 },  /* Danish */
@@ -80,6 +82,7 @@ static const xkb_to_dos_t xkb_dos_table[] = {
     { "hu",  "hu",  852 },  /* Hungarian */
     { "ie",  "uk",  850 },  /* Irish (uses UK/British keyboard) */
     { "il",  "il",  862 },  /* Hebrew */
+    { "in",  "us",  437 },  /* Indian (no FreeDOS keyboard, falls back to US) */
     { "ir",  "ar",  864 },  /* Persian/Farsi */
     { "is",  "is",  850 },  /* Icelandic */
     { "it",  "it",  850 },  /* Italian */
@@ -118,6 +121,7 @@ static const xkb_to_dos_t xkb_dos_table[] = {
     { "tj",  "tj",  850 },  /* Tajik */
     { "tm",  "tm",  850 },  /* Turkmen */
     { "tr",  "tr",  857 },  /* Turkish */
+    { "tw",  "us",  437 },  /* Taiwanese (uses US physical keyboard) */
     { "ua",  "ur",  866 },  /* Ukrainian */
     { "uk",  "uk",  850 },  /* British (alternate key) */
     { "us",  "us",  437 },  /* US English */

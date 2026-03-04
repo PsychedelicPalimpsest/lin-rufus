@@ -561,6 +561,15 @@ TEST(kb_map_la_laos_does_not_map_to_latin_american)
  * previously absent from kb_map.
  * ================================================================ */
 
+TEST(kb_map_canada_ca_maps_to_0c0c)
+{
+	/* Canada (ca): XKB default is French (Canada), maps to 0c0c (Canadian French) */
+	char il[64];
+	get_input_locale_for_xkb("ca", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0c0c") != NULL || strstr(il, "0C0C") != NULL,
+	          "Canada (ca) should map to input locale 0c0c (French Canada)");
+}
+
 TEST(kb_map_austria_at_maps_to_0c07)
 {
 	/* Austria (at) uses Austrian German locale (0c07) with German keyboard (0c07) */
@@ -800,6 +809,7 @@ int main(void)
 	RUN(kb_map_vietnamese_vn_maps_to_042a);
 	RUN(kb_map_austria_at_maps_to_0c07);
 	RUN(kb_map_australia_au_maps_to_0c09);
+	RUN(kb_map_canada_ca_maps_to_0c0c);
 	RUN(kb_map_ireland_ie_maps_to_1809);
 	RUN(kb_map_kyrgyzstan_kg_maps_to_0440);
 	RUN(kb_map_kazakhstan_kz_maps_to_043f);

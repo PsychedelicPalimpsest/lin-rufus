@@ -1030,7 +1030,77 @@ TEST(za_xkb_maps_to_us_keyboard)
 }
 
 /* ================================================================
- * Keyboard driver file selection tests (keybrd2.sys parity)
+ * Additional country layout tests — XKB layouts in locale_oobe.c
+ * kb_map but previously absent from xkb_dos_table.
+ * ================================================================ */
+
+TEST(ara_xkb_maps_to_ar_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Arabic (XKB 'ara') -> DOS 'ar' (Arabic keyboard, keybrd4.sys, CP864) */
+    CHECK_MSG(check_kb_in_fdconfig("ara", "AR") == 1,
+              "Arabic XKB 'ara' -> DOS 'AR'");
+#endif
+}
+
+TEST(cn_xkb_maps_to_us_keyboard_cp936)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* China (XKB 'cn') -> US keyboard + CP936 (FDCONFIG.SYS generated, KEYB US) */
+    CHECK_MSG(check_kb_in_fdconfig("cn", "US") == 1,
+              "China XKB 'cn' -> DOS 'US' with CP936");
+#endif
+}
+
+TEST(in_xkb_maps_to_us_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* India (XKB 'in') -> US/437 keyboard — no FreeDOS Indian keyboard, no FDCONFIG.SYS */
+    dos_locale_set_xkb_layout("in");
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char fdcfg[MAX_PATH];
+    snprintf(fdcfg, sizeof(fdcfg), "%s/FDCONFIG.SYS", target);
+    int fdconfig_exists = (access(fdcfg, F_OK) == 0);
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    CHECK_MSG(!fdconfig_exists,
+              "India XKB 'in' -> US/437, no FDCONFIG.SYS (same as US locale)");
+#endif
+}
+
+TEST(tw_xkb_maps_to_us_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Taiwan (XKB 'tw') -> US/437 keyboard — uses US physical keyboard, no FDCONFIG.SYS */
+    dos_locale_set_xkb_layout("tw");
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char fdcfg[MAX_PATH];
+    snprintf(fdcfg, sizeof(fdcfg), "%s/FDCONFIG.SYS", target);
+    int fdconfig_exists = (access(fdcfg, F_OK) == 0);
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    CHECK_MSG(!fdconfig_exists,
+              "Taiwan XKB 'tw' -> US/437, no FDCONFIG.SYS (same as US locale)");
+#endif
+}
+
+/* ================================================================
  * Windows SetDOSLocale selects keyboard.sys vs keybrd2.sys based on
  * which fd_kb* list the keyboard code appears in.  The Linux port
  * must do the same.
@@ -1702,6 +1772,10 @@ int main(void)
     RUN(me_xkb_maps_to_yu_keyboard);
     RUN(nz_xkb_maps_to_us_keyboard);
     RUN(za_xkb_maps_to_us_keyboard);
+    RUN(ara_xkb_maps_to_ar_keyboard);
+    RUN(cn_xkb_maps_to_us_keyboard_cp936);
+    RUN(in_xkb_maps_to_us_keyboard);
+    RUN(tw_xkb_maps_to_us_keyboard);
     RUN(vconsole_keymap_de_maps_to_gr);
     RUN(vconsole_keymap_with_variant_strips_suffix);
     RUN(etc_default_keyboard_takes_priority_over_vconsole);
