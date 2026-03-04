@@ -30,6 +30,9 @@ install-data-hook:
 		"$(DESTDIR)$(datadir)/icons/hicolor/256x256/apps/ie.akeo.rufus.png"
 	@gtk-update-icon-cache -f -t "$(DESTDIR)$(datadir)/icons/hicolor" 2>/dev/null ||:
 	@update-desktop-database "$(DESTDIR)$(datadir)/applications" 2>/dev/null ||:
+	$(MKDIR_P) "$(DESTDIR)$(datadir)/polkit-1/actions"
+	$(INSTALL_DATA) "$(srcdir)/res/ie.akeo.rufus.policy" \
+		"$(DESTDIR)$(datadir)/polkit-1/actions/ie.akeo.rufus.policy"
 
 endif # TARGET_LINUX
 

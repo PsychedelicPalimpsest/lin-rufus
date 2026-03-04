@@ -7,6 +7,11 @@ License:        GPL-3.0-or-later
 URL:            https://github.com/pbatard/rufus
 Source0:        https://github.com/pbatard/rufus/archive/v%{version}/%{name}-%{version}.tar.gz
 
+# The bundled sub-libraries (wimlib, libcdio, bled, …) are not compiled with
+# -fPIE, so the RPM hardened-build spec (which enforces full PIE at link time)
+# must be disabled until those libraries have been audited for PIE compliance.
+%undefine _hardened_build
+
 BuildRequires:  autoconf
 BuildRequires:  automake
 BuildRequires:  libtool
@@ -18,7 +23,6 @@ BuildRequires:  gtk3-devel
 BuildRequires:  libcurl-devel
 BuildRequires:  systemd-devel
 BuildRequires:  libblkid-devel
-BuildRequires:  util-linux-devel
 BuildRequires:  openssl-devel
 BuildRequires:  fontconfig-devel
 BuildRequires:  libnotify-devel
@@ -88,6 +92,16 @@ cp -r res/* %{buildroot}%{_datadir}/rufus/
 %{_datadir}/icons/hicolor/48x48/apps/ie.akeo.rufus.png
 %{_datadir}/icons/hicolor/256x256/apps/ie.akeo.rufus.png
 %{_datadir}/rufus/
+# gtk-update-icon-cache (called from install-data-hook) may regenerate the
+# shared icon-theme.cache; exclude it since it is owned by hicolor-icon-theme.
+%exclude %{_datadir}/icons/hicolor/icon-theme.cache
+
+%post
+# Refresh the icon cache so the new icons become visible immediately.
+/usr/bin/gtk-update-icon-cache -f -t %{_datadir}/icons/hicolor &>/dev/null || :
+
+%postun
+/usr/bin/gtk-update-icon-cache -f -t %{_datadir}/icons/hicolor &>/dev/null || :
 
 %changelog
 * Wed Jan 01 2025 PsychedelicPalimpsest - 4.13.0-1

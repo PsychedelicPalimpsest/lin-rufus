@@ -689,6 +689,9 @@ uninstall-man: uninstall-man1
 @TARGET_LINUX_TRUE@		"$(DESTDIR)$(datadir)/icons/hicolor/256x256/apps/ie.akeo.rufus.png"
 @TARGET_LINUX_TRUE@	@gtk-update-icon-cache -f -t "$(DESTDIR)$(datadir)/icons/hicolor" 2>/dev/null ||:
 @TARGET_LINUX_TRUE@	@update-desktop-database "$(DESTDIR)$(datadir)/applications" 2>/dev/null ||:
+@TARGET_LINUX_TRUE@	$(MKDIR_P) "$(DESTDIR)$(datadir)/polkit-1/actions"
+@TARGET_LINUX_TRUE@	$(INSTALL_DATA) "$(srcdir)/res/ie.akeo.rufus.policy" \
+@TARGET_LINUX_TRUE@		"$(DESTDIR)$(datadir)/polkit-1/actions/ie.akeo.rufus.policy"
 
 # Static analysis target — runs cppcheck over Linux and common source
 check-cppcheck:

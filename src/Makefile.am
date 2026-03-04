@@ -15,7 +15,11 @@ NONVULNERABLE_LIBS =
 VULNERABLE_LIBS =
 endif
 
+if TARGET_LINUX
+bin_PROGRAMS = rufus
+else
 noinst_PROGRAMS = rufus
+endif
 
 if TARGET_WINDOWS
 AM_V_WINDRES_0 = @echo "  RC     $@";$(WINDRES)

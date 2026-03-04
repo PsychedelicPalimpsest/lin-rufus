@@ -15,6 +15,10 @@
 #   --full-container   Run the complete test suite (linux + ASAN + cppcheck + root)
 #                      inside a privileged Docker/Podman container.  Requires all
 #                      deps from tests/install-deps.sh to be baked into the image.
+#   --packaging-e2e    Build DEB and RPM packages inside containers, install them
+#                      in fresh containers, and verify the binary runs.
+#                      Requires docker or podman.  Passes extra flags through to
+#                      tests/test_packaging_e2e.sh (e.g. --deb-only, --rpm-only).
 #   --help             Show this message
 #
 # Toolchain overrides (environment variables):
@@ -37,6 +41,8 @@ RUN_WINE=1
 RUN_ROOT=0
 RUN_CONTAINER=0
 RUN_FULL_CONTAINER=0
+RUN_PACKAGING_E2E=0
+PACKAGING_E2E_ARGS=()
 
 for arg in "$@"; do
   case "$arg" in
@@ -46,6 +52,8 @@ for arg in "$@"; do
     --root-only)        RUN_LINUX=0; RUN_WINE=0; RUN_ROOT=1 ;;
     --container)        RUN_LINUX=0; RUN_WINE=0; RUN_ROOT=0; RUN_CONTAINER=1 ;;
     --full-container)   RUN_LINUX=0; RUN_WINE=0; RUN_ROOT=0; RUN_FULL_CONTAINER=1 ;;
+    --packaging-e2e)    RUN_LINUX=0; RUN_WINE=0; RUN_ROOT=0; RUN_PACKAGING_E2E=1 ;;
+    --deb-only|--rpm-only) PACKAGING_E2E_ARGS+=("$arg") ;;
     --help)
       sed -n '2,/^$/p' "$0"
       exit 0
@@ -206,6 +214,17 @@ if [ "${RUN_FULL_CONTAINER}" -eq 1 ]; then
 
       echo '--- All tests complete ---'
     "
+fi
+
+# ---------------------------------------------------------------------------
+# --packaging-e2e: build DEB and RPM packages inside containers, install
+# them in fresh containers, and verify the installed binary runs.
+# Delegates to tests/test_packaging_e2e.sh.
+# ---------------------------------------------------------------------------
+if [ "${RUN_PACKAGING_E2E}" -eq 1 ]; then
+  [ -x "${SCRIPT_DIR}/tests/test_packaging_e2e.sh" ] || \
+    die "tests/test_packaging_e2e.sh not found or not executable"
+  exec "${SCRIPT_DIR}/tests/test_packaging_e2e.sh" "${PACKAGING_E2E_ARGS[@]+"${PACKAGING_E2E_ARGS[@]}"}"
 fi
 
 MAKE_ARGS=(-C "${TESTS_DIR}" -j"${JOBS}" CC="${CC}" CC_WIN="${CC_WIN}")
