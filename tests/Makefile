@@ -1654,11 +1654,36 @@ fuzz_pe: fuzz_pe.c $(FUZZ_COMMON_SRC)
 	    $(FUZZ_LIBS) -o fuzz_pe
 
 fuzz-iso: fuzz_iso
-fuzz_iso: fuzz_iso.c $(FUZZ_COMMON_SRC)
-	$(CLANG) $(FUZZ_FLAGS) \
-	    fuzz_iso.c $(FUZZ_COMMON_SRC) \
-	    $(FUZZ_LIBS) -o fuzz_iso
+# fuzz_iso sources: iso.c + its dependencies + stubs for the rest of the binary.
+# Uses system libcdio (-liso9660 -ludf -lcdio) rather than the bundled copies
+# so that we do not need to rebuild the bundled C libraries with clang.
+FUZZ_ISO_SRC = $(SRC_DIR)/linux/iso.c \
+               $(SRC_DIR)/linux/stdfn.c \
+               $(SRC_DIR)/linux/stdio.c \
+               $(SRC_DIR)/linux/localization.c \
+               $(SRC_DIR)/linux/parser.c \
+               $(COMMON)/parser.c \
+               $(COMMON)/localization.c \
+               $(COMMON)/iso_scan.c \
+               $(COMMON)/iso_config.c \
+               $(COMMON)/cregex_compile.c \
+               $(COMMON)/cregex_parse.c \
+               $(COMMON)/cregex_vm.c \
+               fuzz_iso_glue.c
+FUZZ_ISO_FLAGS = $(FUZZ_FLAGS) \
+               -I$(SRC_DIR)/libcdio \
+               -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
+               -I$(SRC_DIR)/wimlib \
+               -Wno-implicit-function-declaration -Wno-unused-function \
+               -Wno-sign-compare -Wno-unused-parameter \
+               -Wno-missing-field-initializers
+FUZZ_ISO_LIBS = -L/usr/lib/gcc/x86_64-linux-gnu/13 \
+               -liso9660 -ludf -lcdio -lfontconfig -lm -lpthread -lz
+fuzz_iso: fuzz_iso.c $(FUZZ_ISO_SRC)
+	$(CLANG) $(FUZZ_ISO_FLAGS) \
+	    fuzz_iso.c $(FUZZ_ISO_SRC) \
+	    $(FUZZ_ISO_LIBS) -o fuzz_iso
 
 clean:
-	rm -f $(LINUX_BINS) $(WIN_BINS) $(ASAN_BINS)
+	rm -f $(LINUX_BINS) $(WIN_BINS) $(ASAN_BINS) fuzz_parser fuzz_pe fuzz_iso
 

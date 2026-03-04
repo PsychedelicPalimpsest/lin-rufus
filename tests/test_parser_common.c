@@ -353,6 +353,55 @@ TEST(GetSbatEntries_extra_fields_ignored)
 	free(entries);
 }
 
+/* Regression test: CR-only line endings must not under-allocate the entry
+ * array.  Before the fix, the counting pass only counted '\n' characters;
+ * '\r' was converted to '\n' afterwards, leaving num_entries too small and
+ * causing a heap-buffer-overflow on the second pass. */
+TEST(GetSbatEntries_cr_line_endings)
+{
+	/* Three entries separated by bare \r (not \n) */
+	char sbat[] = "shim,1\rgrub,3\rlinux,2\r";
+	sbat_entry_t *entries = GetSbatEntries(sbat);
+	CHECK(entries != NULL);
+	if (entries) {
+		CHECK(entries[0].version == 1);
+		CHECK(entries[1].version == 3);
+		CHECK(entries[2].version == 2);
+		free(entries);
+	}
+}
+
+/* Regression test: CRLF line endings must not under-allocate the entry
+ * array.  CRLF becomes \n\n after conversion, so the first \r is counted
+ * when it is converted; the subsequent \n is counted independently.  This
+ * leads to over-allocation (safe) rather than under-allocation (crash). */
+TEST(GetSbatEntries_crlf_line_endings)
+{
+	/* Two entries with Windows-style CRLF */
+	char sbat[] = "shim,1\r\ngrub,3\r\n";
+	sbat_entry_t *entries = GetSbatEntries(sbat);
+	CHECK(entries != NULL);
+	if (entries) {
+		CHECK(entries[0].version == 1);
+		CHECK(entries[1].version == 3);
+		free(entries);
+	}
+}
+
+/* Regression test: fuzz crash input that triggered the heap-buffer-overflow.
+ * Input consists entirely of CR line endings; before the fix, only 1 entry
+ * slot was allocated while the second pass wrote 3+ entries. */
+TEST(GetSbatEntries_fuzz_crash_cr_only)
+{
+	/* Derived from fuzzer crash: ,5x<byte>,<byte>,4x*\r\r\r<bytes>,0x%K\r<byte>,0 */
+	char sbat[] = ",5x\r,4x\r\r\r,0x2\r,0";
+	/* Must not crash or trigger ASAN */
+	sbat_entry_t *entries = GetSbatEntries(sbat);
+	if (entries)
+		free(entries);
+	CHECK(1);  /* reached here without crash = pass */
+}
+
 /* ======================================================================
  * GetThumbprintEntries
  * ====================================================================== */
@@ -857,6 +906,9 @@ int main(void)
 	RUN(GetSbatEntries_null_input);
 	RUN(GetSbatEntries_hex_version);
 	RUN(GetSbatEntries_extra_fields_ignored);
+	RUN(GetSbatEntries_cr_line_endings);
+	RUN(GetSbatEntries_crlf_line_endings);
+	RUN(GetSbatEntries_fuzz_crash_cr_only);
 
 	printf("\n--- GetThumbprintEntries ---\n");
 	RUN(GetThumbprintEntries_basic);

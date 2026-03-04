@@ -716,3 +716,71 @@ code path now has regression coverage via `cli_image_scan_populates_img_report`.
    `ImageScanThread` synchronously before `FormatThread` when `--image` is used
    without `--write-as-image`. Regression test in `test_e2e_linux.c`.
    `ImageScanThread` stub in `e2e_linux_glue.c` for the E2E test build.
+
+---
+
+## Session 10 ($(date +%Y-%m-%d))
+
+### Summary
+
+Fuzz testing found a **CRITICAL heap-buffer-overflow** in `GetSbatEntries` (parser.c).
+Fixed, regression-tested, and added to corpus. Also fixed the broken `fuzz_iso` build.
+
+### Bug Found and Fixed
+
+**`GetSbatEntries` heap-buffer-overflow** (`src/common/parser.c:841-846`)
+
+- **Type**: heap-buffer-overflow (WRITE of size 8, 0 bytes past end of `calloc` allocation)
+- **Trigger**: SBAT data using CR-only (`\r`) or CRLF (`\r\n`) line endings
+- **Root cause**: First counting pass only counted original `\n` characters, but
+  also converted `\r`→`\n` in-place. Second (allocation) pass then encountered more
+  `\n` characters than were allocated for, writing past the end of the array.
+- **Fix**: Swap the order — perform `\r`→`\n` conversion *before* the newline count
+  increment, so the first pass sees the same newlines as the second pass.
+- **Discovered by**: `fuzz_parser` (30-second run, new crash `crash-598321...`)
+- **Regression tests**: `GetSbatEntries_cr_line_endings`, `GetSbatEntries_crlf_line_endings`,
+  `GetSbatEntries_fuzz_crash_cr_only` added to `tests/test_parser_common.c`
+- **Corpus**: crash added to `tests/corpus/parser/`
+
+### Infrastructure Fix: fuzz_iso
+
+`fuzz_iso` was unbuildable (Makefile pointed at non-existent source files).
+
+Fixed:
+- `tests/fuzz_iso_glue.c` created — provides stubs for globals and functions not
+  available in the subset of sources compiled for fuzzing (bled, WIM, progress, VHD, etc.)
+- `tests/Makefile` `fuzz_iso` target rewritten with `FUZZ_ISO_SRC` / `FUZZ_ISO_FLAGS` /
+  `FUZZ_ISO_LIBS` variables; uses system libcdio (`-liso9660 -ludf -lcdio`) so no
+  need to rebuild the bundled libcdio with clang sanitizers
+- `fuzz_iso.c` build comment updated to say `make -C tests fuzz-iso`
+- 25-second initial fuzz run: no crashes found (39 code coverage points reached)
+- `corpus/iso/` directory created
+
+### GitHub Actions (`act`)
+
+Started `act -W .github/workflows/linux.yml -j Linux-Build-and-Test` — still running
+(12+ min) at time of writing; result pending.
+
+### Test Results (session 10)
+
+| Test | Result |
+|------|--------|
+| `./run_tests.sh --linux-only` | ✅ 94 passed, 0 failed |
+| `fuzz_parser` (30 s) | ✅ Found & fixed crash-598321; follow-up 20 s: no new crashes |
+| `fuzz_pe` (60 s baseline) | ✅ No crashes |
+| `fuzz_iso` (25 s — first ever run) | ✅ No crashes |
+| All old crash files in corpus | ✅ No longer reproduce |
+
+### Tips for Next QA Session
+
+1. **Read this file first**, especially the parser.c fix notes.
+2. **All three fuzz targets now build**: `fuzz_parser`, `fuzz_pe`, `fuzz_iso`.
+   Run them with `make -C tests fuzz-parser / fuzz-pe / fuzz-iso`.
+3. **CRLF inputs for SBAT** now handled correctly — regression tests in
+   `test_parser_common.c`.
+4. **fuzz_iso corpus** at `tests/corpus/iso/` — run longer campaigns; coverage
+   is currently low (only 39 points in 25 s) because random bytes rarely form
+   a valid ISO9660 sector layout. Seed the corpus with a real minimal ISO.
+5. **`act` run** was in progress — verify GitHub Actions pass on CI before merge.
+6. **`--container`** loopback tests still not run this session; requires sudo/loop
+   devices.

@@ -839,10 +839,14 @@ sbat_entry_t* GetSbatEntries(char* sbatlevel)
 
 	num_entries = 1;
 	for (i = 0; sbatlevel[i] != '\0'; i++) {
-		if (sbatlevel[i] == '\n')
-			num_entries++;
+		/* Convert CR before counting so that CR-only and CRLF line endings
+		 * are included in the entry count.  Without this, a buffer with only
+		 * \r line endings would allocate too few entries and the second pass
+		 * would write past the end of the allocation. */
 		if (sbatlevel[i] == '\r')
 			sbatlevel[i] = '\n';
+		if (sbatlevel[i] == '\n')
+			num_entries++;
 	}
 
 	sbat_list = calloc(num_entries + 1, sizeof(sbat_entry_t));

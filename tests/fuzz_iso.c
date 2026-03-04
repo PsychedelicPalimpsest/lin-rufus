@@ -7,13 +7,10 @@
  *   - ExtractISO()           — full extraction + scan of an ISO image
  *
  * Build:
- *   clang -fsanitize=fuzzer,address -g \
- *     -I../src/linux/compat -I../src/windows -I../src/linux \
- *     -I../src -I../src/common \
- *     fuzz_iso.c ../src/linux/iso.c ../src/linux/stdfn.c \
- *     ../src/linux/stdio.c ../src/common/iso_scan.c \
- *     fuzz_iso_glue.c \
- *     -o fuzz_iso -lcurl
+ *   make -C tests fuzz-iso
+ *
+ *   (see Makefile FUZZ_ISO_* variables for the full clang invocation;
+ *    requires system libcdio, libiso9660, libudf)
  *
  * Run:
  *   mkdir -p corpus/iso && ./fuzz_iso corpus/iso/ -max_total_time=60
