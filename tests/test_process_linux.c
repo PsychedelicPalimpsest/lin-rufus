@@ -274,6 +274,7 @@ TEST(stop_process_search_clears_blocking_list)
     StopProcessSearch();
     CHECK_MSG(BlockingProcessList.Index == 0,
               "After StopProcessSearch: BlockingProcessList must be cleared");
+    StrArrayDestroy(&BlockingProcessList);
 }
 
 TEST(get_process_search_clears_blocking_list_before_scan)
@@ -292,6 +293,7 @@ TEST(get_process_search_clears_blocking_list_before_scan)
 
     CHECK_MSG(BlockingProcessList.Index == 0,
               "BlockingProcessList should be cleared at start of GetProcessSearch");
+    StrArrayDestroy(&BlockingProcessList);
 }
 
 TEST(blocking_list_empty_when_no_matching_device)
@@ -304,6 +306,7 @@ TEST(blocking_list_empty_when_no_matching_device)
     StopProcessSearch();
     CHECK_MSG(BlockingProcessList.Index == 0,
               "No matching device → BlockingProcessList should be empty");
+    StrArrayDestroy(&BlockingProcessList);
 }
 
 /* ================================================================== */

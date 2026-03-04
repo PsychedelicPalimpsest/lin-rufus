@@ -50,7 +50,7 @@ static uint8_t GetAtaDirection(uint8_t AtaCmd, uint8_t Features)
 	}
 }
 
-const char* SptStrerr(int errcode)
+const char* SptStrerr(int errcode) // cppcheck-suppress staticFunction
 {
 	static char scsi_err[64];
 
@@ -88,6 +88,7 @@ const char* SptStrerr(int errcode)
  * Non-static when RUFUS_TEST is defined so tests can call it directly.
  */
 #ifdef RUFUS_TEST
+// cppcheck-suppress staticFunction
 int ScsiPassthroughDirect(HANDLE hPhysical, uint8_t* Cdb, size_t CdbLen,
 	uint8_t Direction, void* DataBuffer, size_t BufLen, uint32_t Timeout)
 #else

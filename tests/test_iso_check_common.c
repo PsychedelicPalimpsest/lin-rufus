@@ -115,16 +115,12 @@ RUFUS_IMG_REPORT img_report;
 uint64_t total_blocks = 0;
 BOOL has_ldlinux_c32 = FALSE;
 
-/* ------------------------------------------------------------------ */
-/* Windows-only stubs (for the #ifdef _WIN32 block in iso_check.c)    */
-/* ------------------------------------------------------------------ */
+/* Stubs needed by iso_check.c for WIM-splitting code (both Windows and Linux) */
 
-#ifdef _WIN32
 int fs_type = 0;
 char *image_path = NULL;
 #define print_split_file(p, l) ((void)0)
 BOOL WimSplitFile(const char* src, const char* dst) { (void)src; (void)dst; return FALSE; }
-#endif
 
 /* ------------------------------------------------------------------ */
 /* Pull in the common implementation                                    */

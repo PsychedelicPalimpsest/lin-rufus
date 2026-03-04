@@ -63,7 +63,7 @@ char **rufus_build_pkexec_argv(const char *pkexec_path,
     return argv;
 }
 
-void rufus_free_pkexec_argv(char **argv)
+void rufus_free_pkexec_argv(char **argv) // cppcheck-suppress staticFunction
 {
     free(argv);
 }

@@ -622,6 +622,7 @@ static int
 open_iso_wim_file(const tchar* filename, struct filedes* fd_ret)
 {
 	int ret = 0;
+	int use_udf = 0, use_iso = 0;
 	size_t n;
 	char *iso_filename, *iso_path = NULL;
 	udf_dirent_t *p_udf_root;
@@ -642,6 +643,7 @@ open_iso_wim_file(const tchar* filename, struct filedes* fd_ret)
 	fd_ret->p_udf = udf_open(iso_path);
 	if (!fd_ret->p_udf)
 		goto try_iso;
+	use_udf = 1;
 	p_udf_root = udf_get_root(fd_ret->p_udf, true, 0);
 	if (!p_udf_root) {
 		ret = WIMLIB_ERR_OPEN;
@@ -663,6 +665,7 @@ try_iso:
 		ret = WIMLIB_ERR_OPEN;
 		goto out;
 	}
+	use_iso = 1;
 	fd_ret->p_iso_file = iso9660_ifs_stat_translate(fd_ret->p_iso, iso_filename);
 	if (!fd_ret->p_iso_file) {
 		ret = WIMLIB_ERR_OPEN;
@@ -672,9 +675,19 @@ try_iso:
 
 out:
 	FREE(iso_path);
-	/* Because we use an union, make sure fd is cleared on error */
-	if (ret)
+	/* Because we use a union, close any open handle on error before clearing */
+	if (ret) {
+		if (use_iso) {
+			if (fd_ret->p_iso_file)
+				iso9660_stat_free(fd_ret->p_iso_file);
+			iso9660_close(fd_ret->p_iso);
+		} else if (use_udf) {
+			if (fd_ret->p_udf_file)
+				udf_dirent_free(fd_ret->p_udf_file);
+			udf_close(fd_ret->p_udf);
+		}
 		filedes_invalidate(fd_ret);
+	}
 	return ret;
 }
 #endif

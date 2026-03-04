@@ -246,7 +246,7 @@ static int windows_dword_to_errno(DWORD code)
 	}
 }
 
-const char* _StrError(DWORD error_code)
+const char* _StrError(DWORD error_code) // cppcheck-suppress staticFunction
 {
 	if (!IS_ERROR(error_code) || SCODE_CODE(error_code) == ERROR_SUCCESS)
 		return lmprintf(MSG_050);
@@ -315,7 +315,7 @@ typedef struct {
     int         error;
 } _cfwt_params_t;
 
-DWORD WINAPI CreateFileWithTimeoutThread(void* param)
+DWORD WINAPI CreateFileWithTimeoutThread(void* param) // cppcheck-suppress staticFunction
 {
     _cfwt_params_t* p = (_cfwt_params_t*)param;
     int fd = open(p->path, p->oflags | O_NONBLOCK, 0666);

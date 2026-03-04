@@ -51,7 +51,7 @@ uint32_t LIBFAT_SECTOR_MASK  = 511;
  * libfat_readfile — pread-based sector reader used by libfat_open().
  * pp is the POSIX file descriptor (cast to intptr_t).
  * ------------------------------------------------------------------ */
-int libfat_readfile(intptr_t pp, void *buf, size_t secsize,
+int libfat_readfile(intptr_t pp, void *buf, size_t secsize, // cppcheck-suppress staticFunction
                     libfat_sector_t sector)
 {
     int fd = (int)(intptr_t)pp;

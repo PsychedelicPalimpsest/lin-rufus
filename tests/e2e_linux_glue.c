@@ -162,3 +162,16 @@ const char *md5sum_name[2] = { "md5sum.txt", "md5sum.txt~rufus" };
 /* GetDevices stub — dev.c is not in E2E_LINUX_SRC but cli.c calls it for
  * --list-devices.  rufus_drive[] comes from globals.c already. */
 BOOL GetDevices(DWORD devnum) { (void)devnum; return FALSE; }
+
+/* Localization stubs — cli.c calls these for --locale; the e2e tests
+ * exercise FormatThread, not locale selection, so no-op stubs suffice.
+ * find_loc_file() is defined in src/linux/rufus.c which is not linked here.
+ * _init_localization(), get_locale_from_name() are in src/common/localization.c.
+ * get_supported_locales(), get_loc_data_file() are in src/common/parser.c. */
+const char *find_loc_file(void) { return NULL; }
+void _init_localization(BOOL reinit) { (void)reinit; }
+BOOL get_supported_locales(const char *filename) { (void)filename; return FALSE; }
+loc_cmd *get_locale_from_name(char *locale_name, BOOL fallback)
+    { (void)locale_name; (void)fallback; return NULL; }
+BOOL get_loc_data_file(const char *filename, loc_cmd *lcmd)
+    { (void)filename; (void)lcmd; return FALSE; }

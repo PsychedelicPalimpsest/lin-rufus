@@ -36,3 +36,7 @@ nullPointerRedundantCheck:src/windows/rufus.h
 
 // False positive: nullPointerOutOfMemory in third-party ezxml code
 nullPointerOutOfMemory:src/common/xml.c
+
+// False positive: ext2fs third-party header uses EXT2FS_PACKED defined by
+// compiler-specific headers that cppcheck does not process.
+preprocessorErrorDirective:src/ext2fs/ext2_fs.h

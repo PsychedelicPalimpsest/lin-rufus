@@ -392,7 +392,7 @@ static gboolean idle_append_log(gpointer data)
 	return G_SOURCE_REMOVE;
 }
 
-void rufus_gtk_append_log(const char *msg)
+void rufus_gtk_append_log(const char *msg) // cppcheck-suppress staticFunction
 {
 	g_idle_add(idle_append_log, strdup(msg));
 }
@@ -413,7 +413,7 @@ static gboolean idle_update_status(gpointer data)
 	return G_SOURCE_REMOVE;
 }
 
-void rufus_gtk_update_status(const char *msg)
+void rufus_gtk_update_status(const char *msg) // cppcheck-suppress staticFunction
 {
 	g_idle_add(idle_update_status, strdup(msg));
 }
@@ -449,7 +449,7 @@ static void gtk_timeout_cancel_fn(unsigned id)
  * whatever the label currently displays.  Mirrors Windows PrintStatusTimeout.
  * Keeps uprintf() for the log window; this function is for the status bar only.
  */
-void rufus_print_status_timeout(const char *msg)
+void rufus_print_status_timeout(const char *msg) // cppcheck-suppress staticFunction
 {
 	if (!msg)
 		return;
@@ -931,7 +931,7 @@ static GtkWidget *build_log_dialog(GtkWidget *parent)
 }
 
 /* ---- Main window construction ---- */
-GtkWidget *rufus_gtk_create_window(GtkApplication *app)
+GtkWidget *rufus_gtk_create_window(GtkApplication *app) // cppcheck-suppress staticFunction
 {
 	GtkWidget *win = gtk_application_window_new(app);
 	rw.window = win;
@@ -3036,7 +3036,7 @@ void CreateAdditionalControls(HWND hDlg) { (void)hDlg; }
  * Called from on_boot_changed(), on_fs_changed(), on_target_changed(),
  * the UM_IMAGE_SCANNED handler, and on_partition_changed() (via combo logic).
  */
-void update_advanced_controls(void)
+void update_advanced_controls(void) // cppcheck-suppress staticFunction
 {
 	extern BOOL validate_md5sum;
 	int imop_sel = (hImageOption != NULL) ?

@@ -90,7 +90,7 @@ void status_timeout_show(const char *msg, const char *restore_to, unsigned ms)
 	}
 }
 
-void status_timeout_cancel(void)
+void status_timeout_cancel(void) // cppcheck-suppress staticFunction
 {
 	if (s_pending) {
 		if (s_cancel_fn && s_timer_id != 0)

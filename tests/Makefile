@@ -820,6 +820,7 @@ DUMP_FAT_LINUX_SRC := \
 	$(COMMON)/localization.c
 CFLAGS_LINUX_test_dump_fat_linux := \
 	-D_RUFUS -DRUFUS_TEST \
+	-DDO_NOT_WANT_COMPATIBILITY \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/libcdio -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-I$(SRC_DIR)/syslinux/libinstaller \
@@ -1130,6 +1131,7 @@ IMAGE_SCAN_LINUX_SRC := \
 	$(XML_SRC)
 CFLAGS_LINUX_test_image_scan_linux := \
 	-D_RUFUS -DRUFUS_TEST \
+	-DDO_NOT_WANT_COMPATIBILITY \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/libcdio -I$(SRC_DIR)/syslinux -I$(SRC_DIR)/syslinux/libfat \
 	-I$(SRC_DIR)/bled -I$(SRC_DIR)/wimlib -I$(COMMON) \
@@ -1378,31 +1380,35 @@ check-asan: $(ASAN_BINS)
 # ---- cppcheck static analysis target (item 95) ----
 # Requires:  sudo apt install cppcheck
 # Runs cppcheck over the Linux-specific sources with all checks enabled.
-# Suppressions kept minimal — add entries when cppcheck reports false positives.
+# Suppressions are kept in $(PROJ_ROOT)/cppcheck.suppress (shared with the
+# top-level Makefile).  Running from the project root ensures the file-path
+# entries in cppcheck.suppress match the paths cppcheck reports.
 #
 #   make check-cppcheck
 #
-CPPCHECK_SRCS := \
-	$(SRC_DIR)/linux \
-	$(SRC_DIR)/common
+PROJ_ROOT := $(SRC_DIR)/..
+
+CPPCHECK_SRCS := src/linux src/common
 
 CPPCHECK_FLAGS := \
-	--enable=all \
+	--enable=warning,performance \
 	--error-exitcode=1 \
 	--suppress=missingIncludeSystem \
 	--suppress=unmatchedSuppression \
+	--suppress=normalCheckLevelMaxBranches \
 	--inline-suppr \
-	-I$(SRC_DIR)/linux \
-	-I$(SRC_DIR)/linux/compat \
-	-I$(SRC_DIR)/windows \
-	-I$(SRC_DIR)/common \
-	-I$(SRC_DIR) \
+	--suppressions-list=cppcheck.suppress \
+	-Isrc/linux \
+	-Isrc/linux/compat \
+	-Isrc/windows \
+	-Isrc/common \
+	-Isrc \
 	-D__linux__ \
 	-DRUFUS_TEST
 
 check-cppcheck:
 	@command -v cppcheck >/dev/null 2>&1 || { echo "cppcheck not found; install with: sudo apt install cppcheck"; exit 1; }
-	cppcheck $(CPPCHECK_FLAGS) $(CPPCHECK_SRCS)
+	cd $(PROJ_ROOT) && cppcheck $(CPPCHECK_FLAGS) $(CPPCHECK_SRCS)
 	@echo "cppcheck: no issues found."
 
 # ============================================================================

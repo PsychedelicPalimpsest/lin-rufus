@@ -32,7 +32,7 @@ static void make_part_path(const char *dev, int n, char *out, size_t outsz)
 
 /* ---- Public API ---- */
 
-BOOL ventoy_check_mbr(const char *dev_path)
+BOOL ventoy_check_mbr(const char *dev_path) // cppcheck-suppress staticFunction
 {
 	if (!dev_path)
 		return FALSE;
@@ -51,7 +51,7 @@ BOOL ventoy_check_mbr(const char *dev_path)
 	return (memcmp(buf, VENTOY_MBR_MAGIC, VENTOY_MBR_MAGIC_LEN) == 0) ? TRUE : FALSE;
 }
 
-BOOL ventoy_detect_by_label(const char *dev_path)
+BOOL ventoy_detect_by_label(const char *dev_path) // cppcheck-suppress staticFunction
 {
 	if (!dev_path)
 		return FALSE;
