@@ -748,6 +748,63 @@ TEST(fileio_append_adds_content)
     unlink(path);
 }
 
+/* ===========================================================================
+ * GetWindowsVersion / isSMode
+ * ========================================================================= */
+
+extern void GetWindowsVersion(windows_version_t *wv);
+extern BOOL isSMode(void);
+
+TEST(get_windows_version_zeroes_struct)
+{
+    windows_version_t wv;
+    /* Fill with garbage to verify the call zeroes it */
+    memset(&wv, 0xFF, sizeof(wv));
+    GetWindowsVersion(&wv);
+    CHECK_MSG(wv.Version == 0, "GetWindowsVersion must zero Version on Linux");
+    CHECK_MSG(wv.Major == 0,   "GetWindowsVersion must zero Major on Linux");
+    CHECK_MSG(wv.Minor == 0,   "GetWindowsVersion must zero Minor on Linux");
+}
+
+TEST(get_windows_version_null_safe)
+{
+    /* Must not crash when called with NULL */
+    GetWindowsVersion(NULL);
+}
+
+TEST(is_smode_returns_false)
+{
+    CHECK_MSG(isSMode() == FALSE, "isSMode must return FALSE on Linux");
+}
+
+/* ===========================================================================
+ * SetLGP / SetPrivilege / TakeOwnership stubs (all return FALSE on Linux)
+ * ========================================================================= */
+
+extern BOOL SetLGP(BOOL bRestore, BOOL *bExistingKey, const char *szPath,
+                   const char *szPolicy, DWORD dwValue);
+extern BOOL SetPrivilege(HANDLE hToken, LPCWSTR priv, BOOL enable);
+extern BOOL TakeOwnership(LPCSTR lpszOwnFile);
+
+TEST(set_lgp_returns_false)
+{
+    BOOL enabled = FALSE;
+    BOOL r = SetLGP(FALSE, &enabled, "TestPath", "TestPolicy", 0);
+    CHECK_MSG(r == FALSE, "SetLGP must return FALSE on Linux (stub)");
+}
+
+TEST(set_privilege_returns_false)
+{
+    BOOL r = SetPrivilege(NULL, NULL, FALSE);
+    CHECK_MSG(r == FALSE, "SetPrivilege must return FALSE on Linux (stub)");
+}
+
+TEST(take_ownership_returns_false)
+{
+    BOOL r = TakeOwnership("/tmp");
+    CHECK_MSG(r == FALSE, "TakeOwnership must return FALSE on Linux (stub)");
+}
+
 int main(void)
 {
     printf("=== htab_create ===\n");
@@ -834,6 +891,16 @@ int main(void)
     RUN(fileio_null_size_returns_false);
     RUN(fileio_read_missing_file_returns_false);
     RUN(fileio_append_adds_content);
+
+    printf("\n=== GetWindowsVersion / isSMode ===\n");
+    RUN(get_windows_version_zeroes_struct);
+    RUN(get_windows_version_null_safe);
+    RUN(is_smode_returns_false);
+
+    printf("\n=== SetLGP / SetPrivilege / TakeOwnership stubs ===\n");
+    RUN(set_lgp_returns_false);
+    RUN(set_privilege_returns_false);
+    RUN(take_ownership_returns_false);
 
     TEST_RESULTS();
 }
