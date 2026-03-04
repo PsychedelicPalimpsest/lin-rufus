@@ -518,9 +518,10 @@ This is the most structurally significant porting gap.
 | TMPDIR override test | ✅ | Added `paths_temp_dir_respects_tmpdir_env` test to `test_settings_linux.c` (85 total) |
 | Wine hash test expansion | ✅ | Expanded Wine `test_hash.exe` from 54 to 82 assertions: moved StringToHash (7 tests), FileMatchesHash (4 tests), PE256Buffer (5 tests), efi_image_parse (4 tests) outside `#ifdef __linux__`; made `make_ht_file()` cross-platform; replaced stub PE256Buffer in `hash_win_glue.c` with real `common/hash_pe.c` implementation |
 | localization common tests | ✅ | New `test_localization_common.c` (68 assertions, Linux + Wine): `lmprintf` (4 tests: NULL table → UNTRANSLATED, format strings, out-of-range, rolling buffer), `get_locale_from_name` (5 tests), `get_locale_from_lcid` (4 tests), `toggle_default_locale` (2 tests), `get_name_from_id` (3 tests), `free_loc_cmd` null safety, `get_loc_dlg_count/entry` accessors, init/exit lifecycle |
+| `boot_validation.c` → `common/` | ✅ | Moved pure predicate functions (`boot_check_is_pure_dd`, `boot_check_can_write_as_esp`, `boot_check_uefi_compat_fails`, `boot_check_fat_4gb_fails`, `boot_check_fat_compat_fails`, `boot_check_fat16_kolibrios_fails`) from `linux/boot_validation.c` to `common/boot_validation.c`; `linux/boot_validation.[ch]` are now thin redirect shims; new `test_boot_validation_common.c` (40 assertions, Linux + Wine) replaces old Linux-only test |
 
 ---
 
 ## Pending Work
 
-_(None — all features 188–224 are implemented and tested.)_
+_(None — all features 188–225 are implemented and tested.)_

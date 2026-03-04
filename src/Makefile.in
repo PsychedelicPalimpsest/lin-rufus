@@ -207,7 +207,9 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-syslinux.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-ui.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-vhd.$(OBJEXT) \
-@TARGET_WINDOWS_TRUE@	windows/rufus-wue.$(OBJEXT)
+@TARGET_WINDOWS_TRUE@	windows/rufus-wue.$(OBJEXT) \
+@TARGET_WINDOWS_TRUE@	windows/rufus-oobe_locale.$(OBJEXT) \
+@TARGET_WINDOWS_TRUE@	windows/rufus-timezone.$(OBJEXT)
 am_rufus_OBJECTS = $(am__objects_1) $(am__objects_3)
 rufus_OBJECTS = $(am_rufus_OBJECTS)
 am__DEPENDENCIES_1 =
@@ -499,7 +501,8 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
 @TARGET_WINDOWS_TRUE@	windows/icon.c windows/iso.c windows/localization.c windows/net.c windows/parser.c \
 @TARGET_WINDOWS_TRUE@	windows/pki.c windows/process.c windows/rufus.c windows/smart.c windows/stdfn.c \
-@TARGET_WINDOWS_TRUE@	windows/stdio.c windows/stdlg.c windows/syslinux.c windows/ui.c windows/vhd.c windows/wue.c
+@TARGET_WINDOWS_TRUE@	windows/stdio.c windows/stdlg.c windows/syslinux.c windows/ui.c windows/vhd.c windows/wue.c \
+@TARGET_WINDOWS_TRUE@	windows/oobe_locale.c windows/timezone.c
 
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@LINUX_UI_SRC = linux/ui.c
 # Select the UI backend source for Linux builds
@@ -683,6 +686,8 @@ windows/rufus-syslinux.$(OBJEXT): windows/$(am__dirstamp)
 windows/rufus-ui.$(OBJEXT): windows/$(am__dirstamp)
 windows/rufus-vhd.$(OBJEXT): windows/$(am__dirstamp)
 windows/rufus-wue.$(OBJEXT): windows/$(am__dirstamp)
+windows/rufus-oobe_locale.$(OBJEXT): windows/$(am__dirstamp)
+windows/rufus-timezone.$(OBJEXT): windows/$(am__dirstamp)
 
 rufus$(EXEEXT): $(rufus_OBJECTS) $(rufus_DEPENDENCIES) $(EXTRA_rufus_DEPENDENCIES) 
 	@rm -f rufus$(EXEEXT)
@@ -1339,6 +1344,18 @@ windows/rufus-wue.o: windows/wue.c
 
 windows/rufus-wue.obj: windows/wue.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-wue.obj `if test -f 'windows/wue.c'; then $(CYGPATH_W) 'windows/wue.c'; else $(CYGPATH_W) '$(srcdir)/windows/wue.c'; fi`
+
+windows/rufus-oobe_locale.o: windows/oobe_locale.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-oobe_locale.o `test -f 'windows/oobe_locale.c' || echo '$(srcdir)/'`windows/oobe_locale.c
+
+windows/rufus-oobe_locale.obj: windows/oobe_locale.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-oobe_locale.obj `if test -f 'windows/oobe_locale.c'; then $(CYGPATH_W) 'windows/oobe_locale.c'; else $(CYGPATH_W) '$(srcdir)/windows/oobe_locale.c'; fi`
+
+windows/rufus-timezone.o: windows/timezone.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-timezone.o `test -f 'windows/timezone.c' || echo '$(srcdir)/'`windows/timezone.c
+
+windows/rufus-timezone.obj: windows/timezone.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-timezone.obj `if test -f 'windows/timezone.c'; then $(CYGPATH_W) 'windows/timezone.c'; else $(CYGPATH_W) '$(srcdir)/windows/timezone.c'; fi`
 install-dist_polkitactionsDATA: $(dist_polkitactions_DATA)
 	@$(NORMAL_INSTALL)
 	@list='$(dist_polkitactions_DATA)'; test -n "$(polkitactionsdir)" || list=; \
