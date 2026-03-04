@@ -118,7 +118,7 @@ automatically the run step is transparently escalated via `sudo podman`.
 | Windows cross-build script (`build-rufus-mingw.sh`) | ✅ | |
 | Test system (`tests/`, `run_tests.sh`) | ✅ | Runs native + Wine + privileged container (root tests) |
 | GCC 15 compound-literal regression fix in `cregex_compile.c` | ✅ | Static node lifetimes replaced with local vars |
-| GTK3 UI backend (`-DUSE_GTK`) | ✅ | Window builds and launches |
+| GTK3 UI backend (`-DUSE_GTK`) | ✅ | Window builds and launches; CLI flags (`--device`, `--help`, `--version`, `--list-devices`) bypass GTK via argv scan in `ui_gtk.c main()` before `g_application_run()` |
 | Non-GTK console fallback (`src/linux/rufus.c main()`) | ✅ | Full CLI mode via `cli.c`; `cli_parse_args` + `cli_run`; flags: `--device`, `--image`, `--fs`, `--partition-scheme`, `--target`, `--boot-type`, `--cluster-size`, `--persistence`, `--bad-blocks`, `--nb-passes`, `--unattend-xml`, `--include-hdds`, `--zero-drive`, `--force-large-fat32`, `--ntfs-compression`, `--win-to-go`/`-W`, `--write-as-image`/`-w`, `--fast-zeroing`/`-Z`, `--old-bios-fixes`/`-o`, `--allow-dual-uefi-bios`/`-A`, `--preserve-timestamps`/`-e`, `--validate-md5sum`/`-m`, `--no-rufus-mbr`/`-R`, `--no-extended-label`/`-x`, `--no-size-check`/`-s`, `--ignore-boot-marker`/`-I`, `--file-indexing`/`-n`, `--detect-fakes`/`-D`, `--expert-mode`/`-E`, `--usb-debug`/`-g`, `--enable-vmdk`/`-G`, `--advanced-format`/`-a`, `--list-devices`/`-L` (tab-sep drive table), `--json`/`-j`, `--label`, `--quick`/`--no-quick`, `--verify`, `--no-prompt`, `--version`, `--help`; all relevant globals wired via `cli_apply_options()`; `optind=0` re-entrant reset; `cli_print_devices()` calls `GetDevices(0)` + prints tab-separated drive table; 297 tests pass |
 
 ---
@@ -129,7 +129,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Header | Status | Notes |
 |--------|--------|-------|
-| `windows.h` | 🔧 | ~1 800 lines; types, macros, most stubs present. `SendMessage`/`PostMessage` delegate to `msg_dispatch.c` bridge. `GetCurrentThreadId` returns real TID via `SYS_gettid`; `GetCurrentThread` returns pseudo-handle -2; `SetEnvironmentVariableA(NULL)` calls `unsetenv()` (Windows semantics); `GetSystemInfo` fills `dwNumberOfProcessors`/`dwPageSize`/`wProcessorArchitecture` from real OS; `GlobalMemoryStatusEx` reads `/proc/meminfo`; `MultiByteToWideChar`/`WideCharToMultiByte` size-query mode (sz=0) fixed; `InterlockedIncrement/Decrement/Exchange/CompareExchange` use GCC `__sync_*` — all tested |
+| `windows.h` | ✅ | ~1 800 lines; types, macros, all needed stubs present and tested. `SendMessage`/`PostMessage` delegate to `msg_dispatch.c` bridge. `GetCurrentThreadId` returns real TID via `SYS_gettid`; `GetCurrentThread` returns pseudo-handle -2; `SetEnvironmentVariableA(NULL)` calls `unsetenv()` (Windows semantics); `GetSystemInfo` fills `dwNumberOfProcessors`/`dwPageSize`/`wProcessorArchitecture` from real OS; `GlobalMemoryStatusEx` reads `/proc/meminfo`; `MultiByteToWideChar`/`WideCharToMultiByte` size-query mode (sz=0) fixed; `InterlockedIncrement/Decrement/Exchange/CompareExchange` use GCC `__sync_*` — all tested |
 | `GetWindowTextA` / `SetWindowTextA` | ✅ | Real implementation via `window_text_bridge` — thread-safe HWND→text registry; GTK main thread keeps cache in sync via "changed" signal; worker threads (FormatThread) read cache safely; `window_text_register_gtk()` wired in `ui_gtk.c` for volume-label entry; 20 tests, 30 assertions pass |
 | `commctrl.h` | ✅ | Defines `PBS_MARQUEE`; CB_* macros live in `windows.h` and route through `combo_bridge.c` (105 tests pass) |
 | `setupapi.h` | ✅ | Compilation stub only; Linux `dev.c` uses sysfs/libudev directly, not setupapi |
@@ -140,7 +140,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `dbghelp.h` | 🚫 | Symbol walking — no Linux equivalent needed |
 | `gpedit.h` | 🚫 | Group Policy — N/A on Linux |
 | `delayimp.h` | 🚫 | Delay-load DLL mechanism — N/A on Linux |
-| All others | 🔧 | Typedefs / empty stubs compile; `setupapi.h`, `wincrypt.h`, `wintrust.h` are compilation-only stubs (Linux code uses direct API calls) |
+| All others | ✅ | Typedefs / empty stubs compile; `setupapi.h`, `wincrypt.h`, `wintrust.h` are compilation-only stubs (Linux code uses direct API calls) |
 | `SendMessage` / `PostMessage` | ✅ | Full `msg_dispatch` bridge: thread-safe handler registry, async `PostMessage` via pluggable `MsgPostScheduler` (GTK: `g_idle_add`), synchronous `SendMessage` with pthread condvar blocking for cross-thread calls; 61 tests pass; GTK scheduler and main dialog handler registered in `ui_gtk.c` |
 | `CreateThread` / `WaitForSingleObject` | ✅ | Full pthread bridge: threads, events (auto/manual-reset), mutexes, `CRITICAL_SECTION`, `WaitForMultipleObjects`, `GetExitCodeThread`, `TerminateThread` — 51 tests pass |
 | Windows Registry (`RegOpenKey` etc.) | ✅ | Settings use INI-file backend via `src/linux/settings.h`; `ReadSetting*`/`WriteSetting*` macros map to `ReadIniKey*`/`WriteIniKey*`; 80 tests pass |
@@ -524,4 +524,5 @@ This is the most structurally significant porting gap.
 
 ## Pending Work
 
-_(None — all features 188–225 are implemented and tested.)_
+_(None — all features 188–225 are implemented and tested.  Session 8 QA found
+no new bugs or gaps.)_

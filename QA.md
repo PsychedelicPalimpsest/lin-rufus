@@ -1,6 +1,6 @@
 # Rufus Linux Port — QA Notes
 
-> **Last updated:** 2026-03-04 (session 6)
+> **Last updated:** 2026-03-04 (session 8)
 > **Reviewer:** Copilot QA session
 
 ---
@@ -51,84 +51,39 @@ grep 'USE_GTK_TRUE' config.status   # must NOT be '#'
 
 ## Known Open Issues (to be tracked in features.md)
 
-### CRITICAL — GTK binary silently ignores CLI flags (Feature 188)
+### ~~CRITICAL — GTK binary silently ignores CLI flags~~ **RESOLVED**
 
-The shipped binary (`src/rufus`) is compiled with `USE_GTK`.
-When GTK processes `argc/argv` via `g_application_run()`, it intercepts
-`--help` (shows GTK help, not Rufus CLI help) and rejects all Rufus-specific
-flags (`--device`, `--image`, `--fs`, etc.) as "Unknown option".
+**Resolved in commit `3df14315`** (`fix(cli): make --version, --help work without --device in GTK binary`).
+
+`ui_gtk.c` main() now scans `argv` manually before `g_application_run()` and
+short-circuits into `cli_parse_args()` / `cli_run()` when `--device`, `-d`,
+`--list-devices`, `-L`, `--version`, or `--help` is present.
 
 ```
-$ ./src/rufus --device /dev/sdb   # fails with "Unknown option --device"
-$ ./src/rufus --help              # shows GTK options, NOT cli_print_usage()
+$ ./src/rufus --device /dev/sdb   # works correctly ✅
+$ ./src/rufus --help              # shows Rufus CLI help ✅
+$ ./src/rufus --list-devices      # lists devices and exits ✅
 ```
 
-Root cause: `ui_gtk.c main()` calls `g_application_run()` directly with
-`G_APPLICATION_FLAGS_NONE`; there is no `handle-local-options` signal
-registered to intercept Rufus flags before GTK sees them.
-
-The non-GTK CLI path (`#ifndef USE_GTK` in `rufus.c`) works correctly when
-the binary is built without GTK, but:
-1. Building without GTK on Linux currently fails (Windows-specific
-   `darkmode.c` includes `dwmapi.h` when `USE_GTK` is not set).
-2. There is no documented `--with-ui=cli` or `--without-gtk` build path.
-
-The man page (`doc/rufus.1`) documents all CLI flags as if they work in the
-GTK binary — this is inaccurate.
-
-**Tracked as:** Feature 188 ("Test the cli directly by calling the rufus
-executable (both via wine and linux)") — not yet resolved.
-
-**Fix direction:** Register CLI options with `g_application_add_main_option_entries()`
-and handle them in a `handle-local-options` signal to bypass the GTK
-activate path when `--device` is given.
+Verified in session 8: `test_exe_cli_linux_linux` (31 passed), manual tests
+all pass.
 
 ---
 
-### Minor — `device_combo.c` uses unquoted path in xdg-open command
+### ~~Minor — `device_combo.c` uses unquoted path~~ **RESOLVED**
 
-`device_open_in_fm_build_cmd()` builds `"xdg-open /dev/sdX"` without quoting
-the path:
-
-```c
-snprintf(out, sz, "xdg-open %s", dev_path);   // unquoted!
-```
-
-In practice device paths come from sysfs (`/dev/sda`, `/dev/nvme0n1p1`) and
-never contain spaces or shell metacharacters, so there is no real exploit
-path.  However, it is a code quality issue — the function should quote the
-path for correctness:
-
-```c
-snprintf(out, sz, "xdg-open '%s'", dev_path);
-```
-
-No dedicated unit test covers `device_open_in_fm_build_cmd()`.
+Fixed in session 6 (Feature 192): path is now quoted as `xdg-open '%s'`.
+Tests updated to match (`test_ui_linux.c`).
 
 ---
 
-### Minor — `ntfsfix.c` uses `system()` with only outer-quote protection
+### ~~Minor — `ntfsfix.c` and Missing dedicated unit tests~~ **RESOLVED**
 
-`RunNtfsFix()` builds `ntfsfix "<path>"` and calls `system()`.  A partition
-path with embedded double-quote characters would break out of the quoting.
-Again, partition paths from sysfs are safe, but consider switching to
-`execv()` (no shell expansion) or quoting more robustly.
-
----
-
-### Minor — Missing dedicated unit tests
-
-The following source files have no directly corresponding test file:
-
-| File | Notes |
-|------|-------|
-| `ntfsfix.c` | Single function `RunNtfsFix()`; easy to add a mock-system test |
-| `device_combo.c` | `device_open_in_fm_build_cmd()`; should have string tests |
-| `dump_fat.c` | Diagnostic helper; low priority |
-| `proposed_label.c` | Very small; logic is correct but untested |
-
-`proposed_label.c` is exercised indirectly through the GTK UI, and the
-function is simple enough that the risk is low.
+All four previously-untested files now have full test coverage:
+- `ntfsfix.c` — 24 tests in `test_ntfsfix_linux.c`
+- `device_combo.c` — 7 tests in `test_ui_linux.c`
+- `dump_fat.c` — 15 tests in `test_dump_fat_linux.c`
+- `proposed_label.c` — 8 tests in `test_ui_linux.c`
 
 ---
 
@@ -610,3 +565,80 @@ Removed all verbose QA session narratives and verbose RESOLVED feature descripti
 5. **`FindResourceRva` depth guard** is `MAX_RESOURCE_DEPTH 8` — legitimate PE
    resource trees are max 3 levels; 8 gives headroom without allowing abuse.
 6. **No hardcoded `/dev/nvme0n2` in repo** — use `RUFUS_TEST_DEVICE` env var.
+
+---
+
+## What Was Tested — Session 8 (2026-03-04)
+
+### Bugs / Stale Notes Found This Session
+
+No bugs found. The following QA notes from earlier sessions were stale and have
+been updated above:
+
+- **Feature 188 / GTK CLI bypass** — was listed as "CRITICAL open"; actually
+  resolved in commit `3df14315`.  The GTK binary correctly handles `--device`,
+  `--help`, `--version`, `--list-devices` by scanning `argv` before calling
+  `g_application_run()`.
+- **Minor open issues** (unquoted xdg-open, missing tests) — all resolved in
+  sessions 6–7.  QA notes updated.
+
+### Tests Run
+
+| Test | Result |
+|------|--------|
+| `./run_tests.sh --linux-only` | ✅ All tests passed |
+| `./run_tests.sh --wine-only` | ✅ All tests passed |
+| `test_ui_smoke_linux_linux` (from tests/) | ✅ 9 passed |
+| `test_ui_automation_linux_linux` (from tests/) | ✅ 15 passed |
+| `test_exe_cli_linux_linux` | ✅ 31 passed |
+| `test_man_page_linux_linux` | ✅ 105 passed |
+| `test_cppcheck_linux_linux` | ✅ 20 passed |
+| `test_icon_linux_linux` | ✅ 22 passed |
+| `test_dev_usb_speed_linux_linux` | ✅ 17 passed |
+| Manual: `rufus --version` | ✅ `rufus 4.13.0` |
+| Manual: `rufus --help` | ✅ Full CLI help shown |
+| Manual: `rufus --list-devices --include-hdds` | ✅ Lists `/dev/nvme0n2` and `/dev/nvme0n1` |
+| Manual: FAT32 format of `/dev/nvme0n2` | ✅ `Format completed successfully.` |
+| Manual: Ubuntu ISO DD write to `/dev/nvme0n2` | ✅ ISO 9660 magic `01 CD001` verified at offset 0x8000 |
+| Manual: `rufus --list-devices` (no HDDs) | ✅ Returns empty list + exit 1 (correct — no removable drives) |
+
+### Spot Checks Performed
+
+| File | Finding |
+|------|---------|
+| `src/linux/multidev.c` | Clean; all NULL guards present |
+| `src/linux/globals.c` | `dialog_handle` defined but only meaningfully used on Windows (OK, no Linux code references it for flashing) |
+| `src/common/cregex_parse.c` | Shunting-yard parser; clean |
+| `src/linux/icon.c` | `SetAutorun()` correctly queries `hLabel` via `GetWindowTextA`; good test coverage |
+| `src/linux/sl_version.c` | Port of Windows `GetSyslinuxVersion()`; clean |
+| `src/linux/usb_speed.c` | Speed-to-string lookup; clean; 17 tests pass |
+| `src/linux/csm_help.c` | Simple predicate; clean |
+| `src/common/hash_db.c` | `StringToHash` / `FileMatchesHash` / etc.; clean; cast to `unsigned char` before `tolower()` is correct |
+| `src/linux/pki.c` | OpenSSL-based PKI; `buf_size` bounds checks present (post session 7 fix) |
+| `src/linux/rufus.c` | Non-GTK `main()` (dead in GTK build but correct conditional compilation) |
+| `src/common/format_ext.c` | Included by platform ext files; clean |
+| `src/linux/window_text_bridge.c` | Mutex-protected registry; clean |
+| `src/linux/proposed_label.c` | Trivial; clean |
+
+### Coverage Check
+
+All `src/linux/*.c` and `src/common/*.c` files are covered by tests — either
+directly via a matching `test_*_linux.c`, via common tests, or via the
+integration/e2e suite.  No untested production code identified.
+
+---
+
+## Tips for Next QA Session (session 8 update)
+
+1. **Read this file**, then check `features.md` Pending Work (currently empty).
+2. **GTK binary handles CLI flags** — `--device`, `--help`, `--version`,
+   `--list-devices` all bypass GTK and run headless.  The "CRITICAL Feature 188"
+   note from earlier sessions is **resolved**.
+3. **PE parsing functions now require `buf_size`** — see session 7 notes.
+4. **`FindResourceRva` depth guard** is `MAX_RESOURCE_DEPTH 8`.
+5. **Run `./run_tests.sh --container`** if a container runtime is available —
+   loopback/root tests provide additional coverage.
+6. **UI tests must run from `tests/` directory** (not repo root) — binary path
+   resolution uses `../src/rufus` relative to the test binary location.
+7. **No hardcoded `/dev/nvme0n2` in repo** — use `RUFUS_TEST_DEVICE` env var.
+8. **Fuzz corpus** is in `tests/corpus/pe/` — run periodically to check for regressions.
