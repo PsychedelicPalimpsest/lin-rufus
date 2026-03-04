@@ -996,6 +996,20 @@ CFLAGS_LINUX_test_timezone_linux := \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_timezone_linux := $(SRC_DIR)/linux/timezone.c
 
+# timezone_common tests: GetLocalTimezone() cross-platform (Linux native + Wine)
+CFLAGS_LINUX_test_timezone_common := \
+	-DRUFUS_TEST \
+	-I$(SRC_DIR)/linux -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_timezone_common := $(SRC_DIR)/linux/timezone.c
+
+CFLAGS_WIN_test_timezone_common := \
+	-D_WIN32 \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-unused-parameter \
+	-Wno-implicit-function-declaration
+EXTRA_SRC_WIN_test_timezone_common := $(SRC_DIR)/windows/timezone.c
+
 # locale_oobe_linux tests: lang_to_bcp47, GetLinuxOobeLocale
 CFLAGS_LINUX_test_locale_oobe_linux := \
 	-DRUFUS_TEST \

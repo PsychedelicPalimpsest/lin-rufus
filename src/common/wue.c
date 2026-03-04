@@ -40,17 +40,15 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <windowsx.h>
-#include "timezoneapi.h"
-#include "msapi_utf8.h"
 #include "registry.h"
 #else
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-#include "../linux/timezone.h"
 #endif
 
 #include "oobe_locale.h"
+#include "timezone_name.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -65,33 +63,6 @@
 
 /* bypass registry key names */
 extern const char* bypass_name[];
-
-/*
- * _get_local_timezone_name — return the Windows-style timezone name for the
- * current system locale, allocated on the heap (caller must NOT free it
- * since both implementations return a static or borrowed string).
- *
- * Returns a pointer to a static/const string; never NULL.
- */
-static const char* _get_local_timezone_name(void)
-{
-#ifdef _WIN32
-	static char tzname_buf[128];
-	char* tzstr;
-	TIME_ZONE_INFORMATION tz_info;
-	if ((GetTimeZoneInformation(&tz_info) == TIME_ZONE_ID_INVALID) ||
-	    ((tzstr = wchar_to_utf8(tz_info.StandardName)) == NULL)) {
-		uprintf("WARNING: Could not retrieve current timezone: %s", WindowsErrorString());
-		return "UTC";
-	}
-	strncpy(tzname_buf, tzstr, sizeof(tzname_buf) - 1);
-	tzname_buf[sizeof(tzname_buf) - 1] = '\0';
-	free(tzstr);
-	return tzname_buf;
-#else
-	return IanaToWindowsTimezone();
-#endif
-}
 
 /*
  * CreateUnattendXml — generate an installation answer file containing the
@@ -207,7 +178,7 @@ char* CreateUnattendXml(int arch, int flags)
 				fprintf(fd, "      </OOBE>\n");
 			}
 			if (flags & UNATTEND_DUPLICATE_LOCALE) {
-				const char* wintz = _get_local_timezone_name();
+				const char* wintz = GetLocalTimezone();
 				uprintf("• Timezone: %s", wintz);
 				fprintf(fd, "      <TimeZone>%s</TimeZone>\n", wintz);
 			}

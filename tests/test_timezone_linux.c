@@ -18,6 +18,7 @@
 
 /* ── Pull in the module under test ─────────────────────────────────────── */
 #include "timezone.h"   /* IanaToWindowsTimezone, timezone_set_tz_injection */
+#include "../src/common/timezone_name.h"  /* GetLocalTimezone() */
 
 /* ── Minimal test harness ───────────────────────────────────────────────── */
 static int tests_run    = 0;
@@ -318,6 +319,39 @@ static void test_localtime_symlink(void)
     timezone_set_zoneinfo_root(NULL);
 }
 
+/* ── GetLocalTimezone() wrapper tests ─────────────────────────────────── */
+
+static void test_get_local_timezone_with_injection(void)
+{
+    printf("\nGetLocalTimezone() wrapper tests:\n");
+    timezone_set_tz_injection("America/New_York");
+    const char* result = GetLocalTimezone();
+    timezone_set_tz_injection(NULL);
+    CHECK(result != NULL, "GetLocalTimezone() must not return NULL");
+    CHECK(strcmp(result, "Eastern Standard Time") == 0,
+          "America/New_York must map to Eastern Standard Time");
+}
+
+static void test_get_local_timezone_matches_iana_wrapper(void)
+{
+    timezone_set_tz_injection("Europe/Paris");
+    const char* iana_result = IanaToWindowsTimezone();
+    const char* local_result = GetLocalTimezone();
+    timezone_set_tz_injection(NULL);
+    CHECK(iana_result != NULL && local_result != NULL,
+          "neither result should be NULL");
+    CHECK(strcmp(iana_result, local_result) == 0,
+          "GetLocalTimezone() must match IanaToWindowsTimezone() on Linux");
+}
+
+static void test_get_local_timezone_no_injection_non_empty(void)
+{
+    timezone_set_tz_injection(NULL);
+    const char* result = GetLocalTimezone();
+    CHECK(result != NULL, "result must not be NULL");
+    CHECK(result[0] != '\0', "result must not be empty string");
+}
+
 /* ── main ─────────────────────────────────────────────────────────────── */
 int main(void)
 {
@@ -334,6 +368,9 @@ int main(void)
     test_null_injection_returns_system_tz();
     test_etc_timezone_file();
     test_localtime_symlink();
+    test_get_local_timezone_with_injection();
+    test_get_local_timezone_matches_iana_wrapper();
+    test_get_local_timezone_no_injection_non_empty();
 
     printf("\n%d passed, %d failed\n", tests_run - tests_failed, tests_failed);
     return tests_failed ? 1 : 0;

@@ -625,3 +625,6 @@ const char* IanaToWindowsTimezone(void)
     const char* win = lookup_windows_tz(iana);
     return win ? win : "UTC";
 }
+
+/* Cross-platform wrapper: GetLocalTimezone() delegates to IanaToWindowsTimezone(). */
+const char *GetLocalTimezone(void) { return IanaToWindowsTimezone(); }

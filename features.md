@@ -395,7 +395,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `WimExtractFile()` / `WimSplitFile()` / `WimApplyImage()` | ✅ | wimlib with Linux path separators |
 | `VhdMountImageAndGetSize()` | ✅ | qemu-nbd + BLKGETSIZE64 ioctl |
 | `VhdUnmountImage()` | ✅ | qemu-nbd --disconnect |
-| `CreateUnattendXml()` | ✅ | POSIX + timezone from `IanaToWindowsTimezone()`; OOBE international locale from `GetLinuxOobeLocale()` in `locale_oobe.c` (reads `$LANG` + keyboard layout for `InputLocale`/`SystemLocale`/`UserLocale`/`UILanguage`); username sanitization via `filter_chars()` on both platforms; 136 tests pass |
+| `CreateUnattendXml()` | ✅ | POSIX + timezone from `IanaToWindowsTimezone()`; OOBE international locale via `GetOobeLocale()` (cross-platform: Linux reads `$LANG`+keyboard, Windows reads registry/LCIDs); `#ifdef _WIN32` removed from OOBE block in `common/wue.c`; `OobeLocale` struct and `GetOobeLocale()` in `src/common/oobe_locale.h`; 136 WUE + 16 oobe_locale_common + 85 locale_oobe tests pass |
 | `SetupWinPE()` | ✅ | POSIX file copy + binary patching (CRC/path/rdisk patches) |
 | `PopulateWindowsVersion()` | ✅ | wimlib + ezxml (cross-platform) |
 | `CopySKUSiPolicy()` | 🚫 | Windows-only WDAC policy; stub returns FALSE |
