@@ -97,13 +97,13 @@ static const xkb_to_dos_t xkb_dos_table[] = {
     { "pl",  "pl",  852 },  /* Polish */
     { "pt",  "po",  850 },  /* Portuguese */
     { "ro",  "ro",  852 },  /* Romanian */
-    { "rs",  "yu",  855 },  /* Serbian */
+    { "rs",  "yc",  855 },  /* Serbian (Cyrillic default) */
     { "ru",  "ru",  866 },  /* Russian */
     { "se",  "sv",  850 },  /* Swedish */
     { "si",  "sl",  852 },  /* Slovenian */
     { "sk",  "sk",  852 },  /* Slovak */
     { "sq",  "sq",  852 },  /* Albanian (alternate) */
-    { "sr",  "ru",  855 },  /* Serbian Cyrillic */
+    { "sr",  "yc",  855 },  /* Serbian Cyrillic (alternate XKB code) */
     { "sv",  "sv",  850 },  /* Swedish (alternate) */
     { "th",  "us",  874 },  /* Thai (no FreeDOS kb) */
     { "tj",  "tj",  850 },  /* Tajik */

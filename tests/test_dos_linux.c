@@ -785,6 +785,21 @@ TEST(serbian_latin_variant_uses_yu_keyboard)
 #endif
 }
 
+TEST(serbian_cyrillic_default_rs_uses_yc_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Serbia XKB without variant defaults to Cyrillic -> DOS 'YC' */
+    char code[16] = {0};
+    int found = autoexec_keyb_code_from_keyboard_file(
+        "XKBLAYOUT=\"rs\"\n", code, sizeof(code));
+    CHECK_MSG(found, "Should find keyb command in AUTOEXEC.BAT");
+    CHECK_MSG(strcmp(code, "YC") == 0,
+              "Serbian Cyrillic default (rs, no variant) -> DOS keyboard 'YC'");
+#endif
+}
+
 TEST(set_dos_locale_spanish_maps_to_sp)
 {
 #ifndef RUFUS_TEST
@@ -1522,6 +1537,7 @@ int main(void)
     RUN(swiss_french_variant_uses_sf_keyboard);
     RUN(swiss_german_no_variant_uses_sg_keyboard);
     RUN(serbian_latin_variant_uses_yu_keyboard);
+    RUN(serbian_cyrillic_default_rs_uses_yc_keyboard);
 
     RUN(keyboard_sys_used_for_german);
     RUN(keyboard_sys_used_for_french);

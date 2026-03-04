@@ -614,6 +614,25 @@ TEST(serbian_latin_variant_gives_0x081a_locale)
 	          "Serbian Latin (rs + latin variant) should give Serbian Latin locale (081a)");
 }
 
+TEST(serbian_cyrillic_default_rs_gives_0c1a_locale)
+{
+	/* Serbian layout (rs) without variant defaults to Cyrillic -> 0c1a */
+	char *p = write_keyboard_file("XKBLAYOUT=\"rs\"\n");
+	if (!p) { CHECK(0); return; }
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("sr_RS.UTF-8");
+	locale_oobe_set_keyboard_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(p);
+	locale_oobe_set_vconsole_path("/nonexistent/vconsole.conf");
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(NULL);
+	locale_oobe_set_vconsole_path(NULL);
+	unlink(p);
+	CHECK_MSG(strstr(loc.input_locale, "0c1a") != NULL || strstr(loc.input_locale, "0C1A") != NULL,
+	          "Serbian Cyrillic default (rs, no variant) should give Serbian Cyrillic locale (0c1a)");
+}
+
 /* ================================================================
  * main
  * ================================================================ */
@@ -677,6 +696,7 @@ int main(void)
 	RUN(swiss_french_variant_gives_fr_ch_locale);
 	RUN(swiss_german_no_variant_gives_de_ch_locale);
 	RUN(serbian_latin_variant_gives_0x081a_locale);
+	RUN(serbian_cyrillic_default_rs_gives_0c1a_locale);
 
 	TEST_RESULTS();
 }
