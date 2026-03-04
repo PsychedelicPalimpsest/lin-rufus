@@ -1807,16 +1807,18 @@ typedef struct _stat stat_t;
 
 /* ---- wchar_t helpers ---- */
 static inline int MultiByteToWideChar(UINT cp, DWORD flags, LPCSTR mb, int mb_sz, LPWSTR wc, int wc_sz) {
-    (void)cp;(void)flags;
+    (void)cp;(void)flags;(void)mb_sz;
     if (!mb) return 0;
-    size_t n = mbstowcs(wc, mb, wc_sz > 0 ? (size_t)wc_sz : 0);
-    return (int)(n == (size_t)-1 ? 0 : n + 1);
+    /* wc_sz==0 means query required size; pass NULL to mbstowcs for length query */
+    size_t n = mbstowcs(wc_sz > 0 ? wc : NULL, mb, wc_sz > 0 ? (size_t)wc_sz : 0);
+    return (int)(n == (size_t)-1 ? 0 : (int)n + 1);
 }
 static inline int WideCharToMultiByte(UINT cp, DWORD flags, LPCWSTR wc, int wc_sz, LPSTR mb, int mb_sz, LPCSTR def, LPBOOL used) {
     (void)cp;(void)flags;(void)wc_sz;(void)def;(void)used;
     if (!wc) return 0;
-    size_t n = wcstombs(mb, wc, mb_sz > 0 ? (size_t)mb_sz : 0);
-    return (int)(n == (size_t)-1 ? 0 : n + 1);
+    /* mb_sz==0 means query required size; pass NULL to wcstombs for length query */
+    size_t n = wcstombs(mb_sz > 0 ? mb : NULL, wc, mb_sz > 0 ? (size_t)mb_sz : 0);
+    return (int)(n == (size_t)-1 ? 0 : (int)n + 1);
 }
 #define CP_ACP     0
 #define CP_UTF8    65001
