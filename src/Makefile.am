@@ -36,7 +36,8 @@ OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c 
 	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
 	windows/icon.c windows/iso.c windows/localization.c windows/net.c windows/parser.c \
 	windows/pki.c windows/process.c windows/rufus.c windows/smart.c windows/stdfn.c \
-	windows/stdio.c windows/stdlg.c windows/syslinux.c windows/ui.c windows/vhd.c windows/wue.c
+	windows/stdio.c windows/stdlg.c windows/syslinux.c windows/ui.c windows/vhd.c windows/wue.c \
+	windows/oobe_locale.c
 else
 # Select the UI backend source for Linux builds
 if USE_GTK

@@ -181,10 +181,18 @@ void rufus_init_paths(void)
         ini_file = NULL;
     }
 
+    /* temp_dir — use TMPDIR if set, otherwise /tmp */
+    const char *tmpenv = getenv("TMPDIR");
+    if (tmpenv != NULL && tmpenv[0] != '\0')
+        snprintf(temp_dir, sizeof(temp_dir), "%s", tmpenv);
+    else
+        snprintf(temp_dir, sizeof(temp_dir), "/tmp");
+
     uprintf("app_dir:      %s", app_dir);
     uprintf("app_data_dir: %s", app_data_dir);
     uprintf("user_dir:     %s", user_dir);
     uprintf("ini_file:     %s", ini_file ? ini_file : "(none)");
+    uprintf("temp_dir:     %s", temp_dir);
 }
 
 /*

@@ -16,17 +16,11 @@
 extern "C" {
 #endif
 
-/*
- * LinuxOobeLocale — locale strings for the Microsoft-Windows-International-Core
- * component in an autounattend.xml OOBE section.
- */
-typedef struct {
-	char ui_locale[32];     /* e.g. "en-US"          */
-	char system_locale[32]; /* e.g. "en-US"          */
-	char user_locale[32];   /* e.g. "en-US"          */
-	char input_locale[64];  /* e.g. "0409:00000409"  */
-	char ui_fallback[32];   /* e.g. "en-US"          */
-} LinuxOobeLocale;
+/* Pull in the cross-platform struct and GetOobeLocale() declaration. */
+#include "../common/oobe_locale.h"
+
+/* LinuxOobeLocale is an alias for OobeLocale for backward compatibility. */
+typedef OobeLocale LinuxOobeLocale;
 
 /*
  * lang_to_bcp47() — convert a POSIX locale string (e.g. "en_US.UTF-8",

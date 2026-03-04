@@ -49,6 +49,10 @@ on Linux.
 - **Keyboard shortcuts**: full Alt+key cheat-mode parity
 - **Log dialog**: scrollable log window
 - **About dialog**: GTK about dialog
+- **autorun.inf creation**: `SetAutorun()` writes `[autorun]` with icon and
+  label for FAT/NTFS/exFAT drives (same content as Windows; icon embedding N/A)
+- **Bad blocks scan**: native multi-pass `pread`/`pwrite` implementation
+  (same algorithm as Windows, without dependency on external `badblocks` tool)
 
 ---
 
@@ -79,21 +83,26 @@ on Linux.
   in `BlockingProcessList` just as on Windows
 
 ### Extended Label (`IDC_EXTENDED_LABEL`)
-- **Windows**: checkbox to toggle `autorun.inf` creation
-- **Linux**: stub (`SetAutorun` returns FALSE) — no `autorun.inf` is created
-  (irrelevant on Linux since autorun is a Windows concept)
+- **Windows**: checkbox toggles `autorun.inf` creation + icon embedding
+- **Linux**: `SetAutorun()` is fully implemented — creates `autorun.inf` with
+  `[autorun]`, volume label, and icon reference for FAT/NTFS/exFAT drives;
+  icon embedding (`ExtractAppIcon`) is skipped (no embedded `.exe` resources)
 
 ### Autorun / Icon
 - **Windows**: creates `autorun.inf` + embeds Rufus icon in drive root
-- **Linux**: not applicable
+- **Linux**: `autorun.inf` is created (same format as Windows); icon extraction
+  is not supported (N/A — no embedded `.exe` PE resources on Linux)
 
 ### WDAC Policy (`CopySKUSiPolicy`)
 - **Windows**: copies Windows Defender Application Control policy
 - **Linux**: no-op stub — WDAC is a Windows-only feature
 
 ### Bad Blocks Check
-- **Windows**: custom bad-blocks scan with multiple passes
-- **Linux**: implemented via `badblocks` utility
+- **Windows**: custom bad-blocks scan with multiple passes via
+  `IOCTL_DISK_VERIFY` / aligned read+write passes
+- **Linux**: native implementation via `pread`/`pwrite` with
+  `posix_memalign`-aligned buffers and `clock_gettime`-based progress
+  reporting — not via the external `badblocks` utility
 
 ---
 
@@ -104,7 +113,7 @@ on Linux.
 | `WM_DEVICECHANGE` integration | Win32-only; replaced by libudev |
 | `SetAlertPromptHook` / format-disk system dialog | Win32 hook API |
 | `CopySKUSiPolicy` (WDAC) | Windows Defender feature |
-| `SetAutorun` / autorun.inf | Not applicable on Linux |
+| `ExtractAppIcon` | `.exe` PE resource embedding — N/A on Linux |
 | `IDD_FORMAT` / `IDD_LOG` dialog resources | Win32 DIALOG resources |
 | Setup API (`setupapi.h`) | Win32-only device enumeration |
 | SBP2 / Thunderbolt quirks | Handled by kernel on Linux |

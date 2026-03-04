@@ -28,11 +28,13 @@
  * Platform differences handled via #ifdef _WIN32:
  *   - Timezone lookup: Windows uses GetTimeZoneInformation + wchar_to_utf8;
  *     Linux uses IanaToWindowsTimezone() from linux/timezone.c.
- *   - Temp file creation: Windows uses GetTempFileNameU; Linux uses
- *     GetTempFileName (which maps to the POSIX mkstemp-based version).
  *   - Locale duplication (UNATTEND_OOBE_INTERNATIONAL_MASK): Windows reads
  *     from registry and Windows locale APIs; Linux uses GetLinuxOobeLocale()
  *     from linux/locale_oobe.c (reads $LANG / keyboard layout detection).
+ *
+ * Temp file creation uses GetTempFileNameU on both platforms; on Linux this
+ * aliases to GetTempFileNameA (POSIX mkstemp-based, defined in compat/windows.h).
+ * temp_dir is initialised by rufus_init_paths() on Linux (respects $TMPDIR).
  */
 
 #ifdef _WIN32
@@ -46,8 +48,9 @@
 #define _GNU_SOURCE
 #endif
 #include "../linux/timezone.h"
-#include "../linux/locale_oobe.h"
 #endif
+
+#include "oobe_locale.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -115,14 +118,8 @@ char* CreateUnattendXml(int arch, int flags)
 	}
 	arch--;  /* convert to 0-based index */
 
-#ifndef _WIN32
-	if (temp_dir[0] == '\0')
-		static_strcpy(temp_dir, "/tmp");
-	if (GetTempFileName(temp_dir, APPLICATION_NAME, 0, path) == 0)
-#else
 	/* coverity[swapped_arguments] */
 	if (GetTempFileNameU(temp_dir, APPLICATION_NAME, 0, path) == 0)
-#endif
 		return NULL;
 	fd = fopen(path, "w");
 	if (fd == NULL)
@@ -265,29 +262,9 @@ char* CreateUnattendXml(int arch, int flags)
 			}
 			fprintf(fd, "    </component>\n");
 		}
-#ifdef _WIN32
 		if (flags & UNATTEND_OOBE_INTERNATIONAL_MASK) {
-			uprintf("• Use the same regional options as this user's");
-			fprintf(fd,
-				"    <component name=\"Microsoft-Windows-International-Core\""
-				" processorArchitecture=\"%s\" language=\"neutral\""
-				" xmlns:wcm=\"http://schemas.microsoft.com/WMIConfig/2002/State\""
-				" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-				" publicKeyToken=\"31bf3856ad364e35\" versionScope=\"nonSxS\">\n",
-				xml_arch_names[arch]);
-			fprintf(fd, "      <InputLocale>%s</InputLocale>\n",
-				ReadRegistryKeyStr(REGKEY_HKCU, "Keyboard Layout\\Preload\\1"));
-			fprintf(fd, "      <SystemLocale>%s</SystemLocale>\n", ToLocaleName(GetSystemDefaultLCID()));
-			fprintf(fd, "      <UserLocale>%s</UserLocale>\n", ToLocaleName(GetUserDefaultLCID()));
-			fprintf(fd, "      <UILanguage>%s</UILanguage>\n", ToLocaleName(GetUserDefaultUILanguage()));
-			fprintf(fd, "      <UILanguageFallback>%s</UILanguageFallback>\n",
-				ReadRegistryKeyStr(REGKEY_HKLM, "SYSTEM\\CurrentControlSet\\Control\\Nls\\Language\\InstallLanguageFallback"));
-			fprintf(fd, "    </component>\n");
-		}
-#else
-		if (flags & UNATTEND_OOBE_INTERNATIONAL_MASK) {
-			LinuxOobeLocale lol = { 0 };
-			GetLinuxOobeLocale(&lol);
+			OobeLocale lol = { 0 };
+			GetOobeLocale(&lol);
 			uprintf("• Use the same regional options as this user's");
 			fprintf(fd,
 				"    <component name=\"Microsoft-Windows-International-Core\""
@@ -303,7 +280,6 @@ char* CreateUnattendXml(int arch, int flags)
 			fprintf(fd, "      <UILanguageFallback>%s</UILanguageFallback>\n", lol.ui_fallback);
 			fprintf(fd, "    </component>\n");
 		}
-#endif
 		if (flags & UNATTEND_DISABLE_BITLOCKER) {
 			uprintf("• Disable bitlocker");
 			fprintf(fd,

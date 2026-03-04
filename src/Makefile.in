@@ -163,6 +163,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-notify.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-system_info.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-timezone.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-locale_oobe.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-xdg.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-polkit.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-verify.$(OBJEXT) \
@@ -492,7 +493,7 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/img_info.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c linux/paths.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c linux/sl_version.c linux/dump_fat.c linux/ntfsfix.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/status_timeout.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c linux/drag_drop.c linux/progress.c linux/usb_speed.c linux/progress_title.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c linux/sl_version.c linux/dump_fat.c linux/ntfsfix.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/status_timeout.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/locale_oobe.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c linux/drag_drop.c linux/progress.c linux/usb_speed.c linux/progress_title.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -635,6 +636,7 @@ linux/rufus-wintogo_bcd_template.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-notify.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-system_info.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-timezone.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-locale_oobe.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-xdg.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-polkit.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-verify.$(OBJEXT): linux/$(am__dirstamp)
@@ -1073,6 +1075,12 @@ linux/rufus-timezone.o: linux/timezone.c
 
 linux/rufus-timezone.obj: linux/timezone.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-timezone.obj `if test -f 'linux/timezone.c'; then $(CYGPATH_W) 'linux/timezone.c'; else $(CYGPATH_W) '$(srcdir)/linux/timezone.c'; fi`
+
+linux/rufus-locale_oobe.o: linux/locale_oobe.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-locale_oobe.o `test -f 'linux/locale_oobe.c' || echo '$(srcdir)/'`linux/locale_oobe.c
+
+linux/rufus-locale_oobe.obj: linux/locale_oobe.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-locale_oobe.obj `if test -f 'linux/locale_oobe.c'; then $(CYGPATH_W) 'linux/locale_oobe.c'; else $(CYGPATH_W) '$(srcdir)/linux/locale_oobe.c'; fi`
 
 linux/rufus-xdg.o: linux/xdg.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-xdg.o `test -f 'linux/xdg.c' || echo '$(srcdir)/'`linux/xdg.c

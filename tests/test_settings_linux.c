@@ -38,6 +38,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 extern char app_dir[MAX_PATH];
 extern char app_data_dir[MAX_PATH];
 extern char user_dir[MAX_PATH];
+extern char temp_dir[MAX_PATH];
 extern char* ini_file;
 
 /* rufus_init_paths() is compiled in via settings_linux_glue.c */
@@ -516,6 +517,41 @@ CHECK_STR_EQ("test_value", val);
 CHECK(TRUE);
 }
 
+TEST(paths_temp_dir_set_to_valid_dir)
+{
+rufus_init_paths();
+/* temp_dir must be non-empty and point to an existing directory */
+CHECK(temp_dir[0] != '\0');
+CHECK(temp_dir[0] == '/');
+struct stat st;
+int r = stat(temp_dir, &st);
+CHECK_INT_EQ(0, r);
+CHECK(S_ISDIR(st.st_mode));
+}
+
+TEST(paths_temp_dir_respects_tmpdir_env)
+{
+/* Create a real temp directory to use as TMPDIR */
+char custom_tmp[64];
+snprintf(custom_tmp, sizeof(custom_tmp), "/tmp/rufus_tmpdir_test_XXXXXX");
+char *d = mkdtemp(custom_tmp);
+if (!d) { CHECK(FALSE); return; }
+
+const char *old_tmpdir = getenv("TMPDIR");
+setenv("TMPDIR", custom_tmp, 1);
+memset(temp_dir, 0, sizeof(temp_dir));
+rufus_init_paths();
+
+CHECK_STR_EQ(custom_tmp, temp_dir);
+
+/* restore */
+if (old_tmpdir)
+    setenv("TMPDIR", old_tmpdir, 1);
+else
+    unsetenv("TMPDIR");
+rmdir(custom_tmp);
+}
+
 /* ===================================================================
  * SetUpdateCheck tests
  * =================================================================== */
@@ -622,6 +658,8 @@ RUN(paths_user_dir_set);
 RUN(paths_app_data_dir_set);
 RUN(paths_ini_file_in_xdg_config);
 RUN(paths_ini_file_readable_after_init);
+RUN(paths_temp_dir_set_to_valid_dir);
+RUN(paths_temp_dir_respects_tmpdir_env);
 
 printf("\n  SetUpdateCheck\n");
 RUN(set_update_check_no_ini_returns_false);

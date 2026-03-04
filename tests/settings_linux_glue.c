@@ -15,6 +15,7 @@ DWORD ErrorStatus = 0;
 char app_dir[MAX_PATH]      = { 0 };
 char app_data_dir[MAX_PATH] = { 0 };
 char user_dir[MAX_PATH]     = { 0 };
+char temp_dir[MAX_PATH]     = { 0 };
 char *ini_file              = NULL;
 
 /* Globals used by localization / lmprintf */

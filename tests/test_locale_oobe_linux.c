@@ -53,6 +53,12 @@ TEST(lang_to_bcp47_POSIX_returns_en_US)
 	CHECK_STR_EQ(r, "en-US");
 }
 
+TEST(lang_to_bcp47_C_dot_UTF8_returns_en_US)
+{
+	const char *r = lang_to_bcp47("C.UTF-8");
+	CHECK_STR_EQ(r, "en-US");
+}
+
 TEST(lang_to_bcp47_en_US_UTF8)
 {
 	const char *r = lang_to_bcp47("en_US.UTF-8");
@@ -237,6 +243,48 @@ TEST(get_linux_oobe_locale_C_lang_defaults_to_en_US)
 	locale_oobe_set_keyboard_injection(NULL);
 
 	CHECK_STR_EQ(loc.ui_locale, "en-US");
+}
+
+/* ================================================================
+ * GetOobeLocale() wrapper tests (cross-platform alias)
+ * ================================================================ */
+
+/* GetOobeLocale() must return the same result as GetLinuxOobeLocale()
+ * since on Linux it is simply a wrapper. */
+TEST(get_oobe_locale_matches_linux_locale)
+{
+	LinuxOobeLocale linux_loc = { 0 };
+	OobeLocale oobe_loc = { 0 };
+	locale_oobe_set_lang_injection("en_US.UTF-8");
+	locale_oobe_set_keyboard_injection("us");
+	GetLinuxOobeLocale(&linux_loc);
+	GetOobeLocale(&oobe_loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_keyboard_injection(NULL);
+
+	CHECK_STR_EQ(linux_loc.ui_locale,     oobe_loc.ui_locale);
+	CHECK_STR_EQ(linux_loc.system_locale, oobe_loc.system_locale);
+	CHECK_STR_EQ(linux_loc.user_locale,   oobe_loc.user_locale);
+	CHECK_STR_EQ(linux_loc.input_locale,  oobe_loc.input_locale);
+	CHECK_STR_EQ(linux_loc.ui_fallback,   oobe_loc.ui_fallback);
+}
+
+/* GetOobeLocale() must not leave any field un-null-terminated. */
+TEST(get_oobe_locale_fields_not_null)
+{
+	OobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("fr_FR.UTF-8");
+	locale_oobe_set_keyboard_injection("fr");
+	GetOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_keyboard_injection(NULL);
+
+	/* strnlen will be < max if properly null-terminated */
+	CHECK(strnlen(loc.ui_locale,     sizeof(loc.ui_locale))     < sizeof(loc.ui_locale));
+	CHECK(strnlen(loc.system_locale, sizeof(loc.system_locale)) < sizeof(loc.system_locale));
+	CHECK(strnlen(loc.user_locale,   sizeof(loc.user_locale))   < sizeof(loc.user_locale));
+	CHECK(strnlen(loc.input_locale,  sizeof(loc.input_locale))  < sizeof(loc.input_locale));
+	CHECK(strnlen(loc.ui_fallback,   sizeof(loc.ui_fallback))   < sizeof(loc.ui_fallback));
 }
 
 /* ================================================================
@@ -766,6 +814,7 @@ int main(void)
 	RUN(lang_to_bcp47_empty_returns_en_US);
 	RUN(lang_to_bcp47_C_returns_en_US);
 	RUN(lang_to_bcp47_POSIX_returns_en_US);
+	RUN(lang_to_bcp47_C_dot_UTF8_returns_en_US);
 	RUN(lang_to_bcp47_en_US_UTF8);
 	RUN(lang_to_bcp47_fr_FR_UTF8);
 	RUN(lang_to_bcp47_de_DE_euro);
@@ -788,6 +837,10 @@ int main(void)
 	RUN(get_linux_oobe_locale_comma_separated_keyboard_uses_first);
 	RUN(get_linux_oobe_locale_null_safe);
 	RUN(get_linux_oobe_locale_C_lang_defaults_to_en_US);
+
+	printf("\n=== GetOobeLocale() wrapper tests ===\n");
+	RUN(get_oobe_locale_matches_linux_locale);
+	RUN(get_oobe_locale_fields_not_null);
 
 	printf("\n=== /etc/default/keyboard file detection tests ===\n");
 	RUN(etc_default_keyboard_plain_layout);

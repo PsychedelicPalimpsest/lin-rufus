@@ -1545,13 +1545,15 @@ static inline DWORD GetTempPathA(DWORD sz, LPSTR buf) {
 static inline UINT GetTempFileNameA(LPCSTR path, LPCSTR prefix, UINT unum, LPSTR tmpfile) {
     (void)unum;
     if (!tmpfile) return 0;
-    snprintf(tmpfile, MAX_PATH, "%s/%sXXXXXX", path ? path : "/tmp", prefix ? prefix : "tmp");
+    snprintf(tmpfile, MAX_PATH, "%s/%sXXXXXX", (path && path[0]) ? path : "/tmp", prefix ? prefix : "tmp");
     int fd = mkstemp(tmpfile);
     if (fd < 0) { tmpfile[0] = '\0'; return 0; }
     close(fd);
     return 1;  /* non-zero indicates success (Windows returns a unique number; 1 is valid) */
 }
 #define GetTempFileName GetTempFileNameA
+/* GetTempFileNameU: on Linux all strings are UTF-8; alias to GetTempFileNameA */
+#define GetTempFileNameU GetTempFileNameA
 static inline DWORD GetModuleFileNameA(HMODULE h, LPSTR buf, DWORD sz) {
     (void)h;
     ssize_t r = readlink("/proc/self/exe", buf, sz - 1);

@@ -103,6 +103,10 @@ const char *lang_to_bcp47(const char *posix_locale)
 		}
 	}
 
+	/* After stripping suffix, re-check for C/POSIX (handles "C.UTF-8" etc.) */
+	if (strcmp(tmp, "C") == 0 || strcmp(tmp, "POSIX") == 0)
+		return "en-US";
+
 	/* Replace '_' with '-' to form a BCP47 tag */
 	for (i = 0; tmp[i]; i++) {
 		if (tmp[i] == '_')
@@ -468,3 +472,6 @@ void GetLinuxOobeLocale(LinuxOobeLocale *out)
 	out->input_locale[sizeof(out->input_locale)   - 1] = '\0';
 	out->ui_fallback[sizeof(out->ui_fallback)     - 1] = '\0';
 }
+
+/* Cross-platform wrapper: GetOobeLocale() delegates to GetLinuxOobeLocale(). */
+void GetOobeLocale(OobeLocale *out) { GetLinuxOobeLocale(out); }

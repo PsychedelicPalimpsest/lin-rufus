@@ -801,6 +801,15 @@ CFLAGS_LINUX_test_ntfsfix_linux := \
 LDFLAGS_LINUX_test_ntfsfix_linux :=
 EXTRA_SRC_LINUX_test_ntfsfix_linux := $(SRC_DIR)/linux/ntfsfix.c
 
+# icon_linux tests: SetAutorun / ExtractAppIcon in linux/icon.c
+ICON_LINUX_SRC := $(SRC_DIR)/linux/icon.c $(SRC_DIR)/linux/window_text_bridge.c
+CFLAGS_LINUX_test_icon_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter
+LDFLAGS_LINUX_test_icon_linux := -lpthread
+EXTRA_SRC_LINUX_test_icon_linux := $(ICON_LINUX_SRC)
+
 # exe_cli_linux tests: end-to-end subprocess invocation of the rufus binary.
 # No special includes needed — only uses standard POSIX headers + popen.
 CFLAGS_LINUX_test_exe_cli_linux  := -D_GNU_SOURCE
@@ -993,6 +1002,20 @@ CFLAGS_LINUX_test_locale_oobe_linux := \
 	-I$(SRC_DIR)/linux \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_locale_oobe_linux := $(SRC_DIR)/linux/locale_oobe.c
+
+# oobe_locale_common tests: GetOobeLocale() cross-platform (Linux native + Wine)
+CFLAGS_LINUX_test_oobe_locale_common := \
+	-DRUFUS_TEST \
+	-I$(SRC_DIR)/linux -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_oobe_locale_common := $(SRC_DIR)/linux/locale_oobe.c
+
+CFLAGS_WIN_test_oobe_locale_common := \
+	-D_WIN32 \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-unused-parameter \
+	-Wno-implicit-function-declaration
+EXTRA_SRC_WIN_test_oobe_locale_common := $(SRC_DIR)/windows/oobe_locale.c
 
 # xdg_dirs_linux tests: GetXdgUserDir — XDG user-dirs.dirs parsing
 CFLAGS_LINUX_test_xdg_dirs_linux := \
