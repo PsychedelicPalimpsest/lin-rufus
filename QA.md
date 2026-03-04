@@ -542,3 +542,71 @@ Removed all verbose QA session narratives and verbose RESOLVED feature descripti
 7. **`ExitThread` now has `noreturn`** — hash.c warning resolved.
 8. **`FileMatchesHash` now NULL-safe** — both Linux and Wine/Windows glue fixed.
 9. **Wine32 missing** — benign warnings; 64-bit Wine tests work fine.
+
+---
+
+## What Was Tested — Session 7 (fuzz + security fixes)
+
+### Bugs Found and Fixed This Session
+
+**Fuzz crash #1 — fuzz harness null-termination bug (harness bug, not production):**
+- `tests/fuzz_pe.c` passed a single non-null `uint16_t` (not null-terminated) to
+  `FindResourceRva`, which scans for a `0x0000` terminator.  ASAN reported
+  heap-buffer-overflow via OOB stack read.
+- Fixed: changed to `const uint16_t names[][4]` with explicit `0x0000` terminators.
+
+**Fuzz crash #2 — infinite recursion in `FindResourceRva` (real security bug):**
+- A crafted PE with circular resource directory references caused `FindResourceRva`
+  to recurse indefinitely → stack overflow.  PE resource trees are max 3 levels deep;
+  legitimate trees should never exceed 8.
+- Fixed: split into static `FindResourceRva_r(... int depth)` with a
+  `MAX_RESOURCE_DEPTH 8` guard; public `FindResourceRva()` calls the helper at depth 0.
+- File: `src/common/parser.c`.
+
+**Fuzz crash #3 — OOB heap read via unchecked `e_lfanew` (real security bug):**
+- `GetPeArch`, `GetPeSection`, `GetPeSignatureData`, and `RvaToPhysical` all
+  dereferenced `&buf[dos_header->e_lfanew]` without first checking that the offset
+  plus NT header size fits within the buffer.  A 40-byte crafted PE with
+  `e_lfanew=0xFF000000` caused a heap-buffer-overflow.
+- Fixed: added `uint32_t buf_size` parameter to all four functions; added bounds
+  check `if ((uint32_t)dos_header->e_lfanew + sizeof(IMAGE_NT_HEADERS32) > buf_size)`
+  in each.  All callers in `src/linux/hash.c` and `src/linux/pki.c` updated to
+  pass the buffer length.  `src/windows/rufus.h` declarations split with
+  `#ifdef _WIN32` / `#else` to keep Windows callers unchanged.
+- Files: `src/common/parser.c`, `src/linux/hash.c`, `src/linux/pki.c`,
+  `src/windows/rufus.h`.
+- Added 5 regression tests to `tests/test_pe_parser_linux.c`:
+  `get_pe_arch_elfanew_oob`, `get_pe_section_elfanew_oob`,
+  `rva_to_physical_elfanew_oob`, `get_pe_sig_elfanew_oob`,
+  `get_pe_arch_fuzz_crash3_input`.
+
+### GitHub Actions Version Inconsistencies Fixed
+
+- `.github/workflows/linux.yml`: `actions/checkout@v4` → `@v6`,
+  `upload-artifact@v4` → `@v6`.
+- `.github/workflows/setup.yml`: `upload-artifact/merge@v5` → `@v6`.
+  All workflows now consistently use `@v6` for GitHub-provided actions.
+
+### Test Totals This Session
+
+- `./run_tests.sh --linux-only`: all passed (61102+ tests across all suites)
+- `make -C tests check-asan`: all passed
+- `make -C tests check-cppcheck`: no issues
+- `fuzz_pe` 30-second campaign after fixes: 166572 runs, 0 crashes
+- `tests/test_pe_parser_linux_linux`: 67 passed, 0 failed
+
+---
+
+## Tips for Next QA Session (session 7 update)
+
+1. **Read this file**, then check `features.md` Pending Work.
+2. **PE parsing functions now require `buf_size`** — any new caller of `GetPeArch`,
+   `GetPeSection`, `GetPeSignatureData`, `RvaToPhysical` on Linux MUST pass the
+   buffer size.  The `#ifdef _WIN32` block in `rufus.h` retains old Windows signatures.
+3. **Run `./run_tests.sh --container`** — loopback/block-device root tests not yet
+   run from this session (no container available in current env).
+4. **Fuzz corpus** is in `tests/corpus/pe/` — run `fuzz_pe corpus/pe/` to resume
+   where this session left off.
+5. **`FindResourceRva` depth guard** is `MAX_RESOURCE_DEPTH 8` — legitimate PE
+   resource trees are max 3 levels; 8 gives headroom without allowing abuse.
+6. **No hardcoded `/dev/nvme0n2` in repo** — use `RUFUS_TEST_DEVICE` env var.
