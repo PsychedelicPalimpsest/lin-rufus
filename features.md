@@ -503,6 +503,8 @@ This is the most structurally significant porting gap.
 | `proposed_label.c` (`get_iso_proposed_label`) tests | ✅ | 8 tests in `test_ui_linux.c`: all branches covered |
 | `ntfsfix.c` (`RunNtfsFix`) tests | ✅ | 24 tests in `test_ntfsfix_linux.c`: null/empty path, command format + quoting, return values, hook replacement, overflow safety; `ntfsfix_set_system_hook()` added to `ntfsfix.c` |
 | `dump_fat.c` (`DumpFatDir`) tests | ✅ | 15 tests in `test_dump_fat_linux.c`: 9 unit tests for `wchar16_to_utf8` (empty, ASCII, 2-byte, 3-byte UTF-8, surrogate pairs, mixed, null-terminated, FAT name, ASCII range), 3 guard tests (null path, null image path, nonexistent image), 3 integration tests using real FAT12+ISO (extract single file, skip existing, extract multiple files); `dump_fat_wchar16_to_utf8()` test wrapper added to `dump_fat.c` |
+| `common/iso_report.c` (`log_iso_report`) parity | ✅ | Removed `#ifdef _WIN32` guards from `lmprintf()`/`resource.h` includes and `Notification()` call; truncated ISO warning dialog now shown on Linux too; `NotificationEx` stub with call-tracking in `iso_report_linux_glue.c`; 47 tests pass (1 new: `mismatch_truncated_shows_notification`) |
+| `linux/locale_oobe.c` (`/etc/default/keyboard`) tests | ✅ | Added `locale_oobe_set_etc_default_keyboard_path()` injection hook; 5 new tests covering plain/quoted/comma/missing-file/real-format keyboard files; 41 `test_locale_oobe_linux` tests pass |
 
 ---
 
