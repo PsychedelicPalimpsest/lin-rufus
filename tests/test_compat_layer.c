@@ -828,6 +828,68 @@ TEST(closehandle_null_returns_false)
 	CHECK_MSG(!r, "CloseHandle(NULL) must return FALSE");
 }
 
+TEST(getfilesizeex_after_write)
+{
+	const char *path = "/tmp/rufus_compat_layer_fsize_test.tmp";
+	const char data[] = "0123456789";  /* 11 bytes including null */
+	unlink(path);
+
+	HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	CHECK_MSG(h != INVALID_HANDLE_VALUE, "CreateFileA must succeed for GetFileSizeEx test");
+	if (h == INVALID_HANDLE_VALUE) { return; }
+
+	DWORD written = 0;
+	WriteFile(h, data, sizeof(data), &written, NULL);
+	CloseHandle(h);
+
+	HANDLE hr = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+	CHECK_MSG(hr != INVALID_HANDLE_VALUE, "CreateFileA for read must succeed");
+	if (hr == INVALID_HANDLE_VALUE) { unlink(path); return; }
+
+	LARGE_INTEGER sz; sz.QuadPart = 0;
+	BOOL ok = GetFileSizeEx(hr, &sz);
+	CloseHandle(hr);
+	unlink(path);
+
+	CHECK_MSG(ok, "GetFileSizeEx must return TRUE for open file");
+	CHECK_MSG(sz.QuadPart == (LONGLONG)sizeof(data),
+	          "GetFileSizeEx must return correct file size");
+}
+
+TEST(setfilepointerex_seek_set)
+{
+	const char *path = "/tmp/rufus_compat_layer_seek_test.tmp";
+	const char data[] = "ABCDEFGHIJ";
+	unlink(path);
+
+	HANDLE hw = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (hw == INVALID_HANDLE_VALUE) { return; }
+	DWORD wr = 0;
+	WriteFile(hw, data, sizeof(data), &wr, NULL);
+	CloseHandle(hw);
+
+	HANDLE h = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+	CHECK_MSG(h != INVALID_HANDLE_VALUE, "CreateFileA must succeed for SetFilePointerEx test");
+	if (h == INVALID_HANDLE_VALUE) { unlink(path); return; }
+
+	/* Seek to offset 3 from beginning */
+	LARGE_INTEGER dist; dist.QuadPart = 3;
+	LARGE_INTEGER newpos; newpos.QuadPart = 0;
+	BOOL ok = SetFilePointerEx(h, dist, &newpos, FILE_BEGIN);
+	CHECK_MSG(ok, "SetFilePointerEx must return TRUE");
+	CHECK_MSG(newpos.QuadPart == 3, "SetFilePointerEx must report new position as 3");
+
+	/* Read one byte — should be 'D' (data[3]) */
+	char buf[2] = {0};
+	DWORD rd = 0;
+	ReadFile(h, buf, 1, &rd, NULL);
+	CloseHandle(h);
+	unlink(path);
+
+	CHECK_MSG(rd == 1, "ReadFile after seek must read 1 byte");
+	CHECK_MSG(buf[0] == data[3], "ReadFile after seek must return byte at seeked offset");
+}
+
 /* ==========================================================================
  * Run all tests
  * ========================================================================== */
@@ -953,6 +1015,8 @@ int main(void)
 	RUN_TEST(writefile_and_readfile_roundtrip);
 	RUN_TEST(closehandle_invalid_returns_false);
 	RUN_TEST(closehandle_null_returns_false);
+	RUN_TEST(getfilesizeex_after_write);
+	RUN_TEST(setfilepointerex_seek_set);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
