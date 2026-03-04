@@ -279,6 +279,21 @@ TEST(failed_e_fail)
 	CHECK_MSG(FAILED(E_FAIL) != 0, "FAILED(E_FAIL) must be true");
 }
 
+TEST(make_hresult_failure_has_high_bit)
+{
+	/* MAKE_HRESULT with severity=1 must produce a negative HRESULT (failed) */
+	HRESULT hr = MAKE_HRESULT(1, 0, 0);
+	CHECK_MSG(hr < 0, "MAKE_HRESULT(sev=1) must produce negative HRESULT");
+	CHECK_MSG(FAILED(hr), "MAKE_HRESULT(sev=1) must be FAILED");
+}
+
+TEST(make_hresult_success_is_nonnegative)
+{
+	HRESULT hr = MAKE_HRESULT(0, 0, 0);
+	CHECK_MSG(hr == 0, "MAKE_HRESULT(sev=0,fac=0,code=0) must be 0");
+	CHECK_MSG(SUCCEEDED(hr), "MAKE_HRESULT(sev=0) must be SUCCEEDED");
+}
+
 /* ==========================================================================
  * Win32 error codes
  * ========================================================================== */
@@ -1451,6 +1466,8 @@ int main(void)
 	RUN_TEST(succeeded_e_fail);
 	RUN_TEST(failed_s_ok);
 	RUN_TEST(failed_e_fail);
+	RUN_TEST(make_hresult_failure_has_high_bit);
+	RUN_TEST(make_hresult_success_is_nonnegative);
 	RUN_TEST(error_success_is_zero);
 	RUN_TEST(error_access_denied_is_5);
 	RUN_TEST(error_invalid_handle_is_6);
