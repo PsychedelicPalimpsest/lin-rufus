@@ -955,6 +955,30 @@ TEST(setfilepointerex_seek_set)
 	CHECK_MSG(buf[0] == data[3], "ReadFile after seek must return byte at seeked offset");
 }
 
+TEST(getfilesize_low_part)
+{
+	const char *path = "/tmp/rufus_compat_getfilesize.tmp";
+	const char data[] = {1, 2, 3, 4, 5};
+	unlink(path);
+
+	HANDLE hw = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (hw == INVALID_HANDLE_VALUE) { return; }
+	DWORD wr = 0;
+	WriteFile(hw, data, sizeof(data), &wr, NULL);
+	CloseHandle(hw);
+
+	HANDLE hr = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+	if (hr == INVALID_HANDLE_VALUE) { unlink(path); return; }
+
+	DWORD high = 0xDEADBEEF;
+	DWORD low = GetFileSize(hr, &high);
+	CloseHandle(hr);
+	unlink(path);
+
+	CHECK_MSG(low == sizeof(data), "GetFileSize must return correct low part");
+	CHECK_MSG(high == 0, "GetFileSize must set high part to 0 for small file");
+}
+
 /* ==========================================================================
  * LARGE_INTEGER / ULARGE_INTEGER struct layout
  * ========================================================================== */
@@ -1430,6 +1454,7 @@ int main(void)
 	RUN_TEST(closehandle_null_returns_false);
 	RUN_TEST(getfilesizeex_after_write);
 	RUN_TEST(setfilepointerex_seek_set);
+	RUN_TEST(getfilesize_low_part);
 
 	RUN_TEST(large_integer_quadpart_is_8_bytes);
 	RUN_TEST(large_integer_quadpart_set_low_high);
