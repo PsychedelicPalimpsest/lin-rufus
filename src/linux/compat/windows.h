@@ -1729,6 +1729,11 @@ static inline BOOL MoveWindow(HWND h, int x, int y, int w, int ht, BOOL repaint)
 static inline BOOL SetWindowPos(HWND h, HWND hi, int x, int y, int w, int ht, UINT f) { (void)h;(void)hi;(void)x;(void)y;(void)w;(void)ht;(void)f; return FALSE; }
 
 /* ---- GetSystemInfo / SYSTEM_INFO ---- */
+#define PROCESSOR_ARCHITECTURE_AMD64  9
+#define PROCESSOR_ARCHITECTURE_ARM    5
+#define PROCESSOR_ARCHITECTURE_ARM64  12
+#define PROCESSOR_ARCHITECTURE_INTEL  0
+#define PROCESSOR_ARCHITECTURE_UNKNOWN 0xffff
 typedef struct _SYSTEM_INFO {
     union { DWORD dwOemId; struct { WORD wProcessorArchitecture; WORD wReserved; }; };
     DWORD dwPageSize, dwActiveProcessorMask;
@@ -1737,13 +1742,25 @@ typedef struct _SYSTEM_INFO {
     WORD  wProcessorLevel, wProcessorRevision;
     LPVOID lpMinimumApplicationAddress, lpMaximumApplicationAddress;
 } SYSTEM_INFO, *LPSYSTEM_INFO;
-static inline void GetSystemInfo(LPSYSTEM_INFO si) { if(si) memset(si,0,sizeof(*si)); }
+static inline void GetSystemInfo(LPSYSTEM_INFO si) {
+    if (!si) return;
+    memset(si, 0, sizeof(*si));
+    si->dwPageSize = (DWORD)sysconf(_SC_PAGESIZE);
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    si->dwNumberOfProcessors = (n > 0) ? (DWORD)n : 1;
+#if defined(__x86_64__)
+    si->wProcessorArchitecture = PROCESSOR_ARCHITECTURE_AMD64;
+#elif defined(__i386__)
+    si->wProcessorArchitecture = PROCESSOR_ARCHITECTURE_INTEL;
+#elif defined(__aarch64__)
+    si->wProcessorArchitecture = PROCESSOR_ARCHITECTURE_ARM64;
+#elif defined(__arm__)
+    si->wProcessorArchitecture = PROCESSOR_ARCHITECTURE_ARM;
+#else
+    si->wProcessorArchitecture = PROCESSOR_ARCHITECTURE_UNKNOWN;
+#endif
+}
 static inline void GetNativeSystemInfo(LPSYSTEM_INFO si) { GetSystemInfo(si); }
-#define PROCESSOR_ARCHITECTURE_AMD64  9
-#define PROCESSOR_ARCHITECTURE_ARM    5
-#define PROCESSOR_ARCHITECTURE_ARM64  12
-#define PROCESSOR_ARCHITECTURE_INTEL  0
-#define PROCESSOR_ARCHITECTURE_UNKNOWN 0xffff
 
 /* ---- MEMORYSTATUSEX ---- */
 typedef struct _MEMORYSTATUSEX {

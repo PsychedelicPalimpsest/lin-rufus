@@ -968,6 +968,51 @@ TEST(sleep_zero_is_noop)
 	CHECK_MSG(1, "Sleep(0) must complete without crashing");
 }
 
+/* ==========================================================================
+ * GetSystemInfo — processor count, page size, architecture
+ * ========================================================================== */
+
+TEST(getsysteminfo_null_is_safe)
+{
+	/* Must not crash when passed NULL */
+	GetSystemInfo(NULL);
+	CHECK_MSG(1, "GetSystemInfo(NULL) must not crash");
+}
+
+TEST(getsysteminfo_processor_count_nonzero)
+{
+	SYSTEM_INFO si;
+	GetSystemInfo(&si);
+	CHECK_MSG(si.dwNumberOfProcessors >= 1,
+	          "GetSystemInfo: dwNumberOfProcessors must be >= 1");
+}
+
+TEST(getsysteminfo_page_size_power_of_two)
+{
+	SYSTEM_INFO si;
+	GetSystemInfo(&si);
+	DWORD pg = si.dwPageSize;
+	CHECK_MSG(pg >= 4096, "GetSystemInfo: dwPageSize must be at least 4096");
+	CHECK_MSG((pg & (pg - 1)) == 0, "GetSystemInfo: dwPageSize must be a power of two");
+}
+
+TEST(getsysteminfo_architecture_known)
+{
+	SYSTEM_INFO si;
+	GetSystemInfo(&si);
+	WORD arch = si.wProcessorArchitecture;
+	/* Must be one of the defined constants (not 0xffff on any real build host) */
+	CHECK_MSG(arch == PROCESSOR_ARCHITECTURE_AMD64  ||
+	          arch == PROCESSOR_ARCHITECTURE_INTEL  ||
+	          arch == PROCESSOR_ARCHITECTURE_ARM64  ||
+	          arch == PROCESSOR_ARCHITECTURE_ARM,
+	          "GetSystemInfo: wProcessorArchitecture must be a known value");
+}
+
+/* ==========================================================================
+ * Run all tests
+ * ========================================================================== */
+
 int main(void)
 {
 	RUN_TEST(sizeof_byte_is_1);
@@ -1102,6 +1147,11 @@ int main(void)
 
 	RUN_TEST(sleep_actually_delays);
 	RUN_TEST(sleep_zero_is_noop);
+
+	RUN_TEST(getsysteminfo_null_is_safe);
+	RUN_TEST(getsysteminfo_processor_count_nonzero);
+	RUN_TEST(getsysteminfo_page_size_power_of_two);
+	RUN_TEST(getsysteminfo_architecture_known);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
