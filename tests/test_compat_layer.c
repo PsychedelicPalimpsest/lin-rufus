@@ -1415,6 +1415,131 @@ TEST(formatmessage_zero_id_formats_zero)
 
 
 /* ==========================================================================
+ * SetFilePointerEx — FILE_END and FILE_CURRENT seek methods
+ * ========================================================================== */
+
+TEST(setfilepointerex_seek_end)
+{
+	const char *path = "/tmp/rufus_compat_seek_end_test.tmp";
+	const char data[] = "ABCDEFGHIJ";  /* 10 bytes + null = 11 bytes written */
+	unlink(path);
+
+	HANDLE hw = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (hw == INVALID_HANDLE_VALUE) { return; }
+	DWORD wr = 0;
+	WriteFile(hw, data, 10, &wr, NULL);  /* write exactly 10 bytes */
+	CloseHandle(hw);
+
+	HANDLE h = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+	CHECK_MSG(h != INVALID_HANDLE_VALUE, "CreateFileA must succeed for FILE_END test");
+	if (h == INVALID_HANDLE_VALUE) { unlink(path); return; }
+
+	/* Seek to 2 bytes before the end */
+	LARGE_INTEGER dist; dist.QuadPart = -2;
+	LARGE_INTEGER newpos; newpos.QuadPart = 0;
+	BOOL ok = SetFilePointerEx(h, dist, &newpos, FILE_END);
+	CHECK_MSG(ok, "SetFilePointerEx FILE_END must return TRUE");
+	CHECK_MSG(newpos.QuadPart == 8, "SetFilePointerEx FILE_END -2 on 10-byte file must give position 8");
+
+	/* Read one byte — should be 'I' (data[8]) */
+	char buf[2] = {0};
+	DWORD rd = 0;
+	ReadFile(h, buf, 1, &rd, NULL);
+	CloseHandle(h);
+	unlink(path);
+
+	CHECK_MSG(rd == 1, "ReadFile after FILE_END seek must read 1 byte");
+	CHECK_MSG(buf[0] == 'I', "ReadFile after FILE_END seek must return correct byte");
+}
+
+TEST(setfilepointerex_seek_current)
+{
+	const char *path = "/tmp/rufus_compat_seek_cur_test.tmp";
+	const char data[] = "ABCDEFGHIJ";
+	unlink(path);
+
+	HANDLE hw = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (hw == INVALID_HANDLE_VALUE) { return; }
+	DWORD wr = 0;
+	WriteFile(hw, data, 10, &wr, NULL);
+	CloseHandle(hw);
+
+	HANDLE h = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+	CHECK_MSG(h != INVALID_HANDLE_VALUE, "CreateFileA must succeed for FILE_CURRENT test");
+	if (h == INVALID_HANDLE_VALUE) { unlink(path); return; }
+
+	/* First seek to position 3 */
+	LARGE_INTEGER dist3; dist3.QuadPart = 3;
+	SetFilePointerEx(h, dist3, NULL, FILE_BEGIN);
+
+	/* Then advance 2 more via FILE_CURRENT */
+	LARGE_INTEGER dist2; dist2.QuadPart = 2;
+	LARGE_INTEGER newpos; newpos.QuadPart = 0;
+	BOOL ok = SetFilePointerEx(h, dist2, &newpos, FILE_CURRENT);
+	CHECK_MSG(ok, "SetFilePointerEx FILE_CURRENT must return TRUE");
+	CHECK_MSG(newpos.QuadPart == 5, "FILE_CURRENT +2 from pos 3 must give position 5");
+
+	char buf[2] = {0};
+	DWORD rd = 0;
+	ReadFile(h, buf, 1, &rd, NULL);
+	CloseHandle(h);
+	unlink(path);
+
+	CHECK_MSG(rd == 1, "ReadFile after FILE_CURRENT seek must read 1 byte");
+	CHECK_MSG(buf[0] == 'F', "ReadFile after FILE_CURRENT seek must return correct byte (data[5]='F')");
+}
+
+/* ==========================================================================
+ * OutputDebugStringA — no-op but must not crash
+ * ========================================================================== */
+
+TEST(outputdebugstringa_null_does_not_crash)
+{
+	OutputDebugStringA(NULL);
+	CHECK_MSG(1, "OutputDebugStringA(NULL) must not crash");
+}
+
+TEST(outputdebugstringa_empty_string_does_not_crash)
+{
+	OutputDebugStringA("");
+	CHECK_MSG(1, "OutputDebugStringA(\"\") must not crash");
+}
+
+TEST(outputdebugstringa_normal_string_does_not_crash)
+{
+	OutputDebugStringA("rufus debug output");
+	CHECK_MSG(1, "OutputDebugStringA with normal string must not crash");
+}
+
+/* ==========================================================================
+ * atoi64 / _atoi64 — map to atoll
+ * ========================================================================== */
+
+TEST(atoi64_basic_positive)
+{
+	long long v = atoi64("12345");
+	CHECK_MSG(v == 12345LL, "atoi64(\"12345\") must return 12345");
+}
+
+TEST(atoi64_large_value)
+{
+	long long v = atoi64("9223372036854775807");  /* LLONG_MAX */
+	CHECK_MSG(v == 9223372036854775807LL, "atoi64 must handle LLONG_MAX");
+}
+
+TEST(atoi64_negative)
+{
+	long long v = _atoi64("-42");
+	CHECK_MSG(v == -42LL, "_atoi64(\"-42\") must return -42");
+}
+
+TEST(atoi64_zero)
+{
+	long long v = atoi64("0");
+	CHECK_MSG(v == 0LL, "atoi64(\"0\") must return 0");
+}
+
+/* ==========================================================================
  * GlobalAlloc / GlobalFree / GlobalLock / GlobalUnlock
  * ========================================================================== */
 
@@ -1823,6 +1948,18 @@ int main(void)
 	RUN_TEST(formatmessage_basic_error_code);
 	RUN_TEST(formatmessage_null_buf_returns_zero_len);
 	RUN_TEST(formatmessage_zero_id_formats_zero);
+
+	RUN_TEST(setfilepointerex_seek_end);
+	RUN_TEST(setfilepointerex_seek_current);
+
+	RUN_TEST(outputdebugstringa_null_does_not_crash);
+	RUN_TEST(outputdebugstringa_empty_string_does_not_crash);
+	RUN_TEST(outputdebugstringa_normal_string_does_not_crash);
+
+	RUN_TEST(atoi64_basic_positive);
+	RUN_TEST(atoi64_large_value);
+	RUN_TEST(atoi64_negative);
+	RUN_TEST(atoi64_zero);
 
 	RUN_TEST(globalalloc_fixed_returns_non_null);
 	RUN_TEST(globalalloc_zeroinit_zeroes_memory);
