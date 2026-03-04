@@ -23,6 +23,7 @@
 static const char *s_lang_injection             = NULL;
 static const char *s_keyboard_injection         = NULL;
 static const char *s_etc_default_keyboard_path  = NULL;
+static const char *s_vconsole_path              = NULL;
 
 void locale_oobe_set_lang_injection(const char *lang)
 {
@@ -37,6 +38,11 @@ void locale_oobe_set_keyboard_injection(const char *xkb_layout)
 void locale_oobe_set_etc_default_keyboard_path(const char *path)
 {
 	s_etc_default_keyboard_path = path;
+}
+
+void locale_oobe_set_vconsole_path(const char *path)
+{
+	s_vconsole_path = path;
 }
 #endif /* RUFUS_TEST */
 
@@ -208,6 +214,56 @@ static int try_etc_default_keyboard(char *out, size_t outsz)
 	return 0;
 }
 
+/*
+ * Try to read a keyboard layout from /etc/vconsole.conf.
+ * Checks XKBLAYOUT= first (Arch with X11 config), then KEYMAP= (Fedora/RHEL).
+ * Strips variant suffixes like "de-latin1" -> "de".
+ */
+static int try_vconsole(char *out, size_t outsz)
+{
+	const char *path = "/etc/vconsole.conf";
+#ifdef RUFUS_TEST
+	if (s_vconsole_path)
+		path = s_vconsole_path;
+#endif
+	FILE *f = fopen(path, "r");
+	if (!f) return 0;
+
+	static const char* const keys[] = { "XKBLAYOUT=", "KEYMAP=", NULL };
+	char line[256];
+	char found[32] = { 0 };
+	int got = 0;
+
+	while (fgets(line, sizeof(line), f) && !got) {
+		for (int k = 0; keys[k] && !got; k++) {
+			size_t klen = strlen(keys[k]);
+			char *p = line;
+			while (*p == ' ' || *p == '\t') p++;
+			if (strncmp(p, keys[k], klen) != 0) continue;
+			p += klen;
+			if (*p == '"' || *p == '\'') p++;
+			/* Copy base layout, stripping variant suffix ("-" or "_") */
+			size_t i = 0;
+			while (*p && *p != '"' && *p != '\'' && *p != '\n' && *p != '\r'
+			       && *p != '-' && *p != '_' && *p != ','
+			       && i < sizeof(found) - 1) {
+				found[i++] = (char)tolower((unsigned char)*p);
+				p++;
+			}
+			found[i] = '\0';
+			if (i > 0) got = 1;
+		}
+	}
+	fclose(f);
+
+	if (got && found[0] && outsz > 0) {
+		strncpy(out, found, outsz - 1);
+		out[outsz - 1] = '\0';
+		return 1;
+	}
+	return 0;
+}
+
 /* Map an xkb layout string to a Windows input locale string.
  * Returns a pointer to a static string; never NULL. */
 static const char *xkb_to_win_input_locale(const char *xkb, const char *bcp47_fallback)
@@ -277,8 +333,10 @@ void GetLinuxOobeLocale(LinuxOobeLocale *out)
 
 	char detected_xkb[32] = { 0 };
 	if (!xkb || !xkb[0]) {
-		/* Try /etc/default/keyboard */
+		/* Try /etc/default/keyboard (Debian/Ubuntu), then /etc/vconsole.conf (Fedora/Arch) */
 		if (try_etc_default_keyboard(detected_xkb, sizeof(detected_xkb)))
+			xkb = detected_xkb;
+		else if (try_vconsole(detected_xkb, sizeof(detected_xkb)))
 			xkb = detected_xkb;
 	}
 

@@ -58,6 +58,10 @@ void locale_oobe_set_keyboard_injection(const char *xkb_layout);
 /* Override the path to /etc/default/keyboard (for testing file-based
  * keyboard layout detection). Pass NULL to revert to default. */
 void locale_oobe_set_etc_default_keyboard_path(const char *path);
+
+/* Override the path to /etc/vconsole.conf (for testing Fedora/RHEL/Arch
+ * keyboard layout detection via KEYMAP= or XKBLAYOUT=). Pass NULL to revert. */
+void locale_oobe_set_vconsole_path(const char *path);
 #endif
 
 #ifdef __cplusplus

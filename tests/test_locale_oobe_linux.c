@@ -361,6 +361,103 @@ TEST(etc_default_keyboard_no_xkblayout_falls_back_to_lang)
 }
 
 /* ================================================================
+ * /etc/vconsole.conf file-based detection tests (Fedora/RHEL/Arch parity)
+ * ================================================================ */
+
+/* Helper: write a temp /etc/vconsole.conf-style file */
+static char *write_vconsole_file(const char *content)
+{
+	static char path[128];
+	snprintf(path, sizeof(path), "/tmp/test_locale_oobe_vconsole.XXXXXX");
+	int fd = mkstemp(path);
+	if (fd < 0) return NULL;
+	write(fd, content, strlen(content));
+	close(fd);
+	return path;
+}
+
+TEST(vconsole_keymap_sets_input_locale_de)
+{
+	/* Fedora/RHEL: KEYMAP=de in /etc/vconsole.conf → German input locale */
+	char *p = write_vconsole_file("KEYMAP=\"de\"\nFONT=eurlatgr\n");
+	if (!p) { CHECK(0); return; }
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("de_DE.UTF-8");
+	locale_oobe_set_keyboard_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path("/nonexistent/keyboard");
+	locale_oobe_set_vconsole_path(p);
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(NULL);
+	locale_oobe_set_vconsole_path(NULL);
+	unlink(p);
+	/* German input locale = 0407:00000407 */
+	CHECK_MSG(strstr(loc.input_locale, "0407") != NULL,
+	          "vconsole KEYMAP=de -> German input locale (0407)");
+}
+
+TEST(vconsole_xkblayout_sets_input_locale_fr)
+{
+	/* Arch Linux: XKBLAYOUT=fr in /etc/vconsole.conf */
+	char *p = write_vconsole_file("XKBLAYOUT=fr\n");
+	if (!p) { CHECK(0); return; }
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("fr_FR.UTF-8");
+	locale_oobe_set_keyboard_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path("/nonexistent/keyboard");
+	locale_oobe_set_vconsole_path(p);
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(NULL);
+	locale_oobe_set_vconsole_path(NULL);
+	unlink(p);
+	/* French input locale = 040c:0000040c */
+	CHECK_MSG(strstr(loc.input_locale, "040c") != NULL || strstr(loc.input_locale, "040C") != NULL,
+	          "vconsole XKBLAYOUT=fr -> French input locale (040c)");
+}
+
+TEST(etc_default_keyboard_takes_priority_over_vconsole_oobe)
+{
+	/* /etc/default/keyboard (fr) should win over /etc/vconsole.conf (de) */
+	char *kb = write_keyboard_file("XKBLAYOUT=fr\n");
+	char *vc = write_vconsole_file("KEYMAP=de\n");
+	if (!kb || !vc) { CHECK(0); return; }
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("fr_FR.UTF-8");
+	locale_oobe_set_keyboard_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(kb);
+	locale_oobe_set_vconsole_path(vc);
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(NULL);
+	locale_oobe_set_vconsole_path(NULL);
+	unlink(kb);
+	unlink(vc);
+	/* Should use French (040c), not German (0407) */
+	CHECK_MSG(strstr(loc.input_locale, "040c") != NULL || strstr(loc.input_locale, "040C") != NULL,
+	          "etc/default/keyboard (fr) takes priority over vconsole (de)");
+}
+
+TEST(vconsole_keymap_with_variant_suffix_stripped_oobe)
+{
+	/* KEYMAP=de-latin1 -> base layout "de" -> German input locale */
+	char *p = write_vconsole_file("KEYMAP=de-latin1\n");
+	if (!p) { CHECK(0); return; }
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("de_DE.UTF-8");
+	locale_oobe_set_keyboard_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path("/nonexistent/keyboard");
+	locale_oobe_set_vconsole_path(p);
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(NULL);
+	locale_oobe_set_vconsole_path(NULL);
+	unlink(p);
+	CHECK_MSG(strstr(loc.input_locale, "0407") != NULL,
+	          "vconsole KEYMAP=de-latin1 -> German input locale (0407) after stripping suffix");
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 int main(void)
@@ -400,6 +497,12 @@ int main(void)
 	RUN(etc_default_keyboard_missing_file_fallback);
 	RUN(etc_default_keyboard_with_comment_lines);
 	RUN(etc_default_keyboard_no_xkblayout_falls_back_to_lang);
+
+	printf("\n=== /etc/vconsole.conf detection tests ===\n");
+	RUN(vconsole_keymap_sets_input_locale_de);
+	RUN(vconsole_xkblayout_sets_input_locale_fr);
+	RUN(etc_default_keyboard_takes_priority_over_vconsole_oobe);
+	RUN(vconsole_keymap_with_variant_suffix_stripped_oobe);
 
 	TEST_RESULTS();
 }
