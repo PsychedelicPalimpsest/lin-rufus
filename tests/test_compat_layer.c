@@ -1092,6 +1092,34 @@ TEST(movememory_overlapping)
 }
 
 /* ==========================================================================
+ * LocalAlloc / LocalFree — LMEM_FIXED and LMEM_ZEROINIT
+ * ========================================================================== */
+
+TEST(localalloc_fixed_returns_non_null)
+{
+	HLOCAL p = LocalAlloc(LMEM_FIXED, 64);
+	CHECK_MSG(p != NULL, "LocalAlloc(LMEM_FIXED) must return non-NULL");
+	LocalFree(p);
+}
+
+TEST(localalloc_zeroinit_zeroes_memory)
+{
+	BYTE *p = (BYTE *)LocalAlloc(LMEM_ZEROINIT, 64);
+	CHECK_MSG(p != NULL, "LocalAlloc(LMEM_ZEROINIT) must return non-NULL");
+	int all_zero = 1;
+	for (int i = 0; i < 64; i++) if (p[i] != 0) { all_zero = 0; break; }
+	LocalFree(p);
+	CHECK_MSG(all_zero, "LocalAlloc(LMEM_ZEROINIT) must zero-initialise memory");
+}
+
+TEST(localfree_returns_null)
+{
+	HLOCAL p = LocalAlloc(LMEM_FIXED, 8);
+	HLOCAL r = LocalFree(p);
+	CHECK_MSG(r == NULL, "LocalFree must return NULL on success");
+}
+
+/* ==========================================================================
  * VirtualAlloc / VirtualFree — thin wrappers over malloc/free
  * ========================================================================== */
 
@@ -1289,6 +1317,10 @@ int main(void)
 	RUN_TEST(fillmemory_fills_with_value);
 	RUN_TEST(copymemory_copies_data);
 	RUN_TEST(movememory_overlapping);
+
+	RUN_TEST(localalloc_fixed_returns_non_null);
+	RUN_TEST(localalloc_zeroinit_zeroes_memory);
+	RUN_TEST(localfree_returns_null);
 
 	RUN_TEST(virtualalloc_returns_non_null);
 	RUN_TEST(virtualalloc_memory_is_usable);
