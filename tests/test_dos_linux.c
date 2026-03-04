@@ -1102,6 +1102,92 @@ TEST(autoexec_uses_ega5_for_greek)
 #endif
 }
 
+/* ================================================================
+ * Human-readable menu description tests
+ * Windows uses kb_to_hr() / cp_to_hr() to show names like
+ * "German keyboard with Western-European (Euro) codepage [858]".
+ * The Linux port should show similar descriptions.
+ * ================================================================ */
+#ifdef RUFUS_TEST
+/* Helper: check that FDCONFIG.SYS contains a needle (case-insensitive). */
+static int fdconfig_contains(const char* xkb, const char* needle)
+{
+    dos_locale_set_xkb_layout(xkb);
+    char *target = make_tmpdir();
+    if (!target) { dos_locale_set_xkb_layout(NULL); return -1; }
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg, "r");
+    int found = 0;
+    if (f) {
+        char line[512];
+        while (fgets(line, sizeof(line), f)) {
+            char upper_line[512], upper_needle[512];
+            size_t i;
+            for (i = 0; i < sizeof(upper_line)-1 && line[i]; i++)
+                upper_line[i] = (char)toupper((unsigned char)line[i]);
+            upper_line[i] = '\0';
+            for (i = 0; i < sizeof(upper_needle)-1 && needle[i]; i++)
+                upper_needle[i] = (char)toupper((unsigned char)needle[i]);
+            upper_needle[i] = '\0';
+            if (strstr(upper_line, upper_needle))
+                found = 1;
+        }
+        fclose(f);
+    }
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    return found;
+}
+#endif /* RUFUS_TEST */
+
+TEST(fdconfig_menu_shows_german_name)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* de -> GR -> menu should show "German" not just "GR" */
+    CHECK_MSG(fdconfig_contains("de", "German") == 1,
+              "German FDCONFIG.SYS menu should show 'German' keyboard name");
+#endif
+}
+
+TEST(fdconfig_menu_shows_cp858_name)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* de -> CP858 -> menu should show Euro codepage description */
+    CHECK_MSG(fdconfig_contains("de", "Euro") == 1,
+              "German FDCONFIG.SYS menu should show 'Euro' in codepage name");
+#endif
+}
+
+TEST(fdconfig_menu_shows_russian_name)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* ru -> RU -> menu should show "Russian" */
+    CHECK_MSG(fdconfig_contains("ru", "Russian") == 1,
+              "Russian FDCONFIG.SYS menu should show 'Russian' keyboard name");
+#endif
+}
+
+TEST(fdconfig_menu_shows_french_name)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* fr -> FR -> menu should show "French" */
+    CHECK_MSG(fdconfig_contains("fr", "French") == 1,
+              "French FDCONFIG.SYS menu should show 'French' keyboard name");
+#endif
+}
+
 /* GetResource is provided by stdfn.c */
 #include "resource.h"
 extern uint8_t* GetResource(void *m, char *n, char *t, const char *d, DWORD *l, BOOL dup);
@@ -1295,6 +1381,11 @@ int main(void)
     RUN(autoexec_has_label_2_for_german);
     RUN(autoexec_uses_ega3_for_russian);
     RUN(autoexec_uses_ega5_for_greek);
+
+    RUN(fdconfig_menu_shows_german_name);
+    RUN(fdconfig_menu_shows_cp858_name);
+    RUN(fdconfig_menu_shows_russian_name);
+    RUN(fdconfig_menu_shows_french_name);
 
     RUN(getresource_command_com_not_null);
     RUN(getresource_command_com_size_correct);

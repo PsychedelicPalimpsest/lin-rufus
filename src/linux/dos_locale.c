@@ -196,6 +196,77 @@ static const char* ega_driver_for(int cp)
     }
 }
 
+/*
+ * Human-readable names for DOS keyboard codes and OEM codepages.
+ * Mirrors Windows kb_to_hr() / cp_to_hr(), used in FDCONFIG.SYS menu items.
+ */
+typedef struct { const char* code; const char* name; } kb_hr_t;
+static const kb_hr_t kb_hr_table[] = {
+    { "ar", "Arabic"              }, { "az", "Azeri"               },
+    { "be", "Belgian-French"      }, { "bg", "Bulgarian"           },
+    { "bl", "Belarusian"          }, { "br", "Brazilian"           },
+    { "cf", "CA-French"           }, { "cz", "Czech"               },
+    { "dk", "Danish"              }, { "dv", "US-Dvorak"           },
+    { "et", "Estonian"            }, { "fo", "Faeroese"            },
+    { "fr", "French"              }, { "gk", "Greek"               },
+    { "gr", "German"              }, { "hu", "Hungarian"           },
+    { "hy", "Armenian"            }, { "il", "Hebrew"              },
+    { "is", "Icelandic"           }, { "it", "Italian"             },
+    { "jp", "Japanese"            }, { "ka", "Georgian"            },
+    { "kk", "Kazakh"              }, { "ky", "Kyrgyz"              },
+    { "la", "Latin-American"      }, { "lh", "US-Dvorak (LH)"     },
+    { "lt", "Lithuanian"          }, { "lv", "Latvian"             },
+    { "mk", "Macedonian"          }, { "mt", "Maltese"             },
+    { "nl", "Dutch"               }, { "no", "Norwegian"           },
+    { "ph", "Filipino"            }, { "pl", "Polish"              },
+    { "po", "Portuguese"          }, { "rh", "US-Dvorak (RH)"     },
+    { "ro", "Romanian"            }, { "ru", "Russian"             },
+    { "sf", "Swiss-French"        }, { "sg", "Swiss-German"        },
+    { "sk", "Slovak"              }, { "sl", "Slovenian"           },
+    { "sp", "Spanish"             }, { "sq", "Albanian"            },
+    { "su", "Finnish"             }, { "sv", "Swedish"             },
+    { "tj", "Tajik"               }, { "tm", "Turkmen"             },
+    { "tr", "Turkish"             }, { "tt", "Tatar"               },
+    { "uk", "UK-English"          }, { "ur", "Ukrainian"           },
+    { "us", "US-English"          }, { "uz", "Uzbek"               },
+    { "vi", "Vietnamese"          }, { "yc", "YU-Cyrillic"        },
+    { "yu", "YU-Latin"            },
+};
+
+typedef struct { int cp; const char* name; } cp_hr_t;
+static const cp_hr_t cp_hr_table[] = {
+    {  437, "US-English"                    }, {  737, "Greek (DOS)"               },
+    {  775, "Baltic Rim"                    }, {  808, "Cyr-Russian (Euro)"        },
+    {  850, "Western-European"              }, {  851, "Greek"                     },
+    {  852, "Central-European"              }, {  853, "Southern-European"         },
+    {  855, "Cyr-South-Slavic"             }, {  857, "Turkish"                   },
+    {  858, "Western-European (Euro)"       }, {  860, "Portuguese"                },
+    {  861, "Icelandic"                     }, {  862, "Hebrew"                    },
+    {  863, "Canadian-French"               }, {  864, "Arabic"                    },
+    {  865, "Nordic"                        }, {  866, "Cyr-Russian"               },
+    {  869, "Modern Greek"                  }, {  872, "Cyr-South-Slavic (Euro)"  },
+    {  874, "Thai"                          }, {  899, "Armenian"                  },
+    {  932, "Japanese"                      }, {  936, "Chinese (Simplified)"      },
+    {  949, "Korean"                        }, { 1125, "Cyr-Ukrainian"             },
+    { 1131, "Cyr-Belarusian"               },
+};
+
+static const char* kb_to_hr(const char* kb)
+{
+    for (size_t i = 0; i < ARRAYSIZE(kb_hr_table); i++)
+        if (strcmp(kb_hr_table[i].code, kb) == 0)
+            return kb_hr_table[i].name;
+    return kb;  /* fall back to the 2-letter code */
+}
+
+static const char* cp_to_hr(int cp)
+{
+    for (size_t i = 0; i < ARRAYSIZE(cp_hr_table); i++)
+        if (cp_hr_table[i].cp == cp)
+            return cp_hr_table[i].name;
+    return "Unknown";  /* unknown codepage */
+}
+
 /* ----------------------------------------------------------------
  * Injection support for unit testing
  * ---------------------------------------------------------------- */
@@ -363,8 +434,9 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     fprintf(fd, "MENU   FreeDOS Language Selection Menu\r\n");
     fprintf(fd, "MENU   ==================================\r\nMENU\r\n");
     fprintf(fd, "MENUDEFAULT=1,5\r\n");
-    fprintf(fd, "MENU 1) Use %s keyboard with CP%d codepage\r\n", KB_UPPER, cp);
-    fprintf(fd, "MENU 2) Use US keyboard with CP437 codepage\r\n");
+    fprintf(fd, "MENU 1) Use %s keyboard with %s codepage [%d]\r\n",
+            kb_to_hr(kb), cp_to_hr(cp), cp);
+    fprintf(fd, "MENU 2) Use US-English keyboard with US-English codepage [437]\r\n");
     fprintf(fd, "MENU\r\n");
     fprintf(fd, "12?\r\n");
     fprintf(fd, "!DEVICE=\\LOCALE\\DISPLAY.EXE CON=(EGA,,1)\r\n");
