@@ -28,6 +28,8 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include <wchar.h>
 #include <string.h>
 #include <time.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 /* Pull in every compat header we want to verify */
 #include "../src/linux/compat/windows.h"
@@ -2083,6 +2085,254 @@ TEST(coCreateguid_guids_are_unique)
 }
 
 /* ==========================================================================
+ * FormatMessageA
+ * On Linux: produces "Error <code>" into caller's buffer.
+ * ========================================================================== */
+
+TEST(format_message_basic)
+{
+	char buf[64];
+	DWORD n = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, 5, 0, buf, sizeof(buf), NULL);
+	CHECK_MSG(n > 0, "FormatMessageA must return non-zero length");
+	/* Must contain the error code number */
+	CHECK_MSG(strstr(buf, "5") != NULL, "FormatMessageA output must contain the error code");
+}
+
+TEST(format_message_null_buf_returns_zero)
+{
+	DWORD n = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, 1, 0, NULL, 0, NULL);
+	CHECK_MSG(n == 0, "FormatMessageA(NULL buf) must return 0");
+}
+
+TEST(format_message_small_buf_truncates)
+{
+	char buf[4];
+	DWORD n = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, 99, 0, buf, sizeof(buf), NULL);
+	/* Should write something and return the strlen of what was written */
+	CHECK_MSG(n < 4, "FormatMessageA with tiny buf must truncate output");
+	CHECK_MSG(buf[sizeof(buf)-1] == '\0', "FormatMessageA must NUL-terminate");
+}
+
+TEST(format_message_zero_msgid)
+{
+	char buf[64];
+	buf[0] = '\0';
+	FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, 0, 0, buf, sizeof(buf), NULL);
+	/* Must not crash; buf may or may not be filled */
+	CHECK_MSG(strlen(buf) < sizeof(buf), "FormatMessageA with msgid=0 must not overflow");
+}
+
+/* ==========================================================================
+ * GetEnvironmentVariableA / SetEnvironmentVariableA
+ * ========================================================================== */
+
+TEST(get_env_existing_var)
+{
+	/* PATH is always set in a normal environment */
+	char buf[256];
+	DWORD n = GetEnvironmentVariableA("PATH", buf, sizeof(buf));
+	CHECK_MSG(n > 0, "GetEnvironmentVariableA must return non-zero for PATH");
+	CHECK_MSG(buf[0] != '\0', "PATH value must be non-empty");
+}
+
+TEST(get_env_missing_var_returns_zero)
+{
+	char buf[64];
+	DWORD n = GetEnvironmentVariableA("RUFUS_NONEXISTENT_VAR_XYZ", buf, sizeof(buf));
+	CHECK_MSG(n == 0, "GetEnvironmentVariableA must return 0 for missing var");
+}
+
+TEST(get_env_null_buf_returns_required_size)
+{
+	/* Set a known var then query with NULL buf */
+	SetEnvironmentVariableA("RUFUS_TESTVAR_SIZE", "hello");
+	DWORD n = GetEnvironmentVariableA("RUFUS_TESTVAR_SIZE", NULL, 0);
+	/* Must return strlen("hello")+1 = 6 */
+	CHECK_MSG(n == 6, "GetEnvironmentVariableA(NULL buf) must return required size");
+	SetEnvironmentVariableA("RUFUS_TESTVAR_SIZE", NULL);  /* cleanup */
+}
+
+TEST(get_env_returns_length_not_including_nul)
+{
+	SetEnvironmentVariableA("RUFUS_TESTVAR_LEN", "abc");
+	char buf[32];
+	DWORD n = GetEnvironmentVariableA("RUFUS_TESTVAR_LEN", buf, sizeof(buf));
+	CHECK_MSG(n == 3, "GetEnvironmentVariableA must return strlen (not including NUL)");
+	CHECK_MSG(strcmp(buf, "abc") == 0, "GetEnvironmentVariableA must copy value correctly");
+	SetEnvironmentVariableA("RUFUS_TESTVAR_LEN", NULL);  /* cleanup */
+}
+
+TEST(set_env_sets_value)
+{
+	BOOL r = SetEnvironmentVariableA("RUFUS_TESTVAR_SET", "rufus_test_value");
+	CHECK_MSG(r == TRUE, "SetEnvironmentVariableA must return TRUE");
+	const char *v = getenv("RUFUS_TESTVAR_SET");
+	CHECK_MSG(v != NULL && strcmp(v, "rufus_test_value") == 0,
+	          "SetEnvironmentVariableA must actually set the environment variable");
+	SetEnvironmentVariableA("RUFUS_TESTVAR_SET", NULL);  /* cleanup */
+}
+
+TEST(set_env_null_value_unsets)
+{
+	setenv("RUFUS_TESTVAR_UNSET", "something", 1);
+	BOOL r = SetEnvironmentVariableA("RUFUS_TESTVAR_UNSET", NULL);
+	CHECK_MSG(r == TRUE, "SetEnvironmentVariableA(NULL value) must return TRUE");
+	CHECK_MSG(getenv("RUFUS_TESTVAR_UNSET") == NULL,
+	          "SetEnvironmentVariableA(NULL value) must unset the variable");
+}
+
+TEST(set_env_null_name_returns_false)
+{
+	BOOL r = SetEnvironmentVariableA(NULL, "value");
+	CHECK_MSG(r == FALSE, "SetEnvironmentVariableA(NULL name) must return FALSE");
+}
+
+/* ==========================================================================
+ * SetFileAttributesA stub
+ * ========================================================================== */
+
+TEST(set_file_attributes_stub_returns_false)
+{
+	/* SetFileAttributesA is a stub on Linux — always returns FALSE */
+	BOOL r = SetFileAttributesA("/tmp", FILE_ATTRIBUTE_NORMAL);
+	CHECK_MSG(r == FALSE, "SetFileAttributesA must return FALSE on Linux (stub)");
+}
+
+TEST(set_file_attributes_null_returns_false)
+{
+	BOOL r = SetFileAttributesA(NULL, FILE_ATTRIBUTE_NORMAL);
+	CHECK_MSG(r == FALSE, "SetFileAttributesA(NULL) must return FALSE on Linux");
+}
+
+/* ==========================================================================
+ * DeviceIoControl stub
+ * ========================================================================== */
+
+TEST(device_io_control_stub_returns_false)
+{
+	/* DeviceIoControl is a stub on Linux — always returns FALSE */
+	BOOL r = DeviceIoControl((HANDLE)-1, 0, NULL, 0, NULL, 0, NULL, NULL);
+	CHECK_MSG(r == FALSE, "DeviceIoControl must return FALSE on Linux (stub)");
+}
+
+/* ==========================================================================
+ * shlwapi: PathFileExistsA / PathCombineA / StrStrIA / StrCmpIA / StrCmpNIA
+ * ========================================================================== */
+
+TEST(path_file_exists_existing_file)
+{
+	CHECK_MSG(PathFileExistsA("/tmp") == TRUE, "PathFileExistsA must return TRUE for /tmp");
+}
+
+TEST(path_file_exists_missing_file)
+{
+	CHECK_MSG(PathFileExistsA("/tmp/rufus_no_such_file_xyz_99") == FALSE,
+	          "PathFileExistsA must return FALSE for missing path");
+}
+
+TEST(path_file_exists_null_returns_false)
+{
+	CHECK_MSG(PathFileExistsA(NULL) == FALSE,
+	          "PathFileExistsA(NULL) must return FALSE");
+}
+
+TEST(path_file_exists_empty_returns_false)
+{
+	CHECK_MSG(PathFileExistsA("") == FALSE,
+	          "PathFileExistsA(\"\") must return FALSE");
+}
+
+TEST(path_combine_basic)
+{
+	char result[MAX_PATH];
+	LPSTR r = PathCombineA(result, "/usr/local", "bin");
+	CHECK_MSG(r != NULL, "PathCombineA must succeed");
+	CHECK_MSG(strcmp(result, "/usr/local/bin") == 0,
+	          "PathCombineA must combine dir and file with '/'");
+}
+
+TEST(path_combine_dir_trailing_slash)
+{
+	char result[MAX_PATH];
+	PathCombineA(result, "/usr/local/", "bin");
+	CHECK_MSG(strcmp(result, "/usr/local/bin") == 0,
+	          "PathCombineA must not double the slash when dir ends with '/'");
+}
+
+TEST(path_combine_null_file)
+{
+	char result[MAX_PATH];
+	LPSTR r = PathCombineA(result, "/usr/local", NULL);
+	CHECK_MSG(r != NULL, "PathCombineA must handle NULL file");
+	CHECK_MSG(strcmp(result, "/usr/local") == 0,
+	          "PathCombineA with NULL file must return just dir");
+}
+
+TEST(path_combine_null_dir)
+{
+	char result[MAX_PATH];
+	LPSTR r = PathCombineA(result, NULL, "bin");
+	CHECK_MSG(r != NULL, "PathCombineA must handle NULL dir");
+	CHECK_MSG(strcmp(result, "bin") == 0,
+	          "PathCombineA with NULL dir must return just file");
+}
+
+TEST(path_combine_null_result_returns_null)
+{
+	LPSTR r = PathCombineA(NULL, "/usr", "bin");
+	CHECK_MSG(r == NULL, "PathCombineA(NULL result) must return NULL");
+}
+
+TEST(path_combine_backslash_normalized)
+{
+	char result[MAX_PATH];
+	PathCombineA(result, "C:\\Windows", "System32");
+	/* Backslashes should be normalized to forward slashes */
+	CHECK_MSG(strchr(result, '\\') == NULL,
+	          "PathCombineA must normalize backslashes to forward slashes");
+}
+
+TEST(strstra_case_insensitive_found)
+{
+	const char *r = StrStrIA("Hello World", "world");
+	CHECK_MSG(r != NULL, "StrStrIA must find case-insensitive match");
+	CHECK_MSG(strcasecmp(r, "World") == 0, "StrStrIA must return pointer to match");
+}
+
+TEST(strstra_case_insensitive_not_found)
+{
+	const char *r = StrStrIA("Hello World", "xyz");
+	CHECK_MSG(r == NULL, "StrStrIA must return NULL when not found");
+}
+
+TEST(strcmp_ia_equal)
+{
+	CHECK_MSG(StrCmpIA("Hello", "hello") == 0, "StrCmpIA must return 0 for same-string different case");
+}
+
+TEST(strcmp_ia_less)
+{
+	CHECK_MSG(StrCmpIA("abc", "XYZ") < 0, "StrCmpIA must return negative for 'abc' < 'XYZ' (case-insensitive)");
+}
+
+TEST(strcmp_ia_greater)
+{
+	CHECK_MSG(StrCmpIA("xyz", "ABC") > 0, "StrCmpIA must return positive for 'xyz' > 'ABC' (case-insensitive)");
+}
+
+TEST(strcmpnia_first_n_match)
+{
+	CHECK_MSG(StrCmpNIA("Hello World", "hello there", 5) == 0,
+	          "StrCmpNIA must return 0 when first n chars match case-insensitively");
+}
+
+TEST(strcmpnia_first_n_differ)
+{
+	CHECK_MSG(StrCmpNIA("abc", "XYZ", 3) != 0,
+	          "StrCmpNIA must return non-zero when first n chars differ");
+}
+
+/* ==========================================================================
  * Registry stub functions (should fail gracefully on Linux)
  * ========================================================================== */
 
@@ -2414,6 +2664,42 @@ int main(void)
 	RUN_TEST(coCreateguid_variant_bits);
 	RUN_TEST(coCreateguid_null_returns_error);
 	RUN_TEST(coCreateguid_guids_are_unique);
+
+	RUN_TEST(format_message_basic);
+	RUN_TEST(format_message_null_buf_returns_zero);
+	RUN_TEST(format_message_small_buf_truncates);
+	RUN_TEST(format_message_zero_msgid);
+
+	RUN_TEST(get_env_existing_var);
+	RUN_TEST(get_env_missing_var_returns_zero);
+	RUN_TEST(get_env_null_buf_returns_required_size);
+	RUN_TEST(get_env_returns_length_not_including_nul);
+	RUN_TEST(set_env_sets_value);
+	RUN_TEST(set_env_null_value_unsets);
+	RUN_TEST(set_env_null_name_returns_false);
+
+	RUN_TEST(set_file_attributes_stub_returns_false);
+	RUN_TEST(set_file_attributes_null_returns_false);
+
+	RUN_TEST(device_io_control_stub_returns_false);
+
+	RUN_TEST(path_file_exists_existing_file);
+	RUN_TEST(path_file_exists_missing_file);
+	RUN_TEST(path_file_exists_null_returns_false);
+	RUN_TEST(path_file_exists_empty_returns_false);
+	RUN_TEST(path_combine_basic);
+	RUN_TEST(path_combine_dir_trailing_slash);
+	RUN_TEST(path_combine_null_file);
+	RUN_TEST(path_combine_null_dir);
+	RUN_TEST(path_combine_null_result_returns_null);
+	RUN_TEST(path_combine_backslash_normalized);
+	RUN_TEST(strstra_case_insensitive_found);
+	RUN_TEST(strstra_case_insensitive_not_found);
+	RUN_TEST(strcmp_ia_equal);
+	RUN_TEST(strcmp_ia_less);
+	RUN_TEST(strcmp_ia_greater);
+	RUN_TEST(strcmpnia_first_n_match);
+	RUN_TEST(strcmpnia_first_n_differ);
 
 	RUN_TEST(regopenkeyexa_returns_error);
 	RUN_TEST(regqueryvalueexa_returns_error);
