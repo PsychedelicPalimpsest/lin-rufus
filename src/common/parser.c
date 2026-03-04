@@ -41,9 +41,6 @@
 #include "rufus.h"
 #include "missing.h"
 #include "localization.h"
-#ifdef _WIN32
-#include <wintrust.h>
-#endif
 
 static const char space[] = " \t";
 
