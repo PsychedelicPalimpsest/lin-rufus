@@ -22,6 +22,7 @@
 #include "missing.h"
 #include "version.h"
 #include "polkit.h"
+#include "paths.h"
 #include "crash_handler.h"
 #ifndef USE_GTK
 #include "cli.h"
@@ -81,7 +82,7 @@ static char s_ini_path[MAX_PATH];
  *
  * app_dir      directory of the running executable (via /proc/self/exe)
  * app_data_dir $XDG_DATA_HOME/rufus  (or ~/.local/share/rufus)
- * user_dir     home directory ($HOME or passwd entry)
+ * user_dir     home directory (SUDO_USER-aware; see rufus_effective_home())
  * ini_file     $XDG_CONFIG_HOME/rufus/rufus.ini  (or ~/.config/rufus/rufus.ini)
  *
  * The INI directory and an empty INI file are created if they do not exist.
@@ -92,6 +93,7 @@ void rufus_init_paths(void)
     ssize_t len;
     const char* xdg_data;
     const char* xdg_config;
+    char home_buf[PATH_MAX];
     const char* home;
     char ini_dir[MAX_PATH];
     FILE* f;
@@ -112,14 +114,18 @@ void rufus_init_paths(void)
         snprintf(app_dir, sizeof(app_dir), "./");
     }
 
-    /* --- home directory --- */
-    home = getenv("HOME");
-    if (home == NULL || home[0] == '\0')
-        home = "/tmp";
+    /* --- home directory: SUDO_USER-aware ---
+     * When running as root via 'sudo rufus', use the original user's home
+     * directory so that settings are stored in their profile, not root's.
+     * This mirrors the Windows UAC behaviour. */
+    home = rufus_effective_home(home_buf, sizeof(home_buf));
     snprintf(user_dir, sizeof(user_dir), "%s", home);
 
-    /* --- app_data_dir: $XDG_DATA_HOME/rufus or ~/.local/share/rufus --- */
-    xdg_data = getenv("XDG_DATA_HOME");
+    /* --- app_data_dir: $XDG_DATA_HOME/rufus or ~/.local/share/rufus ---
+     * If we resolved SUDO_USER's home, skip $XDG_DATA_HOME (which would be
+     * root's XDG path) and build from the effective home directory. */
+    xdg_data = (geteuid() == 0 && getenv("SUDO_USER") && getenv("SUDO_USER")[0])
+               ? NULL : getenv("XDG_DATA_HOME");
     if (xdg_data != NULL && xdg_data[0] != '\0')
         snprintf(app_data_dir, sizeof(app_data_dir), "%s/rufus", xdg_data);
     else
@@ -139,8 +145,11 @@ void rufus_init_paths(void)
         mkdir(app_data_dir, 0755);
     }
 
-    /* --- ini_file: $XDG_CONFIG_HOME/rufus/rufus.ini or ~/.config/rufus/rufus.ini --- */
-    xdg_config = getenv("XDG_CONFIG_HOME");
+    /* --- ini_file: $XDG_CONFIG_HOME/rufus/rufus.ini or ~/.config/rufus/rufus.ini ---
+     * Same SUDO_USER logic: skip root's XDG_CONFIG_HOME when acting on behalf
+     * of a sudo-invoking user. */
+    xdg_config = (geteuid() == 0 && getenv("SUDO_USER") && getenv("SUDO_USER")[0])
+                 ? NULL : getenv("XDG_CONFIG_HOME");
     if (xdg_config != NULL && xdg_config[0] != '\0')
         snprintf(ini_dir, sizeof(ini_dir), "%s/rufus", xdg_config);
     else

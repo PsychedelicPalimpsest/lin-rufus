@@ -143,6 +143,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-rufus.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-smart.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-stdfn.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-paths.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-stdio.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-stdlg.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-syslinux.$(OBJEXT) \
@@ -489,7 +490,7 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@	linux/dos.c linux/dos_locale.c linux/freedos_data.c \
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/img_info.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
-@TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
+@TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c linux/paths.c \
 @TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c linux/sl_version.c linux/dump_fat.c linux/ntfsfix.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c linux/drag_drop.c linux/progress.c linux/usb_speed.c linux/progress_title.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
@@ -612,6 +613,7 @@ linux/rufus-process.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-rufus.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-smart.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-stdfn.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-paths.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-stdio.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-stdlg.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-syslinux.$(OBJEXT): linux/$(am__dirstamp)
@@ -943,6 +945,12 @@ linux/rufus-stdfn.o: linux/stdfn.c
 
 linux/rufus-stdfn.obj: linux/stdfn.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-stdfn.obj `if test -f 'linux/stdfn.c'; then $(CYGPATH_W) 'linux/stdfn.c'; else $(CYGPATH_W) '$(srcdir)/linux/stdfn.c'; fi`
+
+linux/rufus-paths.o: linux/paths.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-paths.o `test -f 'linux/paths.c' || echo '$(srcdir)/'`linux/paths.c
+
+linux/rufus-paths.obj: linux/paths.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-paths.obj `if test -f 'linux/paths.c'; then $(CYGPATH_W) 'linux/paths.c'; else $(CYGPATH_W) '$(srcdir)/linux/paths.c'; fi`
 
 linux/rufus-stdio.o: linux/stdio.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-stdio.o `test -f 'linux/stdio.c' || echo '$(srcdir)/'`linux/stdio.c

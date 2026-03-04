@@ -997,6 +997,12 @@ CFLAGS_LINUX_test_polkit_linux := \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_polkit_linux := $(SRC_DIR)/linux/polkit.c
 
+# paths_linux tests: SUDO_USER-aware home directory resolution (Feature 222)
+CFLAGS_LINUX_test_paths_linux := \
+	-I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_paths_linux := $(SRC_DIR)/linux/paths.c
+
 # cli_linux tests: non-GTK CLI argument parser
 CFLAGS_LINUX_test_cli_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \

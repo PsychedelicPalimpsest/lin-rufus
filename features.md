@@ -1088,3 +1088,62 @@ process names. On Linux, only the generic error notification was shown with no p
 
 * ~~220~~: **RESOLVED** — Blocking process list shown in ListDialog after format failure.
   3 new tests (36 total assertions in test_process_linux). Full test suite: all tests pass.
+
+## Feature 221: FlashTaskbar on success + SETTING_PREFERRED_SAVE_IMAGE_TYPE restore + crash fix
+
+**Goal**: Three parity gaps fixed in one commit:
+1. `FlashTaskbar(NULL)` was missing from the success branch of `UM_FORMAT_COMPLETED`
+2. `SETTING_PREFERRED_SAVE_IMAGE_TYPE` was written on ISO save but never read back on startup
+3. Critical crash: `ReadIniKeyStr()` returns a static buffer, not heap memory; calling
+   `safe_free()` on it caused heap corruption (abort signal 6)
+
+**Status**: RESOLVED
+
+**Implementation**:
+- Added `FlashTaskbar(NULL)` to success branch of `UM_FORMAT_COMPLETED` in `ui_gtk.c`
+- Added `ReadSettingStr(SETTING_PREFERRED_SAVE_IMAGE_TYPE)` on startup using `const char*`
+  + `strdup()` to store it safely (NOT `safe_free()` on the returned static buffer)
+- **Gotcha documented**: `ReadIniKeyStr()` / `ReadSettingStr()` returns a pointer to
+  `static char str[512]`. Never call `safe_free()` on it. Always use `const char*` and
+  `strdup()` if you need to store the value.
+
+* ~~221~~: **RESOLVED** — FlashTaskbar on success; save_image_type restored; crash fixed.
+  No new tests needed (crash was user-visible, other two are UI integration).
+  Full test suite: all tests pass.
+
+## Feature 222: SUDO_USER-aware settings paths
+
+**Goal**: When users run `sudo rufus`, Rufus stores settings in `/root/.config/rufus/`
+instead of the user's own `~/.config/rufus/` directory. This is because `$HOME` is
+set to `/root` under sudo. The fix mirrors Windows UAC behaviour: elevated processes
+should still use the original user's profile for settings.
+
+**Status**: RESOLVED
+
+**Implementation**:
+- New file `src/linux/paths.c` (and `paths.h`) with two exported functions:
+  - `rufus_effective_home_impl(euid, sudo_user, home_env, buf, sz)` — pure, injectable,
+    testable implementation that does the SUDO_USER logic
+  - `rufus_effective_home(buf, sz)` — production wrapper using `geteuid()`, `$SUDO_USER`, `$HOME`
+- Resolution logic:
+  1. If `euid==0` AND `SUDO_USER` is non-empty → `getpwnam(SUDO_USER)->pw_dir`
+  2. Otherwise → `HOME` env (or `/tmp` as last resort)
+- `rufus_init_paths()` in `rufus.c` updated to call `rufus_effective_home()` for the
+  home directory, and to skip root's `$XDG_DATA_HOME`/`$XDG_CONFIG_HOME` when
+  `SUDO_USER` is set (they'd point to root's XDG dirs, not the user's).
+- `paths.c` added to `src/Makefile.am` OS_SOURCES; `config.status` regenerated `src/Makefile`.
+- `src/linux/ui_gtk.h` updated to include `paths.h` for the declaration.
+- 10 TDD tests in `tests/test_paths_linux.c` (12 total assertions):
+  - `no_sudo_user_nonroot_uses_home_env`
+  - `no_sudo_user_root_uses_home_env`
+  - `sudo_user_set_nonroot_uses_home_env`
+  - `sudo_user_set_root_uses_passwd_home`
+  - `sudo_user_invalid_falls_back_to_home_env`
+  - `sudo_user_set_root_home_null_falls_back_to_tmp`
+  - `sudo_user_empty_root_uses_home_env`
+  - `home_null_no_sudo_user_returns_tmp`
+  - `home_empty_no_sudo_user_returns_tmp`
+  - `passwd_lookup_current_user_works`
+
+* ~~222~~: **RESOLVED** — SUDO_USER-aware settings path resolution.
+  10 new tests (12 assertions) in test_paths_linux. Full test suite: all tests pass.

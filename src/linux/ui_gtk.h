@@ -18,8 +18,10 @@
  */
 #pragma once
 
+#include <sys/types.h>
 #include <gtk/gtk.h>
 #include "rufus.h"
+#include "paths.h"
 
 /* ---- Main window widget registry ---- */
 typedef struct {
