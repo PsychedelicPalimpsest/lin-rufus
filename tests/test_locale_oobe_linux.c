@@ -337,6 +337,29 @@ TEST(etc_default_keyboard_with_comment_lines)
 	          "etc/default/keyboard with comment lines: es → Spanish locale (0c0a)");
 }
 
+TEST(etc_default_keyboard_no_xkblayout_falls_back_to_lang)
+{
+	/* File exists but has no XKBLAYOUT line → fall through to lang-based detection */
+	char *p = write_keyboard_file(
+		"# No XKBLAYOUT here\n"
+		"XKBMODEL=\"pc105\"\n"
+		"XKBOPTIONS=\"\"\n");
+	if (!p) { CHECK(0); return; }
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("de_DE.UTF-8");
+	locale_oobe_set_keyboard_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(p);
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(NULL);
+	unlink(p);
+	/* Should still produce a non-empty locale (fallback via LANG) */
+	CHECK_MSG(loc.input_locale[0] != '\0',
+	          "no XKBLAYOUT in file → fallback to LANG-based detection");
+	CHECK_MSG(strstr(loc.system_locale, "de-DE") != NULL,
+	          "no XKBLAYOUT in file → system_locale from LANG");
+}
+
 /* ================================================================
  * main
  * ================================================================ */
@@ -376,6 +399,7 @@ int main(void)
 	RUN(etc_default_keyboard_comma_layout_uses_first);
 	RUN(etc_default_keyboard_missing_file_fallback);
 	RUN(etc_default_keyboard_with_comment_lines);
+	RUN(etc_default_keyboard_no_xkblayout_falls_back_to_lang);
 
 	TEST_RESULTS();
 }

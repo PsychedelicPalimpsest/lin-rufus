@@ -206,6 +206,16 @@ TEST(mismatch_larger_logged)
     CHECK_MSG(has("larger"), "larger-than-ISO note must be logged");
 }
 
+TEST(mismatch_larger_no_notification)
+{
+    img_report = make_empty();
+    img_report.mismatch_size = -(int64_t)(512 * 1024);
+    iso_report_reset_notification_calls();
+    log_iso_report();
+    CHECK_MSG(iso_report_get_notification_calls() == 0,
+              "larger-than-ISO must NOT trigger a Notification dialog");
+}
+
 TEST(has_4gb_file_logged)
 {
     img_report = make_empty();
@@ -508,6 +518,7 @@ int main(void)
     RUN_TEST(mismatch_truncated_logged);
     RUN_TEST(mismatch_truncated_shows_notification);
     RUN_TEST(mismatch_larger_logged);
+    RUN_TEST(mismatch_larger_no_notification);
     RUN_TEST(has_4gb_file_logged);
     RUN_TEST(has_long_filename_logged);
     RUN_TEST(has_deep_directories_logged);
