@@ -118,6 +118,47 @@ static const xkb_to_dos_t xkb_dos_table[] = {
     { "zh",  "us",  936 },  /* Chinese (no FreeDOS kb) */
 };
 
+/*
+ * FreeDOS keyboard driver file lists, mirroring the Windows implementation.
+ * kb_driver_for() returns the correct *.SYS filename for a given DOS code.
+ *
+ * fd_kb1 -> KEYBOARD.SYS (main set)
+ * fd_kb2 -> KEYBRD2.SYS  (Cyrillic, Greek, Turkish, Icelandic, Romanian)
+ * fd_kb3 -> KEYBRD3.SYS  (Baltic, Armenian, Georgian, Middle-Eastern, etc.)
+ * fd_kb4 -> KEYBRD4.SYS  (extended / special)
+ */
+static const char* const fd_kb1[] = {
+    "be","br","cf","co","cz","dk","dv","fr","gr","hu",
+    "it","jp","la","lh","nl","no","pl","po","rh","sf",
+    "sg","sk","sp","su","sv","uk","us","yu", NULL
+};
+static const char* const fd_kb2[] = {
+    "bg","ce","gk","is","ro","ru","rx","tr","tt","yc", NULL
+};
+static const char* const fd_kb3[] = {
+    "az","bl","et","fo","hy","il","ka","kk","ky","lt",
+    "lv","mk","mn","mt","ph","sq","tj","tm","ur","uz","vi", NULL
+};
+static const char* const fd_kb4[] = {
+    "ar","bn","bx","fx","ix","kx","ne","ng","px","sx","ux", NULL
+};
+static const char* const* const fd_kb_lists[] = { fd_kb1, fd_kb2, fd_kb3, fd_kb4 };
+static const char* const fd_kb_files[] = {
+    "KEYBOARD.SYS", "KEYBRD2.SYS", "KEYBRD3.SYS", "KEYBRD4.SYS"
+};
+
+/* Return the FreeDOS keyboard driver filename for the given 2-letter DOS code. */
+static const char* kb_driver_for(const char* dos_kb)
+{
+    for (size_t list = 0; list < ARRAYSIZE(fd_kb_lists); list++) {
+        for (size_t i = 0; fd_kb_lists[list][i] != NULL; i++) {
+            if (strcmp(fd_kb_lists[list][i], dos_kb) == 0)
+                return fd_kb_files[list];
+        }
+    }
+    return fd_kb_files[0]; /* default: KEYBOARD.SYS */
+}
+
 /* ----------------------------------------------------------------
  * Injection support for unit testing
  * ---------------------------------------------------------------- */
@@ -232,6 +273,7 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     const char* xkb = get_xkb_layout();
     int cp = 437;
     const char* kb = xkb_to_dos(xkb, &cp);
+    const char* kbdrv = kb_driver_for(kb);
 
     /* Upper-case DOS keyboard code for display / KEYB.EXE */
     char KB_UPPER[8];
@@ -259,7 +301,7 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
         fd = fopen(filename, "w");
         if (fd != NULL) {
             fprintf(fd, "!DEVICE=\\LOCALE\\DISPLAY.EXE CON=(EGA,,1)\r\n");
-            fprintf(fd, "!DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\KEYBOARD.SYS\r\n");
+            fprintf(fd, "!DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\%s\r\n", kbdrv);
             fclose(fd);
         }
         uprintf("SetDOSLocale: US locale -- created AUTOEXEC.BAT and FDCONFIG.SYS");
@@ -283,8 +325,8 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     fprintf(fd, "MENU\r\n");
     fprintf(fd, "12?\r\n");
     fprintf(fd, "!DEVICE=\\LOCALE\\DISPLAY.EXE CON=(EGA,,1)\r\n");
-    fprintf(fd, "1 !DEVICE=\\LOCALE\\KEYB.EXE %s,%d,\\LOCALE\\KEYBOARD.SYS\r\n", KB_UPPER, cp);
-    fprintf(fd, "2 !DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\KEYBOARD.SYS\r\n");
+    fprintf(fd, "1 !DEVICE=\\LOCALE\\KEYB.EXE %s,%d,\\LOCALE\\%s\r\n", KB_UPPER, cp, kbdrv);
+    fprintf(fd, "2 !DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\%s\r\n", kbdrv);
     fclose(fd);
 
     snprintf(filename, sizeof(filename), "%sAUTOEXEC.BAT", path);

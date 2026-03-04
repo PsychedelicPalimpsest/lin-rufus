@@ -760,6 +760,135 @@ TEST(set_dos_locale_polish_maps_to_pl)
               "Polish XKB 'pl' -> DOS 'PL'");
 #endif
 }
+/* ================================================================
+ * Keyboard driver file selection tests (keybrd2.sys parity)
+ * Windows SetDOSLocale selects keyboard.sys vs keybrd2.sys based on
+ * which fd_kb* list the keyboard code appears in.  The Linux port
+ * must do the same.
+ *
+ * fd_kb1 (keyboard.sys): be br cf co cz dk dv fr gr hu it jp la lh
+ *                         nl no pl po rh sf sg sk sp su sv uk us yu
+ * fd_kb2 (keybrd2.sys) : bg ce gk is ro ru rx tr tt yc
+ * ================================================================ */
+#ifdef RUFUS_TEST
+/* Helper: check that FDCONFIG.SYS contains the expected driver filename.
+ * Returns 1 if found, 0 if not found, -1 on error. */
+static int check_driver_in_fdconfig(const char* xkb, const char* expected_driver)
+{
+    dos_locale_set_xkb_layout(xkb);
+    char *target = make_tmpdir();
+    if (!target) { dos_locale_set_xkb_layout(NULL); return -1; }
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg, "r");
+    int found = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            /* Case-insensitive search for the driver filename */
+            char *p = line;
+            while (*p) { *p = (char)toupper((unsigned char)*p); p++; }
+            if (strstr(line, expected_driver))
+                found = 1;
+        }
+        fclose(f);
+    }
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    return found;
+}
+#endif /* RUFUS_TEST */
+
+TEST(keyboard_sys_used_for_german)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* de -> GR -> fd_kb1 -> keyboard.sys */
+    CHECK_MSG(check_driver_in_fdconfig("de", "KEYBOARD.SYS") == 1,
+              "German (de) should use KEYBOARD.SYS");
+#endif
+}
+
+TEST(keyboard_sys_used_for_french)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* fr -> FR -> fd_kb1 -> keyboard.sys */
+    CHECK_MSG(check_driver_in_fdconfig("fr", "KEYBOARD.SYS") == 1,
+              "French (fr) should use KEYBOARD.SYS");
+#endif
+}
+
+TEST(keybrd2_sys_used_for_russian)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* ru -> RU -> fd_kb2 -> keybrd2.sys */
+    CHECK_MSG(check_driver_in_fdconfig("ru", "KEYBRD2.SYS") == 1,
+              "Russian (ru) should use KEYBRD2.SYS");
+#endif
+}
+
+TEST(keybrd2_sys_used_for_greek)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* gr -> GK -> fd_kb2 -> keybrd2.sys */
+    CHECK_MSG(check_driver_in_fdconfig("gr", "KEYBRD2.SYS") == 1,
+              "Greek (gr) should use KEYBRD2.SYS");
+#endif
+}
+
+TEST(keybrd2_sys_used_for_turkish)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* tr -> TR -> fd_kb2 -> keybrd2.sys */
+    CHECK_MSG(check_driver_in_fdconfig("tr", "KEYBRD2.SYS") == 1,
+              "Turkish (tr) should use KEYBRD2.SYS");
+#endif
+}
+
+TEST(keyboard_sys_used_for_us)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* us -> US -> fd_kb1 -> keyboard.sys (via simple AUTOEXEC path) */
+    dos_locale_set_xkb_layout("us");
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    /* For US/437, we get FDCONFIG.SYS with KEYBOARD.SYS */
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg, "r");
+    int found = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            char *p = line;
+            while (*p) { *p = (char)toupper((unsigned char)*p); p++; }
+            if (strstr(line, "KEYBOARD.SYS")) found = 1;
+        }
+        fclose(f);
+    }
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    CHECK_MSG(found == 1, "US locale should use KEYBOARD.SYS");
+#endif
+}
+
 /* GetResource is provided by stdfn.c */
 #include "resource.h"
 extern uint8_t* GetResource(void *m, char *n, char *t, const char *d, DWORD *l, BOOL dup);
@@ -932,6 +1061,13 @@ int main(void)
     RUN(vconsole_keymap_de_maps_to_gr);
     RUN(vconsole_keymap_with_variant_strips_suffix);
     RUN(etc_default_keyboard_takes_priority_over_vconsole);
+
+    RUN(keyboard_sys_used_for_german);
+    RUN(keyboard_sys_used_for_french);
+    RUN(keybrd2_sys_used_for_russian);
+    RUN(keybrd2_sys_used_for_greek);
+    RUN(keybrd2_sys_used_for_turkish);
+    RUN(keyboard_sys_used_for_us);
 
     RUN(getresource_command_com_not_null);
     RUN(getresource_command_com_size_correct);
