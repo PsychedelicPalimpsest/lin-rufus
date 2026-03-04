@@ -2027,6 +2027,62 @@ TEST(sleep_short_takes_measurable_time)
 }
 
 /* ==========================================================================
+ * CoCreateGuid
+ * ========================================================================== */
+
+TEST(coCreateguid_returns_s_ok)
+{
+	GUID guid;
+	memset(&guid, 0, sizeof(guid));
+	HRESULT hr = CoCreateGuid(&guid);
+	CHECK_MSG(hr == S_OK, "CoCreateGuid must return S_OK");
+}
+
+TEST(coCreateguid_produces_nonzero_guid)
+{
+	GUID guid;
+	memset(&guid, 0, sizeof(guid));
+	CoCreateGuid(&guid);
+	/* At least one field must be non-zero */
+	CHECK_MSG(guid.Data1 != 0 || guid.Data2 != 0 || guid.Data3 != 0,
+	          "CoCreateGuid must produce a non-zero GUID");
+}
+
+TEST(coCreateguid_version4_bits)
+{
+	GUID guid;
+	CoCreateGuid(&guid);
+	/* Version 4 UUID: top nibble of Data3 must be 0x4 */
+	CHECK_MSG((guid.Data3 & 0xF000) == 0x4000,
+	          "CoCreateGuid must set version=4 in Data3 nibble");
+}
+
+TEST(coCreateguid_variant_bits)
+{
+	GUID guid;
+	CoCreateGuid(&guid);
+	/* RFC 4122 variant: top 2 bits of Data4[0] must be 10 (binary) → 0x80 mask, 0x80 value */
+	CHECK_MSG((guid.Data4[0] & 0xC0) == 0x80,
+	          "CoCreateGuid must set RFC 4122 variant bits in Data4[0]");
+}
+
+TEST(coCreateguid_null_returns_error)
+{
+	HRESULT hr = CoCreateGuid(NULL);
+	CHECK_MSG(hr != S_OK, "CoCreateGuid(NULL) must not return S_OK");
+}
+
+TEST(coCreateguid_guids_are_unique)
+{
+	GUID g1, g2;
+	CoCreateGuid(&g1);
+	CoCreateGuid(&g2);
+	/* Two GUIDs must differ (comparing Data1 is sufficient with overwhelming probability) */
+	CHECK_MSG(memcmp(&g1, &g2, sizeof(GUID)) != 0,
+	          "Consecutive CoCreateGuid calls must produce different GUIDs");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -2296,6 +2352,13 @@ int main(void)
 
 	RUN_TEST(sleep_zero_does_not_hang);
 	RUN_TEST(sleep_short_takes_measurable_time);
+
+	RUN_TEST(coCreateguid_returns_s_ok);
+	RUN_TEST(coCreateguid_produces_nonzero_guid);
+	RUN_TEST(coCreateguid_version4_bits);
+	RUN_TEST(coCreateguid_variant_bits);
+	RUN_TEST(coCreateguid_null_returns_error);
+	RUN_TEST(coCreateguid_guids_are_unique);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
