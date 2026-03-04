@@ -127,7 +127,8 @@ on Linux.
 
 - Requires GTK3, libcurl, OpenSSL, libext2fs (e2fsprogs), wimlib, libcdio
 - All dependencies listed in `tests/install-deps.sh`
-- Build: `./configure && make -C src rufus` (non-GTK CLI mode also available)
+- Build: `./build-rufus-linux.sh` (sets `CC=gcc`, passes `--with-os=linux`);
+  alternatively: `CC=gcc ./configure --with-os=linux && make -C src rufus`
 - Tests: `./run_tests.sh --linux-only` (all Linux tests, no Wine needed)
 - Container tests: `./run_tests.sh --container` (root-required loop device tests)
 - CLI mode: `./rufus --device /dev/sdX --image path.iso`

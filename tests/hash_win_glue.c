@@ -110,9 +110,15 @@ BOOL IsFileInDB(const char* path)
 BOOL FileMatchesHash(const char* path, const char* str)
 {
 	uint8_t hash[SHA256_HASHSIZE];
+	uint8_t *expected;
+	if (str == NULL)
+		return FALSE;
 	if (!HashFile(HASH_SHA256, path, hash))
 		return FALSE;
-	return (memcmp(hash, StringToHash(str), SHA256_HASHSIZE) == 0);
+	expected = StringToHash(str);
+	if (expected == NULL)
+		return FALSE;
+	return (memcmp(hash, expected, SHA256_HASHSIZE) == 0);
 }
 
 /* Auto-detect hash type from hex-string length. */

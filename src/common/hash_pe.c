@@ -176,7 +176,7 @@ BOOL efi_image_parse(uint8_t *efi, size_t len, struct efi_image_regions **regp)
 
 	num_sections = nt->FileHeader.NumberOfSections;
 	sections = (void *)((uint8_t *)&nt->OptionalHeader + nt->FileHeader.SizeOfOptionalHeader);
-	sorted = calloc(sizeof(IMAGE_SECTION_HEADER *), num_sections);
+	sorted = calloc(num_sections, sizeof(IMAGE_SECTION_HEADER *));
 	if (!sorted) {
 		free(regs);
 		return FALSE;

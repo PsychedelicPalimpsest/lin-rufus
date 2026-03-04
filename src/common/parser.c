@@ -67,7 +67,7 @@ static loc_cmd* get_loc_cmd(char c, char* line)
 		return NULL;
 	}
 
-	lcmd = (loc_cmd*)calloc(sizeof(loc_cmd), 1);
+	lcmd = (loc_cmd*)calloc(1, sizeof(loc_cmd));
 	if (lcmd == NULL) {
 		luprint("could not allocate command");
 		return NULL;

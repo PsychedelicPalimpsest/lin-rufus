@@ -1320,6 +1320,13 @@ TEST(file_matches_hash_null_path)
 	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE for NULL path");
 }
 
+TEST(file_matches_hash_null_str)
+{
+	/* NULL hash string — must return FALSE without crashing */
+	BOOL r = FileMatchesHash("/dev/null", NULL);
+	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE for NULL hash string");
+}
+
 TEST(file_matches_hash_missing_file)
 {
 	BOOL r = FileMatchesHash("/nonexistent/path/abc.bin", SHA256_ABC_HEX);
@@ -1487,6 +1494,7 @@ int main(void)
 	RUN(file_matches_hash_correct_md5);
 	RUN(file_matches_hash_wrong_hash);
 	RUN(file_matches_hash_null_path);
+	RUN(file_matches_hash_null_str);
 	RUN(file_matches_hash_missing_file);
 
 	printf("\n  PE256Buffer / efi_image_parse\n");

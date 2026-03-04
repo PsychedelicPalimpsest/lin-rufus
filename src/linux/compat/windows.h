@@ -1482,7 +1482,7 @@ static inline BOOL GetExitCodeThread(HANDLE h, LPDWORD code)
     return TRUE;
 }
 
-static inline void ExitThread(DWORD code)
+static inline __attribute__((noreturn)) void ExitThread(DWORD code)
 {
     pthread_exit((void *)(uintptr_t)code);
 }
