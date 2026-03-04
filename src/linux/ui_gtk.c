@@ -3315,6 +3315,7 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 		EnableControls(ok, TRUE);
 		if (ok) {
 			rufus_gtk_update_status(lmprintf(MSG_210));
+			FlashTaskbar(NULL);  /* Attract user attention on success (mirrors Windows) */
 			/* Refresh device list so the new drive label is shown.
 			 * Mirrors Windows: skip the refresh when saving an image to disk. */
 			if (!save_image)
@@ -3907,6 +3908,15 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 		usb_debug             =  ReadSettingBool(SETTING_ENABLE_USB_DEBUG);
 		default_thread_priority = (int)ReadSetting32(SETTING_DEFAULT_THREAD_PRIORITY)
 		                          + THREAD_PRIORITY_ABOVE_NORMAL;
+		/* Restore preferred save image type (e.g. "img", "iso") from previous session */
+		{
+			extern char *save_image_type;
+			const char *saved_type = ReadSettingStr(SETTING_PREFERRED_SAVE_IMAGE_TYPE);
+			if (saved_type && saved_type[0]) {
+				safe_free(save_image_type);
+				save_image_type = strdup(saved_type);
+			}
+		}
 	}
 
 	/* Apply saved dark mode preference (0=system, 1=light, 2=dark) */
