@@ -111,7 +111,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 	common/rufus-format_fat32.$(OBJEXT) \
 	common/rufus-bootloader_scan.$(OBJEXT) \
 	common/rufus-iso_report.$(OBJEXT) common/rufus-drive.$(OBJEXT) \
-	common/rufus-format.$(OBJEXT)
+	common/rufus-format.$(OBJEXT) common/rufus-net_utils.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@am__objects_2 =  \
 @TARGET_WINDOWS_FALSE@@USE_GTK_FALSE@	linux/rufus-ui.$(OBJEXT)
 @TARGET_WINDOWS_FALSE@@USE_GTK_TRUE@am__objects_2 = linux/rufus-ui_gtk.$(OBJEXT)
@@ -487,7 +487,7 @@ top_srcdir = @top_srcdir@
 @TARGET_WINDOWS_TRUE@AM_V_WINDRES = $(AM_V_WINDRES_$(V))
 COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c \
 	common/localization.c common/parser.c common/iso_scan.c common/iso_config.c common/format_fat32.c \
-	common/bootloader_scan.c common/iso_report.c common/drive.c common/format.c
+	common/bootloader_scan.c common/iso_report.c common/drive.c common/format.c common/net_utils.c
 
 @TARGET_WINDOWS_FALSE@OS_SOURCES = linux/compat/msg_dispatch.c \
 @TARGET_WINDOWS_FALSE@	linux/badblocks.c linux/combo_bridge.c linux/darkmode.c linux/dev.c linux/device_monitor.c \
@@ -583,6 +583,7 @@ common/rufus-bootloader_scan.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-iso_report.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-drive.$(OBJEXT): common/$(am__dirstamp)
 common/rufus-format.$(OBJEXT): common/$(am__dirstamp)
+common/rufus-net_utils.$(OBJEXT): common/$(am__dirstamp)
 linux/compat/$(am__dirstamp):
 	@$(MKDIR_P) linux/compat
 	@: >>linux/compat/$(am__dirstamp)
@@ -786,6 +787,12 @@ common/rufus-format.o: common/format.c
 
 common/rufus-format.obj: common/format.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-format.obj `if test -f 'common/format.c'; then $(CYGPATH_W) 'common/format.c'; else $(CYGPATH_W) '$(srcdir)/common/format.c'; fi`
+
+common/rufus-net_utils.o: common/net_utils.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-net_utils.o `test -f 'common/net_utils.c' || echo '$(srcdir)/'`common/net_utils.c
+
+common/rufus-net_utils.obj: common/net_utils.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o common/rufus-net_utils.obj `if test -f 'common/net_utils.c'; then $(CYGPATH_W) 'common/net_utils.c'; else $(CYGPATH_W) '$(srcdir)/common/net_utils.c'; fi`
 
 linux/compat/rufus-msg_dispatch.o: linux/compat/msg_dispatch.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/compat/rufus-msg_dispatch.o `test -f 'linux/compat/msg_dispatch.c' || echo '$(srcdir)/'`linux/compat/msg_dispatch.c
