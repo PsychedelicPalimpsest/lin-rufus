@@ -1055,6 +1055,50 @@ TEST(globalmemorystatus_memory_load_0_to_100)
 }
 
 /* ==========================================================================
+ * VirtualAlloc / VirtualFree — thin wrappers over malloc/free
+ * ========================================================================== */
+
+TEST(virtualalloc_returns_non_null)
+{
+	PVOID p = VirtualAlloc(NULL, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	CHECK_MSG(p != NULL, "VirtualAlloc must return non-NULL");
+	VirtualFree(p, 0, MEM_RELEASE);
+}
+
+TEST(virtualalloc_memory_is_usable)
+{
+	int *p = (int *)VirtualAlloc(NULL, sizeof(int), MEM_COMMIT, PAGE_READWRITE);
+	CHECK_MSG(p != NULL, "VirtualAlloc must succeed");
+	*p = 42;
+	CHECK_MSG(*p == 42, "VirtualAlloc memory must be writable/readable");
+	VirtualFree(p, 0, MEM_RELEASE);
+}
+
+TEST(virtualfree_returns_true)
+{
+	PVOID p = VirtualAlloc(NULL, 128, MEM_COMMIT, PAGE_READWRITE);
+	BOOL r = VirtualFree(p, 0, MEM_RELEASE);
+	CHECK_MSG(r == TRUE, "VirtualFree must return TRUE");
+}
+
+/* ==========================================================================
+ * FlushFileBuffers — wraps fsync()
+ * ========================================================================== */
+
+TEST(flushfilebuffers_on_valid_file)
+{
+	char path[] = "/tmp/rufus_flush_test_XXXXXX";
+	int fd = mkstemp(path);
+	if (fd >= 0) {
+		HANDLE h = (HANDLE)(intptr_t)fd;
+		BOOL r = FlushFileBuffers(h);
+		close(fd);
+		unlink(path);
+		CHECK_MSG(r == TRUE, "FlushFileBuffers on valid fd must return TRUE");
+	}
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -1203,6 +1247,12 @@ int main(void)
 	RUN_TEST(globalmemorystatus_total_phys_nonzero);
 	RUN_TEST(globalmemorystatus_avail_le_total);
 	RUN_TEST(globalmemorystatus_memory_load_0_to_100);
+
+	RUN_TEST(virtualalloc_returns_non_null);
+	RUN_TEST(virtualalloc_memory_is_usable);
+	RUN_TEST(virtualfree_returns_true);
+
+	RUN_TEST(flushfilebuffers_on_valid_file);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;

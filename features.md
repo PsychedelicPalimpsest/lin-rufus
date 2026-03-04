@@ -129,7 +129,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 
 | Header | Status | Notes |
 |--------|--------|-------|
-| `windows.h` | 🔧 | ~1 800 lines; types, macros, most stubs present. `SendMessage`/`PostMessage` delegate to `msg_dispatch.c` bridge via `extern` declarations. `GetCurrentThreadId` returns real Linux TID via `SYS_gettid`; `GetCurrentThread` returns pseudo-handle -2 (Windows convention); `InterlockedIncrement/Decrement/Exchange/CompareExchange` use GCC `__sync_*` builtins — all tested |
+| `windows.h` | 🔧 | ~1 800 lines; types, macros, most stubs present. `SendMessage`/`PostMessage` delegate to `msg_dispatch.c` bridge. `GetCurrentThreadId` returns real TID via `SYS_gettid`; `GetCurrentThread` returns pseudo-handle -2; `SetEnvironmentVariableA(NULL)` calls `unsetenv()` (Windows semantics); `GetSystemInfo` fills `dwNumberOfProcessors`/`dwPageSize`/`wProcessorArchitecture` from real OS; `GlobalMemoryStatusEx` reads `/proc/meminfo`; `MultiByteToWideChar`/`WideCharToMultiByte` size-query mode (sz=0) fixed; `InterlockedIncrement/Decrement/Exchange/CompareExchange` use GCC `__sync_*` — all tested |
 | `GetWindowTextA` / `SetWindowTextA` | ✅ | Real implementation via `window_text_bridge` — thread-safe HWND→text registry; GTK main thread keeps cache in sync via "changed" signal; worker threads (FormatThread) read cache safely; `window_text_register_gtk()` wired in `ui_gtk.c` for volume-label entry; 20 tests, 30 assertions pass |
 | `commctrl.h` | ✅ | Defines `PBS_MARQUEE`; CB_* macros live in `windows.h` and route through `combo_bridge.c` (105 tests pass) |
 | `setupapi.h` | ✅ | Compilation stub only; Linux `dev.c` uses sysfs/libudev directly, not setupapi |
