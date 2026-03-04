@@ -105,8 +105,10 @@ static BOOL check_iso_props(const char* psz_dirname, int64_t file_length,
 			return TRUE;
 		}
 
-#ifdef _WIN32
-		/* Split a >4GB install.wim if the target filesystem is FAT */
+		/* Split a >4GB install.wim if the target filesystem is FAT.
+		 * Works on both Windows and Linux: our custom wimlib supports
+		 * the "iso_path|/internal/path" format for reading WIM files
+		 * directly out of ISO images on both platforms. */
 		if (file_length >= 4 * GB && psz_dirname != NULL && IS_FAT(fs_type) &&
 		    img_report.has_4GB_file == 0x11) {
 			if (safe_stricmp(&psz_dirname[max(0, ((int)safe_strlen(psz_dirname)) -
@@ -117,6 +119,7 @@ static BOOL check_iso_props(const char* psz_dirname, int64_t file_length,
 					    file_length >= 4 * GB) {
 						print_split_file((char*)psz_fullpath, file_length);
 						char* dst = safe_strdup(psz_fullpath);
+						if (dst == NULL) return FALSE;
 						dst[strlen(dst) - 3] = 's';
 						dst[strlen(dst) - 2] = 'w';
 						dst[strlen(dst) - 1] = 'm';
@@ -131,7 +134,6 @@ static BOOL check_iso_props(const char* psz_dirname, int64_t file_length,
 				}
 			}
 		}
-#endif /* _WIN32 */
 
 		return FALSE;
 	}

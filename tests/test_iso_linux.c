@@ -1428,6 +1428,63 @@ TEST(scan_iso_no_wininst_skips_getwimversion)
 }
 
 /* ================================================================
+ * print_split_file + WimSplitFile parity (iso_check.c #ifdef removed)
+ * ================================================================ */
+
+/* Test export from iso.c (only compiled when RUFUS_TEST is defined) */
+extern void iso_test_print_split_file(char *path, uint64_t len);
+
+/* WimSplitFile mock tracking vars defined in iso_linux_glue.c */
+extern int  g_wimsplitfile_call_count;
+extern char g_wimsplitfile_last_src[512];
+extern char g_wimsplitfile_last_dst[512];
+extern BOOL g_wimsplitfile_return_value;
+
+TEST(print_split_file_restores_path)
+{
+    /*
+     * _print_split_file_linux temporarily appends a size string to the path
+     * to format the log and status messages, then MUST restore the original
+     * path before returning — the caller (iso_check.c) uses the path after
+     * the call to build the wim_path "|" format string.
+     */
+    char path[256];
+    snprintf(path, sizeof(path), "/sources/install.wim");
+    iso_test_print_split_file(path, 4ULL * 1024 * 1024 * 1024 + 1);
+    CHECK_MSG(strcmp(path, "/sources/install.wim") == 0,
+              "print_split_file must restore path to its original value");
+}
+
+TEST(print_split_file_null_is_safe)
+{
+    /* NULL path must not crash */
+    iso_test_print_split_file(NULL, 4ULL * 1024 * 1024 * 1024 + 1);
+    CHECK(1);  /* reaching here means no crash */
+}
+
+TEST(wim_not_split_for_small_file)
+{
+    /*
+     * WimSplitFile must NOT be called when the install.wim is < 4 GB.
+     * The wininst test ISO has a tiny install.wim (< 1 KB), so
+     * WimSplitFile should never be called during that scan.
+     */
+    if (!wininst_iso_available) { printf("SKIP: wininst ISO unavailable\n"); return; }
+
+    char *saved_image_path = image_path;
+    image_path = WININST_ISO_PATH;
+    g_wimsplitfile_call_count = 0;
+    memset(&img_report, 0, sizeof(img_report));
+    ExtractISO(WININST_ISO_PATH, "", TRUE);
+
+    CHECK_MSG(g_wimsplitfile_call_count == 0,
+              "WimSplitFile must NOT be called when install.wim < 4 GB");
+
+    image_path = saved_image_path;
+    memset(&img_report, 0, sizeof(img_report));
+}
+
+/* ================================================================
  * has_deep_directories + needs_ntfs scan-time detection (Feature 155)
  * ================================================================ */
 
@@ -2216,6 +2273,11 @@ int main(void)
     printf("\n  wininst_version detection (GetWimVersion called during scan)\n");
     RUN(scan_iso_wininst_calls_getwimversion);
     RUN(scan_iso_no_wininst_skips_getwimversion);
+
+    printf("\n  print_split_file + WimSplitFile parity (FAT32 large WIM split)\n");
+    RUN(print_split_file_restores_path);
+    RUN(print_split_file_null_is_safe);
+    RUN(wim_not_split_for_small_file);
 
     printf("\n  Rock Ridge parity: has_deep_directories + needs_ntfs\n");
     RUN(scan_iso_deep_dir_logic_sets_flag);

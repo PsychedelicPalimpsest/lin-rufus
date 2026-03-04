@@ -429,7 +429,7 @@ CFLAGS_LINUX_test_iso_linux := \
 	-Wno-implicit-function-declaration -Wno-unused-function \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_iso_linux := $(CDIO_LIBS) $(SRC_DIR)/syslinux/libfat/libfat.a \
-	-Wl,--wrap=DumpFatDir -Wl,--wrap=GetWimVersion \
+	-Wl,--wrap=DumpFatDir -Wl,--wrap=GetWimVersion -Wl,--wrap=WimSplitFile \
 	-lpthread -lz -lm
 EXTRA_SRC_LINUX_test_iso_linux := $(ISO_LINUX_SRC) $(BLED_LIB) $(WIM_LIB_EARLY) iso_linux_glue.c $(COMMON)/iso_scan.c $(SRC_DIR)/linux/sl_version.c
 

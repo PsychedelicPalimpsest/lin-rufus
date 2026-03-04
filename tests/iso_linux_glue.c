@@ -59,6 +59,22 @@ uint32_t __wrap_GetWimVersion(const char* image)
     return g_getwimversion_return_value;
 }
 
+/* --wrap=WimSplitFile: intercept WimSplitFile calls from iso.c for testing */
+int g_wimsplitfile_call_count = 0;
+char g_wimsplitfile_last_src[512] = {0};
+char g_wimsplitfile_last_dst[512] = {0};
+BOOL g_wimsplitfile_return_value = TRUE;
+
+BOOL __wrap_WimSplitFile(const char* src, const char* dst)
+{
+    g_wimsplitfile_call_count++;
+    if (src != NULL)
+        snprintf(g_wimsplitfile_last_src, sizeof(g_wimsplitfile_last_src), "%s", src);
+    if (dst != NULL)
+        snprintf(g_wimsplitfile_last_dst, sizeof(g_wimsplitfile_last_dst), "%s", dst);
+    return g_wimsplitfile_return_value;
+}
+
 /* Stubs for SaveImage() — globals.c / drive.c symbols */
 char *save_image_type = NULL;
 

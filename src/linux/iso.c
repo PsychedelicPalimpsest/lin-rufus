@@ -62,6 +62,7 @@
 #include "../common/iso_config.h"
 
 extern uint32_t GetWimVersion(const char* image);
+extern BOOL WimSplitFile(const char* src, const char* dst);
 
 /* ---- globals (defined here, extern in rufus.h or ui.h) ---- */
 FILE*    fd_md5sum          = NULL;
@@ -303,6 +304,38 @@ static void fix_config(const char* psz_fullpath, const char* psz_path,
 		&modified_files,
 		posix_copy_file);
 }
+
+/* ------------------------------------------------------------------ */
+/* print_split_file — log a WIM being split for FAT32 targets          */
+/* Mirrors Windows _print_extracted_file(..., split=TRUE).             */
+/* On Linux, paths are already POSIX so no slash conversion is needed. */
+/* ------------------------------------------------------------------ */
+
+static void _print_split_file_linux(char *psz_fullpath, uint64_t file_length)
+{
+	size_t nul_pos;
+	if (psz_fullpath == NULL)
+		return;
+	nul_pos = strlen(psz_fullpath);
+	safe_sprintf(&psz_fullpath[nul_pos], 24, " (%s)",
+	             SizeToHumanReadable(file_length, TRUE, FALSE));
+	uprintf("Splitting: %s", psz_fullpath);
+	safe_sprintf(&psz_fullpath[nul_pos], 24, " (%s)",
+	             SizeToHumanReadable(file_length, FALSE, FALSE));
+	PrintStatus(0, MSG_000, psz_fullpath);
+	psz_fullpath[nul_pos] = 0;
+	if (validate_md5sum && md5sum_data != NULL && is_in_md5sum(psz_fullpath))
+		md5sum_totalbytes += file_length;
+}
+#define print_split_file(p, l) _print_split_file_linux(p, l)
+
+#ifdef RUFUS_TEST
+/* Expose _print_split_file_linux for unit tests */
+void iso_test_print_split_file(char *path, uint64_t len)
+{
+	_print_split_file_linux(path, len);
+}
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Property detection (scan-time and extract-time analysis)            */
