@@ -490,7 +490,7 @@ This is the most structurally significant porting gap.
 | `common/cregex` tests | ✅ | 37 tests, Linux + Wine |
 | Threading compat layer tests | ✅ | 51 tests covering threads, events, mutexes, CRITICAL_SECTION |
 | `common/xml` (ezxml) tests | ✅ | 81 tests: parse from string/file, child nav, attrs, siblings, idx, get_val, error, toxml round-trip, entity handling, deep path, programmatic tree build |
-| `stdfn.c` (htab, StrArray) tests | ✅ | 299 tests; htab_create/hash/destroy, StrArray, NULL guards |
+| `stdfn.c` (htab, StrArray) tests | ✅ | 365 tests; htab_create/hash/destroy, StrArray, NULL guards, CompareGUID, IsCurrentProcessElevated, rufus_log_write, FileIO, GetWindowsVersion, isSMode, SetLGP/SetPrivilege/TakeOwnership stubs |
 | `parser.c` / `localization.c` tests | ✅ | 111 tests covering replace_char, filter_chars, remove_substr, sanitize_label, ASN.1, GetSbatEntries, GetThumbprintEntries, open_loc_file, token CRUD, insert_section_data, replace_in_token_data |
 | PE parsing functions tests | ✅ | 59 tests pass in `test_pe_parser_linux` |
 | `msg_dispatch` (PostMessage/SendMessage bridge) tests | ✅ | 61 tests: handler registry, sync/async dispatch, cross-thread SendMessage, concurrent posts, macro aliases, UM_* constants |
