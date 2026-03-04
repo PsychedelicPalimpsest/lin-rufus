@@ -736,6 +736,59 @@ TEST(license_callback_returns_true)
     CHECK_MSG(r == (INT_PTR)TRUE, "LicenseCallback must return TRUE");
 }
 
+/* =========================================================================
+ * FlashTaskbar urgency hint tests (Feature 218)
+ * =========================================================================*/
+
+extern int  flash_taskbar_get_count(void);
+extern void flash_taskbar_reset_count(void);
+
+TEST(flash_taskbar_count_starts_zero)
+{
+    flash_taskbar_reset_count();
+    CHECK_MSG(flash_taskbar_get_count() == 0, "Flash count must start at zero after reset");
+}
+
+TEST(flash_taskbar_null_increments_count)
+{
+    flash_taskbar_reset_count();
+    FlashTaskbar(NULL);
+    CHECK_MSG(flash_taskbar_get_count() == 1, "FlashTaskbar(NULL) must increment counter");
+}
+
+TEST(flash_taskbar_nonnull_increments_count)
+{
+    flash_taskbar_reset_count();
+    FlashTaskbar((HANDLE)0xdeadbeef);
+    CHECK_MSG(flash_taskbar_get_count() == 1, "FlashTaskbar(non-NULL) must increment counter");
+}
+
+TEST(flash_taskbar_multiple_calls_accumulate)
+{
+    flash_taskbar_reset_count();
+    FlashTaskbar(NULL);
+    FlashTaskbar(NULL);
+    FlashTaskbar(NULL);
+    CHECK_MSG(flash_taskbar_get_count() == 3, "Three FlashTaskbar calls must accumulate to 3");
+}
+
+TEST(flash_taskbar_reset_clears_count)
+{
+    FlashTaskbar(NULL);
+    FlashTaskbar(NULL);
+    flash_taskbar_reset_count();
+    CHECK_MSG(flash_taskbar_get_count() == 0, "reset_count must clear to 0");
+}
+
+TEST(flash_taskbar_reset_then_call_counts_one)
+{
+    FlashTaskbar(NULL);
+    FlashTaskbar(NULL);
+    flash_taskbar_reset_count();
+    FlashTaskbar(NULL);
+    CHECK_MSG(flash_taskbar_get_count() == 1, "One call after reset must yield count of 1");
+}
+
 int main(void)
 {
     printf("=== stdlg_linux tests ===\n");
@@ -799,6 +852,14 @@ int main(void)
     RUN(alert_hook_on_mb_ok_yields_idok);
     RUN(alert_clear_hook_restores_fallback);
     RUN(alert_hook_priority_over_test_injection);
+
+    printf("\n=== FlashTaskbar urgency hint (Feature 218) ===\n");
+    RUN(flash_taskbar_count_starts_zero);
+    RUN(flash_taskbar_null_increments_count);
+    RUN(flash_taskbar_nonnull_increments_count);
+    RUN(flash_taskbar_multiple_calls_accumulate);
+    RUN(flash_taskbar_reset_clears_count);
+    RUN(flash_taskbar_reset_then_call_counts_one);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;

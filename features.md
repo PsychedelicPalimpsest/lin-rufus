@@ -998,3 +998,34 @@ was a no-op stub, and the Alt++/- shortcut was not wired at all.
 
 * ~~217~~: **RESOLVED** — Thread priority adjustment works on Linux via setpriority().
   8 new tests (140 total in test_kbd_shortcuts_linux). Full test suite: all tests pass.
+
+## Feature 218: FlashTaskbar via gtk_window_set_urgency_hint
+
+**Goal**: On Windows, `FlashTaskbar()` flashes the taskbar button when a format
+operation completes (success or error), attracting user attention. On Linux the
+stub was a no-op. This feature implements the equivalent GTK urgency hint so the
+window flashes in GNOME Shell, KDE Plasma, XFCE, i3, etc.
+
+**Status**: RESOLVED
+
+**Implementation**:
+- Replaced the one-line `FlashTaskbar(HANDLE handle) { (void)handle; }` no-op in
+  `src/linux/stdlg.c` with a real implementation:
+  - In `RUFUS_TEST` builds: increments a static counter (`s_flash_count`) — no GTK
+  - In GTK production builds: calls `gtk_window_set_urgency_hint(GTK_WINDOW(hMainDialog), TRUE)`
+- Added test-hook API (guarded by `#ifdef RUFUS_TEST`):
+  - `flash_taskbar_get_count()` — returns how many times the flash was requested
+  - `flash_taskbar_reset_count()` — resets the counter to 0
+- Fixed missing `-DRUFUS_TEST` flag in `tests/Makefile` for `test_stdlg_linux`:
+  the stdlg test was the only Linux test binary not built with `-DRUFUS_TEST`, which
+  meant stdlg test-injection helpers were compiled out.
+- 6 TDD tests added to `tests/test_stdlg_linux.c` (FlashTaskbar group):
+  - `flash_taskbar_count_starts_zero` — counter initializes to 0 after reset
+  - `flash_taskbar_null_increments_count` — NULL handle still counts
+  - `flash_taskbar_nonnull_increments_count` — non-NULL handle also counts
+  - `flash_taskbar_multiple_calls_accumulate` — 3 calls → count == 3
+  - `flash_taskbar_reset_clears_count` — reset brings back to 0
+  - `flash_taskbar_reset_then_call_counts_one` — one call after reset → 1
+
+* ~~218~~: **RESOLVED** — FlashTaskbar calls gtk_window_set_urgency_hint on Linux.
+  6 new tests (62 total in test_stdlg_linux). Full test suite: all tests pass.

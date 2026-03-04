@@ -677,7 +677,27 @@ HWND MyCreateDialog(HINSTANCE hi, int dlg_id, HWND parent, DLGPROC fn) { (void)h
 INT_PTR MyDialogBox(HINSTANCE hi, int dlg_id, HWND parent, DLGPROC fn) { (void)hi;(void)dlg_id;(void)parent;(void)fn; return 0; }
 void SetAlertPromptMessages(void)           {}
 BOOL SetAlertPromptHook(void)               { return FALSE; }
-void FlashTaskbar(HANDLE handle)            { (void)handle; }
+
+#ifdef RUFUS_TEST
+/* Test hook: count how many times FlashTaskbar was called without GTK */
+static int s_flash_count = 0;
+int  flash_taskbar_get_count(void)  { return s_flash_count; }
+void flash_taskbar_reset_count(void){ s_flash_count = 0; }
+#endif
+
+void FlashTaskbar(HANDLE handle)
+{
+    (void)handle;
+#ifdef RUFUS_TEST
+    s_flash_count++;
+    return;
+#endif
+#ifdef USE_GTK
+    extern HWND hMainDialog;
+    if (hMainDialog && GTK_IS_WINDOW((GtkWidget *)hMainDialog))
+        gtk_window_set_urgency_hint(GTK_WINDOW((GtkWidget *)hMainDialog), TRUE);
+#endif
+}
 HICON CreateMirroredIcon(HICON hIcon)       { return hIcon; }
 INT_PTR CALLBACK SelectionDynCallback(HWND h, UINT m, WPARAM w, LPARAM l) { (void)h;(void)m;(void)w;(void)l; return 0; }
 int SelectionDyn(char* title, char* msg, char** choices, int n) { (void)title;(void)msg;(void)choices;(void)n; return 0; }
