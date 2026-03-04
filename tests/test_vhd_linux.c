@@ -278,8 +278,7 @@ TEST(isbootable_ignore_boot_marker)
 TEST(isbootable_gz_bootable)
 {
 	/* A .gz file containing an MBR with boot signature */
-	char path[] = "/tmp/test_vhd_boot_XXXXXX.gz";
-	/* mkstemp doesn't work with suffix, use a fixed name */
+	char path[64];
 	snprintf(path, sizeof(path), "/tmp/test_vhd_boot_%d.gz", (int)getpid());
 	if (make_gz_mbr_image(path) != 0) {
 		fprintf(stderr, "  SKIP: could not create gz MBR file\n");

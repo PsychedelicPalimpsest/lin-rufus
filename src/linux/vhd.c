@@ -468,7 +468,7 @@ static int8_t IsCompressedBootableImage(const char* path)
 						img_report.is_vhd = TRUE;
 						dc = fread(buf, 1, MBR_SIZE, fd);
 						fclose(fd);
-						if (strncmp(&buf[4], "SignedImage ", 12) == 0) {
+						if (strncmp((const char *)&buf[4], "SignedImage ", 12) == 0) {
 							buf[0x1FE] = 0x55;
 							buf[0x1FF] = 0xAA;
 						}

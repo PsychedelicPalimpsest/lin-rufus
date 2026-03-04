@@ -858,7 +858,7 @@ DWORD WINAPI FormatThread(void* param)
 		}
 
 		/* Temporarily redirect image_path to NBD device for VHD images */
-		const char *orig_image_path = image_path;
+		char *orig_image_path = image_path;
 		if (is_vhd_image && vhd_nbd_path != NULL)
 			image_path = vhd_nbd_path;
 

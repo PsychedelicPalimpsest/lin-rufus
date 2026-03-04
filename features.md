@@ -512,6 +512,36 @@ This is the most structurally significant porting gap.
 
 _(None — see Resolved Features Summary below)_
 
+---
+
+## Build / CI Fixes (session 2025-07)
+
+### Container test linker failure (`__isoc23_strtol`)
+**Root cause:** Pre-built `.a` files (`libwim.a`, `libiso9660.a`, `libdriver.a`,
+`libudf.a`) were compiled on the host with GCC 15 + glibc 2.38+, which introduces
+C23 symbol aliases (`__isoc23_strtol` etc.).  Ubuntu 22.04 container (glibc 2.35)
+does not export these symbols → linker failure.  
+**Fix (`run_tests.sh`):** In `--container` and `--full-container` modes the script
+now deletes and rebuilds these four libraries with GCC-12 (the container compiler)
+before linking the test binaries.
+
+### `MAX_USERNAME_LENGTH` redefinition warning
+`src/windows/rufus.h` redefined `MAX_USERNAME_LENGTH` (already defined in
+`src/linux/compat/windows.h`) without an `#undef` guard.  Added `#undef` before
+the `#define` in `rufus.h`.
+
+### `vhd.c` signedness / const warnings
+- `strncmp(&buf[4], ...)` — `buf` is `uint8_t*`; added `(const char *)` cast.
+- `const char *orig_image_path = image_path` then re-assigned to `char *image_path`
+  — changed `const char*` to `char*` in `format.c`.
+
+### `test_vhd_linux.c` buffer overflow (pre-existing)
+`isbootable_gz_bootable` declared `char path[] = "/tmp/test_vhd_boot_XXXXXX.gz"`
+(30 bytes) then called `snprintf(path, sizeof(path), "…_%d.gz", getpid())`.  With a
+7-digit PID the snprintf silently truncated the path, stripping the `.gz` extension
+and causing the bootable-detection test to fail.  Fixed by widening the buffer to
+`char path[64]`.
+
 ### Resolved Features Summary
 
 | Feature | Area | Implemented in |

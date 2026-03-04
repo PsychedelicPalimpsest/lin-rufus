@@ -131,9 +131,16 @@ if [ "${RUN_CONTAINER}" -eq 1 ]; then
       set -euo pipefail
       ./configure --with-os=linux
       find . -name 'Makefile.in' -o -name 'aclocal.m4' -o -name 'configure' | xargs touch
-      rm -f src/bled/libbled.a src/ext2fs/libext2fs.a tests/test_loopback_linux
+      rm -f src/bled/libbled.a src/ext2fs/libext2fs.a \
+            src/wimlib/libwim.a \
+            src/libcdio/iso9660/libiso9660.a src/libcdio/driver/libdriver.a src/libcdio/udf/libudf.a \
+            tests/test_loopback_linux
       make -j\$(nproc) -C src/bled
       make -j\$(nproc) -C src/ext2fs
+      make -j\$(nproc) -C src/wimlib
+      make -j\$(nproc) -C src/libcdio/iso9660
+      make -j\$(nproc) -C src/libcdio/driver
+      make -j\$(nproc) -C src/libcdio/udf
       make -C tests test_loopback_linux
       make -C tests run-root
     "
@@ -168,6 +175,10 @@ if [ "${RUN_FULL_CONTAINER}" -eq 1 ]; then
       echo '--- Build sub-libraries ---'
       make -j\$(nproc) -C src/bled
       make -j\$(nproc) -C src/ext2fs
+      make -j\$(nproc) -C src/wimlib
+      make -j\$(nproc) -C src/libcdio/iso9660
+      make -j\$(nproc) -C src/libcdio/driver
+      make -j\$(nproc) -C src/libcdio/udf
 
       echo '--- Linux tests ---'
       make -j\$(nproc) -C tests linux
@@ -180,7 +191,9 @@ if [ "${RUN_FULL_CONTAINER}" -eq 1 ]; then
       make -C tests check-cppcheck || echo 'cppcheck: warnings found (non-fatal)'
 
       echo '--- Root-requiring tests ---'
-      rm -f tests/test_loopback_linux
+      rm -f tests/test_loopback_linux \
+            src/wimlib/libwim.a \
+            src/libcdio/iso9660/libiso9660.a src/libcdio/driver/libdriver.a src/libcdio/udf/libudf.a
       make -C tests test_loopback_linux
       make -C tests run-root
 
