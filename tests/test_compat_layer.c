@@ -1055,6 +1055,43 @@ TEST(globalmemorystatus_memory_load_0_to_100)
 }
 
 /* ==========================================================================
+ * ZeroMemory / FillMemory / CopyMemory / MoveMemory macros
+ * ========================================================================== */
+
+TEST(zeromemory_zeroes_buffer)
+{
+	char buf[8];
+	memset(buf, 0xAA, sizeof(buf));
+	ZeroMemory(buf, sizeof(buf));
+	for (int i = 0; i < 8; i++)
+		CHECK_MSG(buf[i] == 0, "ZeroMemory must zero every byte");
+}
+
+TEST(fillmemory_fills_with_value)
+{
+	char buf[4];
+	FillMemory(buf, sizeof(buf), 0x5A);
+	for (int i = 0; i < 4; i++)
+		CHECK_MSG((unsigned char)buf[i] == 0x5A, "FillMemory must fill every byte");
+}
+
+TEST(copymemory_copies_data)
+{
+	const char src[] = {1, 2, 3, 4};
+	char dst[4] = {0};
+	CopyMemory(dst, src, sizeof(src));
+	CHECK_MSG(memcmp(dst, src, 4) == 0, "CopyMemory must copy all bytes");
+}
+
+TEST(movememory_overlapping)
+{
+	char buf[8] = {1, 2, 3, 4, 0, 0, 0, 0};
+	MoveMemory(buf + 2, buf, 4);
+	CHECK_MSG(buf[2] == 1 && buf[3] == 2 && buf[4] == 3 && buf[5] == 4,
+	          "MoveMemory must handle overlapping buffers correctly");
+}
+
+/* ==========================================================================
  * VirtualAlloc / VirtualFree — thin wrappers over malloc/free
  * ========================================================================== */
 
@@ -1247,6 +1284,11 @@ int main(void)
 	RUN_TEST(globalmemorystatus_total_phys_nonzero);
 	RUN_TEST(globalmemorystatus_avail_le_total);
 	RUN_TEST(globalmemorystatus_memory_load_0_to_100);
+
+	RUN_TEST(zeromemory_zeroes_buffer);
+	RUN_TEST(fillmemory_fills_with_value);
+	RUN_TEST(copymemory_copies_data);
+	RUN_TEST(movememory_overlapping);
 
 	RUN_TEST(virtualalloc_returns_non_null);
 	RUN_TEST(virtualalloc_memory_is_usable);
