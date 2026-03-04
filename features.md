@@ -209,6 +209,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `HasEfiImgBootLoaders()` | ✅ | Reads `img_report.efi_img_path`; 2 tests pass |
 | `ImageScanThread()` | ✅ | `src/linux/image_scan.c`: calls `ExtractISO` (scan mode) + `IsBootableImage`; posts `UM_IMAGE_SCANNED`; wired from `on_select_clicked()`; 7 tests / 14 assertions pass |
 | `iso9660_readfat()` | ✅ | Sector-reader callback for libfat; uses `iso9660_readfat_private` cache (16 ISO blocks); sector divisibility check; 5 tests pass |
+| WIM FAT32 auto-split (`iso_check.c` — `has_4GB_file` path) | ✅ | Removed `#ifdef _WIN32` guard; `print_split_file` macro + `WimSplitFile` now run on both platforms; wimlib `open_iso_wim_file()` supports `"iso|path"` format on Linux; 3 new unit tests (print_split_file_restores_path, print_split_file_null_is_safe, wim_not_split_for_small_file) |
 | `DumpFatDir()` | ✅ | Extracts FAT filesystem from EFI `.img` embedded in ISO; `wchar16_to_utf8()` converts UTF-16 code units (libfat stores 16-bit values in 32-bit wchar_t on Linux) to UTF-8; POSIX mkdir/open/write_all instead of Windows APIs; skips pre-existing files; 13 tests pass |
 | `OpticalDiscSaveImage()` / `IsoSaveImageThread()` / `SaveImage()` | ✅ | Raw-copy optical disc to ISO using `open()`/`read()`/`write()` loop; `iso_save_run_sync()` is testable synchronous core; buffer sizing 8–32 MiB proportional to disc; progress via `UpdateProgressWithInfo`; `save_btn` wired in GTK UI; 10 tests pass |
 
@@ -394,7 +395,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `WimExtractFile()` / `WimSplitFile()` / `WimApplyImage()` | ✅ | wimlib with Linux path separators |
 | `VhdMountImageAndGetSize()` | ✅ | qemu-nbd + BLKGETSIZE64 ioctl |
 | `VhdUnmountImage()` | ✅ | qemu-nbd --disconnect |
-| `CreateUnattendXml()` | ✅ | POSIX + timezone section skipped on Linux |
+| `CreateUnattendXml()` | ✅ | POSIX + timezone from `IanaToWindowsTimezone()`; OOBE international locale from `GetLinuxOobeLocale()` in `locale_oobe.c` (reads `$LANG` + keyboard layout for `InputLocale`/`SystemLocale`/`UserLocale`/`UILanguage`); username sanitization via `filter_chars()` on both platforms; 136 tests pass |
 | `SetupWinPE()` | ✅ | POSIX file copy + binary patching (CRC/path/rdisk patches) |
 | `PopulateWindowsVersion()` | ✅ | wimlib + ezxml (cross-platform) |
 | `CopySKUSiPolicy()` | 🚫 | Windows-only WDAC policy; stub returns FALSE |

@@ -30,10 +30,9 @@
  *     Linux uses IanaToWindowsTimezone() from linux/timezone.c.
  *   - Temp file creation: Windows uses GetTempFileNameU; Linux uses
  *     GetTempFileName (which maps to the POSIX mkstemp-based version).
- *   - Locale duplication (UNATTEND_OOBE_INTERNATIONAL_MASK): Windows-only,
- *     reads from registry and Windows locale APIs.
- *   - Username sanitization: Windows also calls filter_chars() to remove
- *     characters disallowed in Windows local account names.
+ *   - Locale duplication (UNATTEND_OOBE_INTERNATIONAL_MASK): Windows reads
+ *     from registry and Windows locale APIs; Linux uses GetLinuxOobeLocale()
+ *     from linux/locale_oobe.c (reads $LANG / keyboard layout detection).
  */
 
 #ifdef _WIN32
@@ -46,8 +45,8 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-#include <strings.h>          /* strcasecmp */
 #include "../linux/timezone.h"
+#include "../linux/locale_oobe.h"
 #endif
 
 #include <stdlib.h>
@@ -218,11 +217,7 @@ char* CreateUnattendXml(int arch, int flags)
 			if (flags & UNATTEND_SET_USER) {
 				int allowed = 1;
 				for (i = 0; i < ARRAYSIZE(unallowed_account_names); i++) {
-#ifdef _WIN32
-					if (stricmp(unattend_username, unallowed_account_names[i]) == 0) {
-#else
-					if (strcasecmp(unattend_username, unallowed_account_names[i]) == 0) {
-#endif
+					if (_stricmp(unattend_username, unallowed_account_names[i]) == 0) {
 						allowed = 0;
 						break;
 					}
@@ -231,14 +226,12 @@ char* CreateUnattendXml(int arch, int flags)
 					uprintf("WARNING: '%s' is not allowed as local account name - Option ignored",
 						unattend_username);
 				} else if (unattend_username[0] != 0) {
-#ifdef _WIN32
 					char* org_username = safe_strdup(unattend_username);
 					/* per MS docs, also disallow dots and other special chars */
 					filter_chars(unattend_username, "/\\[]:|<>+=;,?*%@.", '_');
-					if (strcmp(org_username, unattend_username) != 0)
+					if (org_username && strcmp(org_username, unattend_username) != 0)
 						uprintf("WARNING: Local account name contained unallowed characters and has been sanitized");
 					free(org_username);
-#endif
 					uprintf("• Use '%s' for local account name", unattend_username);
 					fprintf(fd, "      <UserAccounts>\n");
 					fprintf(fd, "        <LocalAccounts>\n");
@@ -289,6 +282,25 @@ char* CreateUnattendXml(int arch, int flags)
 			fprintf(fd, "      <UILanguage>%s</UILanguage>\n", ToLocaleName(GetUserDefaultUILanguage()));
 			fprintf(fd, "      <UILanguageFallback>%s</UILanguageFallback>\n",
 				ReadRegistryKeyStr(REGKEY_HKLM, "SYSTEM\\CurrentControlSet\\Control\\Nls\\Language\\InstallLanguageFallback"));
+			fprintf(fd, "    </component>\n");
+		}
+#else
+		if (flags & UNATTEND_OOBE_INTERNATIONAL_MASK) {
+			LinuxOobeLocale lol = { 0 };
+			GetLinuxOobeLocale(&lol);
+			uprintf("• Use the same regional options as this user's");
+			fprintf(fd,
+				"    <component name=\"Microsoft-Windows-International-Core\""
+				" processorArchitecture=\"%s\" language=\"neutral\""
+				" xmlns:wcm=\"http://schemas.microsoft.com/WMIConfig/2002/State\""
+				" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
+				" publicKeyToken=\"31bf3856ad364e35\" versionScope=\"nonSxS\">\n",
+				xml_arch_names[arch]);
+			fprintf(fd, "      <InputLocale>%s</InputLocale>\n",    lol.input_locale);
+			fprintf(fd, "      <SystemLocale>%s</SystemLocale>\n",  lol.system_locale);
+			fprintf(fd, "      <UserLocale>%s</UserLocale>\n",      lol.user_locale);
+			fprintf(fd, "      <UILanguage>%s</UILanguage>\n",      lol.ui_locale);
+			fprintf(fd, "      <UILanguageFallback>%s</UILanguageFallback>\n", lol.ui_fallback);
 			fprintf(fd, "    </component>\n");
 		}
 #endif

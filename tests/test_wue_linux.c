@@ -31,6 +31,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "vhd.h"
 #include "wue.h"
 #include "wimlib.h"
+#include "locale_oobe.h"
 
 /* ================================================================
  * Globals required by wue.c and its dependencies
@@ -57,6 +58,9 @@ char   *image_path         = NULL;
 int    fs_type             = 0;
 
 RUFUS_IMG_REPORT img_report = { 0 };
+
+/* unattend_username is defined in linux/wue.c; expose here for tests */
+extern char unattend_username[];
 
 /* ================================================================
  * Stubs
@@ -115,6 +119,18 @@ BOOL    WimApplyImage(const char* a, int b, const char* c)
 /* parser.c stubs (parse_update uses these globals) */
 RUFUS_UPDATE update = {0};
 windows_version_t WindowsVersion = {0};
+
+/* filter_chars: remove characters in @rem from @str, replacing with @rep.
+ * Minimal stub used by wue.c username sanitization. */
+void filter_chars(char* str, const char* rem, const char rep)
+{
+	if (!str || !rem) return;
+	for (size_t i = 0; str[i]; i++) {
+		for (const char *r = rem; *r; r++) {
+			if (str[i] == *r) { str[i] = rep; break; }
+		}
+	}
+}
 
 /* efi_archname is defined in iso.c; provide it here for the test build */
 const char* efi_archname[] = {
@@ -350,6 +366,95 @@ TEST(create_unattend_ms2023_bootloaders)
 		CHECK(strstr(content, "BypassTPMCheck") != NULL);
 		free(content);
 	}
+}
+
+TEST(create_unattend_oobe_international_has_input_locale)
+{
+	/* UNATTEND_DUPLICATE_LOCALE must cause <InputLocale> to appear in XML */
+	locale_oobe_set_lang_injection("en_US.UTF-8");
+	locale_oobe_set_keyboard_injection("us");
+	char* p = CreateUnattendXml(ARCH_X86_64, UNATTEND_DUPLICATE_LOCALE);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_keyboard_injection(NULL);
+	SKIP_IF(p == NULL);
+	char* content = slurp(p);
+	unlink(p);
+	CHECK(content != NULL);
+	if (content) {
+		CHECK_MSG(strstr(content, "<InputLocale>")  != NULL, "InputLocale element present");
+		CHECK_MSG(strstr(content, "<SystemLocale>") != NULL, "SystemLocale element present");
+		CHECK_MSG(strstr(content, "<UserLocale>")   != NULL, "UserLocale element present");
+		CHECK_MSG(strstr(content, "<UILanguage>")   != NULL, "UILanguage element present");
+		CHECK_MSG(strstr(content, "<UILanguageFallback>") != NULL, "UILanguageFallback element present");
+		free(content);
+	}
+}
+
+TEST(create_unattend_oobe_international_locale_values)
+{
+	/* Verify exact locale values written to XML match injected locale */
+	locale_oobe_set_lang_injection("fr_FR.UTF-8");
+	locale_oobe_set_keyboard_injection("fr");
+	char* p = CreateUnattendXml(ARCH_X86_64, UNATTEND_DUPLICATE_LOCALE);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_keyboard_injection(NULL);
+	SKIP_IF(p == NULL);
+	char* content = slurp(p);
+	unlink(p);
+	CHECK(content != NULL);
+	if (content) {
+		CHECK_MSG(strstr(content, "<InputLocale>040c:0000040c</InputLocale>") != NULL,
+		          "French keyboard input locale");
+		CHECK_MSG(strstr(content, "<SystemLocale>fr-FR</SystemLocale>") != NULL,
+		          "French system locale");
+		CHECK_MSG(strstr(content, "<UILanguage>fr-FR</UILanguage>") != NULL,
+		          "French UI language");
+		CHECK_MSG(strstr(content, "<UILanguageFallback>en-US</UILanguageFallback>") != NULL,
+		          "English fallback locale");
+		free(content);
+	}
+}
+
+TEST(create_unattend_oobe_international_de_DE)
+{
+	locale_oobe_set_lang_injection("de_DE.UTF-8");
+	locale_oobe_set_keyboard_injection("de");
+	char* p = CreateUnattendXml(ARCH_X86_64, UNATTEND_DUPLICATE_LOCALE);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_keyboard_injection(NULL);
+	SKIP_IF(p == NULL);
+	char* content = slurp(p);
+	unlink(p);
+	CHECK(content != NULL);
+	if (content) {
+		CHECK_MSG(strstr(content, "<InputLocale>0407:00000407</InputLocale>") != NULL,
+		          "German keyboard input locale");
+		CHECK_MSG(strstr(content, "<SystemLocale>de-DE</SystemLocale>") != NULL,
+		          "German system locale");
+		free(content);
+	}
+}
+
+TEST(create_unattend_username_sanitization)
+{
+	/* filter_chars should sanitize disallowed characters in username */
+	strncpy(unattend_username, "test/user@name", MAX_USERNAME_LENGTH - 1);
+	unattend_username[MAX_USERNAME_LENGTH - 1] = '\0';
+	char* p = CreateUnattendXml(ARCH_X86_64, UNATTEND_SET_USER);
+	SKIP_IF(p == NULL);
+	char* content = slurp(p);
+	unlink(p);
+	CHECK(content != NULL);
+	if (content) {
+		/* Sanitized username should not contain '/' or '@' */
+		CHECK_MSG(strstr(content, "test/user@name") == NULL,
+		          "unsanitized username must not appear");
+		CHECK_MSG(strstr(content, "test_user_name") != NULL,
+		          "sanitized username with underscores must appear");
+		free(content);
+	}
+	/* Reset username for other tests */
+	unattend_username[0] = '\0';
 }
 
 /* ================================================================
@@ -2156,6 +2261,10 @@ int main(void)
 	RUN(create_unattend_disable_bitlocker);
 	RUN(create_unattend_force_smode);
 	RUN(create_unattend_ms2023_bootloaders);
+	RUN(create_unattend_oobe_international_has_input_locale);
+	RUN(create_unattend_oobe_international_locale_values);
+	RUN(create_unattend_oobe_international_de_DE);
+	RUN(create_unattend_username_sanitization);
 
 	printf("\n=== WUE option flags tests ===\n");
 	RUN(wue_option_flags_base_options);

@@ -962,7 +962,7 @@ EXTRA_SRC_LINUX_test_status_timeout_linux := $(STATUS_TIMEOUT_SRC)
 # wue_linux tests: CreateUnattendXml, PopulateWindowsVersion
 # Links against wue.c (Linux impl), libwim.a (WIM), xml.c (ezxml)
 CFLAGS_LINUX_test_wue_linux := \
-	-D_RUFUS \
+	-D_RUFUS -DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/wimlib -I$(COMMON) \
 	-Wno-implicit-function-declaration -Wno-unused-function \
@@ -974,6 +974,7 @@ EXTRA_SRC_LINUX_test_wue_linux := \
 	$(SRC_DIR)/linux/wintogo_bcd_template.c \
 	$(SRC_DIR)/linux/parser.c \
 	$(SRC_DIR)/linux/timezone.c \
+	$(SRC_DIR)/linux/locale_oobe.c \
 	$(SRC_DIR)/common/stdfn.c \
 	$(WIM_LIB) \
 	$(XML_SRC)
@@ -984,6 +985,13 @@ CFLAGS_LINUX_test_timezone_linux := \
 	-I$(SRC_DIR)/linux \
 	-Wno-unused-function -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_timezone_linux := $(SRC_DIR)/linux/timezone.c
+
+# locale_oobe_linux tests: lang_to_bcp47, GetLinuxOobeLocale
+CFLAGS_LINUX_test_locale_oobe_linux := \
+	-DRUFUS_TEST \
+	-I$(SRC_DIR)/linux \
+	-Wno-unused-function -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_locale_oobe_linux := $(SRC_DIR)/linux/locale_oobe.c
 
 # xdg_dirs_linux tests: GetXdgUserDir — XDG user-dirs.dirs parsing
 CFLAGS_LINUX_test_xdg_dirs_linux := \
