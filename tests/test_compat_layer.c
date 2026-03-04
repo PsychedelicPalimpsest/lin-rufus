@@ -600,6 +600,56 @@ TEST(strcat_s_basic)
 }
 
 /* ==========================================================================
+ * MultiByteToWideChar / WideCharToMultiByte
+ * ========================================================================== */
+
+TEST(multibyte_to_wide_ascii_roundtrip)
+{
+	wchar_t wbuf[32] = {0};
+	int r = MultiByteToWideChar(CP_ACP, 0, "hello", -1, wbuf, 32);
+	CHECK_MSG(r > 0, "MultiByteToWideChar must return positive on success");
+	/* wide string must contain "hello" */
+	CHECK_MSG(wbuf[0] == L'h', "first wide char must be 'h'");
+	CHECK_MSG(wbuf[4] == L'o', "fifth wide char must be 'o'");
+	CHECK_MSG(wbuf[5] == L'\0', "sixth wide char must be null terminator");
+}
+
+TEST(multibyte_to_wide_query_size)
+{
+	/* Calling with wc_sz == 0 should return needed size without writing */
+	int needed = MultiByteToWideChar(CP_ACP, 0, "hello", -1, NULL, 0);
+	CHECK_MSG(needed > 0, "MultiByteToWideChar size query must return positive");
+}
+
+TEST(multibyte_to_wide_null_input_returns_zero)
+{
+	wchar_t wbuf[32] = {0};
+	int r = MultiByteToWideChar(CP_ACP, 0, NULL, -1, wbuf, 32);
+	CHECK_MSG(r == 0, "MultiByteToWideChar(NULL) must return 0");
+}
+
+TEST(wide_to_multibyte_ascii_roundtrip)
+{
+	char buf[32] = {0};
+	int r = WideCharToMultiByte(CP_ACP, 0, L"world", -1, buf, sizeof(buf), NULL, NULL);
+	CHECK_MSG(r > 0, "WideCharToMultiByte must return positive on success");
+	CHECK_STR_EQ(buf, "world");
+}
+
+TEST(wide_to_multibyte_query_size)
+{
+	int needed = WideCharToMultiByte(CP_ACP, 0, L"world", -1, NULL, 0, NULL, NULL);
+	CHECK_MSG(needed > 0, "WideCharToMultiByte size query must return positive");
+}
+
+TEST(wide_to_multibyte_null_input_returns_zero)
+{
+	char buf[32] = {0};
+	int r = WideCharToMultiByte(CP_ACP, 0, NULL, -1, buf, sizeof(buf), NULL, NULL);
+	CHECK_MSG(r == 0, "WideCharToMultiByte(NULL) must return 0");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -699,6 +749,13 @@ int main(void)
 	RUN_TEST(strcpy_s_basic);
 	RUN_TEST(strcpy_s_truncates_and_null_terminates);
 	RUN_TEST(strcat_s_basic);
+
+	RUN_TEST(multibyte_to_wide_ascii_roundtrip);
+	RUN_TEST(multibyte_to_wide_query_size);
+	RUN_TEST(multibyte_to_wide_null_input_returns_zero);
+	RUN_TEST(wide_to_multibyte_ascii_roundtrip);
+	RUN_TEST(wide_to_multibyte_query_size);
+	RUN_TEST(wide_to_multibyte_null_input_returns_zero);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
