@@ -2083,6 +2083,61 @@ TEST(coCreateguid_guids_are_unique)
 }
 
 /* ==========================================================================
+ * Registry stub functions (should fail gracefully on Linux)
+ * ========================================================================== */
+
+TEST(regopenkeyexa_returns_error)
+{
+	HKEY hk = NULL;
+	LONG r = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Test", 0, KEY_READ, &hk);
+	CHECK_MSG(r != ERROR_SUCCESS, "RegOpenKeyExA must not return ERROR_SUCCESS on Linux");
+}
+
+TEST(regqueryvalueexa_returns_error)
+{
+	DWORD sz = 32;
+	char buf[32];
+	LONG r = RegQueryValueExA(NULL, "TestValue", NULL, NULL, (LPBYTE)buf, &sz);
+	CHECK_MSG(r != ERROR_SUCCESS, "RegQueryValueExA must not return ERROR_SUCCESS on Linux");
+}
+
+TEST(regclosekey_returns_zero)
+{
+	LONG r = RegCloseKey(NULL);
+	CHECK_MSG(r == 0, "RegCloseKey must return 0 (success) on Linux");
+}
+
+TEST(regcreatekey_returns_error)
+{
+	HKEY hk = NULL;
+	LONG r = RegCreateKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\TestRufus", 0, NULL,
+	                         0, KEY_ALL_ACCESS, NULL, &hk, NULL);
+	CHECK_MSG(r != ERROR_SUCCESS, "RegCreateKeyExA must not return ERROR_SUCCESS on Linux");
+}
+
+/* ==========================================================================
+ * GetModuleHandleA / LoadLibraryA stubs
+ * ========================================================================== */
+
+TEST(getmodulehandlea_returns_null)
+{
+	HMODULE h = GetModuleHandleA("kernel32.dll");
+	CHECK_MSG(h == NULL, "GetModuleHandleA must return NULL on Linux (stub)");
+}
+
+TEST(getmodulehandlea_null_param_returns_null)
+{
+	HMODULE h = GetModuleHandleA(NULL);
+	CHECK_MSG(h == NULL, "GetModuleHandleA(NULL) must return NULL on Linux (stub)");
+}
+
+TEST(loadlibrarya_returns_null)
+{
+	HMODULE h = LoadLibraryA("user32.dll");
+	CHECK_MSG(h == NULL, "LoadLibraryA must return NULL on Linux (stub)");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -2359,6 +2414,15 @@ int main(void)
 	RUN_TEST(coCreateguid_variant_bits);
 	RUN_TEST(coCreateguid_null_returns_error);
 	RUN_TEST(coCreateguid_guids_are_unique);
+
+	RUN_TEST(regopenkeyexa_returns_error);
+	RUN_TEST(regqueryvalueexa_returns_error);
+	RUN_TEST(regclosekey_returns_zero);
+	RUN_TEST(regcreatekey_returns_error);
+
+	RUN_TEST(getmodulehandlea_returns_null);
+	RUN_TEST(getmodulehandlea_null_param_returns_null);
+	RUN_TEST(loadlibrarya_returns_null);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
