@@ -938,10 +938,18 @@ extern HANDLE CreatePreallocatedFile(const char* lpFileName, DWORD dwDesiredAcce
 extern uint32_t ResolveDllAddress(dll_resolver_t* resolver);
 extern sbat_entry_t* GetSbatEntries(char* sbatlevel);
 extern thumbprint_list_t* GetThumbprintEntries(char* thumbprints_txt);
+#ifdef _WIN32
 extern uint16_t GetPeArch(uint8_t* buf);
 extern uint8_t* GetPeSection(uint8_t* buf, const char* name, uint32_t* len);
 extern uint8_t* GetPeSignatureData(uint8_t* buf);
 extern uint8_t* RvaToPhysical(uint8_t* buf, uint32_t rva);
+#else
+/* Linux builds use common/parser.c which bounds-checks with buf_size */
+extern uint16_t GetPeArch(uint8_t* buf, uint32_t buf_size);
+extern uint8_t* GetPeSection(uint8_t* buf, uint32_t buf_size, const char* name, uint32_t* len);
+extern uint8_t* GetPeSignatureData(uint8_t* buf, uint32_t buf_size);
+extern uint8_t* RvaToPhysical(uint8_t* buf, uint32_t buf_size, uint32_t rva);
+#endif
 #ifdef _WIN32
 extern uint32_t FindResourceRva(const wchar_t* name, uint8_t* root, uint8_t* dir, uint32_t* len);
 #else

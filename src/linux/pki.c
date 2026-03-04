@@ -482,7 +482,7 @@ int GetSignatureCertInfo(const char *path, cert_info_t *info)
 		free(buf);
 		return -1;
 	}
-	cert_data = GetPeSignatureData(buf);
+	cert_data = GetPeSignatureData(buf, buf_len);
 	ret = GetIssuerCertificateInfo(cert_data, info);
 	free(buf);
 	return ret;

@@ -37,11 +37,11 @@ BOOL right_to_left_mode = FALSE;
 /* -------------------------------------------------------------------------
  * Forward declarations of functions under test (defined in common/parser.c)
  * ---------------------------------------------------------------------- */
-extern uint16_t  GetPeArch(uint8_t* buf);
-extern uint8_t*  GetPeSection(uint8_t* buf, const char* name, uint32_t* len);
-extern uint8_t*  RvaToPhysical(uint8_t* buf, uint32_t rva);
+extern uint16_t  GetPeArch(uint8_t* buf, uint32_t buf_size);
+extern uint8_t*  GetPeSection(uint8_t* buf, uint32_t buf_size, const char* name, uint32_t* len);
+extern uint8_t*  RvaToPhysical(uint8_t* buf, uint32_t buf_size, uint32_t rva);
 extern uint32_t  FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* root_end, uint8_t* dir, uint32_t* len);
-extern uint8_t*  GetPeSignatureData(uint8_t* buf);
+extern uint8_t*  GetPeSignatureData(uint8_t* buf, uint32_t buf_size);
 
 /* -------------------------------------------------------------------------
  * Minimal PE builder
@@ -145,13 +145,13 @@ static PeImage make_pe(uint16_t machine,
 
 TEST(get_pe_arch_null_returns_unknown)
 {
-    CHECK_INT_EQ(IMAGE_FILE_MACHINE_UNKNOWN, (int)GetPeArch(NULL));
+    CHECK_INT_EQ(IMAGE_FILE_MACHINE_UNKNOWN, (int)GetPeArch(NULL, 0));
 }
 
 TEST(get_pe_arch_bad_mz_returns_unknown)
 {
     uint8_t buf[512] = {0};  /* e_magic == 0 */
-    CHECK_INT_EQ(IMAGE_FILE_MACHINE_UNKNOWN, (int)GetPeArch(buf));
+    CHECK_INT_EQ(IMAGE_FILE_MACHINE_UNKNOWN, (int)GetPeArch(buf, sizeof(buf)));
 }
 
 TEST(get_pe_arch_bad_pe_sig_returns_unknown)
@@ -161,14 +161,14 @@ TEST(get_pe_arch_bad_pe_sig_returns_unknown)
     dos->e_magic  = IMAGE_DOS_SIGNATURE;
     dos->e_lfanew = 64;
     /* NT signature at offset 64 is 0 — not "PE\0\0" */
-    CHECK_INT_EQ(IMAGE_FILE_MACHINE_UNKNOWN, (int)GetPeArch(buf));
+    CHECK_INT_EQ(IMAGE_FILE_MACHINE_UNKNOWN, (int)GetPeArch(buf, sizeof(buf)));
 }
 
 TEST(get_pe_arch_x86)
 {
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, NULL, 0, NULL, 0, 0);
     CHECK(p.buf != NULL);
-    CHECK_INT_EQ(IMAGE_FILE_MACHINE_I386, (int)GetPeArch(p.buf));
+    CHECK_INT_EQ(IMAGE_FILE_MACHINE_I386, (int)GetPeArch(p.buf, (uint32_t)p.total));
     pe_free(&p);
 }
 
@@ -176,7 +176,7 @@ TEST(get_pe_arch_x64)
 {
     PeImage p = make_pe(IMAGE_FILE_MACHINE_AMD64, NULL, 0, NULL, 0, 0);
     CHECK(p.buf != NULL);
-    CHECK_INT_EQ(IMAGE_FILE_MACHINE_AMD64, (int)GetPeArch(p.buf));
+    CHECK_INT_EQ(IMAGE_FILE_MACHINE_AMD64, (int)GetPeArch(p.buf, (uint32_t)p.total));
     pe_free(&p);
 }
 
@@ -184,7 +184,7 @@ TEST(get_pe_arch_arm32)
 {
     PeImage p = make_pe(IMAGE_FILE_MACHINE_ARM, NULL, 0, NULL, 0, 0);
     CHECK(p.buf != NULL);
-    CHECK_INT_EQ(IMAGE_FILE_MACHINE_ARM, (int)GetPeArch(p.buf));
+    CHECK_INT_EQ(IMAGE_FILE_MACHINE_ARM, (int)GetPeArch(p.buf, (uint32_t)p.total));
     pe_free(&p);
 }
 
@@ -192,7 +192,7 @@ TEST(get_pe_arch_arm64)
 {
     PeImage p = make_pe(IMAGE_FILE_MACHINE_ARM64, NULL, 0, NULL, 0, 0);
     CHECK(p.buf != NULL);
-    CHECK_INT_EQ(IMAGE_FILE_MACHINE_ARM64, (int)GetPeArch(p.buf));
+    CHECK_INT_EQ(IMAGE_FILE_MACHINE_ARM64, (int)GetPeArch(p.buf, (uint32_t)p.total));
     pe_free(&p);
 }
 
@@ -202,7 +202,7 @@ TEST(get_pe_arch_arm64)
 
 TEST(get_pe_section_null_buf)
 {
-    CHECK(GetPeSection(NULL, ".text", NULL) == NULL);
+    CHECK(GetPeSection(NULL, 0, ".text", NULL) == NULL);
 }
 
 TEST(get_pe_section_null_name)
@@ -210,7 +210,7 @@ TEST(get_pe_section_null_name)
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, ".text", 0x1000,
                         (const uint8_t*)"abcd", 4, 4);
     CHECK(p.buf != NULL);
-    CHECK(GetPeSection(p.buf, NULL, NULL) == NULL);
+    CHECK(GetPeSection(p.buf, (uint32_t)p.total, NULL, NULL) == NULL);
     pe_free(&p);
 }
 
@@ -221,7 +221,7 @@ TEST(get_pe_section_found_x86)
     CHECK(p.buf != NULL);
 
     uint32_t len = 0;
-    uint8_t* sec = GetPeSection(p.buf, ".text", &len);
+    uint8_t* sec = GetPeSection(p.buf, (uint32_t)p.total, ".text", &len);
     CHECK(sec != NULL);
     CHECK_INT_EQ(4, (int)len);
     CHECK_INT_EQ(0xDE, (int)sec[0]);
@@ -238,7 +238,7 @@ TEST(get_pe_section_found_x64)
     CHECK(p.buf != NULL);
 
     uint32_t len = 0;
-    uint8_t* sec = GetPeSection(p.buf, ".data", &len);
+    uint8_t* sec = GetPeSection(p.buf, (uint32_t)p.total, ".data", &len);
     CHECK(sec != NULL);
     CHECK_INT_EQ(4, (int)len);
     pe_free(&p);
@@ -249,7 +249,7 @@ TEST(get_pe_section_not_found)
     const uint8_t data[] = { 1, 2, 3 };
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, ".text", 0x1000, data, 3, 3);
     CHECK(p.buf != NULL);
-    CHECK(GetPeSection(p.buf, ".rsrc", NULL) == NULL);
+    CHECK(GetPeSection(p.buf, (uint32_t)p.total, ".rsrc", NULL) == NULL);
     pe_free(&p);
 }
 
@@ -259,7 +259,7 @@ TEST(get_pe_section_no_len_param)
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, ".foo", 0x1000, data, 1, 1);
     CHECK(p.buf != NULL);
     /* len == NULL must not crash */
-    uint8_t* sec = GetPeSection(p.buf, ".foo", NULL);
+    uint8_t* sec = GetPeSection(p.buf, (uint32_t)p.total, ".foo", NULL);
     CHECK(sec != NULL);
     CHECK_INT_EQ(0xFF, (int)sec[0]);
     pe_free(&p);
@@ -271,7 +271,7 @@ TEST(get_pe_section_no_len_param)
 
 TEST(rva_to_physical_null_buf)
 {
-    CHECK(RvaToPhysical(NULL, 0x1000) == NULL);
+    CHECK(RvaToPhysical(NULL, 0, 0x1000) == NULL);
 }
 
 TEST(rva_to_physical_rva_in_section)
@@ -281,7 +281,7 @@ TEST(rva_to_physical_rva_in_section)
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, ".text", 0x1000, data, 8, 8);
     CHECK(p.buf != NULL);
 
-    uint8_t* phys = RvaToPhysical(p.buf, 0x1003);
+    uint8_t* phys = RvaToPhysical(p.buf, (uint32_t)p.total, 0x1003);
     CHECK(phys != NULL);
     CHECK_INT_EQ(0x03, (int)phys[0]);
     pe_free(&p);
@@ -293,7 +293,7 @@ TEST(rva_to_physical_rva_before_sections)
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, ".text", 0x2000, data, 4, 4);
     CHECK(p.buf != NULL);
     /* RVA 0x1000 is below the section start 0x2000 */
-    CHECK(RvaToPhysical(p.buf, 0x1000) == NULL);
+    CHECK(RvaToPhysical(p.buf, (uint32_t)p.total, 0x1000) == NULL);
     pe_free(&p);
 }
 
@@ -303,7 +303,7 @@ TEST(rva_to_physical_rva_after_sections)
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, ".text", 0x1000, data, 4, 4);
     CHECK(p.buf != NULL);
     /* RVA 0x3000 is past the end of the only section */
-    CHECK(RvaToPhysical(p.buf, 0x3000) == NULL);
+    CHECK(RvaToPhysical(p.buf, (uint32_t)p.total, 0x3000) == NULL);
     pe_free(&p);
 }
 
@@ -312,7 +312,7 @@ TEST(rva_to_physical_x64)
     const uint8_t data[] = { 0xAA, 0xBB };
     PeImage p = make_pe(IMAGE_FILE_MACHINE_AMD64, ".init", 0x4000, data, 2, 2);
     CHECK(p.buf != NULL);
-    uint8_t* phys = RvaToPhysical(p.buf, 0x4001);
+    uint8_t* phys = RvaToPhysical(p.buf, (uint32_t)p.total, 0x4001);
     CHECK(phys != NULL);
     CHECK_INT_EQ(0xBB, (int)phys[0]);
     pe_free(&p);
@@ -324,7 +324,7 @@ TEST(rva_to_physical_x64)
 
 TEST(get_pe_sig_null)
 {
-    CHECK(GetPeSignatureData(NULL) == NULL);
+    CHECK(GetPeSignatureData(NULL, 0) == NULL);
 }
 
 TEST(get_pe_sig_no_security_dir)
@@ -332,7 +332,7 @@ TEST(get_pe_sig_no_security_dir)
     /* make_pe leaves DataDirectory zeroed, so no security dir */
     PeImage p = make_pe(IMAGE_FILE_MACHINE_I386, NULL, 0, NULL, 0, 0);
     CHECK(p.buf != NULL);
-    CHECK(GetPeSignatureData(p.buf) == NULL);
+    CHECK(GetPeSignatureData(p.buf, (uint32_t)p.total) == NULL);
     pe_free(&p);
 }
 
@@ -371,7 +371,7 @@ TEST(get_pe_sig_with_valid_certificate)
     nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].Size
         = (DWORD)(cert_size + 4);
 
-    uint8_t* result = GetPeSignatureData(p.buf);
+    uint8_t* result = GetPeSignatureData(p.buf, (uint32_t)p.total);
     CHECK(result != NULL);
     CHECK(result == (uint8_t*)cert);
     pe_free(&p);
@@ -403,7 +403,7 @@ TEST(get_pe_sig_wrong_cert_type)
     nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].Size
         = (DWORD)cert_size;
 
-    CHECK(GetPeSignatureData(p.buf) == NULL);
+    CHECK(GetPeSignatureData(p.buf, (uint32_t)p.total) == NULL);
     pe_free(&p);
 }
 
@@ -432,7 +432,7 @@ TEST(get_pe_sig_zero_length_cert)
     nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].Size
         = (DWORD)cert_size;
 
-    CHECK(GetPeSignatureData(p.buf) == NULL);
+    CHECK(GetPeSignatureData(p.buf, (uint32_t)p.total) == NULL);
     pe_free(&p);
 }
 
@@ -555,6 +555,66 @@ TEST(find_resource_rva_zero_size_buffer)
 }
 
 /* =========================================================================
+ * Regression tests: e_lfanew OOB bounds check (crash #3)
+ * A crafted 40-byte DOS header with e_lfanew=0x7FFFFFFF used to cause
+ * an out-of-bounds read in GetPeArch/GetPeSection/GetPeSignatureData/
+ * RvaToPhysical before the buf_size bounds check was added.
+ * ====================================================================== */
+
+TEST(get_pe_arch_elfanew_oob)
+{
+    uint8_t buf[64] = {0};
+    IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)buf;
+    dos->e_magic  = IMAGE_DOS_SIGNATURE;
+    dos->e_lfanew = 0x7FFFFFFF;  /* way past end of buf */
+    CHECK_INT_EQ(IMAGE_FILE_MACHINE_UNKNOWN, (int)GetPeArch(buf, sizeof(buf)));
+}
+
+TEST(get_pe_section_elfanew_oob)
+{
+    uint8_t buf[64] = {0};
+    IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)buf;
+    dos->e_magic  = IMAGE_DOS_SIGNATURE;
+    dos->e_lfanew = 0x7FFFFFFF;
+    CHECK(GetPeSection(buf, sizeof(buf), ".text", NULL) == NULL);
+}
+
+TEST(rva_to_physical_elfanew_oob)
+{
+    uint8_t buf[64] = {0};
+    IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)buf;
+    dos->e_magic  = IMAGE_DOS_SIGNATURE;
+    dos->e_lfanew = 0x7FFFFFFF;
+    CHECK(RvaToPhysical(buf, sizeof(buf), 0x1000) == NULL);
+}
+
+TEST(get_pe_sig_elfanew_oob)
+{
+    uint8_t buf[64] = {0};
+    IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)buf;
+    dos->e_magic  = IMAGE_DOS_SIGNATURE;
+    dos->e_lfanew = 0x7FFFFFFF;
+    CHECK(GetPeSignatureData(buf, sizeof(buf)) == NULL);
+}
+
+/* Regression using the exact crash-#3 corpus input (40 bytes):
+ * a crafted MZ header with e_lfanew that puts NT headers outside the buffer. */
+TEST(get_pe_arch_fuzz_crash3_input)
+{
+    /* crash-528d8bc5f7eb7fa11514e3cd3abc717f84716aec from fuzzer */
+    const uint8_t crash_input[] = {
+        0x4d, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff
+    };
+    /* Must return UNKNOWN without crashing */
+    CHECK_INT_EQ(IMAGE_FILE_MACHINE_UNKNOWN,
+                 (int)GetPeArch((uint8_t*)crash_input, sizeof(crash_input)));
+}
+
+/* =========================================================================
  * main
  * ====================================================================== */
 
@@ -595,6 +655,12 @@ int main(void)
     RUN(find_resource_rva_crash_regression);
     RUN(find_resource_rva_null_root_end);
     RUN(find_resource_rva_zero_size_buffer);
+
+    RUN(get_pe_arch_elfanew_oob);
+    RUN(get_pe_section_elfanew_oob);
+    RUN(rva_to_physical_elfanew_oob);
+    RUN(get_pe_sig_elfanew_oob);
+    RUN(get_pe_arch_fuzz_crash3_input);
 
     TEST_RESULTS();
 }

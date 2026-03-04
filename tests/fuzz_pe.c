@@ -28,9 +28,9 @@
 #include "windows.h"
 #include "rufus.h"
 
-extern uint16_t GetPeArch(uint8_t* buf);
-extern uint8_t* GetPeSection(uint8_t* buf, const char* name, uint32_t* len);
-extern uint8_t* GetPeSignatureData(uint8_t* buf);
+extern uint16_t GetPeArch(uint8_t* buf, uint32_t buf_size);
+extern uint8_t* GetPeSection(uint8_t* buf, uint32_t buf_size, const char* name, uint32_t* len);
+extern uint8_t* GetPeSignatureData(uint8_t* buf, uint32_t buf_size);
 extern uint32_t FindResourceRva(const uint16_t* name, uint8_t* root,
                                 uint8_t* root_end, uint8_t* dir, uint32_t* len);
 
@@ -52,23 +52,33 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	memcpy(buf, data, size);
 
 	/* Target 1: GetPeArch — just reads machine field, should never crash */
-	(void)GetPeArch(buf);
+	(void)GetPeArch(buf, (uint32_t)size);
 
 	/* Target 2: GetPeSection — walk all section names */
 	for (size_t i = 0; i < sizeof(section_names)/sizeof(section_names[0]); i++) {
 		uint32_t len = 0;
-		(void)GetPeSection(buf, section_names[i], &len);
+		(void)GetPeSection(buf, (uint32_t)size, section_names[i], &len);
 		/* do NOT free result: it points into buf */
 	}
 
 	/* Target 3: GetPeSignatureData — reads security directory */
-	(void)GetPeSignatureData(buf);
+	(void)GetPeSignatureData(buf, (uint32_t)size);
 
-	/* Target 4: FindResourceRva — pass buf as root and dir, with proper root_end */
+	/* Target 4: FindResourceRva — pass buf as root and dir, with proper root_end.
+	 * name must be a NULL-terminated UTF-16LE array (the function scans for 0x0000). */
 	if (size >= sizeof(uint16_t)) {
 		uint32_t rsrc_len = 0;
-		const uint16_t name = 0x0001; /* RT_CURSOR */
-		(void)FindResourceRva(&name, buf, buf + size, buf, &rsrc_len);
+		/* Try several resource names, each properly null-terminated. */
+		static const uint16_t names[][4] = {
+			{ 0x0001, 0x0000 },              /* RT_CURSOR */
+			{ 0x0003, 0x0000 },              /* RT_ICON */
+			{ 'M', 'U', 'I', 0x0000 },       /* "MUI" */
+			{ 0x0000 },                       /* empty name */
+		};
+		for (size_t ni = 0; ni < sizeof(names)/sizeof(names[0]); ni++) {
+			rsrc_len = 0;
+			(void)FindResourceRva(names[ni], buf, buf + size, buf, &rsrc_len);
+		}
 	}
 
 	free(buf);

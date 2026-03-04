@@ -101,7 +101,7 @@ uint32_t read_file(const char *path, uint8_t **buf)
     if (n == 0) { free(*buf); *buf = NULL; }
     return n;
 }
-uint8_t *GetPeSignatureData(uint8_t *buf) { (void)buf; return NULL; }
+uint8_t *GetPeSignatureData(uint8_t *buf, uint32_t buf_size) { (void)buf; (void)buf_size; return NULL; }
 
 /* ================================================================
  * Function declarations (from linux/pki.c)

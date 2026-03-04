@@ -101,7 +101,7 @@ static BOOL IsRevokedByDbx(uint8_t* hash, uint8_t* buf, uint32_t len)
 	char dbx_name[32], path[MAX_PATH];
 	uint32_t i, fluff_size, nb_entries;
 
-	i = (uint32_t)MachineToArch(GetPeArch(buf));
+	i = (uint32_t)MachineToArch(GetPeArch(buf, len));
 	if (i == ARCH_UNKNOWN)
 		goto out;
 
@@ -182,7 +182,7 @@ static BOOL IsRevokedBySbat(uint8_t* buf, uint32_t len)
 	if (sbat_entries == NULL)
 		return FALSE;
 
-	sbat = (char*)GetPeSection(buf, ".sbat", &sbat_len);
+	sbat = (char*)GetPeSection(buf, len, ".sbat", &sbat_len);
 	if (sbat == NULL || sbat < (char*)buf || sbat >= (char*)buf + len)
 		return FALSE;
 
@@ -271,6 +271,8 @@ static BOOL IsRevokedBySvn(uint8_t* buf, uint32_t len)
 		return FALSE;
 
 	dos_header = (IMAGE_DOS_HEADER *)buf;
+	if ((uint32_t)dos_header->e_lfanew + sizeof(IMAGE_NT_HEADERS32) > len)
+		return FALSE;
 	pe_header  = (IMAGE_NT_HEADERS32 *)&buf[dos_header->e_lfanew];
 
 	for (i = 0; sbat_entries[i].product != NULL; i++) {
@@ -298,7 +300,7 @@ static BOOL IsRevokedBySvn(uint8_t* buf, uint32_t len)
 		if (img_data_dir.VirtualAddress == 0 || img_data_dir.Size == 0)
 			continue;
 
-		root = RvaToPhysical(buf, img_data_dir.VirtualAddress);
+		root = RvaToPhysical(buf, len, img_data_dir.VirtualAddress);
 		if (root == NULL)
 			continue;
 
@@ -307,7 +309,7 @@ static BOOL IsRevokedBySvn(uint8_t* buf, uint32_t len)
 			continue;
 
 		if (rsrc_len == sizeof(uint32_t)) {
-			svn_ver = (uint32_t *)RvaToPhysical(buf, rsrc_rva);
+			svn_ver = (uint32_t *)RvaToPhysical(buf, len, rsrc_rva);
 			if (svn_ver != NULL) {
 				uuprintf("  SVN version: %d.%d", *svn_ver >> 16, *svn_ver & 0xffff);
 				if (*svn_ver < sbat_entries[i].version) {
@@ -360,7 +362,7 @@ BOOL IsSignedBySecureBootAuthority(uint8_t* buf, uint32_t len)
 		return FALSE;
 
 	/* Get the signer/issuer info */
-	cert = GetPeSignatureData(buf);
+	cert = GetPeSignatureData(buf, len);
 	/* Secure Boot Authority is always an issuer */
 	if (GetIssuerCertificateInfo(cert, &info) != 2)
 		return FALSE;
@@ -393,12 +395,14 @@ int IsBootloaderRevoked(uint8_t* buf, uint32_t len)
 
 	if (buf == NULL || len < 0x100 || dos_header->e_magic != IMAGE_DOS_SIGNATURE)
 		return -2;
+	if ((uint32_t)dos_header->e_lfanew + sizeof(IMAGE_NT_HEADERS32) > len)
+		return -2;
 	pe_header = (IMAGE_NT_HEADERS32*)&buf[dos_header->e_lfanew];
 	if (pe_header->Signature != IMAGE_NT_SIGNATURE)
 		return -2;
 
 	/* Get the signer/issuer info */
-	cert = GetPeSignatureData(buf);
+	cert = GetPeSignatureData(buf, len);
 	r = GetIssuerCertificateInfo(cert, &info);
 	if (r == 0) {
 		uprintf("  (Unsigned Bootloader)");

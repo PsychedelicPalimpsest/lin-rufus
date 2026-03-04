@@ -46,7 +46,7 @@ jobs:
     needs: VS2022-Build
     steps:
       - name: Merge Artifacts
-        uses: actions/upload-artifact/merge@v5
+        uses: actions/upload-artifact/merge@v6
         with:
           name: setup
           delete-merged: true

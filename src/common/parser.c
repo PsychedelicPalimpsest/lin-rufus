@@ -958,13 +958,20 @@ thumbprint_list_t* GetThumbprintEntries(char* thumbprints_txt)
 #ifndef RUFUS_EXCLUDE_PE_PARSER
 
 /* Return the machine architecture of a PE image buffer, or
- * IMAGE_FILE_MACHINE_UNKNOWN on error. */
-uint16_t GetPeArch(uint8_t* buf)
+ * IMAGE_FILE_MACHINE_UNKNOWN on error.
+ * buf_size must be the total size of the allocated buffer so that
+ * the e_lfanew offset can be validated before dereferencing. */
+uint16_t GetPeArch(uint8_t* buf, uint32_t buf_size)
 {
 	IMAGE_DOS_HEADER* dos_header = (IMAGE_DOS_HEADER*)buf;
 	IMAGE_NT_HEADERS32* pe_header;
 
-	if (buf == NULL || dos_header->e_magic != IMAGE_DOS_SIGNATURE)
+	if (buf == NULL || buf_size < sizeof(IMAGE_DOS_HEADER))
+		return IMAGE_FILE_MACHINE_UNKNOWN;
+	if (dos_header->e_magic != IMAGE_DOS_SIGNATURE)
+		return IMAGE_FILE_MACHINE_UNKNOWN;
+	/* Guard: NT headers must fit within the buffer */
+	if ((uint32_t)dos_header->e_lfanew + sizeof(IMAGE_NT_HEADERS32) > buf_size)
 		return IMAGE_FILE_MACHINE_UNKNOWN;
 
 	pe_header = (IMAGE_NT_HEADERS32*)&buf[dos_header->e_lfanew];
@@ -974,8 +981,9 @@ uint16_t GetPeArch(uint8_t* buf)
 }
 
 /* Return the address and (optionally) the length of a named PE section.
- * Returns NULL if not found. */
-uint8_t* GetPeSection(uint8_t* buf, const char* name, uint32_t* len)
+ * Returns NULL if not found.
+ * buf_size must be the total size of the allocated buffer. */
+uint8_t* GetPeSection(uint8_t* buf, uint32_t buf_size, const char* name, uint32_t* len)
 {
 	char section_name[IMAGE_SIZEOF_SHORT_NAME] = { 0 };
 	uint32_t i, nb_sections;
@@ -984,7 +992,12 @@ uint8_t* GetPeSection(uint8_t* buf, const char* name, uint32_t* len)
 	IMAGE_NT_HEADERS64* pe64_header;
 	IMAGE_SECTION_HEADER* section_header;
 
-	if (buf == NULL || name == NULL || dos_header->e_magic != IMAGE_DOS_SIGNATURE)
+	if (buf == NULL || name == NULL || buf_size < sizeof(IMAGE_DOS_HEADER))
+		return NULL;
+	if (dos_header->e_magic != IMAGE_DOS_SIGNATURE)
+		return NULL;
+	/* Guard: NT headers must fit within the buffer */
+	if ((uint32_t)dos_header->e_lfanew + sizeof(IMAGE_NT_HEADERS32) > buf_size)
 		return NULL;
 
 	static_strcpy(section_name, name);
@@ -1013,8 +1026,9 @@ uint8_t* GetPeSection(uint8_t* buf, const char* name, uint32_t* len)
 }
 
 /* Convert an RVA to a physical (file-offset) address in a PE buffer.
- * Returns NULL if the RVA is not covered by any section. */
-uint8_t* RvaToPhysical(uint8_t* buf, uint32_t rva)
+ * Returns NULL if the RVA is not covered by any section.
+ * buf_size must be the total size of the allocated buffer. */
+uint8_t* RvaToPhysical(uint8_t* buf, uint32_t buf_size, uint32_t rva)
 {
 	uint32_t i, nb_sections;
 	IMAGE_DOS_HEADER* dos_header = (IMAGE_DOS_HEADER*)buf;
@@ -1022,7 +1036,12 @@ uint8_t* RvaToPhysical(uint8_t* buf, uint32_t rva)
 	IMAGE_NT_HEADERS64* pe64_header;
 	IMAGE_SECTION_HEADER* section_header;
 
-	if (buf == NULL || dos_header->e_magic != IMAGE_DOS_SIGNATURE)
+	if (buf == NULL || buf_size < sizeof(IMAGE_DOS_HEADER))
+		return NULL;
+	if (dos_header->e_magic != IMAGE_DOS_SIGNATURE)
+		return NULL;
+	/* Guard: NT headers must fit within the buffer */
+	if ((uint32_t)dos_header->e_lfanew + sizeof(IMAGE_NT_HEADERS32) > buf_size)
 		return NULL;
 
 	pe_header = (IMAGE_NT_HEADERS32*)&buf[dos_header->e_lfanew];
@@ -1054,11 +1073,16 @@ uint8_t* RvaToPhysical(uint8_t* buf, uint32_t rva)
  * root must point to the start of the .rsrc section data.
  * Returns the RVA of the data, or 0 if not found.
  *
- * name is a UTF-16LE string (uint16_t per code unit) matching the PE resource
- * format.  This avoids sizeof(wchar_t) portability issues (4 bytes on Linux
- * vs. 2 bytes on Windows). */
+ * name is a NULL-terminated UTF-16LE string (uint16_t per code unit) matching
+ * the PE resource format.  This avoids sizeof(wchar_t) portability issues
+ * (4 bytes on Linux vs. 2 bytes on Windows).
+ *
+ * depth guards against crafted PEs with circular directory references.
+ * PE resource trees are at most 3 levels deep (type → name → language),
+ * so anything beyond MAX_RESOURCE_DEPTH is a malformed/malicious image. */
+#define MAX_RESOURCE_DEPTH 8
 static BOOL FoundResourceRva_flag = FALSE;
-uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* root_end, uint8_t* dir, uint32_t* len)
+static uint32_t FindResourceRva_r(const uint16_t* name, uint8_t* root, uint8_t* root_end, uint8_t* dir, uint32_t* len, int depth)
 {
 	uint32_t i, rva;
 	IMAGE_RESOURCE_DIRECTORY* _dir = (IMAGE_RESOURCE_DIRECTORY*)dir;
@@ -1068,16 +1092,12 @@ uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* root_end,
 	size_t nlen, k;
 	BOOL match;
 
-	if (root == NULL || root_end == NULL || dir == NULL || name == NULL)
+	if (depth > MAX_RESOURCE_DEPTH)
 		return 0;
 
 	/* Guard: the directory header itself must be within the buffer */
 	if ((uint8_t*)(&dir_entry[0]) > root_end)
 		return 0;
-
-	/* Initial invocation always starts at the root */
-	if (root == dir)
-		FoundResourceRva_flag = FALSE;
 
 	for (i = 0; i < (uint32_t)_dir->NumberOfNamedEntries + _dir->NumberOfIdEntries; i++) {
 		/* Guard: each dir_entry[i] must be within the buffer */
@@ -1112,7 +1132,7 @@ uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* root_end,
 			/* Guard: sub-directory offset must be within buffer */
 			if (root + dir_entry[i].OffsetToDirectory + sizeof(IMAGE_RESOURCE_DIRECTORY) > root_end)
 				continue;
-			rva = FindResourceRva(name, root, root_end, &root[dir_entry[i].OffsetToDirectory], len);
+			rva = FindResourceRva_r(name, root, root_end, &root[dir_entry[i].OffsetToDirectory], len, depth + 1);
 			if (rva != 0)
 				return rva;
 		} else if (FoundResourceRva_flag) {
@@ -1128,9 +1148,20 @@ uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* root_end,
 	return 0;
 }
 
+uint32_t FindResourceRva(const uint16_t* name, uint8_t* root, uint8_t* root_end, uint8_t* dir, uint32_t* len)
+{
+	if (root == NULL || root_end == NULL || dir == NULL || name == NULL)
+		return 0;
+	/* Reset traversal state on initial (top-level) call */
+	if (root == dir)
+		FoundResourceRva_flag = FALSE;
+	return FindResourceRva_r(name, root, root_end, dir, len, 0);
+}
+
 /* Return a pointer to the WIN_CERTIFICATE block within a signed PE image,
- * or NULL if the image has no valid Authenticode signature block. */
-uint8_t* GetPeSignatureData(uint8_t* buf)
+ * or NULL if the image has no valid Authenticode signature block.
+ * buf_size must be the total size of the allocated buffer. */
+uint8_t* GetPeSignatureData(uint8_t* buf, uint32_t buf_size)
 {
 	IMAGE_DOS_HEADER* dos_header = (IMAGE_DOS_HEADER*)buf;
 	IMAGE_NT_HEADERS32* pe_header;
@@ -1138,7 +1169,12 @@ uint8_t* GetPeSignatureData(uint8_t* buf)
 	IMAGE_DATA_DIRECTORY sec_dir;
 	WIN_CERTIFICATE* cert;
 
-	if (buf == NULL || dos_header->e_magic != IMAGE_DOS_SIGNATURE)
+	if (buf == NULL || buf_size < sizeof(IMAGE_DOS_HEADER))
+		return NULL;
+	if (dos_header->e_magic != IMAGE_DOS_SIGNATURE)
+		return NULL;
+	/* Guard: NT headers must fit within the buffer */
+	if ((uint32_t)dos_header->e_lfanew + sizeof(IMAGE_NT_HEADERS32) > buf_size)
 		return NULL;
 
 	pe_header = (IMAGE_NT_HEADERS32*)&buf[dos_header->e_lfanew];
@@ -1154,6 +1190,9 @@ uint8_t* GetPeSignatureData(uint8_t* buf)
 		sec_dir = pe64_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY];
 	}
 	if (sec_dir.VirtualAddress == 0 || sec_dir.Size == 0)
+		return NULL;
+	/* Guard: certificate block must fit within the buffer */
+	if (sec_dir.VirtualAddress + sizeof(WIN_CERTIFICATE) > buf_size)
 		return NULL;
 
 	cert = (WIN_CERTIFICATE*)&buf[sec_dir.VirtualAddress];
