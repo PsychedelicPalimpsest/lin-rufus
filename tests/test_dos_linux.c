@@ -342,8 +342,10 @@ TEST(set_dos_locale_null_returns_false)
  * ================================================================ */
 
 #ifdef RUFUS_TEST
-/* Injection hook provided by dos_locale.c when built with -DRUFUS_TEST */
+/* Injection hooks provided by dos_locale.c when built with -DRUFUS_TEST */
 extern void dos_locale_set_xkb_layout(const char* layout);
+extern void dos_locale_set_etc_default_keyboard_path(const char* p);
+extern void dos_locale_set_vconsole_path(const char* p);
 #endif
 
 TEST(set_dos_locale_detects_german_keyboard)
@@ -552,7 +554,142 @@ static int check_kb_in_fdconfig(const char* xkb, const char* expected_dos_upper)
     rm_rf(target); free(target);
     return found;
 }
+
+/* Helper: write a temporary keyboard config file and return its path (caller frees). */
+static char* write_kb_config_file(const char* contents)
+{
+    char tmpl[] = "/tmp/rufus_kbcfg_XXXXXX";
+    int fd = mkstemp(tmpl);
+    if (fd < 0) return NULL;
+    write(fd, contents, strlen(contents));
+    close(fd);
+    return strdup(tmpl);
+}
 #endif /* RUFUS_TEST */
+
+TEST(vconsole_keymap_de_maps_to_gr)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Simulate /etc/vconsole.conf with KEYMAP=de on a Fedora/RHEL system */
+    char *vcfg = write_kb_config_file("KEYMAP=\"de\"\nFONT=eurlatgr\n");
+    CHECK(vcfg != NULL);
+    dos_locale_set_etc_default_keyboard_path("/nonexistent/keyboard.cfg");
+    dos_locale_set_vconsole_path(vcfg);
+
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    BOOL ok = SetDOSLocale(sep, TRUE);
+
+    char cfg_path[MAX_PATH];
+    snprintf(cfg_path, sizeof(cfg_path), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg_path, "r");
+    int found_gr = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            if (strstr(line, " GR") || strstr(line, " gr") ||
+                strstr(line, ",GR") || strstr(line, ",gr"))
+                found_gr = 1;
+        }
+        fclose(f);
+    }
+
+    dos_locale_set_etc_default_keyboard_path(NULL);
+    dos_locale_set_vconsole_path(NULL);
+    rm_rf(target); free(target);
+    unlink(vcfg); free(vcfg);
+
+    CHECK(ok);
+    CHECK_MSG(found_gr, "vconsole KEYMAP=de -> FDCONFIG.SYS should reference 'GR' keyboard");
+#endif
+}
+
+TEST(vconsole_keymap_with_variant_strips_suffix)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Some systems use KEYMAP=de-latin1 -- the variant should be stripped */
+    char *vcfg = write_kb_config_file("KEYMAP=de-latin1\n");
+    CHECK(vcfg != NULL);
+    dos_locale_set_etc_default_keyboard_path("/nonexistent/keyboard.cfg");
+    dos_locale_set_vconsole_path(vcfg);
+
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    BOOL ok = SetDOSLocale(sep, TRUE);
+
+    char cfg_path[MAX_PATH];
+    snprintf(cfg_path, sizeof(cfg_path), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg_path, "r");
+    int found_gr = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            if (strstr(line, " GR") || strstr(line, " gr") ||
+                strstr(line, ",GR") || strstr(line, ",gr"))
+                found_gr = 1;
+        }
+        fclose(f);
+    }
+
+    dos_locale_set_etc_default_keyboard_path(NULL);
+    dos_locale_set_vconsole_path(NULL);
+    rm_rf(target); free(target);
+    unlink(vcfg); free(vcfg);
+
+    CHECK(ok);
+    CHECK_MSG(found_gr, "KEYMAP=de-latin1 should map to 'GR' (variant suffix stripped)");
+#endif
+}
+
+TEST(etc_default_keyboard_takes_priority_over_vconsole)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* /etc/default/keyboard says fr, vconsole says de -- fr should win */
+    char *kbcfg = write_kb_config_file("XKBLAYOUT=fr\n");
+    char *vcfg  = write_kb_config_file("KEYMAP=de\n");
+    CHECK(kbcfg != NULL && vcfg != NULL);
+    dos_locale_set_etc_default_keyboard_path(kbcfg);
+    dos_locale_set_vconsole_path(vcfg);
+
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+
+    char cfg_path[MAX_PATH];
+    snprintf(cfg_path, sizeof(cfg_path), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg_path, "r");
+    int found_fr = 0, found_gr = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            if (strstr(line, " FR") || strstr(line, ",FR")) found_fr = 1;
+            if (strstr(line, " GR") || strstr(line, ",GR")) found_gr = 1;
+        }
+        fclose(f);
+    }
+
+    dos_locale_set_etc_default_keyboard_path(NULL);
+    dos_locale_set_vconsole_path(NULL);
+    rm_rf(target); free(target);
+    unlink(kbcfg); free(kbcfg);
+    unlink(vcfg);  free(vcfg);
+
+    CHECK_MSG(found_fr, "/etc/default/keyboard (fr) takes priority over vconsole (de): should find FR");
+    CHECK_MSG(!found_gr, "/etc/default/keyboard (fr) takes priority over vconsole (de): should NOT find GR");
+#endif
+}
 
 TEST(set_dos_locale_spanish_maps_to_sp)
 {
@@ -792,6 +929,9 @@ int main(void)
     RUN(set_dos_locale_norwegian_maps_to_no);
     RUN(set_dos_locale_russian_maps_to_ru);
     RUN(set_dos_locale_polish_maps_to_pl);
+    RUN(vconsole_keymap_de_maps_to_gr);
+    RUN(vconsole_keymap_with_variant_strips_suffix);
+    RUN(etc_default_keyboard_takes_priority_over_vconsole);
 
     RUN(getresource_command_com_not_null);
     RUN(getresource_command_com_size_correct);

@@ -122,18 +122,24 @@ static const xkb_to_dos_t xkb_dos_table[] = {
  * Injection support for unit testing
  * ---------------------------------------------------------------- */
 #ifdef RUFUS_TEST
-static const char* s_injected_xkb = NULL;
+static const char* s_injected_xkb       = NULL;
+static const char* s_etc_default_kb_path = NULL;
+static const char* s_vconsole_path       = NULL;
 
-void dos_locale_set_xkb_layout(const char* layout)
-{
-    s_injected_xkb = layout;
-}
+void dos_locale_set_xkb_layout(const char* layout)          { s_injected_xkb       = layout; }
+void dos_locale_set_etc_default_keyboard_path(const char* p) { s_etc_default_kb_path = p; }
+void dos_locale_set_vconsole_path(const char* p)             { s_vconsole_path       = p; }
 #endif /* RUFUS_TEST */
 
 /* ----------------------------------------------------------------
  * get_xkb_layout() - returns a pointer to a static buffer holding
  * the detected XKB layout (e.g. "de", "fr", "us").
  * Falls back to "us" on any error.
+ *
+ * Sources tried in order:
+ *   1. /etc/default/keyboard XKBLAYOUT=  (Debian/Ubuntu)
+ *   2. /etc/vconsole.conf    XKBLAYOUT=  (Arch with X11 config)
+ *   3. /etc/vconsole.conf    KEYMAP=     (Fedora/RHEL/Arch console)
  * ---------------------------------------------------------------- */
 static const char* get_xkb_layout(void)
 {
@@ -148,30 +154,50 @@ static const char* get_xkb_layout(void)
     }
 #endif
 
-    FILE* f = fopen("/etc/default/keyboard", "r");
-    if (!f)
-        return buf;
+    typedef struct { const char* file; const char* key; } kb_src_t;
+#ifdef RUFUS_TEST
+    /* When test paths are injected, use them instead of the system paths */
+    const char* etc_default_kb = s_etc_default_kb_path ? s_etc_default_kb_path : "/etc/default/keyboard";
+    const char* vconsole        = s_vconsole_path       ? s_vconsole_path       : "/etc/vconsole.conf";
+#else
+    const char* etc_default_kb = "/etc/default/keyboard";
+    const char* vconsole        = "/etc/vconsole.conf";
+#endif
+    const kb_src_t sources[] = {
+        { etc_default_kb, "XKBLAYOUT=" },  /* Debian / Ubuntu */
+        { vconsole,       "XKBLAYOUT=" },  /* Arch (X11 config) */
+        { vconsole,       "KEYMAP="    },  /* Fedora / RHEL / Arch */
+    };
 
-    char line[256];
-    while (fgets(line, sizeof(line), f)) {
-        char *p = line;
-        while (*p == ' ' || *p == '\t') p++;
-        if (strncmp(p, "XKBLAYOUT=", 10) != 0)
-            continue;
-        p += 10;
-        if (*p == '"' || *p == '\'')
-            p++;
-        size_t i = 0;
-        while (*p && *p != ',' && *p != '"' && *p != '\'' &&
-               *p != '\n' && *p != '\r' && !isspace((unsigned char)*p) &&
-               i < sizeof(buf) - 1) {
-            buf[i++] = (char)tolower((unsigned char)*p);
-            p++;
+    for (size_t src = 0; src < ARRAYSIZE(sources); src++) {
+        FILE* f = fopen(sources[src].file, "r");
+        if (!f) continue;
+        size_t keylen = strlen(sources[src].key);
+        char line[256];
+        int found = 0;
+        while (fgets(line, sizeof(line), f)) {
+            char *p = line;
+            while (*p == ' ' || *p == '\t') p++;
+            if (strncmp(p, sources[src].key, keylen) != 0) continue;
+            p += keylen;
+            if (*p == '"' || *p == '\'') p++;
+            size_t i = 0;
+            /* Strip variant suffixes (e.g. "de-latin1" -> "de") */
+            while (*p && *p != ',' && *p != '"' && *p != '\'' &&
+                   *p != '\n' && *p != '\r' && *p != '_' && *p != '-' &&
+                   !isspace((unsigned char)*p) &&
+                   i < sizeof(buf) - 1) {
+                buf[i++] = (char)tolower((unsigned char)*p);
+                p++;
+            }
+            buf[i] = '\0';
+            found = 1;
+            break;
         }
-        buf[i] = '\0';
-        break;
+        fclose(f);
+        if (found && buf[0] != '\0')
+            return buf;
     }
-    fclose(f);
     return buf;
 }
 
