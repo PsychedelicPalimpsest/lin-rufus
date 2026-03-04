@@ -561,6 +561,15 @@ TEST(kb_map_la_laos_does_not_map_to_latin_american)
  * previously absent from kb_map.
  * ================================================================ */
 
+TEST(kb_map_laos_la_maps_to_0454)
+{
+	/* Laos (la) XKB layout: Lao script keyboard, Windows LCID 0454 */
+	char il[64];
+	get_input_locale_for_xkb("la", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0454") != NULL,
+	          "Laos (la) should map to input locale 0454 (Lao)");
+}
+
 TEST(kb_map_canada_ca_maps_to_0c0c)
 {
 	/* Canada (ca): XKB default is French (Canada), maps to 0c0c (Canadian French) */
@@ -810,6 +819,7 @@ int main(void)
 	RUN(kb_map_austria_at_maps_to_0c07);
 	RUN(kb_map_australia_au_maps_to_0c09);
 	RUN(kb_map_canada_ca_maps_to_0c0c);
+	RUN(kb_map_laos_la_maps_to_0454);
 	RUN(kb_map_ireland_ie_maps_to_1809);
 	RUN(kb_map_kyrgyzstan_kg_maps_to_0440);
 	RUN(kb_map_kazakhstan_kz_maps_to_043f);

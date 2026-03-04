@@ -176,6 +176,7 @@ static const KbEntry kb_map[] = {
 	{ "il",   "040d:0000040d" },
 	{ "ara",  "0401:00000401" },
 	{ "in",   "4009:00004009" },
+	{ "la",   "0454:00000454" },  /* Lao (Laos) */
 	{ "latam","080a:0000080a" },
 	/* Extended entries — parity with xkb_dos_table in dos_locale.c */
 	{ "al",   "041c:0000041c" },  /* Albanian */
