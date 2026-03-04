@@ -1147,8 +1147,51 @@ TEST(virtualfree_returns_true)
 }
 
 /* ==========================================================================
- * FlushFileBuffers — wraps fsync()
+ * CoCreateGuid — generates RFC 4122 v4 UUID via /dev/urandom
  * ========================================================================== */
+
+TEST(cocreateguid_returns_s_ok)
+{
+	GUID guid;
+	HRESULT hr = CoCreateGuid(&guid);
+	CHECK_MSG(hr == S_OK, "CoCreateGuid must return S_OK");
+}
+
+TEST(cocreateguid_null_returns_e_invalidarg)
+{
+	HRESULT hr = CoCreateGuid(NULL);
+	CHECK_MSG(hr == E_INVALIDARG, "CoCreateGuid(NULL) must return E_INVALIDARG");
+}
+
+TEST(cocreateguid_version_4_bits)
+{
+	GUID guid;
+	CoCreateGuid(&guid);
+	/* RFC 4122 v4: top 4 bits of Data3 must be 0100 (0x4) */
+	CHECK_MSG((guid.Data3 & 0xF000) == 0x4000,
+	          "CoCreateGuid must set version 4 bits in Data3");
+}
+
+TEST(cocreateguid_variant_bits)
+{
+	GUID guid;
+	CoCreateGuid(&guid);
+	/* RFC 4122 variant 1: top 2 bits of Data4[0] must be 10 (0x80 & 0xC0) */
+	CHECK_MSG((guid.Data4[0] & 0xC0) == 0x80,
+	          "CoCreateGuid must set RFC 4122 variant bits in Data4[0]");
+}
+
+TEST(cocreateguid_two_guids_differ)
+{
+	GUID a, b;
+	CoCreateGuid(&a);
+	CoCreateGuid(&b);
+	/* Two consecutive GUIDs should not be equal (with overwhelming probability) */
+	CHECK_MSG(memcmp(&a, &b, sizeof(GUID)) != 0,
+	          "Two consecutive CoCreateGuid calls must produce different GUIDs");
+}
+
+
 
 TEST(flushfilebuffers_on_valid_file)
 {
@@ -1325,6 +1368,12 @@ int main(void)
 	RUN_TEST(virtualalloc_returns_non_null);
 	RUN_TEST(virtualalloc_memory_is_usable);
 	RUN_TEST(virtualfree_returns_true);
+
+	RUN_TEST(cocreateguid_returns_s_ok);
+	RUN_TEST(cocreateguid_null_returns_e_invalidarg);
+	RUN_TEST(cocreateguid_version_4_bits);
+	RUN_TEST(cocreateguid_variant_bits);
+	RUN_TEST(cocreateguid_two_guids_differ);
 
 	RUN_TEST(flushfilebuffers_on_valid_file);
 
