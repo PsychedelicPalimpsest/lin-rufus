@@ -1852,12 +1852,23 @@ static inline BOOL RemoveDirectoryA(LPCSTR p) { return rmdir(p) == 0; }
 /* ---- GetLastError / errno mapping ---- */
 static inline DWORD GetLastError_win(void) {
     switch(errno) {
-    case ENOENT: return ERROR_FILE_NOT_FOUND;
-    case EACCES: return ERROR_ACCESS_DENIED;
-    case EEXIST: return ERROR_ALREADY_EXISTS;
-    case ENOMEM: return ERROR_NOT_ENOUGH_MEMORY;
+    case ENOENT:    return ERROR_FILE_NOT_FOUND;
+    case EACCES:    return ERROR_ACCESS_DENIED;
+    case EPERM:     return ERROR_ACCESS_DENIED;
+    case EEXIST:    return ERROR_ALREADY_EXISTS;
+    case ENOMEM:    return ERROR_NOT_ENOUGH_MEMORY;
     case ENOTEMPTY: return ERROR_DIR_NOT_EMPTY;
-    default: return (DWORD)errno;
+    case EINVAL:    return ERROR_INVALID_PARAMETER;
+    case EBADF:     return ERROR_INVALID_HANDLE;
+    case ENOSPC:    return ERROR_DISK_FULL;
+    case EROFS:     return ERROR_WRITE_PROTECT;
+    case ENOTDIR:   return ERROR_PATH_NOT_FOUND;
+    case EISDIR:    return ERROR_ACCESS_DENIED;
+    case ENFILE:    return ERROR_TOO_MANY_OPEN_FILES;
+    case EMFILE:    return ERROR_TOO_MANY_OPEN_FILES;
+    case EBUSY:     return ERROR_BUSY;
+    case EINTR:     return ERROR_OPERATION_ABORTED;
+    default:        return (DWORD)errno;
     }
 }
 

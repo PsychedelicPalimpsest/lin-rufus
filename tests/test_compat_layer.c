@@ -356,6 +356,41 @@ TEST(getlasterror_win_eexist_maps_to_already_exists)
 	          "GetLastError_win: EEXIST must map to ERROR_ALREADY_EXISTS");
 }
 
+TEST(getlasterror_win_einval_maps_to_invalid_parameter)
+{
+	errno = EINVAL;
+	CHECK_MSG(GetLastError_win() == ERROR_INVALID_PARAMETER,
+	          "GetLastError_win: EINVAL must map to ERROR_INVALID_PARAMETER");
+}
+
+TEST(getlasterror_win_ebadf_maps_to_invalid_handle)
+{
+	errno = EBADF;
+	CHECK_MSG(GetLastError_win() == ERROR_INVALID_HANDLE,
+	          "GetLastError_win: EBADF must map to ERROR_INVALID_HANDLE");
+}
+
+TEST(getlasterror_win_enospc_maps_to_disk_full)
+{
+	errno = ENOSPC;
+	CHECK_MSG(GetLastError_win() == ERROR_DISK_FULL,
+	          "GetLastError_win: ENOSPC must map to ERROR_DISK_FULL");
+}
+
+TEST(getlasterror_win_ebusy_maps_to_busy)
+{
+	errno = EBUSY;
+	CHECK_MSG(GetLastError_win() == ERROR_BUSY,
+	          "GetLastError_win: EBUSY must map to ERROR_BUSY");
+}
+
+TEST(getlasterror_win_eperm_maps_to_access_denied)
+{
+	errno = EPERM;
+	CHECK_MSG(GetLastError_win() == ERROR_ACCESS_DENIED,
+	          "GetLastError_win: EPERM must map to ERROR_ACCESS_DENIED");
+}
+
 /* ==========================================================================
  * Bit-manipulation macros
  * ========================================================================== */
@@ -1814,6 +1849,11 @@ int main(void)
 	RUN_TEST(getlasterror_win_enoent_maps_to_file_not_found);
 	RUN_TEST(getlasterror_win_eacces_maps_to_access_denied);
 	RUN_TEST(getlasterror_win_eexist_maps_to_already_exists);
+	RUN_TEST(getlasterror_win_einval_maps_to_invalid_parameter);
+	RUN_TEST(getlasterror_win_ebadf_maps_to_invalid_handle);
+	RUN_TEST(getlasterror_win_enospc_maps_to_disk_full);
+	RUN_TEST(getlasterror_win_ebusy_maps_to_busy);
+	RUN_TEST(getlasterror_win_eperm_maps_to_access_denied);
 	RUN_TEST(loword_extracts_low_16);
 	RUN_TEST(hiword_extracts_high_16);
 	RUN_TEST(lobyte_extracts_low_8);
