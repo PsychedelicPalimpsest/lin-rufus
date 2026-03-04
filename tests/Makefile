@@ -343,6 +343,22 @@ CFLAGS_LINUX_test_stdio_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/
 LDFLAGS_LINUX_test_stdio_linux := -lz $(FONTCONFIG_LIBS)
 EXTRA_SRC_LINUX_test_stdio_linux := $(STDIO_LINUX_SRC) $(BLED_LIB)
 
+# stdio_common tests: GuidToString / StringToGuid / TimestampToHumanReadable (Linux + Wine)
+CFLAGS_LINUX_test_stdio_common := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_stdio_common := $(COMMON)/stdio.c
+
+CFLAGS_WIN_test_stdio_common := \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_stdio_common := $(COMMON)/stdio.c
+
 # ui_linux tests: version initialization
 CFLAGS_LINUX_test_ui_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                -Wno-unused-function -Wno-sign-compare \

@@ -31,10 +31,13 @@
  * Do not compile this file independently.
  */
 
-#ifndef _WIN32
+/* MinGW defines _WIN32 but still needs these headers */
+#if !defined(_WIN32) || defined(__MINGW32__)
 #include <stdint.h>
 #include <stdio.h>
 #endif
+
+#include "rufus.h"
 
 /* -------------------------------------------------------------------------
  * GUID string conversion helpers

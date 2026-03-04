@@ -502,9 +502,16 @@ This is the most structurally significant porting gap.
 | `hyperlink.c` (`hyperlink_build_markup`) tests | ✅ | 7 tests in `test_ui_linux.c`: basic, null text falls back to url, XML escape, null url/buf/bufsz error cases, empty text |
 | `proposed_label.c` (`get_iso_proposed_label`) tests | ✅ | 8 tests in `test_ui_linux.c`: all branches covered |
 | `ntfsfix.c` (`RunNtfsFix`) tests | ✅ | 24 tests in `test_ntfsfix_linux.c`: null/empty path, command format + quoting, return values, hook replacement, overflow safety; `ntfsfix_set_system_hook()` added to `ntfsfix.c` |
-| `dump_fat.c` (`DumpFatDir`) tests | ✅ | 15 tests in `test_dump_fat_linux.c`: 9 unit tests for `wchar16_to_utf8` (empty, ASCII, 2-byte, 3-byte UTF-8, surrogate pairs, mixed, null-terminated, FAT name, ASCII range), 3 guard tests (null path, null image path, nonexistent image), 3 integration tests using real FAT12+ISO (extract single file, skip existing, extract multiple files); `dump_fat_wchar16_to_utf8()` test wrapper added to `dump_fat.c` |
-| `common/iso_report.c` (`log_iso_report`) parity | ✅ | Removed `#ifdef _WIN32` guards from `lmprintf()`/`resource.h` includes and `Notification()` call; truncated ISO warning dialog now shown on Linux too; `NotificationEx` stub with call-tracking in `iso_report_linux_glue.c`; 47 tests pass (1 new: `mismatch_truncated_shows_notification`) |
-| `linux/locale_oobe.c` (`/etc/default/keyboard` + `/etc/vconsole.conf`) tests | ✅ | Added injection hooks; supports Debian/Ubuntu and Fedora/RHEL/Arch with variant suffix stripping; reads XKBVARIANT= alongside XKBLAYOUT=; combined "layout:variant" keys (ch:fr→fr-CH/100c, rs:latin→081a); kb_map fully consistent with xkb_dos_table: 37 total entries + 4 variant override entries (ca, la, au, ie, kg, kz, md, me, nz, za and more added); fixed la=Laos (removed incorrect Latin American mapping), latam correctly gives 080a; xkb_to_win_input_locale() falls back to layout-only if combined variant not in table; 74 `test_locale_oobe_linux` tests pass |
+| `dump_fat.c` (`DumpFatDir`) tests | ✅ | 15 tests in `test_dump_fat_linux.c` |
+| `common/iso_report.c` (`log_iso_report`) parity | ✅ | Removed `#ifdef _WIN32` guards; 47 tests pass |
+| `linux/locale_oobe.c` tests | ✅ | 85 tests in `test_locale_oobe_linux.c`; fixed `C.UTF-8` → `en-US` in `lang_to_bcp47()`; added `GetOobeLocale()` wrapper (2 tests) |
+| `common/oobe_locale.h` cross-platform `GetOobeLocale()` | ✅ | Common struct + common interface; Linux impl wraps `GetLinuxOobeLocale()`; Windows impl reads registry + `LCIDToLocaleName`; 16 cross-platform tests in `test_oobe_locale_common.c` (Linux + Wine); `#ifdef _WIN32` removed from `common/wue.c` OOBE block |
+| `common/timezone_name.h` cross-platform `GetLocalTimezone()` | ✅ | Common interface; Linux wraps `IanaToWindowsTimezone()`; Windows reads `GetTimeZoneInformation()`; 6 cross-platform tests in `test_timezone_common.c` (Linux + Wine); 3 new tests in `test_timezone_linux.c` (286 total); `#ifdef _WIN32` removed from `common/wue.c` timezone block; added `<TimeZone>` XML tests to WUE (140 total) |
+| `common/stdfn.c` cross-platform tests | ✅ | 71 tests in `test_stdfn_common.c`; htab_create/hash/destroy, StrArrayAdd/AddUnique/Find/Destroy, CompareGUID — Linux + Wine |
+| `common/xml.c` cross-platform tests | ✅ | 74 tests in `test_xml_common.c`; buffer-based ezxml parse/child/attr/sibling/idx/get_val/error/toxml/entity — Linux + Wine |
+| `common/stdio.c` cross-platform tests | ✅ | 47 tests in `test_stdio_common.c`; GuidToString/StringToGuid/TimestampToHumanReadable — Linux + Wine |
+| `ToLocaleName()` C.UTF-8 fix | ✅ | Fixed `linux/stdfn.c` `ToLocaleName()` to return `en-US` for `C.UTF-8` (was returning `"C"`); added `to_locale_name_c_utf8_locale` test (366 total) |
+| TMPDIR override test | ✅ | Added `paths_temp_dir_respects_tmpdir_env` test to `test_settings_linux.c` (85 total) |
 
 ---
 
