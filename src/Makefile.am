@@ -29,7 +29,7 @@ endif
 
 COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.c common/xml.c \
 	common/localization.c common/parser.c common/iso_scan.c common/iso_config.c common/format_fat32.c \
-	common/bootloader_scan.c common/iso_report.c common/drive.c common/format.c
+	common/bootloader_scan.c common/iso_report.c common/drive.c common/format.c common/net_utils.c
 
 if TARGET_WINDOWS
 OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \

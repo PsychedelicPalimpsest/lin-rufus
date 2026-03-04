@@ -43,6 +43,7 @@
 #include "bled/bled.h"
 #include "dbx/dbx_info.h"
 #include "download_resume.h"
+#include "../common/net_utils.h"
 
 /* Globals from globals.c / ui_gtk.c not declared in headers */
 extern loc_cmd *selected_locale;
@@ -542,17 +543,8 @@ HANDLE DownloadSignedFileThreaded(const char *url, const char *file,
 
 #define DEFAULT_UPDATE_INTERVAL (24 * 3600)  /* seconds between update checks */
 
-/* Convert a 3-component version array to a uint64 for comparison */
-static __inline uint64_t ver_to_u64(uint16_t v[3])
-{
-	return ((uint64_t)v[0] << 32) | ((uint64_t)v[1] << 16) | (uint64_t)v[2];
-}
-
-/* Public helper: returns TRUE if server version is strictly newer than current. */
-BOOL rufus_is_newer_version(uint16_t server[3], uint16_t current[3])
-{
-	return (ver_to_u64(server) > ver_to_u64(current)) ? TRUE : FALSE;
-}
+/* rufus_is_newer_version, dbx_build_timestamp_url, dbx_parse_github_timestamp
+ * are now in common/net_utils.c (included via net_utils.h above). */
 
 static BOOL force_update_check = FALSE;
 static HANDLE update_check_thread = NULL;
@@ -750,95 +742,6 @@ void net_join_update_thread(void)
 	WaitForSingleObject(h, INFINITE);
 	CloseHandle(h);
 	update_check_thread = NULL;
-}
-
-/*
- * dbx_build_timestamp_url: convert a GitHub "contents" API URL to the "commits"
- * query URL needed to fetch the timestamp of the latest commit to that file.
- *
- * Example:
- *   in:  https://api.github.com/repos/microsoft/secureboot_objects/contents/PostSignedObjects/DBX/amd64/DBXUpdate.bin
- *   out: https://api.github.com/repos/microsoft/secureboot_objects/commits?path=PostSignedObjects%2FDBX%2Famd64%2FDBXUpdate.bin&page=1&per_page=1
- *
- * Returns TRUE on success, FALSE if URL is invalid or output buffer is too small.
- */
-BOOL dbx_build_timestamp_url(const char *content_url, char *out, size_t out_len)
-{
-	const char *marker = "contents/";
-	const char *p, *path_part;
-	char encoded[512];
-	size_t base_len, ei;
-	int n;
-
-	if (content_url == NULL || out == NULL || out_len == 0)
-		return FALSE;
-
-	p = strstr(content_url, marker);
-	if (p == NULL)
-		return FALSE;
-
-	base_len  = (size_t)(p - content_url);
-	path_part = p + strlen(marker);
-
-	/* URL-encode '/' as '%2F' within the file path */
-	ei = 0;
-	for (const char *s = path_part; *s && ei < sizeof(encoded) - 3; s++) {
-		if (*s == '/') {
-			encoded[ei++] = '%';
-			encoded[ei++] = '2';
-			encoded[ei++] = 'F';
-		} else {
-			encoded[ei++] = *s;
-		}
-	}
-	encoded[ei] = '\0';
-
-	n = snprintf(out, out_len, "%.*scommits?path=%s&page=1&per_page=1",
-	             (int)base_len, content_url, encoded);
-	return (n > 0 && (size_t)n < out_len);
-}
-
-/*
- * dbx_parse_github_timestamp: extract the UTC epoch timestamp from a GitHub
- * commits API JSON response.
- *
- * Looks for the first occurrence of:  "date":[ ]*"YYYY-MM-DDTHH:MM:SSZ"
- *
- * Returns TRUE on success and stores the epoch in *ts; FALSE on any parse error.
- */
-BOOL dbx_parse_github_timestamp(const char *json, uint64_t *ts)
-{
-	const char *p, *c;
-	struct tm t = { 0 };
-	int r;
-	time_t epoch;
-
-	if (json == NULL || ts == NULL)
-		return FALSE;
-
-	p = strstr(json, "\"date\":");
-	if (p == NULL)
-		return FALSE;
-
-	c = p + 7; /* skip past "date": */
-	while (*c == ' ' || *c == '"')
-		c++;
-
-	r = sscanf(c, "%d-%d-%dT%d:%d:%dZ",
-	           &t.tm_year, &t.tm_mon, &t.tm_mday,
-	           &t.tm_hour, &t.tm_min, &t.tm_sec);
-	if (r != 6)
-		return FALSE;
-
-	t.tm_year -= 1900;
-	t.tm_mon  -= 1;
-
-	epoch = timegm(&t);
-	if (epoch == (time_t)-1)
-		return FALSE;
-
-	*ts = (uint64_t)epoch;
-	return TRUE;
 }
 
 /* UseLocalDbx: return TRUE when we have a locally cached DBX file that is

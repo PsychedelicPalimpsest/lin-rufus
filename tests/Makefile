@@ -684,6 +684,7 @@ NET_LINUX_SRC := $(SRC_DIR)/linux/net.c \
                  $(SRC_DIR)/linux/download_resume.c \
                  $(SRC_DIR)/linux/stdfn.c \
                  $(SRC_DIR)/linux/stdio.c \
+                 $(COMMON)/net_utils.c \
                  net_linux_glue.c
 CFLAGS_LINUX_test_net_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
@@ -695,6 +696,21 @@ CFLAGS_LINUX_test_net_linux := \
 LDFLAGS_LINUX_test_net_linux := -lcurl -lpthread -lssl -lcrypto $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_net_linux := $(NET_LINUX_SRC)
 
+# net_common tests: pure-logic net helpers (cross-platform, Linux + Wine)
+#   rufus_is_newer_version, dbx_build_timestamp_url, dbx_parse_github_timestamp
+CFLAGS_LINUX_test_net_common := \
+	-I$(SRC_DIR)/common -I$(SRC_DIR)/windows \
+	-I$(COMPAT) \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter
+EXTRA_SRC_LINUX_test_net_common := $(COMMON)/net_utils.c
+
+CFLAGS_WIN_test_net_common := \
+	-I$(SRC_DIR)/common -I$(SRC_DIR)/windows \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter
+EXTRA_SRC_WIN_test_net_common := $(COMMON)/net_utils.c
+
 # dbx_linux tests: DBX caching, timestamp URL building, UseLocalDbx().
 # Uses real common/parser.c for settings (ReadSetting64/WriteSetting64) instead
 # of the stubs in net_linux_glue.c, allowing INI-file-backed settings tests.
@@ -705,6 +721,7 @@ DBX_LINUX_SRC := $(SRC_DIR)/linux/net.c \
                  $(SRC_DIR)/linux/parser.c \
                  $(COMMON)/parser.c \
                  $(COMMON)/localization.c \
+                 $(COMMON)/net_utils.c \
                  dbx_linux_glue.c
 CFLAGS_LINUX_test_dbx_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
@@ -724,6 +741,7 @@ LOCALE_DOWNLOAD_LINUX_SRC := $(SRC_DIR)/linux/net.c \
                               $(SRC_DIR)/linux/parser.c \
                               $(COMMON)/parser.c \
                               $(COMMON)/localization.c \
+                              $(COMMON)/net_utils.c \
                               locale_download_linux_glue.c
 CFLAGS_LINUX_test_locale_download_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
@@ -743,6 +761,7 @@ FIDO_LINUX_SRC := $(SRC_DIR)/linux/net.c \
                   $(SRC_DIR)/linux/parser.c \
                   $(COMMON)/parser.c \
                   $(COMMON)/localization.c \
+                  $(COMMON)/net_utils.c \
                   fido_linux_glue.c
 CFLAGS_LINUX_test_fido_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \

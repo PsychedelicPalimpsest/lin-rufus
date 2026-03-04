@@ -519,10 +519,10 @@ This is the most structurally significant porting gap.
 | Wine hash test expansion | ✅ | Expanded Wine `test_hash.exe` from 54 to 82 assertions: moved StringToHash (7 tests), FileMatchesHash (4 tests), PE256Buffer (5 tests), efi_image_parse (4 tests) outside `#ifdef __linux__`; made `make_ht_file()` cross-platform; replaced stub PE256Buffer in `hash_win_glue.c` with real `common/hash_pe.c` implementation |
 | localization common tests | ✅ | New `test_localization_common.c` (68 assertions, Linux + Wine): `lmprintf` (4 tests: NULL table → UNTRANSLATED, format strings, out-of-range, rolling buffer), `get_locale_from_name` (5 tests), `get_locale_from_lcid` (4 tests), `toggle_default_locale` (2 tests), `get_name_from_id` (3 tests), `free_loc_cmd` null safety, `get_loc_dlg_count/entry` accessors, init/exit lifecycle |
 | `boot_validation.c` → `common/` | ✅ | Moved pure predicate functions (`boot_check_is_pure_dd`, `boot_check_can_write_as_esp`, `boot_check_uefi_compat_fails`, `boot_check_fat_4gb_fails`, `boot_check_fat_compat_fails`, `boot_check_fat16_kolibrios_fails`) from `linux/boot_validation.c` to `common/boot_validation.c`; `linux/boot_validation.[ch]` are now thin redirect shims; new `test_boot_validation_common.c` (40 assertions, Linux + Wine) replaces old Linux-only test |
+| `common/net_utils.c` — portable net helpers | ✅ | Moved `rufus_is_newer_version`, `dbx_build_timestamp_url`, `dbx_parse_github_timestamp` from `linux/net.c` to `common/net_utils.c` + `common/net_utils.h`; `linux/net.c` now includes the common header; `#define timegm _mkgmtime` compat shim for Windows; new `test_net_common.c` (33 assertions, Linux + Wine): 9 version-comparison tests, 9 URL-rewrite tests, 8 timestamp-parse tests (including epoch 0, epoch 2000, spaces-in-JSON variant) |
 
 ---
 
 ## Pending Work
 
-_(None — all features 188–225 are implemented and tested.  Session 8 QA found
-no new bugs or gaps.)_
+_(None — all features implemented and tested.  Session 8 QA found no bugs; session 9 added common/net_utils.c.)_
