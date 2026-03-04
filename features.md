@@ -772,3 +772,30 @@ Linux implementation:
 
 * ~~210~~: **RESOLVED** — Write speed (MB/s / KB/s) shown in status bar during format.
   16 new tests pass. Full test suite: all tests pass.
+
+
+### Feature 211: USB connection speed in device list
+
+On Windows, the device combo shows the USB connection speed alongside device size:
+e.g. "USB 3.0 8.00 GB Kingston DataTraveler".  The Linux version previously only
+showed "8.00 GB Kingston DataTraveler".
+
+Linux implementation:
+- Added `src/linux/usb_speed.h` + `src/linux/usb_speed.c`:
+  - `usb_speed_string(speed_mbps)` maps a sysfs `speed` Mbps string to a
+    human-readable label ("USB 1.0", "USB 1.1", "USB 2.0", "USB 3.0",
+    "USB 3.1", "USB 3.2", "USB 4") or falls back to "USB".
+- Updated `GetDevicesWithRoot()` in `dev.c`:
+  - After `find_usb_sysfs_device()` locates the USB parent in sysfs, reads
+    `<usb_path>/speed` to get the Mbps string.
+  - Passes it through `usb_speed_string()` to produce "USB 2.0" etc.
+  - Device display name is now "USB_SPEED SIZE NAME" (e.g. "USB 3.0 8.00 GB DataTraveler").
+  - Falls back gracefully to "USB" when `find_usb_sysfs_device()` fails
+    (HDD, non-USB drive, or virtual device in tests).
+- Added `usb_speed.c` to `OS_SOURCES` in `src/Makefile.am`.
+- Updated `tests/Makefile` `DEV_LINUX_SRC` to include `usb_speed.c`.
+- 11 TDD tests in `tests/test_dev_usb_speed_linux.c` covering all speed
+  tiers, NULL/empty/unknown inputs, and leading whitespace robustness.
+
+* ~~211~~: **RESOLVED** — USB connection speed shown in device combo on Linux.
+  11 new tests pass. Full test suite: all tests pass.

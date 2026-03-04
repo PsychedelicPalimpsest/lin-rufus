@@ -76,12 +76,17 @@ EXTRA_SRC_LINUX_test_exe_version_linux := $(STDFN_SRC)
 LDFLAGS_LINUX_test_exe_version_linux := $(FONTCONFIG_LIBS)
 
 # dev_linux tests: device enumeration via fake sysfs
-DEV_LINUX_SRC := $(SRC_DIR)/linux/dev.c $(SRC_DIR)/linux/stdfn.c
+DEV_LINUX_SRC := $(SRC_DIR)/linux/dev.c $(SRC_DIR)/linux/stdfn.c $(SRC_DIR)/linux/usb_speed.c
 CFLAGS_LINUX_test_dev_linux  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                  -Wno-implicit-function-declaration -Wno-unused-function \
                                  $(FONTCONFIG_CFLAGS)
 EXTRA_SRC_LINUX_test_dev_linux := $(DEV_LINUX_SRC)
 LDFLAGS_LINUX_test_dev_linux := $(FONTCONFIG_LIBS)
+
+# dev_usb_speed_linux tests: usb_speed_string() in usb_speed.c
+CFLAGS_LINUX_test_dev_usb_speed_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+                                          -Wno-implicit-function-declaration -Wno-unused-function
+EXTRA_SRC_LINUX_test_dev_usb_speed_linux := $(SRC_DIR)/linux/usb_speed.c
 
 # device_monitor tests: lifecycle, callback dispatch, debounce
 DEVICE_MONITOR_SRC := $(SRC_DIR)/linux/device_monitor.c

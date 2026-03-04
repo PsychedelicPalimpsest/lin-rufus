@@ -45,6 +45,8 @@ extern HWND hMainDialog;
 extern BOOL enable_HDDs;
 extern BOOL use_fake_units;  /* globals.c: controls GB vs GiB display */
 
+#include "usb_speed.h"
+
 /* Read a sysfs attribute for a block device, trim trailing whitespace.
  * Returns TRUE on success. */
 static BOOL sysfs_read_attr(const char* sysfs_root, const char* devname,
@@ -199,22 +201,27 @@ BOOL GetDevicesWithRoot(DWORD devnum, const char* sysfs_root, const char* dev_ro
 		else
 			snprintf(dev_name, sizeof(dev_name), "%s", name);
 
-		/* Build display name: "SIZE NAME" */
+		/* Build display name: "USB_SPEED SIZE NAME" */
 		char display_name[512];
-		snprintf(display_name, sizeof(display_name), "%s %s",
-		         SizeToHumanReadable(size, FALSE, use_fake_units), dev_name);
-
-		/* Drive index will be assigned after sorting */
-		rufus_drive[num_drives].id           = safe_strdup(dev_node);
-		rufus_drive[num_drives].name         = safe_strdup(dev_name);
-		rufus_drive[num_drives].display_name = safe_strdup(display_name);
-		rufus_drive[num_drives].label        = safe_strdup("");
-		rufus_drive[num_drives].index        = 0; /* assigned after sort */
-		rufus_drive[num_drives].size         = size;
-
-		/* Locate the parent USB device in sysfs for CyclePort/CycleDevice */
+		/* Try to read USB speed from the parent USB device sysfs node.
+		 * We need to find the USB device path first. */
 		char usb_path[PATH_MAX];
+		const char *usb_speed_str = "USB";
 		if (find_usb_sysfs_device(sysfs_root, name, usb_path, sizeof(usb_path))) {
+			char speed_attr[32];
+			char speed_path[PATH_MAX];
+			snprintf(speed_path, sizeof(speed_path), "%s/speed", usb_path);
+			FILE *sf = fopen(speed_path, "r");
+			if (sf) {
+				if (fgets(speed_attr, sizeof(speed_attr), sf)) {
+					/* Trim trailing whitespace */
+					char *p = speed_attr + strlen(speed_attr);
+					while (p > speed_attr && (p[-1] == '\n' || p[-1] == '\r' || p[-1] == ' '))
+						*--p = '\0';
+					usb_speed_str = usb_speed_string(speed_attr);
+				}
+				fclose(sf);
+			}
 			rufus_drive[num_drives].hub  = safe_strdup(usb_path);
 			/* Store devnum so CyclePort can build /dev/bus/usb/BBB/DDD */
 			char devnum_path[PATH_MAX];
@@ -225,6 +232,17 @@ BOOL GetDevicesWithRoot(DWORD devnum, const char* sysfs_root, const char* dev_ro
 			rufus_drive[num_drives].hub  = NULL;
 			rufus_drive[num_drives].port = 0;
 		}
+		snprintf(display_name, sizeof(display_name), "%s %s %s",
+		         usb_speed_str,
+		         SizeToHumanReadable(size, FALSE, use_fake_units), dev_name);
+
+		/* Drive index will be assigned after sorting */
+		rufus_drive[num_drives].id           = safe_strdup(dev_node);
+		rufus_drive[num_drives].name         = safe_strdup(dev_name);
+		rufus_drive[num_drives].display_name = safe_strdup(display_name);
+		rufus_drive[num_drives].label        = safe_strdup("");
+		rufus_drive[num_drives].index        = 0; /* assigned after sort */
+		rufus_drive[num_drives].size         = size;
 		num_drives++;
 	}
 	closedir(dir);
