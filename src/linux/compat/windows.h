@@ -214,7 +214,9 @@ typedef void* LPVOID;
 /* ---- Common constants ---- */
 #define MAX_PATH         260
 #define MAX_COMPUTERNAME_LENGTH 15
+#ifndef MAX_USERNAME_LENGTH
 #define MAX_USERNAME_LENGTH 256
+#endif
 #define MAXDWORD         0xFFFFFFFF
 #define MAXBYTE          0xFF
 #define MAXWORD          0xFFFF
@@ -1548,7 +1550,7 @@ static inline FARPROC GetProcAddress(HMODULE h, LPCSTR n) { (void)h;(void)n; ret
 /* ---- SetLastError / FormatMessage stubs ---- */
 static inline DWORD FormatMessageA(DWORD flags, LPCVOID src, DWORD msgid, DWORD langid, LPSTR buf, DWORD sz, va_list* args) {
     (void)flags;(void)src;(void)langid;(void)args;
-    if (buf && sz) snprintf(buf, sz, "Error %lu", msgid);
+    if (buf && sz) snprintf(buf, sz, "Error %u", (unsigned)msgid);
     return buf ? (DWORD)strlen(buf) : 0;
 }
 #define FORMAT_MESSAGE_FROM_SYSTEM      0x00001000

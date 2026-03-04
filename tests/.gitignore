@@ -1,0 +1,2 @@
+# Wine test artifacts (Windows paths with backslashes become literal directory names on Linux)
+\tmp\

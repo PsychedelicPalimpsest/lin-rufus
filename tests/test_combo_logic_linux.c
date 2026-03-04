@@ -59,6 +59,20 @@ const char *FileSystemLabel[FS_MAX] = {
 };
 
 /* stubs for things combo_logic.c may call */
+
+/* lmprintf stub: returns a static string so populate_cluster_combo can build
+ * labels without pulling in the full localization engine. */
+const char *lmprintf(int msg_id, ...)
+{
+	static char buf[128];
+	snprintf(buf, sizeof(buf), "<MSG%d>", msg_id);
+	return buf;
+}
+
+/* ClusterSizeLabel is normally populated by SetClusterSizeLabels() in ui_gtk.c
+ * at startup.  In tests we just leave it zero-initialised (empty strings). */
+char ClusterSizeLabel[MAX_CLUSTER_SIZES][64];
+
 void SetComboEntry(HWND hDlg, int data)
 {
 	combo_state_t *cs = (combo_state_t *)hDlg;

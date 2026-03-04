@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 static inline void* _alloca(size_t n) { return __builtin_alloca(n); }
+#ifndef alloca
 #define alloca __builtin_alloca
+#endif
 /* mm_malloc.h is an Intel/x86 header; on other architectures we provide
  * a minimal inline replacement for _mm_malloc / _mm_free. */
 #ifndef _mm_malloc
