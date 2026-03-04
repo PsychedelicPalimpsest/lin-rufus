@@ -507,6 +507,29 @@ errcode_t r = ext2fs_print_progress(0, 0);
 CHECK_INT_EQ((int)r, 0);
 }
 
+/* ================================================================
+ * ext2_last_winerror() — always maps ext2 errors to ERROR_WRITE_FAULT
+ * ================================================================ */
+
+extern DWORD ext2_last_winerror(DWORD default_error);
+
+TEST(ext2_last_winerror_returns_write_fault)
+{
+	DWORD r = ext2_last_winerror(0);
+	/* Must return RUFUS_ERROR(ERROR_WRITE_FAULT) regardless of argument */
+	CHECK(r == RUFUS_ERROR(ERROR_WRITE_FAULT));
+}
+
+TEST(ext2_last_winerror_ignores_argument)
+{
+	/* Passing different values must still return the same constant */
+	DWORD r1 = ext2_last_winerror(0);
+	DWORD r2 = ext2_last_winerror(ERROR_ACCESS_DENIED);
+	DWORD r3 = ext2_last_winerror(0xDEADBEEF);
+	CHECK(r1 == r2);
+	CHECK(r2 == r3);
+}
+
 int main(void)
 {
 printf("=== ext2fs error_message() and progress tests ===\n");
@@ -549,6 +572,9 @@ RUN(ext2fs_print_progress_at_max_returns_zero);
 RUN(ext2fs_print_progress_cancelled_returns_cancel_code);
 RUN(ext2fs_print_progress_generic_error_returns_cancel_code);
 RUN(ext2fs_print_progress_zero_max_does_not_crash);
+
+RUN(ext2_last_winerror_returns_write_fault);
+RUN(ext2_last_winerror_ignores_argument);
 
 TEST_RESULTS();
 }

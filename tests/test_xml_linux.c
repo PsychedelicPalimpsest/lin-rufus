@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /* Pull in the ezxml header from common/ */
 #include "../src/common/xml.h"
@@ -444,6 +445,64 @@ TEST(deep_nested_get)
     free(xml_str);
 }
 
+/* -------------------------------------------------------------------------
+ * 25. ezxml_parse_fd — parse from a file descriptor
+ * --------------------------------------------------------------------- */
+TEST(parse_from_fd)
+{
+    char tmp[] = "/tmp/test_ezxml_XXXXXX";
+    int fd = mkstemp(tmp);
+    CHECK_MSG(fd >= 0, "mkstemp must succeed");
+    const char *xml = "<root><item id=\"1\">value</item></root>";
+    write(fd, xml, strlen(xml));
+    lseek(fd, 0, SEEK_SET);
+
+    ezxml_t root = ezxml_parse_fd(fd);
+    close(fd);
+    unlink(tmp);
+
+    CHECK(root != NULL);
+    CHECK_STR_EQ("root", root->name);
+    ezxml_t item = ezxml_child(root, "item");
+    CHECK(item != NULL);
+    CHECK_STR_EQ("value", ezxml_txt(item));
+    CHECK_STR_EQ("1", ezxml_attr(item, "id"));
+    ezxml_free(root);
+}
+
+/* -------------------------------------------------------------------------
+ * 26. ezxml_parse_file — parse from a filename
+ * --------------------------------------------------------------------- */
+TEST(parse_from_file)
+{
+    char tmp[] = "/tmp/test_ezxml_file_XXXXXX";
+    int fd = mkstemp(tmp);
+    CHECK_MSG(fd >= 0, "mkstemp must succeed");
+    const char *xml = "<config><key name=\"color\">blue</key></config>";
+    write(fd, xml, strlen(xml));
+    close(fd);
+
+    ezxml_t root = ezxml_parse_file(tmp);
+    unlink(tmp);
+
+    CHECK(root != NULL);
+    CHECK_STR_EQ("config", root->name);
+    ezxml_t key = ezxml_child(root, "key");
+    CHECK(key != NULL);
+    CHECK_STR_EQ("blue", ezxml_txt(key));
+    CHECK_STR_EQ("color", ezxml_attr(key, "name"));
+    ezxml_free(root);
+}
+
+/* -------------------------------------------------------------------------
+ * 27. ezxml_parse_file — non-existent file returns NULL
+ * --------------------------------------------------------------------- */
+TEST(parse_file_nonexistent_returns_null)
+{
+    ezxml_t root = ezxml_parse_file("/tmp/this_file_does_not_exist_rufus.xml");
+    CHECK(root == NULL);
+}
+
 int main(void)
 {
     RUN(parse_from_str);
@@ -470,5 +529,8 @@ int main(void)
     RUN(utf8_content_preserved);
     RUN(attr_on_tag_without_attrs);
     RUN(deep_nested_get);
+    RUN(parse_from_fd);
+    RUN(parse_from_file);
+    RUN(parse_file_nonexistent_returns_null);
     TEST_RESULTS();
 }

@@ -70,6 +70,7 @@ TEST(combo_alloc_free)
 TEST(combo_free_null_safe)
 {
 	combo_state_free(NULL);  /* must not crash */
+	CHECK(1);  /* if we reached here, no crash */
 }
 
 /* -------------------------------------------------------------------------
@@ -331,8 +332,8 @@ TEST(setdroppedwidth_is_noop)
 {
 	combo_state_t *cs = make_combo();
 	HWND h = (HWND)cs;
-	/* Should not crash */
-	SendMessageA(h, CB_SETDROPPEDWIDTH, 200, 0);
+	LRESULT r = SendMessageA(h, CB_SETDROPPEDWIDTH, 200, 0);
+	CHECK_INT_EQ((int)r, 0);  /* no-op must return 0 */
 	free_combo(cs);
 }
 
