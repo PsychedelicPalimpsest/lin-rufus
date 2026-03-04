@@ -156,6 +156,7 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-vhd.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-window_text_bridge.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-status_history.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-status_timeout.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-device_combo.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-wue.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-wintogo_bcd_template.$(OBJEXT) \
@@ -491,7 +492,7 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/img_info.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c linux/paths.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c linux/sl_version.c linux/dump_fat.c linux/ntfsfix.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c linux/drag_drop.c linux/progress.c linux/usb_speed.c linux/progress_title.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c linux/sl_version.c linux/dump_fat.c linux/ntfsfix.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/status_timeout.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c linux/drag_drop.c linux/progress.c linux/usb_speed.c linux/progress_title.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -627,6 +628,7 @@ linux/rufus-ui_enable_opts.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-vhd.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-window_text_bridge.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-status_history.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-status_timeout.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-device_combo.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-wue.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-wintogo_bcd_template.$(OBJEXT): linux/$(am__dirstamp)
@@ -1029,6 +1031,12 @@ linux/rufus-status_history.o: linux/status_history.c
 
 linux/rufus-status_history.obj: linux/status_history.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-status_history.obj `if test -f 'linux/status_history.c'; then $(CYGPATH_W) 'linux/status_history.c'; else $(CYGPATH_W) '$(srcdir)/linux/status_history.c'; fi`
+
+linux/rufus-status_timeout.o: linux/status_timeout.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-status_timeout.o `test -f 'linux/status_timeout.c' || echo '$(srcdir)/'`linux/status_timeout.c
+
+linux/rufus-status_timeout.obj: linux/status_timeout.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-status_timeout.obj `if test -f 'linux/status_timeout.c'; then $(CYGPATH_W) 'linux/status_timeout.c'; else $(CYGPATH_W) '$(srcdir)/linux/status_timeout.c'; fi`
 
 linux/rufus-device_combo.o: linux/device_combo.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-device_combo.o `test -f 'linux/device_combo.c' || echo '$(srcdir)/'`linux/device_combo.c

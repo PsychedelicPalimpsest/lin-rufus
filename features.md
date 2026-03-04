@@ -507,7 +507,7 @@ This is the most structurally significant porting gap.
 
 ## Pending Work
 
-All tracked features (188–222) have been resolved.  No open items remain.
+223. In `/home/mitch/workflow_logs` are some logs from failed github actions, fix them
 
 ### Resolved Features Summary
 
@@ -544,4 +544,4 @@ All tracked features (188–222) have been resolved.  No open items remain.
 | 220 | Blocking process list in `ListDialog` after format failure | `ui_gtk.c` |
 | 221 | `FlashTaskbar` on success; save-image-type restored; crash fix | `ui_gtk.c` |
 | 222 | SUDO_USER-aware settings path resolution | `paths.c`, `rufus.c` |
-
+| 223 | Timed status-bar messages: cheat-mode toggle results briefly flash in the status bar (3.5 s) then revert to the previous message, mirroring Windows `PrintStatusTimeout`/`TID_MESSAGE_STATUS`. Injectable timer backend enables pure-C unit tests. | `status_timeout.c`, `ui_gtk.c` |

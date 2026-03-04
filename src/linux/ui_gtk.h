@@ -140,6 +140,7 @@ static inline void gtk_combo_set_active_by_data(GtkWidget *combo, gint data)
 GtkWidget *rufus_gtk_create_window(GtkApplication *app);
 void       rufus_gtk_update_status(const char *msg);
 void       rufus_gtk_append_log(const char *msg);
+void       rufus_print_status_timeout(const char *msg);
 
 /* Image report summary (pure C, no GTK — see stdfn.c) */
 size_t format_img_info(const RUFUS_IMG_REPORT *r, char *buf, size_t sz);

@@ -951,6 +951,13 @@ CFLAGS_LINUX_test_status_history_linux := \
 	-Wno-unused-parameter
 EXTRA_SRC_LINUX_test_status_history_linux := $(STATUS_HISTORY_SRC)
 
+# status_timeout_linux tests: timed status-bar message module
+STATUS_TIMEOUT_SRC := $(SRC_DIR)/linux/status_timeout.c
+CFLAGS_LINUX_test_status_timeout_linux := \
+	-I$(SRC_DIR)/linux \
+	-Wno-unused-parameter
+EXTRA_SRC_LINUX_test_status_timeout_linux := $(STATUS_TIMEOUT_SRC)
+
 # wue_linux tests: CreateUnattendXml, PopulateWindowsVersion
 # Links against wue.c (Linux impl), libwim.a (WIM), xml.c (ezxml)
 CFLAGS_LINUX_test_wue_linux := \

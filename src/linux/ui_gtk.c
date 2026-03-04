@@ -47,6 +47,7 @@
 #include "crash_handler.h"
 #include "device_combo.h"
 #include "status_history.h"
+#include "status_timeout.h"
 #include "notify.h"
 #include "system_info.h"
 #include "darkmode.h"
@@ -415,6 +416,47 @@ static gboolean idle_update_status(gpointer data)
 void rufus_gtk_update_status(const char *msg)
 {
 	g_idle_add(idle_update_status, strdup(msg));
+}
+
+/* ---- Timed status-bar message (mirrors Windows PrintStatusTimeout) ---- */
+
+/* GLib adapter: wraps our void-callback API into a GSourceFunc */
+typedef struct { void (*cb)(void *); void *arg; } gtk_timer_closure_t;
+static gboolean gtk_timer_adapter(gpointer data)
+{
+	gtk_timer_closure_t *cl = (gtk_timer_closure_t *)data;
+	cl->cb(cl->arg);
+	g_free(cl);
+	return G_SOURCE_REMOVE;
+}
+
+static unsigned gtk_timeout_add_fn(unsigned ms, void (*cb)(void *), void *arg)
+{
+	gtk_timer_closure_t *cl = g_new(gtk_timer_closure_t, 1);
+	cl->cb  = cb;
+	cl->arg = arg;
+	return (unsigned)g_timeout_add(ms, gtk_timer_adapter, cl);
+}
+
+static void gtk_timeout_cancel_fn(unsigned id)
+{
+	if (id != 0)
+		g_source_remove((guint)id);
+}
+
+/*
+ * Show |msg| in the status bar for STATUS_MSG_TIMEOUT ms, then revert to
+ * whatever the label currently displays.  Mirrors Windows PrintStatusTimeout.
+ * Keeps uprintf() for the log window; this function is for the status bar only.
+ */
+void rufus_print_status_timeout(const char *msg)
+{
+	if (!msg)
+		return;
+	const char *current = (rw.status_label)
+		? gtk_label_get_text(GTK_LABEL(rw.status_label))
+		: "";
+	status_timeout_show(msg, current, STATUS_MSG_TIMEOUT);
 }
 
 /* ---- Section label (bold, with separator line) ---- */
@@ -2402,26 +2444,42 @@ static void on_toggle_dark_mode(GtkWidget *w, gpointer data)
 	is_darkmode_enabled = next ? TRUE : FALSE;
 }
 
+/*
+ * Emit a cheat-mode toggle message to the log window AND briefly flash it in
+ * the status bar (mirrors Windows PrintStatusTimeout behaviour).
+ */
+static void toggle_status(const char *fmt, ...)
+{
+	char buf[256];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	buf[sizeof(buf) - 1] = '\0';
+	uprintf("%s", buf);
+	rufus_print_status_timeout(buf);
+}
+
 static void on_toggle_expert_mode(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	expert_mode = !expert_mode;
 	WriteSettingBool(SETTING_EXPERT_MODE, expert_mode);
-	uprintf("Expert mode: %s", expert_mode ? "enabled" : "disabled");
+	toggle_status("Expert mode: %s", expert_mode ? "enabled" : "disabled");
 }
 
 static void on_toggle_joliet(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_joliet((int*)&enable_joliet);
-	uprintf("Joliet support: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Joliet support: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_rockridge(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_rockridge((int*)&enable_rockridge);
-	uprintf("Rock Ridge support: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Rock Ridge support: %s", r.new_value ? "enabled" : "disabled");
 }
 
 /* Mirrors Windows IDC_ADVANCED_FORMAT_OPTIONS: refresh FS+cluster combo after toggle */
@@ -2454,7 +2512,7 @@ static void on_toggle_usb_hdd(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	enable_HDDs = !enable_HDDs;
-	uprintf("USB HDD detection: %s", enable_HDDs ? "enabled" : "disabled");
+	toggle_status("USB HDD detection: %s", enable_HDDs ? "enabled" : "disabled");
 	/* Sync the Advanced Drive Properties checkbox */
 	if (rw.list_usb_hdd_check)
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.list_usb_hdd_check), enable_HDDs);
@@ -2504,7 +2562,7 @@ static void on_toggle_rufus_mbr(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_rufus_mbr((int*)&use_rufus_mbr);
 	WriteSettingBool(SETTING_DISABLE_RUFUS_MBR, !r.new_value);
-	uprintf("Rufus MBR: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Rufus MBR: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_detect_fakes(GtkWidget *w, gpointer data)
@@ -2513,7 +2571,7 @@ static void on_toggle_detect_fakes(GtkWidget *w, gpointer data)
 	extern BOOL detect_fakes;
 	kbdshortcut_result_t r = kbdshortcut_toggle_detect_fakes((int*)&detect_fakes);
 	WriteSettingBool(SETTING_DISABLE_FAKE_DRIVES_CHECK, !r.new_value);
-	uprintf("Fake drive detection: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Fake drive detection: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_dual_uefi_bios(GtkWidget *w, gpointer data)
@@ -2521,7 +2579,7 @@ static void on_toggle_dual_uefi_bios(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_dual_uefi_bios((int*)&allow_dual_uefi_bios);
 	WriteSettingBool(SETTING_ENABLE_WIN_DUAL_EFI_BIOS, r.new_value);
-	uprintf("Dual UEFI/BIOS mode: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Dual UEFI/BIOS mode: %s", r.new_value ? "enabled" : "disabled");
 	if (r.refresh_part) {
 		SetPartitionSchemeAndTargetSystem(FALSE);
 	}
@@ -2532,7 +2590,7 @@ static void on_toggle_vhds(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_vhds((int*)&enable_VHDs);
 	WriteSettingBool(SETTING_DISABLE_VHDS, !r.new_value);
-	uprintf("VHD/virtual disk detection: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("VHD/virtual disk detection: %s", r.new_value ? "enabled" : "disabled");
 	if (r.refresh_devs)
 		GetDevices(0);
 }
@@ -2542,7 +2600,7 @@ static void on_toggle_extra_hashes(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_extra_hashes((int*)&enable_extra_hashes);
 	WriteSettingBool(SETTING_ENABLE_EXTRA_HASHES, r.new_value);
-	uprintf("Extra hash (SHA-512) computation: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Extra hash (SHA-512) computation: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_iso(GtkWidget *w, gpointer data)
@@ -2550,7 +2608,7 @@ static void on_toggle_iso(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	extern BOOL enable_iso;
 	kbdshortcut_result_t r = kbdshortcut_toggle_iso((int*)&enable_iso);
-	uprintf("ISO support: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("ISO support: %s", r.new_value ? "enabled" : "disabled");
 	/* Re-scan current image if one is loaded, to apply the new setting */
 	if (image_path != NULL) {
 		HANDLE scan_thr = CreateThread(NULL, 0, ImageScanThread, NULL, 0, NULL);
@@ -2564,7 +2622,7 @@ static void on_toggle_large_fat32(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_large_fat32((int*)&force_large_fat32);
 	WriteSettingBool(SETTING_FORCE_LARGE_FAT32_FORMAT, r.new_value);
-	uprintf("Force large FAT32: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Force large FAT32: %s", r.new_value ? "enabled" : "disabled");
 	if (r.refresh_devs)
 		GetDevices(0);
 }
@@ -2575,21 +2633,21 @@ static void on_toggle_boot_marker(GtkWidget *w, gpointer data)
 	extern BOOL ignore_boot_marker;
 	kbdshortcut_result_t r = kbdshortcut_toggle_boot_marker((int*)&ignore_boot_marker);
 	WriteSettingBool(SETTING_IGNORE_BOOT_MARKER, r.new_value);
-	uprintf("Ignore boot marker: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Ignore boot marker: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_ntfs_compression(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_ntfs_compression((int*)&enable_ntfs_compression);
-	uprintf("NTFS compression: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("NTFS compression: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_size_check(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_size_check((int*)&size_check);
-	uprintf("ISO size check: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("ISO size check: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_preserve_ts(GtkWidget *w, gpointer data)
@@ -2597,7 +2655,7 @@ static void on_toggle_preserve_ts(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_preserve_ts((int*)&preserve_timestamps);
 	WriteSettingBool(SETTING_PRESERVE_TIMESTAMPS, r.new_value);
-	uprintf("Preserve timestamps: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Preserve timestamps: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_proper_units(GtkWidget *w, gpointer data)
@@ -2605,7 +2663,7 @@ static void on_toggle_proper_units(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_proper_units((int*)&use_fake_units);
 	WriteSettingBool(SETTING_USE_PROPER_SIZE_UNITS, !r.new_value);
-	uprintf("Proper size units (GiB/MiB): %s", r.new_value ? "disabled (SI)" : "enabled (binary)");
+	toggle_status("Proper size units (GiB/MiB): %s", r.new_value ? "disabled (SI)" : "enabled (binary)");
 	if (r.refresh_devs)
 		GetDevices(0);
 }
@@ -2615,7 +2673,7 @@ static void on_toggle_vmdk(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_vmdk((int*)&enable_vmdk);
 	WriteSettingBool(SETTING_ENABLE_VMDK_DETECTION, r.new_value);
-	uprintf("VMware/VMDK detection: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("VMware/VMDK detection: %s", r.new_value ? "enabled" : "disabled");
 	if (r.refresh_devs)
 		GetDevices(0);
 }
@@ -2625,14 +2683,14 @@ static void on_toggle_force_update(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	extern int force_update;
 	kbdshortcut_result_t r = kbdshortcut_toggle_force_update(&force_update);
-	uprintf("Force update check: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Force update check: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_zero_drive(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	kbdshortcut_zero_drive((int*)&zero_drive, (int*)&fast_zeroing);
-	uprintf("Zero drive requested (standard)");
+	toggle_status("Zero drive requested (standard)");
 	/* Simulate Start button click */
 	gtk_button_clicked(GTK_BUTTON(rw.start_btn));
 }
@@ -2641,7 +2699,7 @@ static void on_fast_zero_drive(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	kbdshortcut_fast_zero_drive((int*)&zero_drive, (int*)&fast_zeroing);
-	uprintf("Zero drive requested (fast — skip empty blocks)");
+	toggle_status("Zero drive requested (fast — skip empty blocks)");
 	/* Simulate Start button click */
 	gtk_button_clicked(GTK_BUTTON(rw.start_btn));
 }
@@ -2652,7 +2710,7 @@ static void on_toggle_persistent_log(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	extern BOOL persistent_log;
 	kbdshortcut_result_t r = kbdshortcut_toggle_persistent_log(&persistent_log);
-	uprintf("Persistent log %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Persistent log %s", r.new_value ? "enabled" : "disabled");
 	WriteSettingBool(SETTING_PERSISTENT_LOG, r.new_value);
 }
 
@@ -2669,7 +2727,7 @@ static void on_adjust_thread_priority(GtkWidget *w, gpointer data)
 	               default_thread_priority - THREAD_PRIORITY_ABOVE_NORMAL);
 	if (format_thread != NULL)
 		SetThreadPriority(format_thread, r.new_value);
-	uprintf("Default thread priority: %d", r.new_value);
+	toggle_status("Default thread priority: %d", r.new_value);
 }
 
 static void on_cycle_port(GtkWidget *w, gpointer data)
@@ -2700,7 +2758,7 @@ static void on_toggle_usb_debug(GtkWidget *w, gpointer data)
 	extern BOOL usb_debug;
 	kbdshortcut_result_t r = kbdshortcut_toggle_usb_debug((int*)&usb_debug);
 	WriteSettingBool(SETTING_ENABLE_USB_DEBUG, usb_debug);
-	uprintf("USB debug: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("USB debug: %s", r.new_value ? "enabled" : "disabled");
 	if (r.refresh_devs)
 		GetDevices(0);
 }
@@ -2709,7 +2767,7 @@ static void on_toggle_lock_drive(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_lock_drive((int*)&lock_drive);
-	uprintf("Exclusive USB drive locking: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("Exclusive USB drive locking: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_file_indexing(GtkWidget *w, gpointer data)
@@ -2717,7 +2775,7 @@ static void on_toggle_file_indexing(GtkWidget *w, gpointer data)
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_file_indexing((int*)&enable_file_indexing);
 	WriteSettingBool(SETTING_ENABLE_FILE_INDEXING, enable_file_indexing);
-	uprintf("File indexing: %s", r.new_value ? "enabled" : "disabled");
+	toggle_status("File indexing: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_non_usb_removable(GtkWidget *w, gpointer data)
@@ -2728,9 +2786,9 @@ static void on_toggle_non_usb_removable(GtkWidget *w, gpointer data)
 		(int*)&enable_HDDs,
 		(int*)&previous_enable_HDDs);
 	if (list_non_usb_removable_drives)
-		uprintf("CAUTION: Listing of non-USB removable drives enabled — you may lose data!");
+		toggle_status("CAUTION: Listing of non-USB removable drives enabled — you may lose data!");
 	else
-		uprintf("Listing of non-USB removable drives disabled");
+		toggle_status("Listing of non-USB removable drives disabled");
 	/* Sync the list-USB-HDDs checkbox to the new enable_HDDs value */
 	if (rw.list_usb_hdd_check)
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rw.list_usb_hdd_check), enable_HDDs);
@@ -2742,7 +2800,7 @@ static void on_toggle_force_update_strict(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
 	kbdshortcut_result_t r = kbdshortcut_toggle_force_update_strict((int*)&force_update);
-	uprintf("Force update check (strict): %s (force_update=%d)",
+	toggle_status("Force update check (strict): %s (force_update=%d)",
 		r.new_value ? "enabled" : "disabled", r.new_value);
 }
 
@@ -3957,6 +4015,9 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 	rufus_set_log_handler(rufus_gtk_append_log);
 	/* Route PrintStatusInfo() to the GTK status label. */
 	rufus_set_status_handler(rufus_gtk_update_status);
+	/* Register GTK backends for timed status messages (PrintStatusTimeout). */
+	status_timeout_set_backends(gtk_timeout_add_fn, gtk_timeout_cancel_fn,
+	                            rufus_gtk_update_status);
 
 	GtkWidget *win = rufus_gtk_create_window(app);
 	(void)win;
