@@ -85,7 +85,8 @@ static const xkb_to_dos_t xkb_dos_table[] = {
     { "ko",  "us",  949 },  /* Korean (no FreeDOS kb) */
     { "kr",  "us",  949 },  /* Korean alternate */
     { "ky",  "ky",  850 },  /* Kyrgyz */
-    { "la",  "la",  850 },  /* Latin American Spanish */
+    { "la",  "us",  850 },  /* Laos (no FreeDOS keyboard, falls back to US) */
+    { "latam","la", 850 },  /* Latin American Spanish */
     { "lt",  "lt",  775 },  /* Lithuanian */
     { "lv",  "lv",  775 },  /* Latvian */
     { "mk",  "mk",  855 },  /* Macedonian */

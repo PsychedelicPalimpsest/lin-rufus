@@ -523,10 +523,11 @@ TEST(kb_map_icelandic_is_maps_to_040f)
 
 TEST(kb_map_latin_american_la_maps_to_080a)
 {
+	/* 'latam' is the XKB code for Latin American Spanish keyboard */
 	char il[64];
-	get_input_locale_for_xkb("la", il, sizeof(il));
+	get_input_locale_for_xkb("latam", il, sizeof(il));
 	CHECK_MSG(strstr(il, "080a") != NULL,
-	          "Latin American (la) should map to input locale 080a");
+	          "Latin American Spanish (latam) should map to input locale 080a");
 }
 
 TEST(kb_map_macedonian_mk_maps_to_042f)
@@ -535,6 +536,24 @@ TEST(kb_map_macedonian_mk_maps_to_042f)
 	get_input_locale_for_xkb("mk", il, sizeof(il));
 	CHECK_MSG(strstr(il, "042f") != NULL || strstr(il, "042F") != NULL,
 	          "Macedonian (mk) should map to input locale 042f");
+}
+
+TEST(kb_map_latam_latin_american_maps_to_080a)
+{
+	/* latam (Latin American Spanish) is the correct XKB layout code */
+	char il[64];
+	get_input_locale_for_xkb("latam", il, sizeof(il));
+	CHECK_MSG(strstr(il, "080a") != NULL || strstr(il, "080A") != NULL,
+	          "latam (Latin American Spanish) should map to input locale 080a");
+}
+
+TEST(kb_map_la_laos_does_not_map_to_latin_american)
+{
+	/* la is the Laos XKB layout - should NOT map to Latin American Spanish (080a) */
+	char il[64];
+	get_input_locale_for_xkb("la", il, sizeof(il));
+	CHECK_MSG(strstr(il, "080a") == NULL && strstr(il, "080A") == NULL,
+	          "XKB 'la' (Laos) should not be confused with Latin American Spanish");
 }
 
 TEST(kb_map_serbian_cyrillic_sr_maps_to_0c1a)
@@ -688,6 +707,8 @@ int main(void)
 	RUN(kb_map_albanian_al_maps_to_041c);
 	RUN(kb_map_icelandic_is_maps_to_040f);
 	RUN(kb_map_latin_american_la_maps_to_080a);
+	RUN(kb_map_latam_latin_american_maps_to_080a);
+	RUN(kb_map_la_laos_does_not_map_to_latin_american);
 	RUN(kb_map_macedonian_mk_maps_to_042f);
 	RUN(kb_map_serbian_cyrillic_sr_maps_to_0c1a);
 	RUN(kb_map_vietnamese_vn_maps_to_042a);

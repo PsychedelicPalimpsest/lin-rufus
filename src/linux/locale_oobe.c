@@ -188,7 +188,6 @@ static const KbEntry kb_map[] = {
 	{ "kk",   "043f:0000043f" },  /* Kazakh */
 	{ "ko",   "0412:00000412" },  /* Korean (alternate) */
 	{ "ky",   "0440:00000440" },  /* Kyrgyz */
-	{ "la",   "080a:0000080a" },  /* Latin American Spanish */
 	{ "lt",   "0427:00000427" },  /* Lithuanian */
 	{ "lv",   "0426:00000426" },  /* Latvian */
 	{ "mk",   "042f:0000042f" },  /* Macedonian */

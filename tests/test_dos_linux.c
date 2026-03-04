@@ -869,6 +869,28 @@ TEST(set_dos_locale_polish_maps_to_pl)
               "Polish XKB 'pl' -> DOS 'PL'");
 #endif
 }
+
+TEST(latam_xkb_maps_to_la_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* 'latam' is the correct XKB layout code for Latin American Spanish */
+    CHECK_MSG(check_kb_in_fdconfig("latam", "LA") == 1,
+              "Latin American Spanish XKB 'latam' -> DOS 'LA'");
+#endif
+}
+
+TEST(la_xkb_laos_does_not_map_to_la_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* 'la' is Laos in XKB — should NOT produce Latin American DOS keyboard */
+    CHECK_MSG(check_kb_in_fdconfig("la", "LA") == 0,
+              "Laos XKB 'la' should NOT map to DOS Latin American 'LA' keyboard");
+#endif
+}
 /* ================================================================
  * Keyboard driver file selection tests (keybrd2.sys parity)
  * Windows SetDOSLocale selects keyboard.sys vs keybrd2.sys based on
@@ -1531,6 +1553,8 @@ int main(void)
     RUN(set_dos_locale_norwegian_maps_to_no);
     RUN(set_dos_locale_russian_maps_to_ru);
     RUN(set_dos_locale_polish_maps_to_pl);
+    RUN(latam_xkb_maps_to_la_keyboard);
+    RUN(la_xkb_laos_does_not_map_to_la_keyboard);
     RUN(vconsole_keymap_de_maps_to_gr);
     RUN(vconsole_keymap_with_variant_strips_suffix);
     RUN(etc_default_keyboard_takes_priority_over_vconsole);
