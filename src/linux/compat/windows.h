@@ -63,7 +63,7 @@ void     linux_unregister_fd_offset(int fd);
 
 /* Calling convention macros (set early to avoid redefinition issues) */
 #define WINAPI
-#define CALLBACK __attribute__((cdecl))
+#define CALLBACK  /* cdecl is x86-only and meaningless on Linux */
 #define APIENTRY WINAPI
 #define WINAPIV
 #define PASCAL
