@@ -45,6 +45,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <unistd.h>
 
 #include "../src/windows/rufus.h"
 
@@ -695,13 +696,38 @@ extern const char* find_license_file(void);
  * =========================================================================*/
 TEST(find_license_file_with_real_repo_path)
 {
-    /* Set app_dir to repo root so find_license_file finds LICENSE.txt there.
-     * The test binary runs from tests/, so ../  is the repo root. */
-    snprintf(app_dir, sizeof(app_dir), "../");
+    /* Set app_dir to the repo root by resolving the test binary's directory.
+     * Tests run from the repo root, but the binary is in tests/; detect both. */
+    char exe[MAX_PATH] = {0};
+    char saved[MAX_PATH] = {0};
+    strncpy(saved, app_dir, sizeof(saved)-1);
+
+    /* Try the current directory first (LICENSE.txt may be right here) */
+    snprintf(app_dir, sizeof(app_dir), "./");
     const char *path = find_license_file();
+    if (!path) {
+        /* Try one level up (running from inside tests/ subdir) */
+        snprintf(app_dir, sizeof(app_dir), "../");
+        path = find_license_file();
+    }
+    if (!path) {
+        /* Try /proc/self/exe-based lookup: binary is in tests/ subdir */
+        ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe)-1);
+        if (n > 0) {
+            exe[n] = '\0';
+            /* Strip last two path components (binary name and "tests/" dir) */
+            char *p = strrchr(exe, '/');
+            if (p) *p = '\0';  /* remove binary name → exe is now tests/ path */
+            p = strrchr(exe, '/');
+            if (p) { *(p+1) = '\0'; }  /* remove tests/ → exe is repo root */
+            snprintf(app_dir, sizeof(app_dir), "%s", exe);
+            path = find_license_file();
+        }
+    }
+
     CHECK_MSG(path != NULL, "find_license_file must find LICENSE.txt in repo root");
     /* Verify the file is readable */
-    FILE *f = fopen(path, "r");
+    FILE *f = path ? fopen(path, "r") : NULL;
     CHECK_MSG(f != NULL, "found license file must be readable");
     if (f) {
         char buf[64];
@@ -709,7 +735,7 @@ TEST(find_license_file_with_real_repo_path)
         fclose(f);
         CHECK_MSG(line != NULL, "LICENSE.txt must be non-empty");
     }
-    app_dir[0] = '\0';
+    strncpy(app_dir, saved, sizeof(app_dir)-1);
 }
 
 TEST(find_license_file_with_bad_path_returns_null)
