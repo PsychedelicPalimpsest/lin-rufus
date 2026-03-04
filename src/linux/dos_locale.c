@@ -426,7 +426,9 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     }
     fprintf(fd, "!MENUCOLOR=7,0\r\nMENU\r\n");
     fprintf(fd, "MENU   FreeDOS Language Selection Menu\r\n");
-    fprintf(fd, "MENU   ==================================\r\nMENU\r\n");
+    /* \xCD is CP850/858 box-drawing '═' (U+2550); matches Windows separator */
+    fprintf(fd, "MENU   \xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
+                    "\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\r\nMENU\r\n");
     fprintf(fd, "MENUDEFAULT=1,5\r\n");
     fprintf(fd, "MENU 1) Use %s keyboard with %s codepage [%d]\r\n",
             kb_to_hr(kb), cp_to_hr(cp), cp);
