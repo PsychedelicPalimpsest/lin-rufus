@@ -97,6 +97,71 @@ TEST(sg_io_hdr_has_cmdp)
     CHECK(hdr.cmdp == cmd);
 }
 
+/* Additional sg_io_hdr fields used by src/linux/smart.c */
+TEST(sg_io_hdr_has_cmd_len)
+{
+    sg_io_hdr_t hdr;
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.cmd_len = 16;
+    CHECK(hdr.cmd_len == 16);
+}
+
+TEST(sg_io_hdr_has_dxfer_len)
+{
+    sg_io_hdr_t hdr;
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.dxfer_len = 512;
+    CHECK(hdr.dxfer_len == 512);
+}
+
+TEST(sg_io_hdr_has_mx_sb_len)
+{
+    sg_io_hdr_t hdr;
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.mx_sb_len = 64;
+    CHECK(hdr.mx_sb_len == 64);
+}
+
+TEST(sg_io_hdr_has_sbp)
+{
+    uint8_t sense[64] = {0};
+    sg_io_hdr_t hdr;
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.sbp = sense;
+    CHECK(hdr.sbp == sense);
+}
+
+TEST(sg_io_hdr_has_timeout)
+{
+    sg_io_hdr_t hdr;
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.timeout = 30000;
+    CHECK(hdr.timeout == 30000);
+}
+
+TEST(sg_io_hdr_has_status)
+{
+    sg_io_hdr_t hdr;
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.status = 0;
+    CHECK(hdr.status == 0);
+}
+
+TEST(sg_dxfer_to_dev_is_defined)
+{
+    int val = SG_DXFER_TO_DEV;
+    /* Must be distinct from SG_DXFER_FROM_DEV and SG_DXFER_NONE */
+    CHECK(val != SG_DXFER_FROM_DEV);
+    CHECK(val != SG_DXFER_NONE);
+}
+
+TEST(sg_dxfer_none_is_defined)
+{
+    int val = SG_DXFER_NONE;
+    (void)val;
+    CHECK(1); /* compile-time check that SG_DXFER_NONE exists */
+}
+
 /* ------------------------------------------------------------------ */
 /* Tests: integer type sizes (AArch64 LP64)                            */
 /* ------------------------------------------------------------------ */
@@ -173,6 +238,14 @@ int main(void)
     RUN(sg_io_hdr_has_interface_id);
     RUN(sg_io_hdr_has_dxfer_direction);
     RUN(sg_io_hdr_has_cmdp);
+    RUN(sg_io_hdr_has_cmd_len);
+    RUN(sg_io_hdr_has_dxfer_len);
+    RUN(sg_io_hdr_has_mx_sb_len);
+    RUN(sg_io_hdr_has_sbp);
+    RUN(sg_io_hdr_has_timeout);
+    RUN(sg_io_hdr_has_status);
+    RUN(sg_dxfer_to_dev_is_defined);
+    RUN(sg_dxfer_none_is_defined);
 
     RUN(uint64_t_is_8_bytes);
     RUN(size_t_is_pointer_width);

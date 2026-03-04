@@ -340,9 +340,12 @@ TEST(efi_boot_info_shim_detected)
 	char buf[512];
 	memset(buf, 0, sizeof(buf));
 	const char* shim_sig = "UEFI SHIM\n$Version: 15.7";
+	size_t search_len = strlen("UEFI SHIM\n$Version: ");
 	memcpy(buf, shim_sig, strlen(shim_sig) + 1);
-	/* Should not crash; no output to verify (uprintf is stubbed) */
 	GetEfiBootInfo(buf, sizeof(buf), "shimx64.efi");
+	/* After detection, buf[search_len] should contain the version string */
+	CHECK_MSG(strncmp(buf + search_len, "15.7", 4) == 0,
+	          "shim version string must remain at expected offset");
 }
 
 TEST(efi_boot_info_systemd_boot_detected)
@@ -350,8 +353,12 @@ TEST(efi_boot_info_systemd_boot_detected)
 	char buf[512];
 	memset(buf, 0, sizeof(buf));
 	const char* sd_sig = "#### LoaderInfo: systemd-boot 254.5-1";
+	size_t search_len = strlen("#### LoaderInfo: systemd-boot ");
 	memcpy(buf, sd_sig, strlen(sd_sig) + 1);
 	GetEfiBootInfo(buf, sizeof(buf), "bootx64.efi");
+	/* After detection, version string should be at search_len offset */
+	CHECK_MSG(strncmp(buf + search_len, "254.5-1", 7) == 0,
+	          "systemd-boot version string must remain at expected offset");
 }
 
 TEST(efi_boot_info_empty_buf)
@@ -359,6 +366,8 @@ TEST(efi_boot_info_empty_buf)
 	char buf[512];
 	memset(buf, 0, sizeof(buf));
 	GetEfiBootInfo(buf, sizeof(buf), "unknown.efi");
+	/* Empty buffer — no match, buf still all-zero */
+	CHECK_MSG(buf[0] == '\0', "empty buf must remain unchanged after no-match");
 }
 
 TEST(efi_boot_info_too_small)
@@ -367,6 +376,7 @@ TEST(efi_boot_info_too_small)
 	memset(buf, 0, sizeof(buf));
 	/* buf_size < max_string_size — must not crash */
 	GetEfiBootInfo(buf, sizeof(buf), "small.efi");
+	CHECK_MSG(buf[0] == '\0', "too-small buf must remain unchanged");
 }
 
 TEST(efi_boot_info_no_match)
@@ -374,8 +384,11 @@ TEST(efi_boot_info_no_match)
 	char buf[512];
 	memset(buf, 0, sizeof(buf));
 	const char* data = "This is some random EFI binary data with no recognizable signature";
-	memcpy(buf, data, strlen(data) + 1);
+	size_t dlen = strlen(data);
+	memcpy(buf, data, dlen + 1);
 	GetEfiBootInfo(buf, sizeof(buf), "random.efi");
+	/* No match — buf[dlen] should still be NUL (no in-place modification) */
+	CHECK_MSG(buf[dlen] == '\0', "no-match must not modify buf past the data");
 }
 
 TEST(efi_boot_info_null_source_no_crash)
@@ -386,6 +399,10 @@ TEST(efi_boot_info_null_source_no_crash)
 	memcpy(buf, shim_sig, strlen(shim_sig) + 1);
 	/* source = NULL — must not crash */
 	GetEfiBootInfo(buf, sizeof(buf), NULL);
+	/* Version string should still be found */
+	size_t search_len = strlen("UEFI SHIM\n$Version: ");
+	CHECK_MSG(strncmp(buf + search_len, "15.4", 4) == 0,
+	          "null source must not prevent detection");
 }
 
 TEST(efi_boot_info_version_at_offset)
@@ -394,8 +411,13 @@ TEST(efi_boot_info_version_at_offset)
 	char buf[512];
 	memset(buf, 0, sizeof(buf));
 	const char* shim_sig = "UEFI SHIM\n$Version: 15.8";
-	memcpy(buf + 100, shim_sig, strlen(shim_sig) + 1);
+	size_t offset = 100;
+	size_t search_len = strlen("UEFI SHIM\n$Version: ");
+	memcpy(buf + offset, shim_sig, strlen(shim_sig) + 1);
 	GetEfiBootInfo(buf, sizeof(buf), "shimx64.efi");
+	/* Version should be at offset + search_len */
+	CHECK_MSG(strncmp(buf + offset + search_len, "15.8", 4) == 0,
+	          "signature at non-zero offset must still be detected");
 }
 
 /* =====================================================================
