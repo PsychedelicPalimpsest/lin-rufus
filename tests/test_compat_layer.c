@@ -717,6 +717,39 @@ TEST(strcat_s_basic)
 	CHECK_STR_EQ(buf, "hello world");
 }
 
+TEST(strncpy_s_basic)
+{
+	char dst[32] = {0};
+	strncpy_s(dst, sizeof(dst), "hello", 5);
+	CHECK_MSG(strncmp(dst, "hello", 5) == 0, "strncpy_s must copy specified chars");
+	CHECK_MSG(dst[sizeof(dst)-1] == '\0', "strncpy_s must guarantee null termination");
+}
+
+TEST(strncpy_s_truncate_mode)
+{
+	char dst[8] = {0};
+	/* _TRUNCATE: copy at most sizeof(dst)-1 chars */
+	strncpy_s(dst, sizeof(dst), "hello world truncated", _TRUNCATE);
+	CHECK_MSG(dst[7] == '\0', "strncpy_s _TRUNCATE must null-terminate at last position");
+	CHECK_MSG(strlen(dst) <= 7, "strncpy_s _TRUNCATE must not exceed buffer");
+}
+
+TEST(strncat_s_basic)
+{
+	char buf[32] = "hello";
+	strncat_s(buf, sizeof(buf), " world", 6);
+	CHECK_STR_EQ(buf, "hello world");
+}
+
+TEST(strncat_s_truncate_mode)
+{
+	char buf[10] = "he";
+	strncat_s(buf, sizeof(buf), "llo world truncated", _TRUNCATE);
+	/* buf can hold 9 chars + null; "he" + "llo wor" = 9 chars */
+	CHECK_MSG(buf[9] == '\0', "strncat_s _TRUNCATE must null-terminate");
+	CHECK_MSG(strlen(buf) <= 9, "strncat_s _TRUNCATE must not exceed buffer");
+}
+
 /* ==========================================================================
  * MultiByteToWideChar / WideCharToMultiByte
  * ========================================================================== */
@@ -1483,6 +1516,10 @@ int main(void)
 	RUN_TEST(strcpy_s_basic);
 	RUN_TEST(strcpy_s_truncates_and_null_terminates);
 	RUN_TEST(strcat_s_basic);
+	RUN_TEST(strncpy_s_basic);
+	RUN_TEST(strncpy_s_truncate_mode);
+	RUN_TEST(strncat_s_basic);
+	RUN_TEST(strncat_s_truncate_mode);
 
 	RUN_TEST(multibyte_to_wide_ascii_roundtrip);
 	RUN_TEST(multibyte_to_wide_query_size);
