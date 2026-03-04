@@ -129,6 +129,28 @@ TEST(path_file_exists_a_directory)
 }
 
 /* =========================================================================
+ * PathFileExistsW — wide-char variant
+ * =========================================================================*/
+
+TEST(path_file_exists_w_real_path)
+{
+	CHECK_MSG(PathFileExistsW(L"/tmp") == TRUE,
+	          "PathFileExistsW: /tmp must exist");
+}
+
+TEST(path_file_exists_w_missing_path)
+{
+	CHECK_MSG(PathFileExistsW(L"/this_path_should_not_exist_rufus_test") == FALSE,
+	          "PathFileExistsW: missing path must return FALSE");
+}
+
+TEST(path_file_exists_w_null_returns_false)
+{
+	CHECK_MSG(PathFileExistsW(NULL) == FALSE,
+	          "PathFileExistsW(NULL) must return FALSE");
+}
+
+/* =========================================================================
  * PathCombineA
  * =========================================================================*/
 
@@ -537,6 +559,11 @@ int main(void)
 	RUN(path_file_exists_a_null_path);
 	RUN(path_file_exists_a_empty_string);
 	RUN(path_file_exists_a_directory);
+
+	printf("\n  PathFileExistsW\n");
+	RUN(path_file_exists_w_real_path);
+	RUN(path_file_exists_w_missing_path);
+	RUN(path_file_exists_w_null_returns_false);
 
 	printf("\n  PathCombineA\n");
 	RUN(path_combine_a_basic);
