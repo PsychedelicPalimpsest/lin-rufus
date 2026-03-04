@@ -676,6 +676,25 @@ TEST(sprintf_s_basic)
 	CHECK_STR_EQ(buf, "hello 42");
 }
 
+TEST(snprintf_s_truncate_mode)
+{
+	char buf[8] = {0};
+	/* _TRUNCATE: should write at most 7 chars + null terminator */
+	int r = _snprintf_s(buf, sizeof(buf), _TRUNCATE, "hello world more text");
+	CHECK_MSG(buf[7] == '\0', "_snprintf_s with _TRUNCATE must null-terminate");
+	CHECK_MSG(r >= 0 || r == -1, "_snprintf_s return value must be valid");
+}
+
+TEST(snprintf_s_exact_count)
+{
+	char buf[32] = {0};
+	/* count=5 means snprintf(buf, 5, ...) — writes at most 4 chars + null */
+	_snprintf_s(buf, sizeof(buf), 5, "hello world");
+	/* snprintf with size 5 produces "hell\0" */
+	CHECK_MSG(strncmp(buf, "hell", 4) == 0, "_snprintf_s with count=5 must copy first 4 chars");
+	CHECK_MSG(buf[4] == '\0', "_snprintf_s with count=5 must null-terminate at position 4");
+}
+
 TEST(strcpy_s_basic)
 {
 	char dst[16] = {0};
@@ -1459,6 +1478,8 @@ int main(void)
 	RUN_TEST(set_current_directory_a_roundtrip);
 
 	RUN_TEST(sprintf_s_basic);
+	RUN_TEST(snprintf_s_truncate_mode);
+	RUN_TEST(snprintf_s_exact_count);
 	RUN_TEST(strcpy_s_basic);
 	RUN_TEST(strcpy_s_truncates_and_null_terminates);
 	RUN_TEST(strcat_s_basic);
