@@ -1010,6 +1010,51 @@ TEST(getsysteminfo_architecture_known)
 }
 
 /* ==========================================================================
+ * GlobalMemoryStatusEx — physical memory info from /proc/meminfo
+ * ========================================================================== */
+
+TEST(globalmemorystatus_returns_true)
+{
+	MEMORYSTATUSEX ms;
+	ms.dwLength = sizeof(ms);
+	BOOL r = GlobalMemoryStatusEx(&ms);
+	CHECK_MSG(r == TRUE, "GlobalMemoryStatusEx must return TRUE on Linux");
+}
+
+TEST(globalmemorystatus_null_returns_false)
+{
+	CHECK_MSG(GlobalMemoryStatusEx(NULL) == FALSE,
+	          "GlobalMemoryStatusEx(NULL) must return FALSE");
+}
+
+TEST(globalmemorystatus_total_phys_nonzero)
+{
+	MEMORYSTATUSEX ms;
+	ms.dwLength = sizeof(ms);
+	GlobalMemoryStatusEx(&ms);
+	CHECK_MSG(ms.ullTotalPhys > 0,
+	          "GlobalMemoryStatusEx: ullTotalPhys must be > 0");
+}
+
+TEST(globalmemorystatus_avail_le_total)
+{
+	MEMORYSTATUSEX ms;
+	ms.dwLength = sizeof(ms);
+	GlobalMemoryStatusEx(&ms);
+	CHECK_MSG(ms.ullAvailPhys <= ms.ullTotalPhys,
+	          "GlobalMemoryStatusEx: ullAvailPhys must be <= ullTotalPhys");
+}
+
+TEST(globalmemorystatus_memory_load_0_to_100)
+{
+	MEMORYSTATUSEX ms;
+	ms.dwLength = sizeof(ms);
+	GlobalMemoryStatusEx(&ms);
+	CHECK_MSG(ms.dwMemoryLoad <= 100,
+	          "GlobalMemoryStatusEx: dwMemoryLoad must be 0-100");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -1152,6 +1197,12 @@ int main(void)
 	RUN_TEST(getsysteminfo_processor_count_nonzero);
 	RUN_TEST(getsysteminfo_page_size_power_of_two);
 	RUN_TEST(getsysteminfo_architecture_known);
+
+	RUN_TEST(globalmemorystatus_returns_true);
+	RUN_TEST(globalmemorystatus_null_returns_false);
+	RUN_TEST(globalmemorystatus_total_phys_nonzero);
+	RUN_TEST(globalmemorystatus_avail_le_total);
+	RUN_TEST(globalmemorystatus_memory_load_0_to_100);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;

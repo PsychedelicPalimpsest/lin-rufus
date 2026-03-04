@@ -1775,7 +1775,29 @@ typedef struct _MEMORYSTATUSEX {
     DWORDLONG ullTotalVirtual, ullAvailVirtual;
     DWORDLONG ullAvailExtendedVirtual;
 } MEMORYSTATUSEX, *LPMEMORYSTATUSEX;
-static inline BOOL GlobalMemoryStatusEx(LPMEMORYSTATUSEX ms) { (void)ms; return FALSE; }
+static inline BOOL GlobalMemoryStatusEx(LPMEMORYSTATUSEX ms) {
+    if (!ms) return FALSE;
+    memset(ms, 0, sizeof(*ms));
+    ms->dwLength = sizeof(*ms);
+    /* Read total/available physical memory from /proc/meminfo (kB values) */
+    FILE *f = fopen("/proc/meminfo", "r");
+    if (f) {
+        char line[128]; DWORDLONG total = 0, avail = 0;
+        while (fgets(line, sizeof(line), f)) {
+            unsigned long long v;
+            if (sscanf(line, "MemTotal: %llu kB", &v) == 1) total = (DWORDLONG)v * 1024ULL;
+            else if (sscanf(line, "MemAvailable: %llu kB", &v) == 1) avail = (DWORDLONG)v * 1024ULL;
+        }
+        fclose(f);
+        ms->ullTotalPhys = total;
+        ms->ullAvailPhys = avail;
+        ms->ullTotalVirtual = total;   /* conservative: treat physical as virtual */
+        ms->ullAvailVirtual = avail;
+        if (total > 0)
+            ms->dwMemoryLoad = (DWORD)((total - avail) * 100ULL / total);
+    }
+    return TRUE;
+}
 
 /* ---- CRT types ---- */
 typedef struct _stat stat_t;
