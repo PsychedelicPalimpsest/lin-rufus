@@ -1025,6 +1025,100 @@ TEST(closehandle_null_returns_false)
 	CHECK_MSG(!r, "CloseHandle(NULL) must return FALSE");
 }
 
+TEST(createfile_create_new_fails_if_exists)
+{
+	const char *path = "/tmp/rufus_compat_layer_create_new_test.tmp";
+	/* Pre-create the file */
+	HANDLE h1 = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (h1 != INVALID_HANDLE_VALUE) CloseHandle(h1);
+
+	/* CREATE_NEW on existing file must fail */
+	HANDLE h2 = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, 0, NULL);
+	BOOL failed = (h2 == INVALID_HANDLE_VALUE);
+	if (h2 != INVALID_HANDLE_VALUE) CloseHandle(h2);
+	unlink(path);
+	CHECK_MSG(failed, "CreateFileA CREATE_NEW must fail if file already exists");
+}
+
+TEST(createfile_open_always_does_not_truncate)
+{
+	const char *path = "/tmp/rufus_compat_layer_open_always_test.tmp";
+	const char data[] = "original";
+	unlink(path);
+
+	/* Create and write initial content */
+	HANDLE hw = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (hw != INVALID_HANDLE_VALUE) {
+		DWORD wr = 0;
+		WriteFile(hw, data, strlen(data), &wr, NULL);
+		CloseHandle(hw);
+	}
+
+	/* OPEN_ALWAYS should open without truncating */
+	HANDLE h = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_ALWAYS, 0, NULL);
+	CHECK_MSG(h != INVALID_HANDLE_VALUE, "CreateFileA OPEN_ALWAYS must succeed on existing file");
+	if (h != INVALID_HANDLE_VALUE) {
+		char buf[32] = {0};
+		DWORD rd = 0;
+		ReadFile(h, buf, sizeof(buf), &rd, NULL);
+		CloseHandle(h);
+		CHECK_MSG(rd == strlen(data), "OPEN_ALWAYS must preserve existing file content");
+		CHECK_MSG(strncmp(buf, data, strlen(data)) == 0, "OPEN_ALWAYS content must match original");
+	}
+	unlink(path);
+}
+
+TEST(createfile_open_always_creates_if_missing)
+{
+	const char *path = "/tmp/rufus_compat_layer_open_always_new.tmp";
+	unlink(path);
+	HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, 0, NULL);
+	CHECK_MSG(h != INVALID_HANDLE_VALUE, "CreateFileA OPEN_ALWAYS must create file if missing");
+	if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+	CHECK_MSG(PathFileExistsA(path), "OPEN_ALWAYS must create the file on disk");
+	unlink(path);
+}
+
+TEST(createfile_truncate_existing_fails_for_missing_file)
+{
+	const char *path = "/tmp/rufus_compat_truncate_nonexist.tmp";
+	unlink(path);
+	HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL, TRUNCATE_EXISTING, 0, NULL);
+	BOOL failed = (h == INVALID_HANDLE_VALUE);
+	if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+	unlink(path);
+	CHECK_MSG(failed, "CreateFileA TRUNCATE_EXISTING must fail for non-existent file");
+}
+
+TEST(createfile_truncate_existing_truncates_existing)
+{
+	const char *path = "/tmp/rufus_compat_truncate_exist.tmp";
+	unlink(path);
+
+	/* Create with content */
+	HANDLE hw = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (hw != INVALID_HANDLE_VALUE) {
+		DWORD wr = 0;
+		WriteFile(hw, "hello rufus", 11, &wr, NULL);
+		CloseHandle(hw);
+	}
+
+	/* TRUNCATE_EXISTING must open and truncate */
+	HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL, TRUNCATE_EXISTING, 0, NULL);
+	CHECK_MSG(h != INVALID_HANDLE_VALUE, "CreateFileA TRUNCATE_EXISTING must succeed for existing file");
+	if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+
+	/* Size must now be 0 */
+	HANDLE hr = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+	if (hr != INVALID_HANDLE_VALUE) {
+		LARGE_INTEGER sz; sz.QuadPart = -1;
+		GetFileSizeEx(hr, &sz);
+		CloseHandle(hr);
+		CHECK_MSG(sz.QuadPart == 0, "TRUNCATE_EXISTING must result in zero-size file");
+	}
+	unlink(path);
+}
+
 TEST(getfilesizeex_after_write)
 {
 	const char *path = "/tmp/rufus_compat_layer_fsize_test.tmp";
@@ -1786,6 +1880,153 @@ TEST(getmodulefilename_null_terminates)
 }
 
 /* ==========================================================================
+ * lstrcat / lstrcpy / lstrcpyn / lstrlen macros
+ * ========================================================================== */
+
+TEST(lstrcpya_copies_string)
+{
+	char dst[32] = {0};
+	LPSTR r = lstrcpyA(dst, "hello");
+	CHECK_MSG(strcmp(dst, "hello") == 0, "lstrcpyA must copy the string");
+	CHECK_MSG(r == dst, "lstrcpyA must return dst pointer");
+}
+
+TEST(lstrcpyna_copies_up_to_n_chars)
+{
+	char dst[32] = {0};
+	lstrcpynA(dst, "hello world", 6);
+	CHECK_MSG(strncmp(dst, "hello", 5) == 0, "lstrcpynA must copy up to n characters");
+}
+
+TEST(lstrcata_appends_string)
+{
+	char dst[32];
+	strcpy(dst, "foo");
+	lstrcatA(dst, "bar");
+	CHECK_MSG(strcmp(dst, "foobar") == 0, "lstrcatA must append the string");
+}
+
+TEST(lstrlena_returns_length)
+{
+	int len = lstrlenA("hello");
+	CHECK_MSG(len == 5, "lstrlenA must return string length");
+}
+
+TEST(lstrlena_empty_string_returns_zero)
+{
+	int len = lstrlenA("");
+	CHECK_MSG(len == 0, "lstrlenA must return 0 for empty string");
+}
+
+/* ==========================================================================
+ * GetCurrentDirectoryA / SetCurrentDirectoryA
+ * ========================================================================== */
+
+TEST(getcurrentdirectorya_returns_nonzero)
+{
+	char buf[256] = {0};
+	DWORD r = GetCurrentDirectoryA(sizeof(buf), buf);
+	CHECK_MSG(r > 0, "GetCurrentDirectoryA must return non-zero length");
+	CHECK_MSG(buf[0] == '/', "GetCurrentDirectoryA must return absolute path on Linux");
+}
+
+TEST(setcurrentdirectorya_changes_dir)
+{
+	char orig[256] = {0};
+	GetCurrentDirectoryA(sizeof(orig), orig);
+
+	BOOL ok = SetCurrentDirectoryA("/tmp");
+	CHECK_MSG(ok, "SetCurrentDirectoryA must return TRUE for /tmp");
+
+	char cur[256] = {0};
+	GetCurrentDirectoryA(sizeof(cur), cur);
+	CHECK_MSG(strncmp(cur, "/tmp", 4) == 0, "GetCurrentDirectoryA must reflect changed dir");
+
+	/* Restore */
+	SetCurrentDirectoryA(orig);
+}
+
+TEST(setcurrentdirectorya_fails_for_missing_dir)
+{
+	BOOL ok = SetCurrentDirectoryA("/tmp/rufus_missing_dir_xyz_9999");
+	CHECK_MSG(!ok, "SetCurrentDirectoryA must return FALSE for non-existent directory");
+}
+
+/* ==========================================================================
+ * GetNativeSystemInfo (mirrors GetSystemInfo on Linux)
+ * ========================================================================== */
+
+TEST(getnativesysteminfo_matches_getsysteminfo)
+{
+	SYSTEM_INFO si1, si2;
+	memset(&si1, 0, sizeof(si1));
+	memset(&si2, 0, sizeof(si2));
+	GetSystemInfo(&si1);
+	GetNativeSystemInfo(&si2);
+	CHECK_MSG(si1.dwPageSize == si2.dwPageSize,
+	          "GetNativeSystemInfo must return same page size as GetSystemInfo");
+	CHECK_MSG(si1.dwNumberOfProcessors == si2.dwNumberOfProcessors,
+	          "GetNativeSystemInfo must return same processor count as GetSystemInfo");
+}
+
+/* ==========================================================================
+ * GetFileAttributesA
+ * ========================================================================== */
+
+TEST(getfileattributesa_existing_file_is_normal)
+{
+	const char *path = "/tmp/rufus_compat_attr_test.tmp";
+	unlink(path);
+	HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+
+	DWORD attr = GetFileAttributesA(path);
+	unlink(path);
+	CHECK_MSG(attr != INVALID_FILE_ATTRIBUTES, "GetFileAttributesA must not return INVALID for existing file");
+	CHECK_MSG(attr & FILE_ATTRIBUTE_NORMAL, "GetFileAttributesA must set FILE_ATTRIBUTE_NORMAL for a plain file");
+}
+
+TEST(getfileattributesa_directory_has_dir_bit)
+{
+	DWORD attr = GetFileAttributesA("/tmp");
+	CHECK_MSG(attr != INVALID_FILE_ATTRIBUTES, "GetFileAttributesA must succeed for /tmp");
+	CHECK_MSG(attr & FILE_ATTRIBUTE_DIRECTORY, "GetFileAttributesA must set FILE_ATTRIBUTE_DIRECTORY for /tmp");
+}
+
+TEST(getfileattributesa_missing_file_returns_invalid)
+{
+	DWORD attr = GetFileAttributesA("/tmp/rufus_missing_attr_xyz_9999.tmp");
+	CHECK_MSG(attr == INVALID_FILE_ATTRIBUTES,
+	          "GetFileAttributesA must return INVALID_FILE_ATTRIBUTES for missing file");
+}
+
+TEST(getfileattributesa_null_returns_invalid)
+{
+	DWORD attr = GetFileAttributesA(NULL);
+	CHECK_MSG(attr == INVALID_FILE_ATTRIBUTES,
+	          "GetFileAttributesA must return INVALID_FILE_ATTRIBUTES for NULL path");
+}
+
+/* ==========================================================================
+ * Sleep
+ * ========================================================================== */
+
+TEST(sleep_zero_does_not_hang)
+{
+	Sleep(0);
+	CHECK_MSG(1, "Sleep(0) must return without hanging");
+}
+
+TEST(sleep_short_takes_measurable_time)
+{
+	ULONGLONG t0 = GetTickCount64();
+	Sleep(50);
+	ULONGLONG t1 = GetTickCount64();
+	/* At least 40ms (allow 20% slack for scheduling) */
+	CHECK_MSG(t1 - t0 >= 40, "Sleep(50) must take at least ~40ms");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -1935,6 +2176,11 @@ int main(void)
 
 	RUN_TEST(createfile_open_existing_fails_for_missing_file);
 	RUN_TEST(createfile_create_always_creates_file);
+	RUN_TEST(createfile_create_new_fails_if_exists);
+	RUN_TEST(createfile_open_always_does_not_truncate);
+	RUN_TEST(createfile_open_always_creates_if_missing);
+	RUN_TEST(createfile_truncate_existing_fails_for_missing_file);
+	RUN_TEST(createfile_truncate_existing_truncates_existing);
 	RUN_TEST(writefile_and_readfile_roundtrip);
 	RUN_TEST(closehandle_invalid_returns_false);
 	RUN_TEST(closehandle_null_returns_false);
@@ -2030,6 +2276,26 @@ int main(void)
 
 	RUN_TEST(getmodulefilename_returns_nonzero);
 	RUN_TEST(getmodulefilename_null_terminates);
+
+	RUN_TEST(lstrcpya_copies_string);
+	RUN_TEST(lstrcpyna_copies_up_to_n_chars);
+	RUN_TEST(lstrcata_appends_string);
+	RUN_TEST(lstrlena_returns_length);
+	RUN_TEST(lstrlena_empty_string_returns_zero);
+
+	RUN_TEST(getcurrentdirectorya_returns_nonzero);
+	RUN_TEST(setcurrentdirectorya_changes_dir);
+	RUN_TEST(setcurrentdirectorya_fails_for_missing_dir);
+
+	RUN_TEST(getnativesysteminfo_matches_getsysteminfo);
+
+	RUN_TEST(getfileattributesa_existing_file_is_normal);
+	RUN_TEST(getfileattributesa_directory_has_dir_bit);
+	RUN_TEST(getfileattributesa_missing_file_returns_invalid);
+	RUN_TEST(getfileattributesa_null_returns_invalid);
+
+	RUN_TEST(sleep_zero_does_not_hang);
+	RUN_TEST(sleep_short_takes_measurable_time);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
