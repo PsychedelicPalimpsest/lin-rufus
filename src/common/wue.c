@@ -25,16 +25,18 @@
  *   CreateUnattendXml()        — generate autounattend.xml answer file
  *   wue_compute_option_flags() — calculate UNATTEND_* flag bitmask
  *
- * Platform differences handled via #ifdef _WIN32:
- *   - Timezone lookup: Windows uses GetTimeZoneInformation + wchar_to_utf8;
- *     Linux uses IanaToWindowsTimezone() from linux/timezone.c.
- *   - Locale duplication (UNATTEND_OOBE_INTERNATIONAL_MASK): Windows reads
- *     from registry and Windows locale APIs; Linux uses GetLinuxOobeLocale()
- *     from linux/locale_oobe.c (reads $LANG / keyboard layout detection).
+ * Platform differences are fully abstracted:
+ *   - Timezone lookup: common GetLocalTimezone() (src/common/timezone_name.h);
+ *     Windows: GetTimeZoneInformation in windows/timezone.c;
+ *     Linux: IanaToWindowsTimezone() in linux/timezone.c.
+ *   - OOBE international locale: common GetOobeLocale() (src/common/oobe_locale.h);
+ *     Windows: registry + LCIDToLocaleName in windows/oobe_locale.c;
+ *     Linux: $LANG / keyboard layout detection in linux/locale_oobe.c.
+ *   - Temp file creation: GetTempFileNameU on both platforms; on Linux this
+ *     aliases to GetTempFileNameA (POSIX mkstemp-based, defined in compat/windows.h).
+ *     temp_dir is initialised by rufus_init_paths() on Linux (respects $TMPDIR).
  *
- * Temp file creation uses GetTempFileNameU on both platforms; on Linux this
- * aliases to GetTempFileNameA (POSIX mkstemp-based, defined in compat/windows.h).
- * temp_dir is initialised by rufus_init_paths() on Linux (respects $TMPDIR).
+ * The only #ifdef _WIN32 that remains is for platform-specific system headers.
  */
 
 #ifdef _WIN32

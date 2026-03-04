@@ -32,6 +32,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include "wue.h"
 #include "wimlib.h"
 #include "locale_oobe.h"
+#include "timezone.h"
 
 /* ================================================================
  * Globals required by wue.c and its dependencies
@@ -431,6 +432,40 @@ TEST(create_unattend_oobe_international_de_DE)
 		          "German keyboard input locale");
 		CHECK_MSG(strstr(content, "<SystemLocale>de-DE</SystemLocale>") != NULL,
 		          "German system locale");
+		free(content);
+	}
+}
+
+TEST(create_unattend_duplicate_locale_contains_timezone)
+{
+	/* <TimeZone> must appear when UNATTEND_DUPLICATE_LOCALE is set */
+	timezone_set_tz_injection("America/New_York");
+	char* p = CreateUnattendXml(ARCH_X86_64, UNATTEND_DUPLICATE_LOCALE);
+	timezone_set_tz_injection(NULL);
+	SKIP_IF(p == NULL);
+	char* content = slurp(p);
+	unlink(p);
+	CHECK(content != NULL);
+	if (content) {
+		CHECK_MSG(strstr(content, "<TimeZone>Eastern Standard Time</TimeZone>") != NULL,
+		          "TimeZone element with injected timezone");
+		free(content);
+	}
+}
+
+TEST(create_unattend_duplicate_locale_timezone_utc_fallback)
+{
+	/* Injecting an unknown timezone must produce <TimeZone>UTC</TimeZone> */
+	timezone_set_tz_injection("Nonexistent/Zone");
+	char* p = CreateUnattendXml(ARCH_X86_64, UNATTEND_DUPLICATE_LOCALE);
+	timezone_set_tz_injection(NULL);
+	SKIP_IF(p == NULL);
+	char* content = slurp(p);
+	unlink(p);
+	CHECK(content != NULL);
+	if (content) {
+		CHECK_MSG(strstr(content, "<TimeZone>UTC</TimeZone>") != NULL,
+		          "Unknown IANA zone falls back to UTC");
 		free(content);
 	}
 }
@@ -2264,6 +2299,8 @@ int main(void)
 	RUN(create_unattend_oobe_international_has_input_locale);
 	RUN(create_unattend_oobe_international_locale_values);
 	RUN(create_unattend_oobe_international_de_DE);
+	RUN(create_unattend_duplicate_locale_contains_timezone);
+	RUN(create_unattend_duplicate_locale_timezone_utc_fallback);
 	RUN(create_unattend_username_sanitization);
 
 	printf("\n=== WUE option flags tests ===\n");
