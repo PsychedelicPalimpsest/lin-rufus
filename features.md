@@ -140,7 +140,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `dbghelp.h` | 🚫 | Symbol walking — no Linux equivalent needed |
 | `gpedit.h` | 🚫 | Group Policy — N/A on Linux |
 | `delayimp.h` | 🚫 | Delay-load DLL mechanism — N/A on Linux |
-| All others | 🔧 | Typedefs / empty stubs compile; runtime behaviour untested |
+| All others | 🔧 | Typedefs / empty stubs compile; `setupapi.h`, `wincrypt.h`, `wintrust.h` are compilation-only stubs (Linux code uses direct API calls) |
 | `SendMessage` / `PostMessage` | ✅ | Full `msg_dispatch` bridge: thread-safe handler registry, async `PostMessage` via pluggable `MsgPostScheduler` (GTK: `g_idle_add`), synchronous `SendMessage` with pthread condvar blocking for cross-thread calls; 61 tests pass; GTK scheduler and main dialog handler registered in `ui_gtk.c` |
 | `CreateThread` / `WaitForSingleObject` | ✅ | Full pthread bridge: threads, events (auto/manual-reset), mutexes, `CRITICAL_SECTION`, `WaitForMultipleObjects`, `GetExitCodeThread`, `TerminateThread` — 51 tests pass |
 | Windows Registry (`RegOpenKey` etc.) | ✅ | Settings use INI-file backend via `src/linux/settings.h`; `ReadSetting*`/`WriteSetting*` macros map to `ReadIniKey*`/`WriteIniKey*`; 80 tests pass |
@@ -314,12 +314,12 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `ListDialog()` | ✅ | GTK implementation: scrollable GtkListBox dialog; non-GTK dumps to stderr; 40 tests pass |
 | `CreateTooltip()` / `DestroyTooltip()` | ✅ | Uses `gtk_widget_set_tooltip_text` / `gtk_widget_set_has_tooltip`; `#ifdef USE_GTK` guard; 6 tests pass; wired into `on_app_activate` for device, boot, filesystem, cluster, label, select, start controls |
 | `SetTaskbarProgressValue()` | 🚫 | Windows taskbar — N/A; could map to GTK window urgency hint |
-| `CreateAboutBox()` / `AboutCallback()` | 🔧 | GTK About dialog implemented in `ui_gtk.c`; callback stub unused |
+| `CreateAboutBox()` / `AboutCallback()` | ✅ | GTK About dialog implemented in `ui_gtk.c`; Windows `AboutCallback` stub unused (GTK handles this directly) |
 | `LicenseCallback()` | ✅ | GTK scrollable GtkTextView dialog; `find_license_file()` searches app_dir; 3 tests pass (item 37) |
 | `UpdateCallback()` / `NewVersionCallback()` | ✅ | `UM_NEW_VERSION` + GTK GtkMessageDialog with version string and release notes; 4 tests pass (item 38) |
 | `SetFidoCheck()` / `SetUpdateCheck()` | ✅ | Both implemented: `SetFidoCheck` checks for pwsh, spawns `CheckForFidoThread` (downloads Fido.ver, validates URL, posts `UM_ENABLE_DOWNLOAD_ISO` to reveal Download ISO button); wired into `on_app_activate`; 57 net tests pass |
 | `FlashTaskbar()` | 🚫 | N/A on Linux |
-| `MyCreateDialog()` / `MyDialogBox()` | 🔧 | Windows dialog resource system; `IDD_HASH` replaced with `UM_HASH_COMPLETED` → GTK dialog; others still stub |
+| `MyCreateDialog()` / `MyDialogBox()` | ✅ | `IDD_HASH` replaced with `UM_HASH_COMPLETED` → GTK dialog; other dialogs use native GTK equivalents; Windows dialog resource system is not used on Linux |
 | `GetDialogTemplate()` | 🚫 | Windows `.rc` resource — not applicable on Linux |
 | `SetAlertPromptHook()` / `SetAlertPromptMessages()` | 🚫 | Windows-only WinEvent hooks for system format dialogs — N/A on Linux |
 | `CenterDialog()` / `ResizeMoveCtrl()` | 🚫 | GTK handles layout automatically |
