@@ -1,6 +1,6 @@
 # Rufus Linux Port — QA Notes
 
-> **Last updated:** 2026-03-03  
+> **Last updated:** 2026-03-04  
 > **Reviewer:** Copilot QA session
 
 ---
@@ -277,8 +277,8 @@ Fixed by updating the three `CHECK_MSG` expected strings.
 3. **Run `./run_tests.sh --linux-only` first** to establish baseline; always
    force-rebuild specific test binaries (`make -B -C tests test_<name>_linux_linux`).
 4. **Test disk `/dev/nvme0n2`** — after third session it has FAT32 with label "TESTVOL".
-5. **`--label` now works** (verified: `blkid` shows `LABEL_FATBOOT`), but `fatlabel`
-   still returns empty due to missing root-dir label entry (Feature 199).
+5. **`--label` now works** (verified: `blkid` shows `LABEL_FATBOOT`); `fatlabel` also
+   works since Feature 199 fixed the root-dir label entry.
 6. **Wine32 missing** — `wine32 is missing` warnings are benign; only 64-bit tests work.
 7. **No hardcoded `/dev/nvme0n2` in repo** — all device tests use `RUFUS_TEST_DEVICE` env var.
 
@@ -288,18 +288,75 @@ Fixed by updating the three `CHECK_MSG` expected strings.
    making any code changes.  **Always force-rebuild the specific test binary**
    (`make -B test_<name>_linux`) before accepting "up to date" as a pass —
    stale binaries masked the 3 failing tests this session.
-4. **Feature 188/189** (CLI binary integration) remains the highest-priority
-   open item; any developer working on GTK CLI integration should verify
-   with `sudo rufus --device /dev/nvme0n2 --fs fat32 --no-prompt` returning 0.
+4. **All features 188–222 are RESOLVED** — the `features.md` Pending Work section
+   is a clean summary table; no open items remain.
 5. **Wine** only supports 64-bit on this machine; the Windows-binary tests
    via Wine may show `wine32 is missing` warnings — ignore them as long as
    Wine tests still pass for 64-bit code.
 6. **The test disk `/dev/nvme0n2`** is safe to use destructively; re-image
-   with any format you need.  After this session it has the Ubuntu 24.04 ISO
-   written to it (ISO 9660 magic verified).
+   with any format you need.  After the 2026-03-04 session it has the Ubuntu
+   24.04 ISO written to it (ISO 9660 magic verified).
 7. **No TODO/FIXME/HACK/BUG comments** were found in `src/linux/*.c` — the
    codebase is clean in that regard.
-8. **`test_ui_linux_linux` 56 tests** — 7 cover `device_combo`, 7 cover
-   `hyperlink`, 8 cover `proposed_label`.  These tests previously passed
-   stale because the binary was not rebuilt.  Always force rebuild suspicious
-   tests.
+8. **`test_ui_linux_linux` 65 tests** — 7 cover `device_combo`, 7 cover
+   `hyperlink`, 8 cover `proposed_label`, 10 cover window title progress.
+   Always force rebuild suspicious tests.
+
+---
+
+## What Was Tested — Session 2026-03-04 (this session)
+
+### Bug Fixed This Session
+
+**`--locale` missing from man page** (`doc/rufus.1`):
+- Added `[--locale LOCALE]` to the SYNOPSIS section
+- Added `.TP` entry with full description under OPTIONS
+- 105 man page tests still pass after the fix
+
+### Tests Run
+
+| Test | Result |
+|------|--------|
+| `./run_tests.sh --linux-only` | ✅ All tests passed |
+| `./run_tests.sh --wine-only` | ✅ All tests passed |
+| `sudo RUFUS_TEST_DEVICE=/dev/nvme0n2 test_real_device_linux_linux` | ✅ 11 passed |
+| `sudo RUFUS_TEST_DEVICE=/dev/nvme0n2 test_e2e_linux_linux` | ✅ 13 passed |
+| `test_man_page_linux_linux` (rebuilt) | ✅ 105 passed |
+| `test_multidev_linux_linux` (rebuilt) | ✅ 74 passed |
+| `test_format_linux_linux` (rebuilt) | ✅ 167 passed |
+| `test_cli_linux_linux` (rebuilt) | ✅ 320 passed |
+| `test_progress_linux_linux` | ✅ 33 passed |
+| `test_progress_text_linux_linux` | ✅ 18 passed |
+| `test_dump_fat_linux_linux` | ✅ 139 passed |
+| `test_ui_linux_linux` | ✅ 65 passed |
+| Manual `--device /dev/nvme0n2 --fs fat32 --label QATEST --no-prompt` | ✅ FAT32 formatted; `fatlabel` shows `QATEST` |
+| Manual `--device /dev/nvme0n2 --image ~/ubuntu-24.04.4-desktop-amd64.iso --write-as-image --no-prompt` | ✅ ISO 9660 magic `01 CD001` verified at offset 0x8000 |
+| Manual `--include-hdds --list-devices --json` | ✅ valid JSON, nvme0n1 + nvme0n2 shown |
+| Manual `--version` | ✅ `rufus 4.13.0` |
+| Manual `--help` | ✅ full usage printed, all flags shown |
+
+### Spot Checks Performed
+
+| File | Finding |
+|------|---------|
+| `src/linux/ventoy_detect.c` | Clean; `make_part_path` handles nvme/mmcblk `p` suffix correctly |
+| `src/linux/polkit.c` | Clean; `rufus_build_pkexec_argv` correctly handles empty argv |
+| `src/linux/paths.c` | Clean; `rufus_effective_home_impl` correctly handles all edge cases |
+| `src/linux/status_history.c` | Ring buffer correct; `status_history_tooltip` walks oldest→newest |
+| `src/linux/globals.c` | All globals initialized; `lmprintf` weak stub present |
+| `src/linux/usb_speed.c` | `usb_speed_string` range table correct (USB 1.0–4) |
+| `src/linux/boot_validation.c` | All predicates clean; no dead code |
+| `src/linux/ui_combo_logic.c` | `set_preselected_fs` / `set_user_selected_fs` correct |
+| `src/linux/dump_fat.c` | 15 tests pass; `iso9660_readfat` cache window logic correct |
+| `src/linux/hyperlink.c` | XML escaping correct; tested in `test_ui_linux.c` |
+| `src/linux/sl_version.c` | Port of Windows `GetSyslinuxVersion`; unchanged from upstream |
+| `src/linux/verify.c` | Chunk-by-chunk compare; `CHECK_FOR_USER_CANCEL` in loop |
+| `src/linux/ntfsfix.c` | Double-quote protection; pluggable system hook for tests |
+| `doc/rufus.1` | `--locale` was absent from SYNOPSIS and OPTIONS — **fixed** |
+
+### features.md Cleanup
+
+Removed all verbose QA session narratives and verbose RESOLVED feature descriptions
+(lines 573–1149 of the old file).  Replaced with a compact summary table of all
+188–222 features in the new "Pending Work" section.  File shrunk from 75 KB → 43 KB.
+

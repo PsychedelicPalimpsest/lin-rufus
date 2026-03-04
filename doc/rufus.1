@@ -44,6 +44,7 @@ rufus \- The Reliable USB Formatting Utility
 [\fB\-\-list\-devices\fR]
 [\fB\-\-json\fR]
 [\fB\-\-label\fR \fILABEL\fR]
+[\fB\-\-locale\fR \fILOCALE\fR]
 [\fB\-\-quick\fR|\fB\-\-no\-quick\fR]
 [\fB\-\-verify\fR]
 [\fB\-\-no\-prompt\fR]
@@ -313,6 +314,12 @@ warnings, including the "all data will be destroyed" prompt.
 .TP
 .B \-\-version
 Print the Rufus version string (e.g.\& \fB4.13.0\fR) and exit with status 0.
+.TP
+.B \-\-locale " " \fILOCALE\fR
+Select the UI locale / language for messages (e.g.\& \fBen-US\fR, \fBfr-FR\fR,
+\fBde-DE\fR).  The locale name must match a translation file present in
+the Rufus locale directory.  If the locale cannot be loaded, Rufus falls
+back to the compiled-in default (English).
 .TP
 .BR \-L ", " \-\-list\-devices
 Enumerate all available removable drives and print them to standard output,
