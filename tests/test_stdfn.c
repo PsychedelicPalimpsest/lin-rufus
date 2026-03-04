@@ -21,6 +21,7 @@ int main(void) { return 0; } /* Skip on non-Linux */
 #include <string.h>
 #include <stdlib.h>
 #include <sched.h>
+#include <unistd.h>
 
 /* --------------------------------------------------------------------------
  * Minimal stubs required by stdfn.c
@@ -547,6 +548,125 @@ TEST(get_exe_version_self)
 }
 
 /* ===========================================================================
+ * CompareGUID
+ * ========================================================================= */
+
+TEST(compare_guid_equal)
+{
+    GUID g1 = { 0x12345678, 0x1234, 0x5678, { 0x9A, 0xBC, 0xDE, 0xF0, 0x12, 0x34, 0x56, 0x78 } };
+    GUID g2 = g1;
+    CHECK_MSG(CompareGUID(&g1, &g2), "CompareGUID must return TRUE for equal GUIDs");
+}
+
+TEST(compare_guid_different)
+{
+    GUID g1 = { 0x12345678, 0x1234, 0x5678, { 0x9A, 0xBC, 0xDE, 0xF0, 0x12, 0x34, 0x56, 0x78 } };
+    GUID g2 = { 0x87654321, 0x4321, 0x8765, { 0x9A, 0xBC, 0xDE, 0xF0, 0x12, 0x34, 0x56, 0x78 } };
+    CHECK_MSG(!CompareGUID(&g1, &g2), "CompareGUID must return FALSE for different GUIDs");
+}
+
+TEST(compare_guid_null_first)
+{
+    GUID g = { 0x12345678, 0x1234, 0x5678, { 0 } };
+    CHECK_MSG(!CompareGUID(NULL, &g), "CompareGUID(NULL, g) must return FALSE");
+}
+
+TEST(compare_guid_null_second)
+{
+    GUID g = { 0x12345678, 0x1234, 0x5678, { 0 } };
+    CHECK_MSG(!CompareGUID(&g, NULL), "CompareGUID(g, NULL) must return FALSE");
+}
+
+TEST(compare_guid_both_null)
+{
+    CHECK_MSG(!CompareGUID(NULL, NULL), "CompareGUID(NULL, NULL) must return FALSE");
+}
+
+TEST(compare_guid_differ_in_data4)
+{
+    GUID g1 = { 0x12345678, 0x1234, 0x5678, { 0x9A, 0xBC, 0xDE, 0xF0, 0x12, 0x34, 0x56, 0x78 } };
+    GUID g2 = { 0x12345678, 0x1234, 0x5678, { 0x9A, 0xBC, 0xDE, 0xF0, 0x12, 0x34, 0x56, 0x79 } };
+    CHECK_MSG(!CompareGUID(&g1, &g2), "CompareGUID must detect difference in Data4 byte");
+}
+
+/* ===========================================================================
+ * IsCurrentProcessElevated
+ * ========================================================================= */
+
+TEST(is_elevated_matches_geteuid)
+{
+    BOOL elevated = IsCurrentProcessElevated();
+    BOOL expected = (geteuid() == 0);
+    CHECK_MSG(elevated == expected,
+              "IsCurrentProcessElevated must match whether effective UID is 0");
+}
+
+/* ===========================================================================
+ * rufus_log_write
+ * ========================================================================= */
+
+TEST(rufus_log_write_null_text_returns_false)
+{
+    CHECK_MSG(!rufus_log_write(NULL, FALSE, "/tmp"), "rufus_log_write(NULL text) must return FALSE");
+}
+
+TEST(rufus_log_write_null_dir_returns_false)
+{
+    CHECK_MSG(!rufus_log_write("hello", FALSE, NULL), "rufus_log_write(NULL dir) must return FALSE");
+}
+
+TEST(rufus_log_write_creates_log_file)
+{
+    const char *dir = "/tmp/rufus_test_log_dir";
+    const char *path = "/tmp/rufus_test_log_dir/rufus.log";
+    rmdir(dir);
+    unlink(path);
+    BOOL ok = rufus_log_write("test message", FALSE, dir);
+    int exists = (access(path, F_OK) == 0);
+    unlink(path);
+    rmdir(dir);
+    CHECK_MSG(ok, "rufus_log_write must return TRUE on success");
+    CHECK_MSG(exists, "rufus_log_write must create rufus.log in the specified dir");
+}
+
+TEST(rufus_log_write_content_matches)
+{
+    const char *dir = "/tmp/rufus_test_log_content";
+    const char *path = "/tmp/rufus_test_log_content/rufus.log";
+    const char *msg = "hello from rufus log test";
+    rmdir(dir);
+    unlink(path);
+    rufus_log_write(msg, FALSE, dir);
+
+    FILE *f = fopen(path, "r");
+    char buf[128] = {0};
+    if (f) { fread(buf, 1, sizeof(buf)-1, f); fclose(f); }
+    unlink(path);
+    rmdir(dir);
+
+    CHECK_MSG(strstr(buf, msg) != NULL, "rufus_log_write content must include the written message");
+}
+
+TEST(rufus_log_write_append_mode_adds_content)
+{
+    const char *dir = "/tmp/rufus_test_log_append";
+    const char *path = "/tmp/rufus_test_log_append/rufus.log";
+    rmdir(dir);
+    unlink(path);
+    rufus_log_write("first line", FALSE, dir);
+    rufus_log_write("second line", TRUE, dir);
+
+    FILE *f = fopen(path, "r");
+    char buf[256] = {0};
+    if (f) { fread(buf, 1, sizeof(buf)-1, f); fclose(f); }
+    unlink(path);
+    rmdir(dir);
+
+    CHECK_MSG(strstr(buf, "first line") != NULL, "rufus_log_write append must preserve first write");
+    CHECK_MSG(strstr(buf, "second line") != NULL, "rufus_log_write append must include second write");
+}
+
+/* ===========================================================================
  * main
  * ========================================================================= */
 
@@ -610,6 +730,24 @@ int main(void)
     printf("\n=== GetExecutableVersion ===\n");
     RUN(get_exe_version_null);
     RUN(get_exe_version_self);
+
+    printf("\n=== CompareGUID ===\n");
+    RUN(compare_guid_equal);
+    RUN(compare_guid_different);
+    RUN(compare_guid_null_first);
+    RUN(compare_guid_null_second);
+    RUN(compare_guid_both_null);
+    RUN(compare_guid_differ_in_data4);
+
+    printf("\n=== IsCurrentProcessElevated ===\n");
+    RUN(is_elevated_matches_geteuid);
+
+    printf("\n=== rufus_log_write ===\n");
+    RUN(rufus_log_write_null_text_returns_false);
+    RUN(rufus_log_write_null_dir_returns_false);
+    RUN(rufus_log_write_creates_log_file);
+    RUN(rufus_log_write_content_matches);
+    RUN(rufus_log_write_append_mode_adds_content);
 
     TEST_RESULTS();
 }
