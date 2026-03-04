@@ -173,6 +173,32 @@ TEST(passwd_lookup_current_user_works)
 }
 
 /* =========================================================================
+ * 11. Buffer truncation — small buf still NUL-terminates and returns buf
+ * =========================================================================*/
+TEST(small_buf_truncates_safely)
+{
+    char buf[4]; /* intentionally tiny */
+    const char *result = rufus_effective_home_impl(
+        1000, NULL, "/home/testuser", buf, sizeof(buf));
+    /* Result must be buf (same pointer) */
+    CHECK_MSG(result == buf, "must return buf pointer");
+    /* Must be NUL-terminated */
+    CHECK_MSG(buf[sizeof(buf) - 1] == '\0', "buf must be NUL-terminated");
+}
+
+/* =========================================================================
+ * 12. High uid, long home path — no crash
+ * =========================================================================*/
+TEST(high_uid_long_home_no_crash)
+{
+    char buf[256];
+    const char *result = rufus_effective_home_impl(
+        65534, NULL, "/very/long/home/path/for/a/user/who/does/not/exist", buf, sizeof(buf));
+    CHECK_MSG(result != NULL, "must return non-NULL");
+    CHECK_MSG(buf[0] != '\0', "buf must be non-empty");
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -189,6 +215,8 @@ int main(void)
     RUN(home_null_no_sudo_user_returns_tmp);
     RUN(home_empty_no_sudo_user_returns_tmp);
     RUN(passwd_lookup_current_user_works);
+    RUN(small_buf_truncates_safely);
+    RUN(high_uid_long_home_no_crash);
 
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;

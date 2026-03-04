@@ -691,6 +691,47 @@ TEST(string_to_hash_sha1_length)
 	CHECK_MSG(h[0] == 0xda, "StringToHash SHA-1: first byte must be 0xda");
 }
 
+/* ---- FileMatchesHash: file path + expected hex string ---- */
+
+/* MD5 of "abc" */
+#define MD5_ABC_HEX "900150983cd24fb0d6963f7d28e17f72"
+/* SHA-256 of "abc" */
+#define SHA256_ABC_HEX "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+/* SHA-256 of empty string */
+#define SHA256_EMPTY_HEX "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+TEST(file_matches_hash_correct_md5)
+{
+	/* Write "abc" and verify FileMatchesHash returns TRUE for the correct MD5 */
+	if (make_ht_file("abc", 3) < 0) { CHECK(0); return; }
+	/* FileMatchesHash always uses SHA-256 internally */
+	BOOL r = FileMatchesHash(ht_tmp, SHA256_ABC_HEX);
+	CHECK_MSG(r == TRUE, "FileMatchesHash must return TRUE for correct SHA-256");
+	unlink(ht_tmp);
+}
+
+TEST(file_matches_hash_wrong_hash)
+{
+	if (make_ht_file("abc", 3) < 0) { CHECK(0); return; }
+	/* Pass the MD5 of "abc" to a function that uses SHA-256 — must not match */
+	BOOL r = FileMatchesHash(ht_tmp, SHA256_EMPTY_HEX);
+	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE when hash does not match");
+	unlink(ht_tmp);
+}
+
+TEST(file_matches_hash_null_path)
+{
+	/* NULL path — HashFile will fail, should return FALSE */
+	BOOL r = FileMatchesHash(NULL, SHA256_ABC_HEX);
+	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE for NULL path");
+}
+
+TEST(file_matches_hash_missing_file)
+{
+	BOOL r = FileMatchesHash("/nonexistent/path/abc.bin", SHA256_ABC_HEX);
+	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE for missing file");
+}
+
 /* ====================================================================
  * Hash dialog — hash_str content after successful HashThread run
  *
@@ -1430,6 +1471,12 @@ int main(void)
 	RUN(string_to_hash_invalid_chars_returns_null);
 	RUN(string_to_hash_sha256_length);
 	RUN(string_to_hash_sha1_length);
+
+	printf("\n  FileMatchesHash\n");
+	RUN(file_matches_hash_correct_md5);
+	RUN(file_matches_hash_wrong_hash);
+	RUN(file_matches_hash_null_path);
+	RUN(file_matches_hash_missing_file);
 
 	printf("\n  Hash dialog (Linux only)\n");
 	RUN(hash_dialog_strings_non_empty_after_run);

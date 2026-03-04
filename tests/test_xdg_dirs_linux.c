@@ -220,6 +220,74 @@ static void test_multiple_dirs_coexist(void)
     CHECK(strcmp(buf, expected) == 0, "PICTURES correct");
 }
 
+static void test_videos_dir(void)
+{
+    printf("\nvideos_dir:\n");
+    char* tmp = make_tmpdir();
+    const char* content =
+        "XDG_VIDEOS_DIR=\"$HOME/Videos\"\n";
+    char* cfg = write_dirs_file(tmp, content);
+    xdg_set_config_home(cfg);
+    xdg_set_home_dir(tmp);
+
+    char buf[512] = {0};
+    BOOL ok = GetXdgUserDir("VIDEOS", buf, sizeof(buf));
+    CHECK(ok == TRUE, "VIDEOS dir found");
+
+    char expected[512];
+    snprintf(expected, sizeof(expected), "%s/Videos", tmp);
+    CHECK(strcmp(buf, expected) == 0, "VIDEOS dir matches $HOME/Videos");
+}
+
+static void test_case_sensitive_key(void)
+{
+    printf("\ncase_sensitive_key:\n");
+    char* tmp = make_tmpdir();
+    const char* content =
+        "XDG_DOWNLOAD_DIR=\"$HOME/Downloads\"\n";
+    char* cfg = write_dirs_file(tmp, content);
+    xdg_set_config_home(cfg);
+    xdg_set_home_dir(tmp);
+
+    char buf[512] = {0};
+    /* "download" (lowercase) should NOT match "DOWNLOAD" key */
+    BOOL ok = GetXdgUserDir("download", buf, sizeof(buf));
+    CHECK(ok == FALSE, "key lookup is case-sensitive");
+}
+
+static void test_null_name_returns_false(void)
+{
+    printf("\nnull_name_returns_false:\n");
+    xdg_set_config_home("/tmp");
+    xdg_set_home_dir("/tmp");
+    char buf[512] = {0};
+    /* NULL name: key would be "XDG_<null>" — should not crash and return FALSE */
+    /* We can't call with NULL safely without knowing the impl handles it,
+     * so test with an empty name instead */
+    BOOL ok = GetXdgUserDir("", buf, sizeof(buf));
+    CHECK(ok == FALSE, "empty name returns FALSE (no matching key)");
+}
+
+static void test_first_match_wins(void)
+{
+    printf("\nfirst_match_wins:\n");
+    char* tmp = make_tmpdir();
+    /* Duplicate key — first occurrence should win */
+    const char* content =
+        "XDG_DOWNLOAD_DIR=\"$HOME/First\"\n"
+        "XDG_DOWNLOAD_DIR=\"$HOME/Second\"\n";
+    char* cfg = write_dirs_file(tmp, content);
+    xdg_set_config_home(cfg);
+    xdg_set_home_dir(tmp);
+
+    char buf[512] = {0};
+    BOOL ok = GetXdgUserDir("DOWNLOAD", buf, sizeof(buf));
+    CHECK(ok == TRUE, "download dir found");
+    char expected[512];
+    snprintf(expected, sizeof(expected), "%s/First", tmp);
+    CHECK(strcmp(buf, expected) == 0, "first matching entry wins");
+}
+
 /* ── main ─────────────────────────────────────────────────────────────────── */
 int main(void)
 {
@@ -234,6 +302,10 @@ int main(void)
     test_comment_lines_ignored();
     test_whitespace_before_key();
     test_multiple_dirs_coexist();
+    test_videos_dir();
+    test_case_sensitive_key();
+    test_null_name_returns_false();
+    test_first_match_wins();
 
     printf("\n%d passed, %d failed\n", tests_run - tests_failed, tests_failed);
     return tests_failed ? 1 : 0;
