@@ -67,6 +67,22 @@ CFLAGS_LINUX_test_stdfn  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux 
 EXTRA_SRC_LINUX_test_stdfn := $(STDFN_SRC)
 LDFLAGS_LINUX_test_stdfn := $(FONTCONFIG_LIBS)
 
+# stdfn_common tests: htab, StrArray, CompareGUID from common/stdfn.c (Linux + Wine)
+CFLAGS_LINUX_test_stdfn_common := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_stdfn_common := $(COMMON)/stdfn.c
+
+CFLAGS_WIN_test_stdfn_common := \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_stdfn_common := $(COMMON)/stdfn.c
+
 # exe_version_linux tests: GetExecutableVersion() — ELF version-marker scanner
 # Links stdfn.c so that the test binary itself contains the RUFUS:VER: marker,
 # enabling the NULL-path round-trip tests.
@@ -874,6 +890,22 @@ CFLAGS_LINUX_test_xml_linux := \
 	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS_LINUX_test_xml_linux :=
 EXTRA_SRC_LINUX_test_xml_linux := $(XML_SRC)
+
+# xml_common tests: ezxml buffer-based tests (Linux + Wine)
+CFLAGS_LINUX_test_xml_common := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_xml_common := $(XML_SRC)
+
+CFLAGS_WIN_test_xml_common := \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_xml_common := $(XML_SRC)
 
 # vhd_nbd_linux tests: VHD footer parsing + NBD server protocol (socketpair)
 # Root tests: kernel_nbd_device_available, kernel_nbd_full_mount_fixed_vhd
