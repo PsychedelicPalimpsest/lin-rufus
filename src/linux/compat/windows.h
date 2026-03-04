@@ -20,6 +20,8 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/resource.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
@@ -1004,6 +1006,7 @@ typedef struct _win_handle_s {
         /* --- Thread --- */
         struct {
             pthread_t tid;
+            pid_t     ktid;      /* Linux kernel TID (syscall SYS_gettid) */
             DWORD     exit_code;
             int       joined;    /* 1 after pthread_join completes */
             int       detached;  /* 1 if CloseHandle called before join */
@@ -1062,6 +1065,8 @@ _wh_thread_wrapper(void *raw)
     _win_handle_t     *h = a->handle;
     DWORD (WINAPI *fn)(LPVOID) = a->fn;
     LPVOID param = a->param;
+    /* Record the kernel TID so SetThreadPriority can use it */
+    h->u.thread.ktid = (pid_t)syscall(SYS_gettid);
     free(a);
     DWORD ec = fn(param);
     if (h->u.thread.detached) {
@@ -1398,8 +1403,25 @@ static inline BOOL TerminateThread(HANDLE h, DWORD code)
 
 static inline BOOL SetThreadPriority(HANDLE h, int prio)
 {
-    (void)h; (void)prio;
-    return TRUE;   /* scheduler priority — ignored on Linux */
+    if (!_wh_is_sync(h)) return FALSE;
+    _win_handle_t *wh = (_win_handle_t *)h;
+    if (wh->type != WH_THREAD) return FALSE;
+    pid_t ktid = wh->u.thread.ktid;
+    if (ktid <= 0) return FALSE;   /* thread hasn't started yet */
+
+    /* Map Windows THREAD_PRIORITY_* to Unix nice values.
+     * Lower nice = higher scheduling priority on Linux. */
+    int nice_val;
+    switch (prio) {
+    case THREAD_PRIORITY_IDLE:          nice_val =  19; break;
+    case THREAD_PRIORITY_LOWEST:        nice_val =  10; break;
+    case THREAD_PRIORITY_BELOW_NORMAL:  nice_val =   5; break;
+    case THREAD_PRIORITY_NORMAL:        nice_val =   0; break;
+    case THREAD_PRIORITY_ABOVE_NORMAL:  nice_val =  -5; break;
+    case THREAD_PRIORITY_HIGHEST:       nice_val = -10; break;
+    default:                            nice_val = -15; break; /* TIME_CRITICAL */
+    }
+    return setpriority(PRIO_PROCESS, (id_t)ktid, nice_val) == 0;
 }
 
 static inline DWORD_PTR SetThreadAffinityMask(HANDLE h, DWORD_PTR mask)

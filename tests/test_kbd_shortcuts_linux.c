@@ -664,6 +664,152 @@ TEST(toggle_persistent_log_no_refresh_part)
 }
 
 /* ===================================================================== *
+ * Alt+J — enable_joliet                                                 *
+ * ===================================================================== */
+
+TEST(toggle_joliet_off_to_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_joliet(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_joliet_on_to_off)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_joliet(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_joliet_double_returns_original)
+{
+	int v = 1;
+	kbdshortcut_toggle_joliet(&v);
+	kbdshortcut_toggle_joliet(&v);
+	CHECK_INT_EQ(1, v);
+}
+
+TEST(toggle_joliet_no_refresh_devs)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_joliet(&v);
+	CHECK_INT_EQ(0, r.refresh_devs);
+}
+
+TEST(toggle_joliet_no_refresh_part)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_joliet(&v);
+	CHECK_INT_EQ(0, r.refresh_part);
+}
+
+/* ===================================================================== *
+ * Alt+K — enable_rockridge                                              *
+ * ===================================================================== */
+
+TEST(toggle_rockridge_off_to_on)
+{
+	int v = 0;
+	kbdshortcut_result_t r = kbdshortcut_toggle_rockridge(&v);
+	CHECK_INT_EQ(1, v);
+	CHECK_INT_EQ(1, r.new_value);
+}
+
+TEST(toggle_rockridge_on_to_off)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_rockridge(&v);
+	CHECK_INT_EQ(0, v);
+	CHECK_INT_EQ(0, r.new_value);
+}
+
+TEST(toggle_rockridge_double_returns_original)
+{
+	int v = 0;
+	kbdshortcut_toggle_rockridge(&v);
+	kbdshortcut_toggle_rockridge(&v);
+	CHECK_INT_EQ(0, v);
+}
+
+TEST(toggle_rockridge_no_refresh_devs)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_rockridge(&v);
+	CHECK_INT_EQ(0, r.refresh_devs);
+}
+
+TEST(toggle_rockridge_no_refresh_part)
+{
+	int v = 1;
+	kbdshortcut_result_t r = kbdshortcut_toggle_rockridge(&v);
+	CHECK_INT_EQ(0, r.refresh_part);
+}
+
+/* ===================================================================== *
+ * Alt++/-  — default_thread_priority                                    *
+ * ===================================================================== */
+
+TEST(thread_priority_increment_from_normal)
+{
+	int v = THREAD_PRIORITY_NORMAL;
+	kbdshortcut_result_t r = kbdshortcut_adjust_thread_priority(&v, +1);
+	CHECK_INT_EQ(THREAD_PRIORITY_ABOVE_NORMAL, v);
+	CHECK_INT_EQ(THREAD_PRIORITY_ABOVE_NORMAL, r.new_value);
+}
+
+TEST(thread_priority_decrement_from_above_normal)
+{
+	int v = THREAD_PRIORITY_ABOVE_NORMAL;
+	kbdshortcut_result_t r = kbdshortcut_adjust_thread_priority(&v, -1);
+	CHECK_INT_EQ(THREAD_PRIORITY_NORMAL, v);
+	CHECK_INT_EQ(THREAD_PRIORITY_NORMAL, r.new_value);
+}
+
+TEST(thread_priority_clamped_at_highest)
+{
+	int v = THREAD_PRIORITY_HIGHEST;
+	kbdshortcut_adjust_thread_priority(&v, +1);
+	CHECK_INT_EQ(THREAD_PRIORITY_HIGHEST, v);
+}
+
+TEST(thread_priority_clamped_at_lowest)
+{
+	int v = THREAD_PRIORITY_LOWEST;
+	kbdshortcut_adjust_thread_priority(&v, -1);
+	CHECK_INT_EQ(THREAD_PRIORITY_LOWEST, v);
+}
+
+TEST(thread_priority_no_refresh_devs)
+{
+	int v = THREAD_PRIORITY_NORMAL;
+	kbdshortcut_result_t r = kbdshortcut_adjust_thread_priority(&v, +1);
+	CHECK_INT_EQ(0, r.refresh_devs);
+}
+
+TEST(thread_priority_no_refresh_part)
+{
+	int v = THREAD_PRIORITY_NORMAL;
+	kbdshortcut_result_t r = kbdshortcut_adjust_thread_priority(&v, +1);
+	CHECK_INT_EQ(0, r.refresh_part);
+}
+
+TEST(thread_priority_increment_stores_new_value)
+{
+	int v = THREAD_PRIORITY_BELOW_NORMAL;
+	kbdshortcut_result_t r = kbdshortcut_adjust_thread_priority(&v, +1);
+	CHECK_INT_EQ(THREAD_PRIORITY_NORMAL, r.new_value);
+}
+
+TEST(thread_priority_decrement_stores_new_value)
+{
+	int v = THREAD_PRIORITY_NORMAL;
+	kbdshortcut_result_t r = kbdshortcut_adjust_thread_priority(&v, -1);
+	CHECK_INT_EQ(THREAD_PRIORITY_BELOW_NORMAL, r.new_value);
+}
+
+/* ===================================================================== *
  * main                                                                  *
  * ===================================================================== */
 
@@ -784,6 +930,30 @@ int main(void)
 	RUN(toggle_persistent_log_double_returns_original);
 	RUN(toggle_persistent_log_no_refresh_devs);
 	RUN(toggle_persistent_log_no_refresh_part);
+
+	printf("\n=== Alt+J (enable_joliet) ===\n");
+	RUN(toggle_joliet_off_to_on);
+	RUN(toggle_joliet_on_to_off);
+	RUN(toggle_joliet_double_returns_original);
+	RUN(toggle_joliet_no_refresh_devs);
+	RUN(toggle_joliet_no_refresh_part);
+
+	printf("\n=== Alt+K (enable_rockridge) ===\n");
+	RUN(toggle_rockridge_off_to_on);
+	RUN(toggle_rockridge_on_to_off);
+	RUN(toggle_rockridge_double_returns_original);
+	RUN(toggle_rockridge_no_refresh_devs);
+	RUN(toggle_rockridge_no_refresh_part);
+
+	printf("\n=== Alt+/-  (thread_priority) ===\n");
+	RUN(thread_priority_increment_from_normal);
+	RUN(thread_priority_decrement_from_above_normal);
+	RUN(thread_priority_clamped_at_highest);
+	RUN(thread_priority_clamped_at_lowest);
+	RUN(thread_priority_no_refresh_devs);
+	RUN(thread_priority_no_refresh_part);
+	RUN(thread_priority_increment_stores_new_value);
+	RUN(thread_priority_decrement_stores_new_value);
 
 	TEST_RESULTS();
 	return (_fail > 0) ? 1 : 0;

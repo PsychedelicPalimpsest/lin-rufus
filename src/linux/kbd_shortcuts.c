@@ -74,6 +74,24 @@ kbdshortcut_result_t kbdshortcut_toggle_iso(int *enable_iso)
 	return r;
 }
 
+/* Alt+J — toggle Joliet support for ISO9660 images */
+kbdshortcut_result_t kbdshortcut_toggle_joliet(int *enable_joliet)
+{
+	kbdshortcut_result_t r = { 0, 0, 0 };
+	*enable_joliet = !*enable_joliet;
+	r.new_value = *enable_joliet;
+	return r;
+}
+
+/* Alt+K — toggle Rock Ridge support for ISO9660 images */
+kbdshortcut_result_t kbdshortcut_toggle_rockridge(int *enable_rockridge)
+{
+	kbdshortcut_result_t r = { 0, 0, 0 };
+	*enable_rockridge = !*enable_rockridge;
+	r.new_value = *enable_rockridge;
+	return r;
+}
+
 /* Alt+L — force large-FAT32 format on drives < 32 GB */
 kbdshortcut_result_t kbdshortcut_toggle_large_fat32(int *force_large_fat32)
 {
@@ -254,4 +272,24 @@ int kbdshortcut_size_check_fails(int size_check,
 	if (!size_check)
 		return 0;
 	return (projected_size > disk_size) ? 1 : 0;
+}
+
+/* --------------------------------------------------------------------- *
+ * Thread priority adjustment (Alt++ / Alt+-)                            *
+ * --------------------------------------------------------------------- */
+
+/*
+ * Adjusts *priority by delta (+1 or -1), clamped to
+ * [THREAD_PRIORITY_LOWEST, THREAD_PRIORITY_HIGHEST].
+ * Returns a result with new_value = updated priority.
+ */
+kbdshortcut_result_t kbdshortcut_adjust_thread_priority(int *priority, int delta)
+{
+	kbdshortcut_result_t r = { 0, 0, 0 };
+	int p = *priority + delta;
+	if (p < THREAD_PRIORITY_LOWEST)  p = THREAD_PRIORITY_LOWEST;
+	if (p > THREAD_PRIORITY_HIGHEST) p = THREAD_PRIORITY_HIGHEST;
+	*priority = p;
+	r.new_value = p;
+	return r;
 }

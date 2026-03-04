@@ -95,6 +95,7 @@ extern BOOL previous_enable_HDDs;     /* globals.c */
 extern BOOL list_non_usb_removable_drives; /* globals.c */
 extern BOOL enable_file_indexing; /* globals.c */
 extern uint8_t image_options;     /* globals.c */
+extern int default_thread_priority;  /* globals.c */
 
 /* format_thread and dialog_handle are defined in globals.c */
 extern HANDLE format_thread;
@@ -343,6 +344,7 @@ static void on_zero_drive(GtkWidget *w, gpointer data);
 static void on_fast_zero_drive(GtkWidget *w, gpointer data);
 static void on_toggle_persistent_log(GtkWidget *w, gpointer data);
 static void on_cycle_port(GtkWidget *w, gpointer data);
+static void on_adjust_thread_priority(GtkWidget *w, gpointer data);
 static void on_hash_clicked(GtkButton *btn, gpointer data);
 void InitProgress(BOOL bOnlyFormat);
 static void on_save_clicked(GtkButton *btn, gpointer data);
@@ -1071,6 +1073,24 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	gtk_accel_group_connect(accel, GDK_KEY_p,
 	                        GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE,
 	                        g_cclosure_new(G_CALLBACK(on_toggle_persistent_log), NULL, NULL));
+	/* Alt++ / Alt+KP_Add: increase format thread priority */
+	gtk_accel_group_connect(accel, GDK_KEY_plus,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_adjust_thread_priority),
+	                                       GINT_TO_POINTER(+1), NULL));
+	gtk_accel_group_connect(accel, GDK_KEY_KP_Add,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_adjust_thread_priority),
+	                                       GINT_TO_POINTER(+1), NULL));
+	/* Alt+- / Alt+KP_Subtract: decrease format thread priority */
+	gtk_accel_group_connect(accel, GDK_KEY_minus,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_adjust_thread_priority),
+	                                       GINT_TO_POINTER(-1), NULL));
+	gtk_accel_group_connect(accel, GDK_KEY_KP_Subtract,
+	                        GDK_MOD1_MASK, GTK_ACCEL_VISIBLE,
+	                        g_cclosure_new(G_CALLBACK(on_adjust_thread_priority),
+	                                       GINT_TO_POINTER(-1), NULL));
 
 	/* Enable drag-and-drop of image files onto the window (mirrors WM_DROPFILES) */
 	gtk_drag_dest_set(win, GTK_DEST_DEFAULT_ALL, NULL, 0, GDK_ACTION_COPY);
@@ -1514,6 +1534,8 @@ start_format:
 			rufus_gtk_update_status(lmprintf(MSG_212));
 			EnableControls(TRUE, FALSE);
 		} else {
+			/* Apply saved thread priority to the format thread */
+			SetThreadPriority(format_thread, default_thread_priority);
 			/* Start the elapsed-time / speed-tracking clock — mirrors
 			 * SendMessage(hMainDialog, UM_TIMER_START, 0, 0) in Windows rufus.c. */
 			PostMessage(hMainDialog, UM_TIMER_START, 0, 0);
@@ -2391,15 +2413,15 @@ static void on_toggle_expert_mode(GtkWidget *w, gpointer data)
 static void on_toggle_joliet(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
-	enable_joliet = !enable_joliet;
-	uprintf("Joliet support: %s", enable_joliet ? "enabled" : "disabled");
+	kbdshortcut_result_t r = kbdshortcut_toggle_joliet((int*)&enable_joliet);
+	uprintf("Joliet support: %s", r.new_value ? "enabled" : "disabled");
 }
 
 static void on_toggle_rockridge(GtkWidget *w, gpointer data)
 {
 	(void)w; (void)data;
-	enable_rockridge = !enable_rockridge;
-	uprintf("Rock Ridge support: %s", enable_rockridge ? "enabled" : "disabled");
+	kbdshortcut_result_t r = kbdshortcut_toggle_rockridge((int*)&enable_rockridge);
+	uprintf("Rock Ridge support: %s", r.new_value ? "enabled" : "disabled");
 }
 
 /* Mirrors Windows IDC_ADVANCED_FORMAT_OPTIONS: refresh FS+cluster combo after toggle */
@@ -2632,6 +2654,22 @@ static void on_toggle_persistent_log(GtkWidget *w, gpointer data)
 	kbdshortcut_result_t r = kbdshortcut_toggle_persistent_log(&persistent_log);
 	uprintf("Persistent log %s", r.new_value ? "enabled" : "disabled");
 	WriteSettingBool(SETTING_PERSISTENT_LOG, r.new_value);
+}
+
+/* Alt++ / Alt+-: adjust the default format/hash thread priority.
+ * data encodes the delta (+1 or -1) via GINT_TO_POINTER.
+ * Mirrors Windows Alt+VK_ADD / Alt+VK_SUBTRACT in rufus.c. */
+static void on_adjust_thread_priority(GtkWidget *w, gpointer data)
+{
+	(void)w;
+	int delta = GPOINTER_TO_INT(data);
+	kbdshortcut_result_t r =
+		kbdshortcut_adjust_thread_priority(&default_thread_priority, delta);
+	WriteSetting32(SETTING_DEFAULT_THREAD_PRIORITY,
+	               default_thread_priority - THREAD_PRIORITY_ABOVE_NORMAL);
+	if (format_thread != NULL)
+		SetThreadPriority(format_thread, r.new_value);
+	uprintf("Default thread priority: %d", r.new_value);
 }
 
 static void on_cycle_port(GtkWidget *w, gpointer data)
@@ -3858,6 +3896,8 @@ static void on_app_activate(GtkApplication *app, gpointer data)
 		preserve_timestamps   =  ReadSettingBool(SETTING_PRESERVE_TIMESTAMPS);
 		use_fake_units        = !ReadSettingBool(SETTING_USE_PROPER_SIZE_UNITS);
 		usb_debug             =  ReadSettingBool(SETTING_ENABLE_USB_DEBUG);
+		default_thread_priority = (int)ReadSetting32(SETTING_DEFAULT_THREAD_PRIORITY)
+		                          + THREAD_PRIORITY_ABOVE_NORMAL;
 	}
 
 	/* Apply saved dark mode preference (0=system, 1=light, 2=dark) */

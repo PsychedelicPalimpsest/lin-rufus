@@ -15,6 +15,16 @@
 extern "C" {
 #endif
 
+/* Mirror the Windows THREAD_PRIORITY_* constants so this header is
+ * self-contained and usable in unit tests that don't include windows.h */
+#ifndef THREAD_PRIORITY_LOWEST
+#  define THREAD_PRIORITY_LOWEST      (-2)
+#  define THREAD_PRIORITY_BELOW_NORMAL (-1)
+#  define THREAD_PRIORITY_NORMAL        0
+#  define THREAD_PRIORITY_ABOVE_NORMAL  1
+#  define THREAD_PRIORITY_HIGHEST       2
+#endif
+
 /*
  * kbdshortcut_result - describes what happened when a shortcut fires.
  */
@@ -32,6 +42,8 @@ kbdshortcut_result_t kbdshortcut_toggle_dual_uefi_bios   (int *allow_dual_uefi_b
 kbdshortcut_result_t kbdshortcut_toggle_vhds             (int *enable_VHDs);
 kbdshortcut_result_t kbdshortcut_toggle_extra_hashes     (int *enable_extra_hashes);
 kbdshortcut_result_t kbdshortcut_toggle_iso              (int *enable_iso);
+kbdshortcut_result_t kbdshortcut_toggle_joliet           (int *enable_joliet);
+kbdshortcut_result_t kbdshortcut_toggle_rockridge        (int *enable_rockridge);
 kbdshortcut_result_t kbdshortcut_toggle_large_fat32      (int *force_large_fat32);
 kbdshortcut_result_t kbdshortcut_toggle_boot_marker      (int *ignore_boot_marker);
 kbdshortcut_result_t kbdshortcut_toggle_ntfs_compression (int *enable_ntfs_compression);
@@ -91,6 +103,17 @@ kbdshortcut_result_t kbdshortcut_toggle_persistent_log(int *persistent_log);
 int kbdshortcut_size_check_fails (int size_check,
                                   unsigned long long projected_size,
                                   unsigned long long disk_size);
+
+/*
+ * kbdshortcut_adjust_thread_priority - increment or decrement the default
+ * thread priority by delta (+1 or -1), clamped to
+ * [THREAD_PRIORITY_LOWEST, THREAD_PRIORITY_HIGHEST].
+ *
+ * @param  priority  pointer to the current priority value (modified in-place)
+ * @param  delta     +1 to increase priority, -1 to decrease
+ * @returns          result with new_value = updated priority
+ */
+kbdshortcut_result_t kbdshortcut_adjust_thread_priority(int *priority, int delta);
 
 #ifdef __cplusplus
 }

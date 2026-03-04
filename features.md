@@ -941,3 +941,60 @@ and providing visible progress even when the window is minimized.
 
 * ~~215~~: **RESOLVED** — Window title shows "(NN%) Title" during in-progress operations.
   10 new tests in test_ui_linux (65 total). Full test suite: all tests pass.
+
+## Feature 216: Joliet and Rock Ridge keyboard shortcuts in kbd_shortcuts.c
+
+**Goal**: The Alt+J (Joliet) and Alt+K (Rock Ridge) keyboard shortcuts were handled
+inline in `ui_gtk.c` without using `kbd_shortcuts.c`, making them untested. This
+feature adds proper `kbdshortcut_toggle_joliet()` and `kbdshortcut_toggle_rockridge()`
+functions following the established pattern.
+
+**Status**: RESOLVED
+
+**Implementation**:
+- Added `kbdshortcut_toggle_joliet(int *enable_joliet)` to `src/linux/kbd_shortcuts.c`
+- Added `kbdshortcut_toggle_rockridge(int *enable_rockridge)` to `src/linux/kbd_shortcuts.c`
+- Added declarations to `src/linux/kbd_shortcuts.h`
+- Updated `on_toggle_joliet()` and `on_toggle_rockridge()` in `ui_gtk.c` to call the
+  kbd_shortcuts functions (removing duplicate inline logic)
+- 10 TDD tests added to `tests/test_kbd_shortcuts_linux.c`:
+  - `toggle_joliet_off_to_on`, `on_to_off`, `double_returns_original`,
+    `no_refresh_devs`, `no_refresh_part`
+  - `toggle_rockridge_off_to_on`, `on_to_off`, `double_returns_original`,
+    `no_refresh_devs`, `no_refresh_part`
+
+* ~~216~~: **RESOLVED** — Joliet + Rock Ridge toggles tested via kbd_shortcuts.
+  10 new tests (130 total in test_kbd_shortcuts_linux). Full test suite: all tests pass.
+
+## Feature 217: Thread priority adjustment (Alt++/-) and real SetThreadPriority
+
+**Goal**: On Windows, Alt++/Alt+- adjusts the default format/hash thread priority
+between THREAD_PRIORITY_LOWEST and THREAD_PRIORITY_HIGHEST. On Linux, `SetThreadPriority`
+was a no-op stub, and the Alt++/- shortcut was not wired at all.
+
+**Status**: RESOLVED
+
+**Implementation**:
+- Added `kbdshortcut_adjust_thread_priority(int *priority, int delta)` to
+  `src/linux/kbd_shortcuts.c`: clamps priority in [LOWEST, HIGHEST] range
+- Added THREAD_PRIORITY_* constants to `kbd_shortcuts.h` (self-contained fallback)
+- Added declaration to `kbd_shortcuts.h`
+- Implemented real `SetThreadPriority()` in `src/linux/compat/windows.h`:
+  - Added `pid_t ktid` field to `_win_handle_t.thread` struct
+  - `_wh_thread_wrapper()` records `syscall(SYS_gettid)` into `ktid` on thread start
+  - `SetThreadPriority()` now maps Windows priority constants to Unix nice values
+    and calls `setpriority(PRIO_PROCESS, ktid, nice_val)`
+  - Added `#include <sys/syscall.h>` and `#include <sys/resource.h>`
+- Wired Alt++, Alt+-, Alt+KP_Add, Alt+KP_Subtract accelerators in `ui_gtk.c`
+- `on_adjust_thread_priority()` handler calls kbd_shortcuts function, saves setting,
+  and applies priority to running format_thread if present
+- Format thread creation now applies `default_thread_priority` after `CreateThread()`
+- Settings read on startup: `default_thread_priority` loaded from `SETTING_DEFAULT_THREAD_PRIORITY`
+- 8 TDD tests added to `tests/test_kbd_shortcuts_linux.c` (thread_priority group):
+  - increment from normal, decrement from above_normal
+  - clamped at highest, clamped at lowest
+  - no_refresh_devs, no_refresh_part
+  - increment/decrement stores correct new_value
+
+* ~~217~~: **RESOLVED** — Thread priority adjustment works on Linux via setpriority().
+  8 new tests (140 total in test_kbd_shortcuts_linux). Full test suite: all tests pass.
