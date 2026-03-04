@@ -57,6 +57,7 @@ extern void drive_linux_add_drive(const char *id, const char *name,
                                    const char *display_name, uint64_t size);
 extern DWORD ErrorStatus;
 extern DWORD FormatThread(void *param);
+extern DWORD WINAPI ImageScanThread(LPVOID param);
 extern DWORD selected_cluster_size;
 extern uint64_t persistence_size;
 extern BOOL enable_bad_blocks;
@@ -780,6 +781,20 @@ int cli_run(const cli_options_t *opts)
 	/* Non-interactive mode: auto-accept all confirmation dialogs */
 	if (opts->no_prompt)
 		alert_set_hook(cli_no_prompt_hook);
+
+	/* When an image is specified for extraction (not DD write), scan it first
+	 * to populate img_report (is_iso, has_grub2, has_efi, etc.) so that
+	 * FormatThread knows which bootloader to install and whether to extract. */
+	if (opts->image[0] != '\0' && !opts->write_as_image) {
+		HANDLE scan_thread = CreateThread(NULL, 0, ImageScanThread, NULL, 0, NULL);
+		if (scan_thread == NULL) {
+			fprintf(stderr, "rufus: failed to start image scan thread\n");
+			if (opts->no_prompt) alert_clear_hook();
+			return 1;
+		}
+		WaitForSingleObject(scan_thread, INFINITE);
+		CloseHandle(scan_thread);
+	}
 
 	/* Launch FormatThread and wait for it */
 	ErrorStatus = 0;

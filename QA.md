@@ -628,12 +628,82 @@ integration/e2e suite.  No untested production code identified.
 
 ---
 
-## Tips for Next QA Session (session 8 update)
+---
+
+## What Was Tested — Session 9 (2026-03-05)
+
+### Bugs Found and Fixed This Session
+
+#### CRITICAL: CLI ISO extraction silently skipped (fixed)
+
+**File:** `src/linux/cli.c` — `cli_run()`
+
+**Root cause:** `cli_run()` launched `FormatThread` directly without first calling
+`ImageScanThread`. The extraction code path in `format.c` (~line 1202) is gated on
+`img_report.is_iso == TRUE`, but since `ImageScanThread` (which calls
+`ExtractISO(path, "", TRUE)` in scan-only mode) was never invoked, `img_report`
+was all-zero and extraction was silently skipped. Only a trivial `autorun.inf`
+was written (32 KB used on a 25 GB disk).
+
+The DD write path (`--write-as-image`) was unaffected — it uses a separate code
+path that doesn't check `img_report.is_iso`.
+
+The GTK UI path was also unaffected — `ui_gtk.c` correctly calls
+`ImageScanThread` via `g_idle_add` before triggering `FormatThread`.
+
+**Fix:** In `cli_run()`, added a block that creates `ImageScanThread` as a
+synchronous thread (via `CreateThread` + `WaitForSingleObject`) when
+`opts->image[0] != '\0' && !opts->write_as_image`.
+
+**Regression test:** `cli_image_scan_populates_img_report` added to
+`tests/test_e2e_linux.c`. The test creates a tiny ISO with genisoimage, calls
+`cli_run()` with that ISO in extraction mode, and asserts `img_report.is_iso ==
+TRUE` after the call. `ImageScanThread` stub added to `e2e_linux_glue.c`.
+
+**Verified manually:** Ubuntu 24.04 ISO extracted to FAT32 — 6.3 GB written,
+files present, GRUB2 installed.
+
+### Tests Run
+
+| Test | Result |
+|------|--------|
+| `./run_tests.sh --linux-only` (post-fix) | ✅ 94 passed, 0 failed |
+| `./run_tests.sh --wine-only` | ✅ All passed (baseline) |
+| `sudo ./tests/test_e2e_linux_linux` | ✅ 14 passed (incl. new regression test) |
+| Manual: `rufus --help` | ✅ 42 flags shown |
+| Manual: `rufus --version` | ✅ `rufus 4.13.0` |
+| Manual: `rufus --list-devices --include-hdds` | ✅ Lists nvme0n1 + nvme0n2 |
+| Manual: `rufus --list-devices --json` | ✅ Valid JSON |
+| Manual: FAT32 format `/dev/nvme0n2` label QASESS9 | ✅ blkid confirms |
+| Manual: NTFS format `/dev/nvme0n2` label QANTFS9 | ✅ blkid confirms |
+| Manual: Ubuntu 24.04 ISO DD write | ✅ ISO 9660 magic at 0x8000 |
+| Manual: Ubuntu 24.04 ISO extraction (post-fix) | ✅ 6.3 GB written, GRUB2 installed |
+
+### Spot Checks Performed (session 9)
+
+| File | Finding |
+|------|---------|
+| `src/linux/locale_oobe.c` | Clean |
+| `src/linux/iso_config.c` | Clean |
+| `src/linux/download_resume.c` | Clean |
+| `src/linux/vhd.c` | Clean |
+| `src/linux/smart.c` | Clean |
+| `src/linux/format_fat32.c` | Clean |
+| `src/linux/stdfn.c` | Clean |
+| `src/linux/wue.c` | Clean |
+
+### Coverage Check (session 9)
+
+All `src/linux/*.c` and `src/common/*.c` files covered. New `ImageScanThread`
+code path now has regression coverage via `cli_image_scan_populates_img_report`.
+
+---
+
+## Tips for Next QA Session (session 9 update)
 
 1. **Read this file**, then check `features.md` Pending Work (currently empty).
 2. **GTK binary handles CLI flags** — `--device`, `--help`, `--version`,
-   `--list-devices` all bypass GTK and run headless.  The "CRITICAL Feature 188"
-   note from earlier sessions is **resolved**.
+   `--list-devices` all bypass GTK and run headless.
 3. **PE parsing functions now require `buf_size`** — see session 7 notes.
 4. **`FindResourceRva` depth guard** is `MAX_RESOURCE_DEPTH 8`.
 5. **Run `./run_tests.sh --container`** if a container runtime is available —
@@ -641,4 +711,8 @@ integration/e2e suite.  No untested production code identified.
 6. **UI tests must run from `tests/` directory** (not repo root) — binary path
    resolution uses `../src/rufus` relative to the test binary location.
 7. **No hardcoded `/dev/nvme0n2` in repo** — use `RUFUS_TEST_DEVICE` env var.
-8. **Fuzz corpus** is in `tests/corpus/pe/` — run periodically to check for regressions.
+8. **Fuzz corpus** is in `tests/corpus/pe/` — run periodically.
+9. **CLI ISO extraction fix (session 9):** `cli_run()` now calls
+   `ImageScanThread` synchronously before `FormatThread` when `--image` is used
+   without `--write-as-image`. Regression test in `test_e2e_linux.c`.
+   `ImageScanThread` stub in `e2e_linux_glue.c` for the E2E test build.

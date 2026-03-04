@@ -525,4 +525,4 @@ This is the most structurally significant porting gap.
 
 ## Pending Work
 
-_(None — all features implemented and tested.  Session 8 QA found no bugs; session 9 added common/net_utils.c.)_
+_(None — all features implemented and tested.  Session 9 QA fixed CLI ISO extraction bug: `cli_run()` now calls `ImageScanThread` before `FormatThread` when `--image` is used without `--write-as-image`; regression test added to `test_e2e_linux.c`.)_

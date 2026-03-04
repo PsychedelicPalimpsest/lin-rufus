@@ -159,6 +159,19 @@ BOOL CopySKUSiPolicy(const char *drive_name) { (void)drive_name; return FALSE; }
 /* md5sum_name global — defined in iso.c which is not linked in e2e tests. */
 const char *md5sum_name[2] = { "md5sum.txt", "md5sum.txt~rufus" };
 
+/* ImageScanThread stub — image_scan.c is not linked in E2E tests.
+ * Sets img_report.is_iso via the existing ExtractISO stub so that FormatThread
+ * sees a valid ISO report when cli_run() calls ImageScanThread before format. */
+DWORD WINAPI ImageScanThread(LPVOID param)
+{
+	(void)param;
+	if (image_path != NULL) {
+		memset(&img_report, 0, sizeof(img_report));
+		img_report.is_iso = (BOOLEAN)ExtractISO(image_path, "", TRUE);
+	}
+	ExitThread(0);
+}
+
 /* GetDevices stub — dev.c is not in E2E_LINUX_SRC but cli.c calls it for
  * --list-devices.  rufus_drive[] comes from globals.c already. */
 BOOL GetDevices(DWORD devnum) { (void)devnum; return FALSE; }

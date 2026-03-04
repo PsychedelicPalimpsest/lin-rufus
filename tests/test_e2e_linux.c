@@ -11,6 +11,9 @@
  *                                   device; verifies MBR 0x55AA boot signature.
  *   cli_format_freedos_loop       — cli_run() with BT_FREEDOS on a loop device;
  *                                   verifies MBR 0x55AA and KERNEL.SYS present.
+ *   cli_image_scan_populates_img_report — regression test: cli_run() with --image
+ *                                   (no --write-as-image) must call ImageScanThread
+ *                                   so img_report.is_iso is set before FormatThread.
  *
  * The ISO test is non-root; the rest require root (loopback + mount).
  *
@@ -618,6 +621,95 @@ TEST(cli_format_freedos_loop)
 	CHECK_MSG(has_kernel, "KERNEL.SYS must be present after cli FreeDOS format");
 }
 
+/*
+ * cli_image_scan_populates_img_report   (ROOT required)
+ *
+ * Regression test for the CLI ImageScanThread fix: when cli_run() is given
+ * --image without --write-as-image, it must call ImageScanThread before
+ * launching FormatThread so that img_report.is_iso is set.
+ *
+ * This test creates a tiny ISO with genisoimage, runs cli_run() with that
+ * image, and verifies that img_report.is_iso is TRUE after the call.
+ * (The ImageScanThread stub in e2e_linux_glue.c delegates to ExtractISO
+ * which sets img_report.is_iso = TRUE; without the fix, ImageScanThread
+ * would never be called and img_report.is_iso would remain FALSE.)
+ */
+TEST(cli_image_scan_populates_img_report)
+{
+	SKIP_NOT_ROOT();
+	set_app_dir_to_project_root();
+
+	/* Require genisoimage to create a tiny ISO */
+	if (system("which genisoimage >/dev/null 2>&1") != 0) {
+		printf("  SKIP cli_image_scan_populates_img_report: genisoimage not found\n");
+		return;
+	}
+
+	/* Create a tiny ISO from a temp dir */
+	char iso_dir[]  = "/tmp/rufus_e2e_isodir_XXXXXX";
+	char iso_path[] = "/tmp/rufus_e2e_XXXXXX.iso";
+	/* mkstemp doesn't give us .iso extension — use a fixed-suffix name */
+	char iso_file[256];
+	char *d = mkdtemp(iso_dir);
+	if (!d) {
+		CHECK_MSG(0, "mkdtemp for ISO source dir must succeed");
+		return;
+	}
+	/* Put a single file in the dir so the ISO is non-empty */
+	char sentinel[512];
+	snprintf(sentinel, sizeof(sentinel), "%s/test.txt", d);
+	FILE *f = fopen(sentinel, "w");
+	if (f) { fputs("rufus-e2e\n", f); fclose(f); }
+
+	snprintf(iso_file, sizeof(iso_file), "/tmp/rufus_e2e_img_scan_%d.iso", (int)getpid());
+	char cmd[768];
+	snprintf(cmd, sizeof(cmd),
+	         "genisoimage -quiet -o %s -R %s 2>/dev/null", iso_file, d);
+	system(cmd);
+	/* cleanup source dir */
+	snprintf(cmd, sizeof(cmd), "rm -rf %s", d);
+	system(cmd);
+
+	if (access(iso_file, F_OK) != 0) {
+		CHECK_MSG(0, "genisoimage must produce an ISO file");
+		return;
+	}
+
+	loop_ctx_t ctx;
+	if (!loop_setup(&ctx)) {
+		unlink(iso_file);
+		CHECK_MSG(0, "loop_setup for img_scan test");
+		return;
+	}
+
+	/* Reset img_report so we can detect whether it was set */
+	memset(&img_report, 0, sizeof(img_report));
+
+	cli_options_t opts;
+	cli_options_init(&opts);
+	strncpy(opts.device, ctx.dev_path, sizeof(opts.device) - 1);
+	strncpy(opts.image,  iso_file,     sizeof(opts.image)  - 1);
+	opts.fs            = FS_FAT32;
+	opts.part_scheme   = PARTITION_STYLE_MBR;
+	opts.write_as_image = 0;   /* extraction mode — must trigger ImageScanThread */
+	opts.quick         = 1;
+	opts.no_prompt     = 1;
+
+	ErrorStatus = 0;
+	memset(partition_index, 0, sizeof(partition_index));
+
+	cli_run(&opts);
+
+	BOOLEAN iso_was_scanned = img_report.is_iso;
+
+	loop_teardown(&ctx);
+	unlink(iso_file);
+
+	CHECK_MSG(iso_was_scanned,
+	          "img_report.is_iso must be TRUE after cli_run with --image "
+	          "(ImageScanThread must be called before FormatThread)");
+}
+
 /* ================================================================
  * main
  * ================================================================ */
@@ -632,6 +724,7 @@ int main(void)
 	RUN(freedos_format_and_verify);
 	RUN(cli_format_fat32_loop);
 	RUN(cli_format_freedos_loop);
+	RUN(cli_image_scan_populates_img_report);
 
 	TEST_RESULTS();
 }
