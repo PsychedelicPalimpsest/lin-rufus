@@ -408,6 +408,23 @@ CFLAGS_LINUX_test_iso_report_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_D
                                        -Wno-unused-parameter
 EXTRA_SRC_LINUX_test_iso_report_linux := $(COMMON)/iso_report.c iso_report_linux_glue.c
 
+# iso_report_common tests: cross-platform log_iso_report()
+# All stubs (uprintf, SizeToHumanReadable, Notification, etc.) are inlined
+# in the test file — no separate glue needed.
+CFLAGS_LINUX_test_iso_report_common := \
+	-D_GNU_SOURCE -DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_iso_report_common := $(COMMON)/iso_report.c
+
+CFLAGS_WIN_test_iso_report_common := \
+	-I$(SRC_DIR)/common -I$(SRC_DIR)/windows \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_iso_report_common := $(COMMON)/iso_report.c
+
 # notify_linux tests: desktop notification bridge (notify_build_cmd, rufus_notify, notify_format_message)
 CFLAGS_LINUX_test_notify_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
                                    -D_GNU_SOURCE -DRUFUS_TEST \
