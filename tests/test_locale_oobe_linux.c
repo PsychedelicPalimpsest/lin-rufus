@@ -556,6 +556,92 @@ TEST(kb_map_la_laos_does_not_map_to_latin_american)
 	          "XKB 'la' (Laos) should not be confused with Latin American Spanish");
 }
 
+/* ================================================================
+ * Missing country layout tests — XKB layouts present in X11 but
+ * previously absent from kb_map.
+ * ================================================================ */
+
+TEST(kb_map_austria_at_maps_to_0c07)
+{
+	/* Austria (at) uses Austrian German locale (0c07) with German keyboard (0c07) */
+	char il[64];
+	get_input_locale_for_xkb("at", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0c07") != NULL || strstr(il, "0C07") != NULL,
+	          "Austria (at) should map to input locale 0c07");
+}
+
+TEST(kb_map_australia_au_maps_to_0c09)
+{
+	/* Australia (au) uses English (Australia) locale (0c09) with US keyboard (0409) */
+	char il[64];
+	get_input_locale_for_xkb("au", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0c09") != NULL || strstr(il, "0C09") != NULL,
+	          "Australia (au) should map to input locale 0c09");
+}
+
+TEST(kb_map_ireland_ie_maps_to_1809)
+{
+	/* Ireland (ie) uses English (Ireland) locale (1809) */
+	char il[64];
+	get_input_locale_for_xkb("ie", il, sizeof(il));
+	CHECK_MSG(strstr(il, "1809") != NULL,
+	          "Ireland (ie) should map to input locale 1809");
+}
+
+TEST(kb_map_kyrgyzstan_kg_maps_to_0440)
+{
+	/* Kyrgyzstan: XKB uses 'kg', Windows Kyrgyz locale is 0440 */
+	char il[64];
+	get_input_locale_for_xkb("kg", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0440") != NULL,
+	          "Kyrgyzstan (kg) should map to input locale 0440");
+}
+
+TEST(kb_map_kazakhstan_kz_maps_to_043f)
+{
+	/* Kazakhstan: XKB uses 'kz', Windows Kazakh locale is 043f */
+	char il[64];
+	get_input_locale_for_xkb("kz", il, sizeof(il));
+	CHECK_MSG(strstr(il, "043f") != NULL || strstr(il, "043F") != NULL,
+	          "Kazakhstan (kz) should map to input locale 043f");
+}
+
+TEST(kb_map_moldova_md_maps_to_0818)
+{
+	/* Moldova (md) uses Moldavian/Romanian locale (0818) */
+	char il[64];
+	get_input_locale_for_xkb("md", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0818") != NULL,
+	          "Moldova (md) should map to input locale 0818");
+}
+
+TEST(kb_map_montenegro_me_maps_to_2c1a)
+{
+	/* Montenegro (me) uses Montenegrin locale (2c1a) with Serbian Latin keyboard */
+	char il[64];
+	get_input_locale_for_xkb("me", il, sizeof(il));
+	CHECK_MSG(strstr(il, "2c1a") != NULL || strstr(il, "2C1A") != NULL,
+	          "Montenegro (me) should map to input locale 2c1a");
+}
+
+TEST(kb_map_new_zealand_nz_maps_to_1409)
+{
+	/* New Zealand (nz) uses English (New Zealand) locale (1409) with US keyboard */
+	char il[64];
+	get_input_locale_for_xkb("nz", il, sizeof(il));
+	CHECK_MSG(strstr(il, "1409") != NULL,
+	          "New Zealand (nz) should map to input locale 1409");
+}
+
+TEST(kb_map_south_africa_za_maps_to_1c09)
+{
+	/* South Africa (za) uses English (South Africa) locale (1c09) with US keyboard */
+	char il[64];
+	get_input_locale_for_xkb("za", il, sizeof(il));
+	CHECK_MSG(strstr(il, "1c09") != NULL || strstr(il, "1C09") != NULL,
+	          "South Africa (za) should map to input locale 1c09");
+}
+
 TEST(kb_map_serbian_cyrillic_sr_maps_to_0c1a)
 {
 	char il[64];
@@ -712,6 +798,15 @@ int main(void)
 	RUN(kb_map_macedonian_mk_maps_to_042f);
 	RUN(kb_map_serbian_cyrillic_sr_maps_to_0c1a);
 	RUN(kb_map_vietnamese_vn_maps_to_042a);
+	RUN(kb_map_austria_at_maps_to_0c07);
+	RUN(kb_map_australia_au_maps_to_0c09);
+	RUN(kb_map_ireland_ie_maps_to_1809);
+	RUN(kb_map_kyrgyzstan_kg_maps_to_0440);
+	RUN(kb_map_kazakhstan_kz_maps_to_043f);
+	RUN(kb_map_moldova_md_maps_to_0818);
+	RUN(kb_map_montenegro_me_maps_to_2c1a);
+	RUN(kb_map_new_zealand_nz_maps_to_1409);
+	RUN(kb_map_south_africa_za_maps_to_1c09);
 
 	printf("\n=== XKB variant support tests ===\n");
 	RUN(swiss_french_variant_gives_fr_ch_locale);

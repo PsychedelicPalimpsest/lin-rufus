@@ -152,6 +152,7 @@ static const KbEntry kb_map[] = {
 	{ "be",   "080c:0000080c" },
 	{ "ch",   "0807:00000807" },
 	{ "at",   "0c07:00000c07" },
+	{ "au",   "0c09:00000409" },  /* English (Australia) / US keyboard */
 	{ "dk",   "0406:00000406" },
 	{ "fi",   "040b:0000040b" },
 	{ "se",   "041d:0000041d" },
@@ -170,6 +171,7 @@ static const KbEntry kb_map[] = {
 	{ "ua",   "0422:00000422" },
 	{ "bg",   "0402:00000402" },
 	{ "rs",   "0c1a:00000c1a" },
+	{ "ie",   "1809:00001809" },  /* English (Ireland) / Irish keyboard */
 	{ "il",   "040d:0000040d" },
 	{ "ara",  "0401:00000401" },
 	{ "in",   "4009:00004009" },
@@ -186,10 +188,14 @@ static const KbEntry kb_map[] = {
 	{ "ir",   "0429:00000429" },  /* Persian */
 	{ "is",   "040f:0000040f" },  /* Icelandic */
 	{ "kk",   "043f:0000043f" },  /* Kazakh */
+	{ "kg",   "0440:00000440" },  /* Kyrgyz (XKB 'kg', LCID 0440) */
 	{ "ko",   "0412:00000412" },  /* Korean (alternate) */
 	{ "ky",   "0440:00000440" },  /* Kyrgyz */
+	{ "kz",   "043f:0000043f" },  /* Kazakh (XKB 'kz', LCID 043f) */
 	{ "lt",   "0427:00000427" },  /* Lithuanian */
 	{ "lv",   "0426:00000426" },  /* Latvian */
+	{ "md",   "0818:00000418" },  /* Moldavian (uses Romanian locale/keyboard) */
+	{ "me",   "2c1a:0000081a" },  /* Montenegrin (Serbian Latin keyboard) */
 	{ "mk",   "042f:0000042f" },  /* Macedonian */
 	{ "mn",   "0450:00000450" },  /* Mongolian */
 	{ "mt",   "043a:0000043a" },  /* Maltese */
@@ -200,9 +206,11 @@ static const KbEntry kb_map[] = {
 	{ "th",   "041e:0000041e" },  /* Thai */
 	{ "tj",   "0428:00000428" },  /* Tajik */
 	{ "tm",   "0442:00000442" },  /* Turkmen */
+	{ "nz",   "1409:00000409" },  /* English (New Zealand) / US keyboard */
 	{ "uz",   "0443:00000443" },  /* Uzbek (Latin) */
 	{ "vn",   "042a:0000042a" },  /* Vietnamese */
 	{ "yu",   "081a:0000081a" },  /* Yugoslav / Serbian Latin */
+	{ "za",   "1c09:00000409" },  /* English (South Africa) / US keyboard */
 	/* XKB variant overrides — "layout:variant" combined keys */
 	{ "ch:fr",       "100c:0000100c" },  /* Swiss French (ch + fr variant) */
 	{ "ch:fr_mac",   "100c:0000100c" },  /* Swiss French Mac layout */

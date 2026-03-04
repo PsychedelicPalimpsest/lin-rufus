@@ -54,6 +54,8 @@ typedef struct {
 static const xkb_to_dos_t xkb_dos_table[] = {
     { "al",  "sq",  852 },  /* Albanian */
     { "am",  "hy",  899 },  /* Armenian */
+    { "at",  "gr",  850 },  /* Austrian German */
+    { "au",  "us",  437 },  /* Australian English */
     { "az",  "az",  850 },  /* Azerbaijani */
     { "ba",  "yu",  852 },  /* Bosnian */
     { "be",  "be",  850 },  /* Belgian French */
@@ -76,24 +78,30 @@ static const xkb_to_dos_t xkb_dos_table[] = {
     { "gr",  "gk",  737 },  /* Greek */
     { "hr",  "yu",  852 },  /* Croatian */
     { "hu",  "hu",  852 },  /* Hungarian */
+    { "ie",  "uk",  850 },  /* Irish (uses UK/British keyboard) */
     { "il",  "il",  862 },  /* Hebrew */
     { "ir",  "ar",  864 },  /* Persian/Farsi */
     { "is",  "is",  850 },  /* Icelandic */
     { "it",  "it",  850 },  /* Italian */
     { "jp",  "jp",  932 },  /* Japanese */
+    { "kg",  "ky",  850 },  /* Kyrgyz (XKB 'kg', FreeDOS keyboard 'ky') */
     { "kk",  "kk",  850 },  /* Kazakh */
     { "ko",  "us",  949 },  /* Korean (no FreeDOS kb) */
     { "kr",  "us",  949 },  /* Korean alternate */
     { "ky",  "ky",  850 },  /* Kyrgyz */
+    { "kz",  "kk",  850 },  /* Kazakh (XKB 'kz', FreeDOS keyboard 'kk') */
     { "la",  "us",  850 },  /* Laos (no FreeDOS keyboard, falls back to US) */
     { "latam","la", 850 },  /* Latin American Spanish */
     { "lt",  "lt",  775 },  /* Lithuanian */
     { "lv",  "lv",  775 },  /* Latvian */
+    { "md",  "ro",  852 },  /* Moldovan (uses Romanian keyboard) */
+    { "me",  "yu",  852 },  /* Montenegrin (uses Serbian Latin keyboard) */
     { "mk",  "mk",  855 },  /* Macedonian */
     { "mn",  "mn",  850 },  /* Mongolian */
     { "mt",  "mt",  850 },  /* Maltese */
     { "nl",  "nl",  850 },  /* Dutch */
     { "no",  "no",  850 },  /* Norwegian */
+    { "nz",  "us",  437 },  /* New Zealand English */
     { "ph",  "ph",  850 },  /* Filipino */
     { "pl",  "pl",  852 },  /* Polish */
     { "pt",  "po",  850 },  /* Portuguese */
@@ -116,6 +124,7 @@ static const xkb_to_dos_t xkb_dos_table[] = {
     { "uz",  "uz",  850 },  /* Uzbek */
     { "vn",  "vi",  850 },  /* Vietnamese */
     { "yu",  "yu",  855 },  /* Yugoslav */
+    { "za",  "us",  437 },  /* South African English */
     { "zh",  "us",  936 },  /* Chinese (no FreeDOS kb) */
 };
 

@@ -891,6 +891,144 @@ TEST(la_xkb_laos_does_not_map_to_la_keyboard)
               "Laos XKB 'la' should NOT map to DOS Latin American 'LA' keyboard");
 #endif
 }
+
+/* ================================================================
+ * Missing country layout tests — XKB layouts present in X11 but
+ * previously absent from xkb_dos_table.
+ * ================================================================ */
+
+TEST(at_xkb_maps_to_gr_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Austria (XKB 'at') uses the German keyboard in DOS mode */
+    CHECK_MSG(check_kb_in_fdconfig("at", "GR") == 1,
+              "Austria XKB 'at' -> DOS 'GR' (German)");
+#endif
+}
+
+TEST(au_xkb_maps_to_us_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Australia (XKB 'au') maps to US/437 — produces US-style AUTOEXEC.BAT, no FDCONFIG.SYS */
+    dos_locale_set_xkb_layout("au");
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char fdcfg[MAX_PATH];
+    snprintf(fdcfg, sizeof(fdcfg), "%s/FDCONFIG.SYS", target);
+    int fdconfig_exists = (access(fdcfg, F_OK) == 0);
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    CHECK_MSG(!fdconfig_exists,
+              "Australia XKB 'au' -> US/437 keyboard, no FDCONFIG.SYS (same as US locale)");
+#endif
+}
+
+TEST(ie_xkb_maps_to_uk_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Ireland (XKB 'ie') uses the UK/British keyboard in DOS mode */
+    CHECK_MSG(check_kb_in_fdconfig("ie", "UK") == 1,
+              "Ireland XKB 'ie' -> DOS 'UK'");
+#endif
+}
+
+TEST(kg_xkb_maps_to_ky_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Kyrgyzstan: XKB layout code is 'kg' (not 'ky'), FreeDOS keyboard code is 'ky' */
+    CHECK_MSG(check_kb_in_fdconfig("kg", "KY") == 1,
+              "Kyrgyzstan XKB 'kg' -> DOS 'KY'");
+#endif
+}
+
+TEST(kz_xkb_maps_to_kk_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Kazakhstan: XKB layout code is 'kz' (not 'kk'), FreeDOS keyboard code is 'kk' */
+    CHECK_MSG(check_kb_in_fdconfig("kz", "KK") == 1,
+              "Kazakhstan XKB 'kz' -> DOS 'KK'");
+#endif
+}
+
+TEST(md_xkb_maps_to_ro_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Moldova (XKB 'md') uses the Romanian keyboard in DOS mode */
+    CHECK_MSG(check_kb_in_fdconfig("md", "RO") == 1,
+              "Moldova XKB 'md' -> DOS 'RO' (Romanian)");
+#endif
+}
+
+TEST(me_xkb_maps_to_yu_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Montenegro (XKB 'me') default layout includes Serbian Latin -> DOS 'YU' */
+    CHECK_MSG(check_kb_in_fdconfig("me", "YU") == 1,
+              "Montenegro XKB 'me' -> DOS 'YU' (Yugoslav Latin)");
+#endif
+}
+
+TEST(nz_xkb_maps_to_us_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* New Zealand (XKB 'nz') maps to US/437 — produces US-style AUTOEXEC.BAT, no FDCONFIG.SYS */
+    dos_locale_set_xkb_layout("nz");
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char fdcfg[MAX_PATH];
+    snprintf(fdcfg, sizeof(fdcfg), "%s/FDCONFIG.SYS", target);
+    int fdconfig_exists = (access(fdcfg, F_OK) == 0);
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    CHECK_MSG(!fdconfig_exists,
+              "New Zealand XKB 'nz' -> US/437 keyboard, no FDCONFIG.SYS (same as US locale)");
+#endif
+}
+
+TEST(za_xkb_maps_to_us_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* South Africa (XKB 'za') maps to US/437 — produces US-style AUTOEXEC.BAT, no FDCONFIG.SYS */
+    dos_locale_set_xkb_layout("za");
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char fdcfg[MAX_PATH];
+    snprintf(fdcfg, sizeof(fdcfg), "%s/FDCONFIG.SYS", target);
+    int fdconfig_exists = (access(fdcfg, F_OK) == 0);
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    CHECK_MSG(!fdconfig_exists,
+              "South Africa XKB 'za' -> US/437 keyboard, no FDCONFIG.SYS (same as US locale)");
+#endif
+}
+
 /* ================================================================
  * Keyboard driver file selection tests (keybrd2.sys parity)
  * Windows SetDOSLocale selects keyboard.sys vs keybrd2.sys based on
@@ -1555,6 +1693,15 @@ int main(void)
     RUN(set_dos_locale_polish_maps_to_pl);
     RUN(latam_xkb_maps_to_la_keyboard);
     RUN(la_xkb_laos_does_not_map_to_la_keyboard);
+    RUN(at_xkb_maps_to_gr_keyboard);
+    RUN(au_xkb_maps_to_us_keyboard);
+    RUN(ie_xkb_maps_to_uk_keyboard);
+    RUN(kg_xkb_maps_to_ky_keyboard);
+    RUN(kz_xkb_maps_to_kk_keyboard);
+    RUN(md_xkb_maps_to_ro_keyboard);
+    RUN(me_xkb_maps_to_yu_keyboard);
+    RUN(nz_xkb_maps_to_us_keyboard);
+    RUN(za_xkb_maps_to_us_keyboard);
     RUN(vconsole_keymap_de_maps_to_gr);
     RUN(vconsole_keymap_with_variant_strips_suffix);
     RUN(etc_default_keyboard_takes_priority_over_vconsole);
