@@ -3326,6 +3326,7 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 			rufus_gtk_update_status(lmprintf(MSG_283));
 		} else {
 			rufus_gtk_update_status(lmprintf(MSG_212));
+			FlashTaskbar(NULL);
 			/* When the device isn't ready, a port cycle usually helps */
 			if (SCODE_CODE(ErrorStatus) == ERROR_NOT_READY) {
 				int index = ComboBox_GetCurSel(hDeviceList);
@@ -3334,8 +3335,16 @@ static LRESULT main_dialog_handler(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 					CyclePort(index);
 				}
 			}
-			Notification(MB_ICONERROR | MB_CLOSE, lmprintf(MSG_042),
-			             lmprintf(MSG_043, StrError(ErrorStatus, FALSE)));
+			/* Re-scan for blocking processes (mirrors Windows behaviour).
+			 * If any process is still holding the device open, show them
+			 * in a list dialog so the user knows what to close. */
+			GetProcessSearch(0, 0x07, TRUE);
+			if (BlockingProcessList.Index > 0)
+				ListDialog(lmprintf(MSG_042), lmprintf(MSG_055),
+				           BlockingProcessList.String, BlockingProcessList.Index);
+			else
+				Notification(MB_ICONERROR | MB_CLOSE, lmprintf(MSG_042),
+				             lmprintf(MSG_043, StrError(ErrorStatus, FALSE)));
 		}
 		save_image = FALSE;  /* reset after checking above */
 		uprintf("*** Format completed (success=%d) ***", (int)ok);

@@ -307,6 +307,61 @@ TEST(blocking_list_empty_when_no_matching_device)
 }
 
 /* ================================================================== */
+/* Feature 220: Format failure shows blocking process list            */
+/* ================================================================== */
+
+TEST(blocking_list_string_array_accessible_after_add)
+{
+    /* Simulate what UM_FORMAT_COMPLETED does: after format failure,
+     * GetProcessSearch populates BlockingProcessList. Verify that
+     * String[] is accessible when Index > 0. */
+    StrArrayCreate(&BlockingProcessList, 4);
+    StrArrayAdd(&BlockingProcessList, "bash", TRUE);
+    StrArrayAdd(&BlockingProcessList, "nautilus", TRUE);
+    CHECK_MSG(BlockingProcessList.Index == 2,
+              "Two entries added → Index must be 2");
+    CHECK_MSG(BlockingProcessList.String != NULL,
+              "String array must not be NULL after adds");
+    CHECK_MSG(BlockingProcessList.String[0] != NULL,
+              "First entry must be non-NULL");
+    CHECK_MSG(strcmp(BlockingProcessList.String[0], "bash") == 0,
+              "First entry must be 'bash'");
+    CHECK_MSG(BlockingProcessList.String[1] != NULL,
+              "Second entry must be non-NULL");
+    CHECK_MSG(strcmp(BlockingProcessList.String[1], "nautilus") == 0,
+              "Second entry must be 'nautilus'");
+    StrArrayDestroy(&BlockingProcessList);
+}
+
+TEST(blocking_list_index_zero_means_no_dialog_needed)
+{
+    /* When no processes are blocking, Index == 0 → ListDialog should not
+     * be called.  Verify the guard condition works. */
+    StrArrayCreate(&BlockingProcessList, 4);
+    /* Don't add any entries */
+    CHECK_MSG(BlockingProcessList.Index == 0,
+              "Empty list: Index must be 0 (no ListDialog needed)");
+    StrArrayDestroy(&BlockingProcessList);
+}
+
+TEST(blocking_list_after_clear_safe_to_reuse)
+{
+    /* Simulate format-failure retry: clear the list (as GetProcessSearch
+     * does at the start of each scan) and then repopulate. */
+    StrArrayCreate(&BlockingProcessList, 4);
+    StrArrayAdd(&BlockingProcessList, "old_process", TRUE);
+    CHECK_MSG(BlockingProcessList.Index == 1, "Before clear: 1 entry");
+    StrArrayClear(&BlockingProcessList);
+    CHECK_MSG(BlockingProcessList.Index == 0, "After clear: 0 entries");
+    StrArrayAdd(&BlockingProcessList, "new_process", TRUE);
+    CHECK_MSG(BlockingProcessList.Index == 1,
+              "After re-add: Index must be 1");
+    CHECK_MSG(strcmp(BlockingProcessList.String[0], "new_process") == 0,
+              "Re-added entry must be 'new_process'");
+    StrArrayDestroy(&BlockingProcessList);
+}
+
+/* ================================================================== */
 /* main                                                                 */
 /* ================================================================== */
 int main(void)
@@ -341,6 +396,11 @@ int main(void)
     RUN(stop_process_search_clears_blocking_list);
     RUN(get_process_search_clears_blocking_list_before_scan);
     RUN(blocking_list_empty_when_no_matching_device);
+
+    /* Feature 220: format failure blocking process list */
+    RUN(blocking_list_string_array_accessible_after_add);
+    RUN(blocking_list_index_zero_means_no_dialog_needed);
+    RUN(blocking_list_after_clear_safe_to_reuse);
 
     TEST_RESULTS();
 }

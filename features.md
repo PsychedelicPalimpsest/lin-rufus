@@ -1060,3 +1060,31 @@ making USB port cycling completely broken on Linux.
 
 * ~~219~~: **RESOLVED** — GetTickCount64 uses clock_gettime(CLOCK_MONOTONIC); CyclePort works.
   5 new tests (29 total in test_compat_linux). Full test suite: all tests pass.
+
+## Feature 220: Show blocking process list after format failure
+
+**Goal**: On Windows, when a format operation fails, `GetProcessSearch` is called again
+and if any process is still holding the device open, `ListDialog` is shown listing those
+process names. On Linux, only the generic error notification was shown with no process info.
+
+**Status**: RESOLVED
+
+**Implementation**:
+- In `UM_FORMAT_COMPLETED` handler in `src/linux/ui_gtk.c`, when format fails
+  (not cancelled, not bad signature):
+  - Calls `FlashTaskbar(NULL)` to attract user attention (matches Windows)
+  - Calls `GetProcessSearch(0, 0x07, TRUE)` to re-scan for blocking processes
+  - If `BlockingProcessList.Index > 0`: calls `ListDialog(lmprintf(MSG_042),
+    lmprintf(MSG_055), BlockingProcessList.String, BlockingProcessList.Index)`
+    to show the list of process names blocking the device
+  - Otherwise: shows the existing generic error notification
+- 3 TDD tests added to `tests/test_process_linux.c` (Feature 220 group):
+  - `blocking_list_string_array_accessible_after_add` — verify String[] is
+    accessible and correct after StrArrayAdd calls (simulates format-failure scenario)
+  - `blocking_list_index_zero_means_no_dialog_needed` — verify Index==0 means
+    no dialog should be shown
+  - `blocking_list_after_clear_safe_to_reuse` — verify StrArrayClear + re-add
+    works correctly (simulates GetProcessSearch clearing before re-scan)
+
+* ~~220~~: **RESOLVED** — Blocking process list shown in ListDialog after format failure.
+  3 new tests (36 total assertions in test_process_linux). Full test suite: all tests pass.
