@@ -472,6 +472,20 @@ TEST(get_current_thread_pseudo_handle)
 	CHECK_MSG(h == (HANDLE)(intptr_t)-2, "GetCurrentThread must return pseudo-handle -2");
 }
 
+TEST(set_thread_affinity_mask_with_pseudo_handle)
+{
+	/* SetThreadAffinityMask with GetCurrentThread() must not crash and
+	 * must return a non-zero value (the old mask or the new mask) on
+	 * success, or 0 only on failure.  On any system with at least 1 CPU
+	 * (i.e. everywhere), mask = 1 is valid and the call must succeed. */
+	HANDLE h = GetCurrentThread();
+	DWORD_PTR old = SetThreadAffinityMask(h, 1);
+	/* Restore previous affinity so we don't starve the process */
+	if (old != 0)
+		SetThreadAffinityMask(h, old);
+	CHECK_MSG(old != 0, "SetThreadAffinityMask with pseudo-handle must succeed (return non-zero)");
+}
+
 /* =========================================================================
  * main
  * =========================================================================*/
@@ -551,6 +565,7 @@ int main(void)
 	RUN(get_current_thread_id_nonzero);
 	RUN(get_current_thread_id_matches_gettid);
 	RUN(get_current_thread_pseudo_handle);
+	RUN(set_thread_affinity_mask_with_pseudo_handle);
 
 	TEST_RESULTS();
 	return (_fail > 0) ? 1 : 0;

@@ -5,7 +5,9 @@
  *
  * Covers:
  *   windows.h  — primitive types, HANDLE-family, HRESULT, string types,
- *                 bit-manipulation macros, file constants, error codes
+ *                 bit-manipulation macros, file constants, error codes,
+ *                 CreateFileA/ReadFile/WriteFile/CloseHandle,
+ *                 InterlockedIncrement/Decrement/Exchange/CompareExchange
  *   winioctl.h — PARTITION_STYLE enum
  *   winerror.h — standard HRESULT / Win32 error constants
  *   shlwapi.h  — already exercised in test_compat_linux; included here only for
@@ -23,6 +25,7 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include <stdint.h>
 #include <stddef.h>
 #include <wchar.h>
+#include <string.h>
 
 /* Pull in every compat header we want to verify */
 #include "../src/linux/compat/windows.h"
@@ -760,6 +763,72 @@ TEST(interlocked_compare_exchange_failure)
 }
 
 /* ==========================================================================
+ * CreateFileA / ReadFile / WriteFile / CloseHandle
+ * ========================================================================== */
+
+TEST(createfile_open_existing_fails_for_missing_file)
+{
+	HANDLE h = CreateFileA("/tmp/rufus_compat_layer_nonexistent_xyz.tmp",
+	                       GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+	CHECK_MSG(h == INVALID_HANDLE_VALUE,
+	          "CreateFileA with OPEN_EXISTING must return INVALID_HANDLE_VALUE for missing file");
+}
+
+TEST(createfile_create_always_creates_file)
+{
+	const char *path = "/tmp/rufus_compat_layer_createfile_test.tmp";
+	unlink(path);
+	HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	CHECK_MSG(h != INVALID_HANDLE_VALUE, "CreateFileA CREATE_ALWAYS must succeed");
+	if (h != INVALID_HANDLE_VALUE)
+		CloseHandle(h);
+	CHECK_MSG(PathFileExistsA(path), "CreateFileA CREATE_ALWAYS must create the file on disk");
+	unlink(path);
+}
+
+TEST(writefile_and_readfile_roundtrip)
+{
+	const char *path = "/tmp/rufus_compat_layer_rw_test.tmp";
+	const char payload[] = "hello rufus compat";
+	unlink(path);
+
+	/* Write */
+	HANDLE hw = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	CHECK_MSG(hw != INVALID_HANDLE_VALUE, "CreateFileA for write must succeed");
+	if (hw == INVALID_HANDLE_VALUE) { return; }
+	DWORD written = 0;
+	BOOL wok = WriteFile(hw, payload, sizeof(payload), &written, NULL);
+	CloseHandle(hw);
+	CHECK_MSG(wok, "WriteFile must return TRUE");
+	CHECK_MSG(written == sizeof(payload), "WriteFile must write all bytes");
+
+	/* Read back */
+	HANDLE hr = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+	CHECK_MSG(hr != INVALID_HANDLE_VALUE, "CreateFileA for read must succeed");
+	if (hr == INVALID_HANDLE_VALUE) { unlink(path); return; }
+	char buf[64] = {0};
+	DWORD nread = 0;
+	BOOL rok = ReadFile(hr, buf, sizeof(buf), &nread, NULL);
+	CloseHandle(hr);
+	CHECK_MSG(rok, "ReadFile must return TRUE");
+	CHECK_MSG(nread == sizeof(payload), "ReadFile must read all bytes written");
+	CHECK_MSG(memcmp(buf, payload, sizeof(payload)) == 0, "ReadFile content must match WriteFile content");
+	unlink(path);
+}
+
+TEST(closehandle_invalid_returns_false)
+{
+	BOOL r = CloseHandle(INVALID_HANDLE_VALUE);
+	CHECK_MSG(!r, "CloseHandle(INVALID_HANDLE_VALUE) must return FALSE");
+}
+
+TEST(closehandle_null_returns_false)
+{
+	BOOL r = CloseHandle(NULL);
+	CHECK_MSG(!r, "CloseHandle(NULL) must return FALSE");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -878,6 +947,12 @@ int main(void)
 	RUN_TEST(interlocked_exchange_sets_value);
 	RUN_TEST(interlocked_compare_exchange_success);
 	RUN_TEST(interlocked_compare_exchange_failure);
+
+	RUN_TEST(createfile_open_existing_fails_for_missing_file);
+	RUN_TEST(createfile_create_always_creates_file);
+	RUN_TEST(writefile_and_readfile_roundtrip);
+	RUN_TEST(closehandle_invalid_returns_false);
+	RUN_TEST(closehandle_null_returns_false);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
