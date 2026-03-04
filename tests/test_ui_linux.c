@@ -390,6 +390,42 @@ int main(void)
     RUN(proposed_label_not_user_changed_returns_label);
     RUN(proposed_label_user_changed_ignores_label_change);
 
+    /* ------------------------------------------------------------------ */
+    printf("\n=== Window title progress indicator tests (Feature 215) ===\n");
+    /* build_progress_title() is declared extern below */
+    extern void build_progress_title(char *buf, size_t bufsz,
+                                     const char *base, BOOL in_progress,
+                                     double pct);
+
+#define TITLE_CHECK(base, in_prog, pct, expected) do { \
+    char _buf[128]; \
+    build_progress_title(_buf, sizeof(_buf), (base), (in_prog), (pct)); \
+    if (strcmp(_buf, (expected)) != 0) { \
+        printf("FAIL build_progress_title(\"%s\", %d, %.1f): got \"%s\", want \"%s\"\n", \
+               (base), (in_prog), (double)(pct), _buf, (expected)); \
+        _fail++; \
+    } else { \
+        _pass++; \
+    } \
+} while (0)
+
+    /* Not in progress → just the base title regardless of percent */
+    TITLE_CHECK("Rufus 4.6", FALSE, 50.0,  "Rufus 4.6");
+    TITLE_CHECK("Rufus 4.6", FALSE,  0.0,  "Rufus 4.6");
+    TITLE_CHECK("Rufus 4.6", FALSE, 99.0,  "Rufus 4.6");
+
+    /* In progress → "(NN%) BASE" */
+    TITLE_CHECK("Rufus 4.6", TRUE,   0.0,  "(0%) Rufus 4.6");
+    TITLE_CHECK("Rufus 4.6", TRUE,  50.0,  "(50%) Rufus 4.6");
+    TITLE_CHECK("Rufus 4.6", TRUE,  50.5,  "(50%) Rufus 4.6");  /* banker's rounding: 50 is even */
+    TITLE_CHECK("Rufus 4.6", TRUE,  99.0,  "(99%) Rufus 4.6");
+
+    /* At 100% (done) → restore base title */
+    TITLE_CHECK("Rufus 4.6", TRUE, 100.0,  "Rufus 4.6");
+
+    /* Negative percent (invalid) → base title */
+    TITLE_CHECK("Rufus 4.6", TRUE,  -1.0,  "Rufus 4.6");
+
     TEST_RESULTS();
     return (_fail > 0) ? 1 : 0;
 }

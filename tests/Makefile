@@ -336,7 +336,8 @@ LDFLAGS_LINUX_test_ui_linux := $(FONTCONFIG_LIBS)
 EXTRA_SRC_LINUX_test_ui_linux := $(SRC_DIR)/linux/globals.c \
                                   $(SRC_DIR)/linux/device_combo.c \
                                   $(SRC_DIR)/linux/hyperlink.c \
-                                  $(SRC_DIR)/linux/proposed_label.c
+                                  $(SRC_DIR)/linux/proposed_label.c \
+                                  $(SRC_DIR)/linux/progress_title.c
 
 # boot_validation_linux tests: pure predicates for on_start_clicked validation
 CFLAGS_LINUX_test_boot_validation_linux := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \

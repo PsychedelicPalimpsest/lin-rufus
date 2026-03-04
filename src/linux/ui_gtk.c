@@ -165,6 +165,11 @@ static guint elapsed_timer_source = 0;
 static struct bar_progress g_bp;
 /* Timestamp (ms) when the current format operation started, for elapsed calc. */
 static uint64_t g_format_start_ms = 0;
+/* Base window title (e.g. "Rufus 4.6") — used to restore title when ops finish. */
+static char g_rufus_base_title[64];
+/* progress_title.c helper */
+extern void build_progress_title(char *buf, size_t bufsz, const char *base,
+                                  BOOL in_progress, double pct);
 
 /* Forward declaration for combo registration helper */
 static void combo_register_all(void);
@@ -175,13 +180,22 @@ void EnableControls(BOOL enable, BOOL remove_checkboxes);
 /* Forward declaration for update_advanced_controls (defined later in this file) */
 void update_advanced_controls(void);
 
-/* Idle callback: update progress bar from main thread. */
+/* Idle callback: update progress bar and window title from main thread. */
 static gboolean idle_update_progress(gpointer data)
 {
 	ProgressData *p = (ProgressData *)data;
 	if (rw.progress_bar)
 		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(rw.progress_bar),
 			CLAMP((double)p->pct / 100.0, 0.0, 1.0));
+
+	/* Update window title with progress percentage while an op is running. */
+	if (rw.window && g_rufus_base_title[0]) {
+		char title[96];
+		build_progress_title(title, sizeof(title), g_rufus_base_title,
+		                     op_in_progress, (double)p->pct);
+		gtk_window_set_title(GTK_WINDOW(rw.window), title);
+	}
+
 	free(p);
 	return G_SOURCE_REMOVE;
 }
@@ -228,6 +242,9 @@ static void stop_clock_timer(void)
 		gtk_label_set_text(GTK_LABEL(rw.elapsed_label), "");
 	if (rw.speed_label)
 		gtk_label_set_text(GTK_LABEL(rw.speed_label), "");
+	/* Restore window title to base (remove any "(NN%)" prefix). */
+	if (rw.window && g_rufus_base_title[0])
+		gtk_window_set_title(GTK_WINDOW(rw.window), g_rufus_base_title);
 }
 
 /* Blocking I/O timer — mirrors Windows BlockingTimer (3 s interval).
@@ -876,10 +893,9 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	rw.window = win;
 	{
 		extern uint16_t rufus_version[3];
-		char title[32];
-		snprintf(title, sizeof(title), "Rufus %d.%d",
+		snprintf(g_rufus_base_title, sizeof(g_rufus_base_title), "Rufus %d.%d",
 		         rufus_version[0], rufus_version[1]);
-		gtk_window_set_title(GTK_WINDOW(win), title);
+		gtk_window_set_title(GTK_WINDOW(win), g_rufus_base_title);
 	}
 	gtk_window_set_resizable(GTK_WINDOW(win), FALSE);
 	gtk_window_set_icon_name(GTK_WINDOW(win), "ie.akeo.rufus");

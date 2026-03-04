@@ -906,3 +906,38 @@ display name in the device combo box — matching Windows behavior where such de
 
 * ~~214~~: **RESOLVED** — UAS devices show "(UAS)" in device display name.
   3 new tests in test_dev_linux (173 total). Full test suite: all tests pass.
+
+## Feature 215: Window Title Progress Indicator
+
+**Goal**: When a write operation is in progress, prefix the Rufus window title with the
+current progress percentage — e.g., `"(42%) Rufus 4.6"` — matching Windows taskbar behavior
+and providing visible progress even when the window is minimized.
+
+**Status**: RESOLVED
+
+**Implementation**:
+- New pure function `build_progress_title(buf, bufsz, base, in_progress, pct)` in
+  `src/linux/progress_title.c`:
+  - When `in_progress` and `0 <= pct < 100`: writes `"(NN%) base"` into buf
+  - Otherwise (idle or pct==100): writes plain `"base"` into buf
+  - No GTK dependency — pure C, testable without UI
+- `ui_gtk.c` wiring:
+  - `static char g_rufus_base_title[64]` stores the unchanging base title
+  - `idle_update_progress()` calls `build_progress_title()` + `gtk_window_set_title()`
+    on each progress tick
+  - `stop_clock_timer()` restores the base title on operation completion
+  - Initial window title initialization stores into `g_rufus_base_title`
+- 10 TDD tests added to `tests/test_ui_linux.c` (Feature 215 group):
+  - zero percent → "(0%) base"
+  - 50% → "(50%) base" (glibc banker's rounding: 50.5 → 50)
+  - 99% → "(99%) base"
+  - 100% → plain base (no prefix)
+  - in_progress=false → plain base
+  - negative pct → plain base
+  - null buf → no crash
+  - bufsz=0 → no crash
+  - bufsz=1 → NUL-terminated, no overflow
+  - long base title → truncated safely
+
+* ~~215~~: **RESOLVED** — Window title shows "(NN%) Title" during in-progress operations.
+  10 new tests in test_ui_linux (65 total). Full test suite: all tests pass.
