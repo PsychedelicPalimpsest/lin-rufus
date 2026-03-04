@@ -1415,6 +1415,217 @@ TEST(formatmessage_zero_id_formats_zero)
 
 
 /* ==========================================================================
+ * GlobalAlloc / GlobalFree / GlobalLock / GlobalUnlock
+ * ========================================================================== */
+
+TEST(globalalloc_fixed_returns_non_null)
+{
+	HGLOBAL p = GlobalAlloc(GMEM_FIXED, 64);
+	CHECK_MSG(p != NULL, "GlobalAlloc(GMEM_FIXED) must return non-NULL");
+	GlobalFree(p);
+}
+
+TEST(globalalloc_zeroinit_zeroes_memory)
+{
+	BYTE *p = (BYTE *)GlobalAlloc(GMEM_ZEROINIT, 64);
+	CHECK_MSG(p != NULL, "GlobalAlloc(GMEM_ZEROINIT) must return non-NULL");
+	int all_zero = 1;
+	for (int i = 0; i < 64; i++) if (p[i] != 0) { all_zero = 0; break; }
+	GlobalFree(p);
+	CHECK_MSG(all_zero, "GlobalAlloc(GMEM_ZEROINIT) must zero-initialise memory");
+}
+
+TEST(globalfree_returns_null)
+{
+	HGLOBAL p = GlobalAlloc(GMEM_FIXED, 8);
+	HGLOBAL r = GlobalFree(p);
+	CHECK_MSG(r == NULL, "GlobalFree must return NULL on success");
+}
+
+TEST(globallock_returns_same_pointer)
+{
+	HGLOBAL p = GlobalAlloc(GMEM_FIXED, 16);
+	LPVOID lp = GlobalLock(p);
+	CHECK_MSG(lp == p, "GlobalLock must return the same pointer on Linux (no moveable heap)");
+	GlobalUnlock(p);
+	GlobalFree(p);
+}
+
+TEST(globalunlock_returns_true)
+{
+	HGLOBAL p = GlobalAlloc(GMEM_FIXED, 8);
+	GlobalLock(p);
+	BOOL r = GlobalUnlock(p);
+	CHECK_MSG(r == TRUE, "GlobalUnlock must return TRUE");
+	GlobalFree(p);
+}
+
+/* ==========================================================================
+ * GetCurrentProcess / GetCurrentProcessId / GetCurrentThread / GetCurrentThreadId
+ * ========================================================================== */
+
+TEST(getcurrentprocessid_matches_getpid)
+{
+	DWORD cpid = GetCurrentProcessId();
+	CHECK_MSG(cpid == (DWORD)getpid(), "GetCurrentProcessId must equal getpid()");
+}
+
+TEST(getcurrentprocess_is_valid_handle)
+{
+	HANDLE h = GetCurrentProcess();
+	/* On Linux the compat layer returns the PID cast to a HANDLE. It must not
+	 * be NULL or INVALID_HANDLE_VALUE. */
+	CHECK_MSG(h != NULL, "GetCurrentProcess must not return NULL");
+	CHECK_MSG(h != INVALID_HANDLE_VALUE, "GetCurrentProcess must not be INVALID_HANDLE_VALUE");
+}
+
+TEST(getcurrentthreadid_is_nonzero)
+{
+	DWORD tid = GetCurrentThreadId();
+	CHECK_MSG(tid != 0, "GetCurrentThreadId must return a nonzero TID");
+}
+
+TEST(getcurrentthread_is_pseudo_handle)
+{
+	HANDLE h = GetCurrentThread();
+	/* Windows convention: GetCurrentThread() returns the pseudo-handle -2. */
+	CHECK_MSG((intptr_t)h == -2, "GetCurrentThread must return pseudo-handle -2");
+}
+
+/* ==========================================================================
+ * GetTickCount64 — monotonically increasing millisecond counter
+ * ========================================================================== */
+
+TEST(gettickcount64_is_nonzero)
+{
+	ULONGLONG t = GetTickCount64();
+	CHECK_MSG(t > 0, "GetTickCount64 must return > 0 on a running system");
+}
+
+TEST(gettickcount64_increases_over_time)
+{
+	ULONGLONG t1 = GetTickCount64();
+	/* A brief busy-loop so we don't actually sleep. */
+	volatile int x = 0;
+	for (int i = 0; i < 1000000; i++) x++;
+	(void)x;
+	ULONGLONG t2 = GetTickCount64();
+	CHECK_MSG(t2 >= t1, "GetTickCount64 must be non-decreasing");
+}
+
+/* ==========================================================================
+ * CharLowerA / CharUpperA — ASCII case conversion
+ * ========================================================================== */
+
+TEST(charlowera_lowercases_ascii)
+{
+	char buf[] = "HELLO";
+	CharLowerA(buf);
+	CHECK_MSG(strcmp(buf, "hello") == 0, "CharLowerA must convert ASCII uppercase to lower");
+}
+
+TEST(charlowera_already_lower_unchanged)
+{
+	char buf[] = "world";
+	CharLowerA(buf);
+	CHECK_MSG(strcmp(buf, "world") == 0, "CharLowerA must leave already-lowercase string unchanged");
+}
+
+TEST(charuppera_uppercases_ascii)
+{
+	char buf[] = "hello";
+	CharUpperA(buf);
+	CHECK_MSG(strcmp(buf, "HELLO") == 0, "CharUpperA must convert ASCII lowercase to upper");
+}
+
+TEST(charuppera_already_upper_unchanged)
+{
+	char buf[] = "WORLD";
+	CharUpperA(buf);
+	CHECK_MSG(strcmp(buf, "WORLD") == 0, "CharUpperA must leave already-uppercase string unchanged");
+}
+
+/* ==========================================================================
+ * GetTempPathA — temp directory path
+ * ========================================================================== */
+
+TEST(gettemppath_returns_nonzero_length)
+{
+	char buf[MAX_PATH];
+	DWORD r = GetTempPathA(sizeof(buf), buf);
+	CHECK_MSG(r > 0, "GetTempPathA must return > 0");
+	CHECK_MSG(buf[0] != '\0', "GetTempPathA must write a non-empty string");
+}
+
+TEST(gettemppath_buf_too_small_returns_length)
+{
+	/* Pass a 1-char buffer — should still return the required length. */
+	char tiny[1] = {0};
+	DWORD r = GetTempPathA(1, tiny);
+	CHECK_MSG(r > 0, "GetTempPathA must return required length even when buf is too small");
+}
+
+TEST(gettemppath_custom_tmpdir)
+{
+	setenv("TMPDIR", "/var/tmp", 1);
+	char buf[MAX_PATH];
+	DWORD r = GetTempPathA(sizeof(buf), buf);
+	unsetenv("TMPDIR");
+	CHECK_MSG(r > 0, "GetTempPathA with TMPDIR set must return > 0");
+	CHECK_MSG(strncmp(buf, "/var/tmp", 8) == 0, "GetTempPathA must honour TMPDIR");
+}
+
+/* ==========================================================================
+ * GetTempFileNameA — creates a temp file
+ * ========================================================================== */
+
+TEST(gettempfilename_returns_nonzero)
+{
+	char tmpf[MAX_PATH] = {0};
+	UINT r = GetTempFileNameA("/tmp", "rft", 0, tmpf);
+	if (r != 0) unlink(tmpf);
+	CHECK_MSG(r != 0, "GetTempFileNameA must return non-zero on success");
+}
+
+TEST(gettempfilename_creates_file)
+{
+	char tmpf[MAX_PATH] = {0};
+	GetTempFileNameA("/tmp", "rft", 0, tmpf);
+	int exists = (access(tmpf, F_OK) == 0);
+	if (exists) unlink(tmpf);
+	CHECK_MSG(exists, "GetTempFileNameA must create the temp file");
+}
+
+TEST(gettempfilename_null_path_uses_tmp)
+{
+	char tmpf[MAX_PATH] = {0};
+	UINT r = GetTempFileNameA(NULL, "rft", 0, tmpf);
+	if (r != 0) unlink(tmpf);
+	/* NULL path should fallback to /tmp rather than crash */
+	CHECK_MSG(r != 0, "GetTempFileNameA with NULL path must still succeed (fallback to /tmp)");
+}
+
+/* ==========================================================================
+ * GetModuleFileNameA — returns path to the running executable
+ * ========================================================================== */
+
+TEST(getmodulefilename_returns_nonzero)
+{
+	char buf[MAX_PATH] = {0};
+	DWORD r = GetModuleFileNameA(NULL, buf, sizeof(buf));
+	CHECK_MSG(r > 0, "GetModuleFileNameA must return > 0 for the running binary");
+}
+
+TEST(getmodulefilename_null_terminates)
+{
+	char buf[MAX_PATH];
+	memset(buf, 0xFF, sizeof(buf));
+	DWORD r = GetModuleFileNameA(NULL, buf, sizeof(buf));
+	if (r > 0 && r < sizeof(buf))
+		CHECK_MSG(buf[r] == '\0', "GetModuleFileNameA must null-terminate the buffer");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -1612,6 +1823,36 @@ int main(void)
 	RUN_TEST(formatmessage_basic_error_code);
 	RUN_TEST(formatmessage_null_buf_returns_zero_len);
 	RUN_TEST(formatmessage_zero_id_formats_zero);
+
+	RUN_TEST(globalalloc_fixed_returns_non_null);
+	RUN_TEST(globalalloc_zeroinit_zeroes_memory);
+	RUN_TEST(globalfree_returns_null);
+	RUN_TEST(globallock_returns_same_pointer);
+	RUN_TEST(globalunlock_returns_true);
+
+	RUN_TEST(getcurrentprocessid_matches_getpid);
+	RUN_TEST(getcurrentprocess_is_valid_handle);
+	RUN_TEST(getcurrentthreadid_is_nonzero);
+	RUN_TEST(getcurrentthread_is_pseudo_handle);
+
+	RUN_TEST(gettickcount64_is_nonzero);
+	RUN_TEST(gettickcount64_increases_over_time);
+
+	RUN_TEST(charlowera_lowercases_ascii);
+	RUN_TEST(charlowera_already_lower_unchanged);
+	RUN_TEST(charuppera_uppercases_ascii);
+	RUN_TEST(charuppera_already_upper_unchanged);
+
+	RUN_TEST(gettemppath_returns_nonzero_length);
+	RUN_TEST(gettemppath_buf_too_small_returns_length);
+	RUN_TEST(gettemppath_custom_tmpdir);
+
+	RUN_TEST(gettempfilename_returns_nonzero);
+	RUN_TEST(gettempfilename_creates_file);
+	RUN_TEST(gettempfilename_null_path_uses_tmp);
+
+	RUN_TEST(getmodulefilename_returns_nonzero);
+	RUN_TEST(getmodulefilename_null_terminates);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;

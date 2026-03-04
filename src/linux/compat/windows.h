@@ -669,8 +669,11 @@ static inline void OutputDebugStringW(LPCWSTR s) { (void)s; }
 #define OutputDebugString OutputDebugStringA
 
 /* LocalAlloc/LocalFree/GlobalAlloc/GlobalFree → malloc/free */
-#define LMEM_FIXED   0x0000
+#define LMEM_FIXED    0x0000
 #define LMEM_ZEROINIT 0x0040
+#define GMEM_FIXED    0x0000
+#define GMEM_MOVEABLE 0x0002
+#define GMEM_ZEROINIT 0x0040
 static inline HLOCAL LocalAlloc(UINT flags, SIZE_T n) { return (flags & LMEM_ZEROINIT) ? calloc(1,n) : malloc(n); }
 static inline HLOCAL LocalFree(HLOCAL p) { free(p); return NULL; }
 static inline HGLOBAL GlobalAlloc(UINT flags, SIZE_T n) { return (flags & LMEM_ZEROINIT) ? calloc(1,n) : malloc(n); }
