@@ -1102,6 +1102,23 @@ EXTRA_SRC_LINUX_test_wue_linux := \
 	$(WIM_LIB) \
 	$(XML_SRC)
 
+# localization_common tests: lmprintf, get_locale_from_name/lcid, toggle_default_locale,
+# get_name_from_id, free_loc_cmd — pure logic (Linux + Wine)
+CFLAGS_LINUX_test_localization_common := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_localization_common := $(COMMON)/localization.c $(COMMON)/stdfn.c
+
+CFLAGS_WIN_test_localization_common := \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_localization_common := $(COMMON)/localization.c $(COMMON)/stdfn.c
+
 # wue_common tests: wue_compute_option_flags() pure logic (Linux + Wine)
 CFLAGS_LINUX_test_wue_common := \
 	-DRUFUS_TEST \
