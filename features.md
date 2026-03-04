@@ -511,6 +511,7 @@ This is the most structurally significant porting gap.
 | `common/xml.c` cross-platform tests | ✅ | 74 tests in `test_xml_common.c`; buffer-based ezxml parse/child/attr/sibling/idx/get_val/error/toxml/entity — Linux + Wine |
 | `common/stdio.c` cross-platform tests | ✅ | 47 tests in `test_stdio_common.c`; GuidToString/StringToGuid/TimestampToHumanReadable — Linux + Wine |
 | `common/wue.c` cross-platform tests | ✅ | 38 tests in `test_wue_common.c`; wue_compute_option_flags (all UNATTEND_* flag combinations, build gates, expert mode) — Linux + Wine; fixed `bypass_name[]` to have explicit size [3] for standalone compilation; added `unattend_username` extern declaration; added `#include "msapi_utf8.h"` to Win32 block |
+| `common/iso_config.c` cross-platform tests | ✅ | 73 tests in `test_iso_config_common.c`; iso_patch_config_file — null guards, label replace (grub/syslinux/spaces), persistence (Ubuntu/Mint/Debian/size=0), RH8 stage2→repo, FreeNAS cd9660, Tails dual-BIOS copy, modified_files list, is_cfg=FALSE skip, BT_IMAGE guard, multi-occurrence replace — Linux + Wine; replace_char inlined to avoid common/parser.c PE-parsing header conflicts on MinGW |
 | `ToLocaleName()` C.UTF-8 fix | ✅ | Fixed `linux/stdfn.c` `ToLocaleName()` to return `en-US` for `C.UTF-8` (was returning `"C"`); added `to_locale_name_c_utf8_locale` test (366 total) |
 | TMPDIR override test | ✅ | Added `paths_temp_dir_respects_tmpdir_env` test to `test_settings_linux.c` (85 total) |
 

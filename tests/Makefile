@@ -539,6 +539,29 @@ EXTRA_SRC_LINUX_test_iso_config_linux := \
 	$(SRC_DIR)/linux/parser.c \
 	$(SRC_DIR)/linux/stdfn.c
 
+# iso_config_common tests: cross-platform iso_patch_config_file()
+# replace_char is inlined in the test; replace_in_token_data comes from the
+# platform-specific parser (linux/ on Linux, windows/ on Wine/MinGW).
+CFLAGS_LINUX_test_iso_config_common := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_iso_config_common := \
+	$(SRC_DIR)/common/iso_config.c \
+	$(SRC_DIR)/linux/parser.c \
+	$(SRC_DIR)/linux/stdfn.c
+
+CFLAGS_WIN_test_iso_config_common := \
+	-I$(SRC_DIR)/common -I$(SRC_DIR)/windows \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_iso_config_common := \
+	$(SRC_DIR)/common/iso_config.c \
+	$(SRC_DIR)/common/stdfn.c \
+	$(SRC_DIR)/windows/parser.c
+
 # fat32_common tests: portable fat32_default_cluster_size()
 # No OS I/O — the test file is self-contained; only common/format_fat32.c needed.
 CFLAGS_LINUX_test_fat32_common := \
