@@ -1385,6 +1385,7 @@ void OpticalDiscSaveImage(void)
 	if (format_thread != NULL) {
 		uprintf("\r\nSave to ISO operation started");
 		PrintInfo(0, -1);
+		SendMessage(hMainDialog, UM_TIMER_START, 0, 0);
 	} else {
 		uprintf("Unable to start ISO save thread");
 		ErrorStatus = RUFUS_ERROR(APPERR(ERROR_CANT_START_THREAD));
@@ -1473,6 +1474,7 @@ BOOL SaveImage(void)
 	                             &s_vhd_save, 0, NULL);
 	if (format_thread != NULL) {
 		PrintInfo(0, -1);
+		SendMessage(hMainDialog, UM_TIMER_START, 0, 0);
 	} else {
 		uprintf("Unable to start image save thread");
 		ErrorStatus = RUFUS_ERROR(APPERR(ERROR_CANT_START_THREAD));

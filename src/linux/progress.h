@@ -68,3 +68,22 @@ uint64_t bar_get_speed(const struct bar_progress *bp, uint64_t dl_total_time);
  * @dl_total_time — elapsed time since the transfer started (ms).
  */
 uint32_t bar_get_eta(struct bar_progress *bp, uint64_t dl_total_time);
+
+/**
+ * Format the progress display text according to the current display mode.
+ *
+ * @out       — output buffer (NUL-terminated string written here)
+ * @sz        — size of @out in bytes
+ * @mode      — UPT_PERCENT / UPT_SPEED / UPT_ETA (values from ui.h)
+ * @percent   — completion percentage (0.0–100.0)
+ * @speed_bps — transfer speed in bytes/second (0 = unknown)
+ * @eta_s     — estimated remaining seconds (UINT32_MAX = unknown)
+ *
+ * Produces:
+ *   UPT_PERCENT  → "XX.X%"
+ *   UPT_SPEED    → "X.X MB/s" / "X.X KB/s" / "N B/s" / "---" (if speed=0)
+ *   UPT_ETA      → "H:MM:SS" / "-:--:--" (if eta=UINT32_MAX)
+ *   (anything else falls back to UPT_PERCENT)
+ */
+void format_progress_text(char *out, size_t sz, int mode,
+                          double percent, uint64_t speed_bps, uint32_t eta_s);

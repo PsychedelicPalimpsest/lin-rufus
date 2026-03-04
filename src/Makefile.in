@@ -174,7 +174,9 @@ am__objects_1 = common/rufus-cregex_compile.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-kbd_shortcuts.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-proposed_label.$(OBJEXT) \
 @TARGET_WINDOWS_FALSE@	linux/rufus-boot_validation.$(OBJEXT) \
-@TARGET_WINDOWS_FALSE@	linux/rufus-drag_drop.$(OBJEXT)
+@TARGET_WINDOWS_FALSE@	linux/rufus-drag_drop.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-progress.$(OBJEXT) \
+@TARGET_WINDOWS_FALSE@	linux/rufus-usb_speed.$(OBJEXT)
 @TARGET_WINDOWS_TRUE@am__objects_3 =  \
 @TARGET_WINDOWS_TRUE@	windows/rufus-badblocks.$(OBJEXT) \
 @TARGET_WINDOWS_TRUE@	windows/rufus-darkmode.$(OBJEXT) \
@@ -487,7 +489,7 @@ COMMON_SOURCES = common/cregex_compile.c common/cregex_parse.c common/cregex_vm.
 @TARGET_WINDOWS_FALSE@	linux/drive.c linux/format.c linux/format_ext.c linux/format_ext_tools.c linux/format_fat32.c linux/globals.c \
 @TARGET_WINDOWS_FALSE@	linux/hash.c linux/icon.c linux/image_scan.c linux/img_info.c linux/iso.c linux/localization.c linux/net.c linux/parser.c \
 @TARGET_WINDOWS_FALSE@	linux/pki.c linux/process.c linux/rufus.c linux/smart.c linux/stdfn.c \
-@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c linux/sl_version.c linux/dump_fat.c linux/ntfsfix.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c linux/drag_drop.c
+@TARGET_WINDOWS_FALSE@	linux/stdio.c linux/stdlg.c linux/syslinux.c linux/sl_version.c linux/dump_fat.c linux/ntfsfix.c $(LINUX_UI_SRC) linux/ui_combo_logic.c linux/ui_enable_opts.c linux/vhd.c linux/window_text_bridge.c linux/status_history.c linux/device_combo.c linux/wue.c linux/wintogo_bcd_template.c linux/notify.c linux/system_info.c linux/timezone.c linux/xdg.c linux/polkit.c linux/verify.c linux/download_resume.c linux/cli.c linux/crash_handler.c linux/hyperlink.c linux/csm_help.c linux/multidev.c linux/ventoy_detect.c linux/kbd_shortcuts.c linux/proposed_label.c linux/boot_validation.c linux/drag_drop.c linux/progress.c linux/usb_speed.c
 
 @TARGET_WINDOWS_TRUE@OS_SOURCES = windows/badblocks.c windows/darkmode.c windows/dev.c windows/dos.c windows/dos_locale.c \
 @TARGET_WINDOWS_TRUE@	windows/drive.c windows/format.c windows/format_ext.c windows/format_fat32.c windows/hash.c \
@@ -642,6 +644,8 @@ linux/rufus-kbd_shortcuts.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-proposed_label.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-boot_validation.$(OBJEXT): linux/$(am__dirstamp)
 linux/rufus-drag_drop.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-progress.$(OBJEXT): linux/$(am__dirstamp)
+linux/rufus-usb_speed.$(OBJEXT): linux/$(am__dirstamp)
 windows/$(am__dirstamp):
 	@$(MKDIR_P) windows
 	@: >>windows/$(am__dirstamp)
@@ -1135,6 +1139,18 @@ linux/rufus-drag_drop.o: linux/drag_drop.c
 
 linux/rufus-drag_drop.obj: linux/drag_drop.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-drag_drop.obj `if test -f 'linux/drag_drop.c'; then $(CYGPATH_W) 'linux/drag_drop.c'; else $(CYGPATH_W) '$(srcdir)/linux/drag_drop.c'; fi`
+
+linux/rufus-progress.o: linux/progress.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-progress.o `test -f 'linux/progress.c' || echo '$(srcdir)/'`linux/progress.c
+
+linux/rufus-progress.obj: linux/progress.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-progress.obj `if test -f 'linux/progress.c'; then $(CYGPATH_W) 'linux/progress.c'; else $(CYGPATH_W) '$(srcdir)/linux/progress.c'; fi`
+
+linux/rufus-usb_speed.o: linux/usb_speed.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-usb_speed.o `test -f 'linux/usb_speed.c' || echo '$(srcdir)/'`linux/usb_speed.c
+
+linux/rufus-usb_speed.obj: linux/usb_speed.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o linux/rufus-usb_speed.obj `if test -f 'linux/usb_speed.c'; then $(CYGPATH_W) 'linux/usb_speed.c'; else $(CYGPATH_W) '$(srcdir)/linux/usb_speed.c'; fi`
 
 windows/rufus-badblocks.o: windows/badblocks.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(rufus_CFLAGS) $(CFLAGS) -c -o windows/rufus-badblocks.o `test -f 'windows/badblocks.c' || echo '$(srcdir)/'`windows/badblocks.c

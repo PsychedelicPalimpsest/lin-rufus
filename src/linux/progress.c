@@ -18,6 +18,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
+#include <stdio.h>
 
 #include "progress.h"
 
@@ -139,4 +140,44 @@ uint32_t bar_get_eta(struct bar_progress *bp, uint64_t dl_total_time)
 	bp->last_eta_value = eta;
 	bp->last_eta_time  = dl_total_time;
 	return eta;
+}
+
+/* ── format_progress_text ──────────────────────────────────────────────── */
+
+void format_progress_text(char *out, size_t sz, int mode,
+                          double percent, uint64_t speed_bps, uint32_t eta_s)
+{
+	/* Use integer values matching UPT_SPEED=1 and UPT_ETA=2 from ui.h,
+	 * so this file does not need to include ui.h (which depends on rufus.h
+	 * context not available here). */
+	switch (mode) {
+	case 1: /* UPT_SPEED */
+		if (speed_bps == 0) {
+			snprintf(out, sz, "---");
+		} else if (speed_bps >= (uint64_t)1024 * 1024) {
+			snprintf(out, sz, "%.1f MB/s",
+			         (double)speed_bps / (1024.0 * 1024.0));
+		} else if (speed_bps >= 1024) {
+			snprintf(out, sz, "%.1f KB/s",
+			         (double)speed_bps / 1024.0);
+		} else {
+			snprintf(out, sz, "%" PRIu64 " B/s", speed_bps);
+		}
+		break;
+
+	case 2: /* UPT_ETA */
+		if (eta_s == UINT32_MAX) {
+			snprintf(out, sz, "-:--:--");
+		} else {
+			snprintf(out, sz, "%u:%02u:%02u",
+			         eta_s / 3600,
+			         (eta_s % 3600) / 60,
+			         eta_s % 60);
+		}
+		break;
+
+	default: /* UPT_PERCENT (0) and anything unrecognised */
+		snprintf(out, sz, "%.1f%%", percent);
+		break;
+	}
 }

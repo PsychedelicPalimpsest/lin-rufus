@@ -686,6 +686,12 @@ CFLAGS_LINUX_test_progress_linux := \
 	-Wno-unused-parameter
 EXTRA_SRC_LINUX_test_progress_linux := $(SRC_DIR)/linux/progress.c
 
+# progress_text_linux tests: format_progress_text() display mode formatting
+CFLAGS_LINUX_test_progress_text_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-unused-parameter
+EXTRA_SRC_LINUX_test_progress_text_linux := $(SRC_DIR)/linux/progress.c
+
 CFLAGS_LINUX_test_badblocks_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs \

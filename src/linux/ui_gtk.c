@@ -35,6 +35,7 @@
 #include "missing.h"
 #include "drive.h"
 #include "format.h"
+#include "ui.h"
 #include <windowsx.h>
 #include <msg_dispatch.h>
 #include "device_monitor.h"
@@ -332,6 +333,8 @@ static void on_save_optical_clicked(GtkWidget *w, gpointer data);
 static void on_drag_data_received(GtkWidget *w, GdkDragContext *ctx,
                                   gint x, gint y, GtkSelectionData *sel,
                                   guint info, guint t, gpointer data);
+static gboolean on_key_press(GtkWidget *w, GdkEventKey *ev, gpointer data);
+static gboolean on_key_release(GtkWidget *w, GdkEventKey *ev, gpointer data);
 static void on_persistence_changed(GtkWidget *w, gpointer data);
 static void on_multi_write_clicked(GtkButton *btn, gpointer data);
 void SetPersistenceSize(void);   /* defined later in this file */
@@ -1059,6 +1062,14 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 	g_signal_connect(win, "drag-data-received",
 	                 G_CALLBACK(on_drag_data_received), NULL);
 
+	/* Alt key tracking — bare Alt tap cycles the progress display mode.
+	 * key-press-event / key-release-event on the top-level window capture
+	 * key events before accelerators consume them.  We need GDK_KEY_PRESS_MASK
+	 * and GDK_KEY_RELEASE_MASK for the window to receive these signals. */
+	gtk_widget_add_events(win, GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK);
+	g_signal_connect(win, "key-press-event",   G_CALLBACK(on_key_press),   NULL);
+	g_signal_connect(win, "key-release-event", G_CALLBACK(on_key_release), NULL);
+
 	gtk_widget_show_all(win);
 
 	/* Default state: hide optional rows */
@@ -1069,6 +1080,43 @@ GtkWidget *rufus_gtk_create_window(GtkApplication *app)
 }
 
 /* ---- Signal handlers ---- */
+
+/* Alt key state — mirrors the Windows alt_pressed / alt_command tracking
+ * in rufus.c.  Used to cycle the progress display mode (speed/ETA/percent)
+ * on a bare Alt key press without a secondary key. */
+static BOOL alt_pressed = FALSE;
+static BOOL alt_command = FALSE;
+
+/* key-press-event: track Alt down and any secondary key pressed with Alt. */
+static gboolean on_key_press(GtkWidget *w, GdkEventKey *ev, gpointer data)
+{
+	(void)w; (void)data;
+	if (ev->keyval == GDK_KEY_Alt_L || ev->keyval == GDK_KEY_Alt_R) {
+		alt_pressed = TRUE;
+		alt_command = FALSE;
+	} else if (alt_pressed) {
+		/* A non-Alt key was pressed while Alt was held — this is an Alt+X
+		 * command, not a bare Alt tap. */
+		alt_command = TRUE;
+	}
+	return FALSE;  /* do not consume the event */
+}
+
+/* key-release-event: on bare Alt release, cycle the progress display mode. */
+static gboolean on_key_release(GtkWidget *w, GdkEventKey *ev, gpointer data)
+{
+	(void)w; (void)data;
+	if (ev->keyval == GDK_KEY_Alt_L || ev->keyval == GDK_KEY_Alt_R) {
+		if (alt_pressed && !alt_command) {
+			/* Bare Alt tap — cycle progress display mode */
+			update_progress_type = (update_progress_type + 1) % UPT_MAX;
+			uprintf("Progress display mode: %d", update_progress_type);
+		}
+		alt_pressed = FALSE;
+		alt_command = FALSE;
+	}
+	return FALSE;
+}
 
 static void on_close_clicked(GtkButton *btn, gpointer data)
 {
@@ -1449,6 +1497,10 @@ start_format:
 			op_in_progress = FALSE;
 			rufus_gtk_update_status(lmprintf(MSG_212));
 			EnableControls(TRUE, FALSE);
+		} else {
+			/* Start the elapsed-time / speed-tracking clock — mirrors
+			 * SendMessage(hMainDialog, UM_TIMER_START, 0, 0) in Windows rufus.c. */
+			PostMessage(hMainDialog, UM_TIMER_START, 0, 0);
 		}
 	}
 	return;
@@ -2225,6 +2277,8 @@ static void on_hash_clicked(GtkButton *btn, gpointer data)
 	if (format_thread == NULL) {
 		uprintf("on_hash_clicked: unable to start HashThread");
 		ErrorStatus = RUFUS_ERROR(ERROR_CANT_START_THREAD);
+	} else {
+		PostMessage(hMainDialog, UM_TIMER_START, 0, 0);
 	}
 }
 
@@ -3088,8 +3142,8 @@ void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f
 	(void)msg; (void)f;
 	if (tot == 0) return;
 
-	float pct = (float)((double)cur / (double)tot * 100.0);
-	UpdateProgress(op, pct);
+	double percent = (double)cur / (double)tot * 100.0;
+	UpdateProgress(op, (float)percent);
 
 	/* ---- speed / ETA tracking ---------------------------------------- */
 	struct timespec ts;
@@ -3102,29 +3156,24 @@ void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f
 	uint64_t dl_total_ms = now_ms - g_format_start_ms;
 
 	/* Keep total_length in sync (first call may not know it yet) */
-	if (g_bp.total_length != tot) {
+	if (g_bp.total_length != tot)
 		g_bp.total_length = tot;
-	}
 	uint64_t prev = g_bp.count;
 	g_bp.count    = cur;
 	bar_update(&g_bp, cur - prev, dl_total_ms);
 
-	/* Build the speed/ETA string to show beside the elapsed timer. */
+	/* Build the speed/ETA/percent string according to the current display mode. */
+	if (!rw.speed_label)
+		return;
+
 	uint64_t speed = bar_get_speed(&g_bp, dl_total_ms);
-	if (speed > 0 && rw.speed_label) {
-		SpeedData *sd = malloc(sizeof(*sd));
-		if (sd) {
-			/* Format speed as "X.X MB/s" or "X.X KB/s" */
-			if (speed >= 1024 * 1024)
-				snprintf(sd->text, sizeof(sd->text), "%.1f MB/s",
-				         (double)speed / (1024.0 * 1024.0));
-			else if (speed >= 1024)
-				snprintf(sd->text, sizeof(sd->text), "%.1f KB/s",
-				         (double)speed / 1024.0);
-			else
-				snprintf(sd->text, sizeof(sd->text), "%" PRIu64 " B/s", speed);
-			g_idle_add(idle_update_speed, sd);
-		}
+	uint32_t eta   = bar_get_eta(&g_bp, dl_total_ms);
+
+	SpeedData *sd = malloc(sizeof(*sd));
+	if (sd) {
+		format_progress_text(sd->text, sizeof(sd->text),
+		                     update_progress_type, percent, speed, eta);
+		g_idle_add(idle_update_speed, sd);
 	}
 }
 

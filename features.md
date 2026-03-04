@@ -799,3 +799,57 @@ Linux implementation:
 
 * ~~211~~: **RESOLVED** — USB connection speed shown in device combo on Linux.
   11 new tests pass. Full test suite: all tests pass.
+
+
+---
+
+## Session 2026-03-09 — Progress mode cycling and timer fix
+
+### Feature 212: Alt key cycles progress display mode (speed/ETA/percent)
+
+On Windows, a bare Alt key release (with no other key) cycles `update_progress_type`
+through UPT_PERCENT → UPT_SPEED → UPT_ETA → UPT_PERCENT.  The Linux port had
+`update_progress_type` defined but never changed, and `_UpdateProgressWithInfo`
+always showed speed regardless of the mode.
+
+**Bug fixed concurrently:** `UM_TIMER_START` was never sent on Linux — neither the
+format thread, hash thread, nor optical-disc save thread called `start_clock_timer()`.
+This meant the elapsed-time display never ticked and the ring-buffer speed tracking
+never initialised.
+
+Linux implementation:
+- Extracted `format_progress_text(char *out, size_t sz, int mode, double percent,
+  uint64_t speed_bps, uint32_t eta_s)` from `_UpdateProgressWithInfo` into
+  `src/linux/progress.c` / `src/linux/progress.h`.
+  - UPT_PERCENT: "XX.X%"
+  - UPT_SPEED:   "X.X MB/s" / "X.X KB/s" / "N B/s" / "---" (if speed=0)
+  - UPT_ETA:     "H:MM:SS" / "-:--:--" (if eta=UINT32_MAX)
+  - Any unrecognised mode falls back to percent.
+  - Uses numeric cases (1/2/default) to avoid pulling `ui.h` into `progress.c`.
+- Added `#include "ui.h"` to `src/linux/ui_gtk.c` (after `rufus.h` which defines
+  `BADLOCKS_PATTERN_TYPES` that `ui.h` needs) — provides UPT_* constants and
+  the extern declaration for `update_progress_type`.
+- Updated `_UpdateProgressWithInfo()` in `ui_gtk.c` to call `bar_get_eta()` and
+  `format_progress_text()` instead of the inline speed-only formatting.
+- Added `on_key_press` / `on_key_release` handlers to `ui_gtk.c`:
+  - `on_key_press`: sets `alt_pressed = TRUE`; sets `alt_command = TRUE` if a
+    non-Alt key is also held.
+  - `on_key_release`: on bare Alt release, cycles
+    `update_progress_type = (update_progress_type + 1) % UPT_MAX`.
+  - Connected to main window via `g_signal_connect(win, "key-press-event" …)` and
+    `"key-release-event"`, with `GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK` added.
+- **Timer start fix**: added `PostMessage(hMainDialog, UM_TIMER_START, 0, 0)` after
+  successful thread creation in:
+  - `on_start_clicked()` (FormatThread) in `ui_gtk.c`
+  - `on_hash_clicked()` (HashThread) in `ui_gtk.c`
+  - Both `OpticalDiscSaveImageThread` creation sites in `iso.c`
+- 15 TDD tests in `tests/test_progress_text_linux.c` (18 assertions):
+  - UPT enum sanity (4 values)
+  - UPT_PERCENT: 0%, mid, 100%
+  - UPT_SPEED: MB/s, KB/s, B/s, zero→"---", 1MB/s boundary, 1KB/s boundary
+  - UPT_ETA: seconds only, with hours, zero, UINT32_MAX→"-:--:--"
+  - Unknown mode falls back to percent
+
+* ~~212~~: **RESOLVED** — Alt key cycles speed/ETA/percent mode; elapsed timer and
+  speed ring-buffer now start correctly.  15 new tests, 18 assertions, all pass.
+  Full test suite: all tests pass.
