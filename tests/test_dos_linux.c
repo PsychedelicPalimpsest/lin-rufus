@@ -972,6 +972,136 @@ TEST(freedos_keeps_cp737_for_greek)
 #endif
 }
 
+/* ================================================================
+ * AUTOEXEC.BAT parity tests
+ * Windows writes a full keyboard+codepage setup in AUTOEXEC.BAT:
+ *   GOTO %CONFIG%
+ *   :1
+ *   mode con codepage prepare=((cp) \locale\ega.cpx)
+ *   mode con codepage select=cp
+ *   keyb XX,,\locale\keyboard.sys
+ *   :2
+ * The Linux port should write the same structure.
+ * ================================================================ */
+#ifdef RUFUS_TEST
+/* Helper: check AUTOEXEC.BAT contains a specific needle string. */
+static int check_autoexec_contains(const char* xkb, const char* needle)
+{
+    dos_locale_set_xkb_layout(xkb);
+    char *target = make_tmpdir();
+    if (!target) { dos_locale_set_xkb_layout(NULL); return -1; }
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char bat[MAX_PATH];
+    snprintf(bat, sizeof(bat), "%s/AUTOEXEC.BAT", target);
+    FILE *f = fopen(bat, "r");
+    int found = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            /* Case-insensitive search */
+            char upper_line[256], upper_needle[256];
+            size_t i;
+            for (i = 0; i < sizeof(upper_line)-1 && line[i]; i++)
+                upper_line[i] = (char)toupper((unsigned char)line[i]);
+            upper_line[i] = '\0';
+            for (i = 0; i < sizeof(upper_needle)-1 && needle[i]; i++)
+                upper_needle[i] = (char)toupper((unsigned char)needle[i]);
+            upper_needle[i] = '\0';
+            if (strstr(upper_line, upper_needle))
+                found = 1;
+        }
+        fclose(f);
+    }
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    return found;
+}
+#endif /* RUFUS_TEST */
+
+TEST(autoexec_has_goto_config_for_german)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_autoexec_contains("de", "GOTO") == 1,
+              "German AUTOEXEC.BAT should have GOTO %%CONFIG%%");
+#endif
+}
+
+TEST(autoexec_has_label_1_for_german)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_autoexec_contains("de", ":1") == 1,
+              "German AUTOEXEC.BAT should have :1 label");
+#endif
+}
+
+TEST(autoexec_has_keyb_command_for_german)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_autoexec_contains("de", "keyb") == 1,
+              "German AUTOEXEC.BAT should have keyb command");
+#endif
+}
+
+TEST(autoexec_has_mode_codepage_for_german)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_autoexec_contains("de", "codepage") == 1,
+              "German AUTOEXEC.BAT should have mode codepage command");
+#endif
+}
+
+TEST(autoexec_has_ega_cpx_for_german)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_autoexec_contains("de", "ega.cpx") == 1,
+              "German AUTOEXEC.BAT should reference ega.cpx");
+#endif
+}
+
+TEST(autoexec_has_label_2_for_german)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_autoexec_contains("de", ":2") == 1,
+              "German AUTOEXEC.BAT should have :2 (US fallback) label");
+#endif
+}
+
+TEST(autoexec_uses_ega3_for_russian)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Russian CP866 -> ega3.cpx (Cyrillic) */
+    CHECK_MSG(check_autoexec_contains("ru", "ega3.cpx") == 1,
+              "Russian AUTOEXEC.BAT should reference ega3.cpx");
+#endif
+}
+
+TEST(autoexec_uses_ega5_for_greek)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Greek CP737 -> ega5.cpx (Greek) */
+    CHECK_MSG(check_autoexec_contains("gr", "ega5.cpx") == 1,
+              "Greek AUTOEXEC.BAT should reference ega5.cpx");
+#endif
+}
+
 /* GetResource is provided by stdfn.c */
 #include "resource.h"
 extern uint8_t* GetResource(void *m, char *n, char *t, const char *d, DWORD *l, BOOL dup);
@@ -1156,6 +1286,15 @@ int main(void)
     RUN(freedos_upgrades_cp850_to_cp858_for_french);
     RUN(freedos_keeps_cp866_for_russian);
     RUN(freedos_keeps_cp737_for_greek);
+
+    RUN(autoexec_has_goto_config_for_german);
+    RUN(autoexec_has_label_1_for_german);
+    RUN(autoexec_has_keyb_command_for_german);
+    RUN(autoexec_has_mode_codepage_for_german);
+    RUN(autoexec_has_ega_cpx_for_german);
+    RUN(autoexec_has_label_2_for_german);
+    RUN(autoexec_uses_ega3_for_russian);
+    RUN(autoexec_uses_ega5_for_greek);
 
     RUN(getresource_command_com_not_null);
     RUN(getresource_command_com_size_correct);

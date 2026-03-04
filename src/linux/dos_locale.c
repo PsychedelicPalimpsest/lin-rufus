@@ -159,6 +159,43 @@ static const char* kb_driver_for(const char* dos_kb)
     return fd_kb_files[0]; /* default: KEYBOARD.SYS */
 }
 
+/*
+ * Return the FreeDOS EGA/CPX font file for a given OEM codepage.
+ * Mirrors the Windows fd_get_ega() function.
+ */
+static const char* ega_driver_for(int cp)
+{
+    switch (cp) {
+    case  437: case  850: case  852: case  853:
+    case  857: case  858:
+        return "ega.cpx";
+    case  775: case  859: case 1116: case 1117:
+    case 1118: case 1119:
+        return "ega2.cpx";
+    case  771: case  772: case  808: case  855:
+    case  866: case  872:
+        return "ega3.cpx";
+    case  848: case  849: case 1125: case 1131:
+    case 3012:
+        return "ega4.cpx";
+    case  113: case  737: case  851: case  869:
+        return "ega5.cpx";
+    case  899:
+        return "ega6.cpx";
+    case  770: case  773: case  774: case  777:
+    case  778:
+        return "ega8.cpx";
+    case  860: case  861: case  863: case  865:
+    case  867:
+        return "ega9.cpx";
+    case  667: case  668: case  790: case  991:
+    case 3845:
+        return "ega10.cpx";
+    default:
+        return "ega.cpx"; /* safe fallback */
+    }
+}
+
 /* ----------------------------------------------------------------
  * Injection support for unit testing
  * ---------------------------------------------------------------- */
@@ -279,6 +316,8 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     if (cp == 850)
         cp = 858;
 
+    const char* egadrv = ega_driver_for(cp);
+
     /* Upper-case DOS keyboard code for display / KEYB.EXE */
     char KB_UPPER[8];
     size_t kblen = strlen(kb);
@@ -333,6 +372,8 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     fprintf(fd, "2 !DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\%s\r\n", kbdrv);
     fclose(fd);
 
+    /* AUTOEXEC.BAT: use GOTO %%CONFIG%% structure to activate codepage/keyboard
+     * for the selected menu option, mirroring Windows SetDOSLocale() exactly. */
     snprintf(filename, sizeof(filename), "%sAUTOEXEC.BAT", path);
     fd = fopen(filename, "w");
     if (fd == NULL) {
@@ -341,9 +382,15 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     }
     fprintf(fd, "@echo off\r\n");
     fprintf(fd, "set PATH=.;\\;\\LOCALE\r\n");
-    fprintf(fd, "echo Using %s keyboard with CP%d codepage\r\n", KB_UPPER, cp);
+    fprintf(fd, "display con=(ega,,1)\r\n");
+    fprintf(fd, "GOTO %%CONFIG%%\r\n");
+    fprintf(fd, ":1\r\n");
+    fprintf(fd, "mode con codepage prepare=((%d) \\LOCALE\\%s) > NUL\r\n", cp, egadrv);
+    fprintf(fd, "mode con codepage select=%d > NUL\r\n", cp);
+    fprintf(fd, "keyb %s,,\\LOCALE\\%s\r\n", KB_UPPER, kbdrv);
+    fprintf(fd, ":2\r\n");
     fclose(fd);
 
-    uprintf("SetDOSLocale: %s locale (CP%d) -- created AUTOEXEC.BAT and FDCONFIG.SYS", KB_UPPER, cp);
+    uprintf("SetDOSLocale: %s locale (CP%d, %s) -- created AUTOEXEC.BAT and FDCONFIG.SYS", KB_UPPER, cp, egadrv);
     return TRUE;
 }
