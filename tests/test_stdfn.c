@@ -667,8 +667,86 @@ TEST(rufus_log_write_append_mode_adds_content)
 }
 
 /* ===========================================================================
- * main
+ * FileIO
  * ========================================================================= */
+
+TEST(fileio_write_and_read_roundtrip)
+{
+    const char *path = "/tmp/rufus_stdfn_fileio_test.tmp";
+    const char *msg = "FileIO test content";
+    DWORD wsz = (DWORD)strlen(msg);
+    char *wbuf = (char *)msg;
+    unlink(path);
+
+    BOOL wok = FileIO(FILE_IO_WRITE, (char*)path, &wbuf, &wsz);
+    CHECK_MSG(wok, "FileIO WRITE must return TRUE");
+
+    char *rbuf = NULL;
+    DWORD rsz = 0;
+    BOOL rok = FileIO(FILE_IO_READ, (char*)path, &rbuf, &rsz);
+    CHECK_MSG(rok, "FileIO READ must return TRUE");
+    CHECK_MSG(rbuf != NULL, "FileIO READ must allocate buffer");
+    if (rbuf) {
+        CHECK_MSG(rsz == (DWORD)strlen(msg), "FileIO READ must return correct size");
+        CHECK_MSG(strncmp(rbuf, msg, rsz) == 0, "FileIO read data must match written data");
+        free(rbuf);
+    }
+    unlink(path);
+}
+
+TEST(fileio_null_path_returns_false)
+{
+    char *buf = NULL;
+    DWORD sz = 0;
+    CHECK_MSG(!FileIO(FILE_IO_READ, NULL, &buf, &sz), "FileIO(NULL path) must return FALSE");
+}
+
+TEST(fileio_null_buf_returns_false)
+{
+    DWORD sz = 0;
+    CHECK_MSG(!FileIO(FILE_IO_WRITE, (char*)"/tmp/test.tmp", NULL, &sz),
+              "FileIO(NULL buf) must return FALSE");
+}
+
+TEST(fileio_null_size_returns_false)
+{
+    char *buf = NULL;
+    CHECK_MSG(!FileIO(FILE_IO_READ, (char*)"/tmp/test.tmp", &buf, NULL),
+              "FileIO(NULL size) must return FALSE");
+}
+
+TEST(fileio_read_missing_file_returns_false)
+{
+    char *buf = NULL;
+    DWORD sz = 0;
+    BOOL ok = FileIO(FILE_IO_READ, (char*)"/tmp/rufus_missing_fileio_xyz_9999.tmp", &buf, &sz);
+    CHECK_MSG(!ok, "FileIO READ on missing file must return FALSE");
+    CHECK_MSG(buf == NULL, "FileIO READ on missing file must set buf to NULL");
+}
+
+TEST(fileio_append_adds_content)
+{
+    const char *path = "/tmp/rufus_stdfn_fileio_append.tmp";
+    unlink(path);
+    char *s1 = "first";
+    DWORD sz1 = (DWORD)strlen(s1);
+    FileIO(FILE_IO_WRITE, (char*)path, &s1, &sz1);
+
+    char *s2 = " second";
+    DWORD sz2 = (DWORD)strlen(s2);
+    BOOL ok = FileIO(FILE_IO_APPEND, (char*)path, &s2, &sz2);
+    CHECK_MSG(ok, "FileIO APPEND must return TRUE");
+
+    char *rbuf = NULL;
+    DWORD rsz = 0;
+    FileIO(FILE_IO_READ, (char*)path, &rbuf, &rsz);
+    if (rbuf) {
+        CHECK_MSG(strstr(rbuf, "first") != NULL, "FileIO APPEND must preserve first write");
+        CHECK_MSG(strstr(rbuf, "second") != NULL, "FileIO APPEND must include second write");
+        free(rbuf);
+    }
+    unlink(path);
+}
 
 int main(void)
 {
@@ -748,6 +826,14 @@ int main(void)
     RUN(rufus_log_write_creates_log_file);
     RUN(rufus_log_write_content_matches);
     RUN(rufus_log_write_append_mode_adds_content);
+
+    printf("\n=== FileIO ===\n");
+    RUN(fileio_write_and_read_roundtrip);
+    RUN(fileio_null_path_returns_false);
+    RUN(fileio_null_buf_returns_false);
+    RUN(fileio_null_size_returns_false);
+    RUN(fileio_read_missing_file_returns_false);
+    RUN(fileio_append_adds_content);
 
     TEST_RESULTS();
 }
