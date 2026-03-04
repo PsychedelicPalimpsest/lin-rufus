@@ -74,6 +74,7 @@ typedef struct {
 	GtkWidget *progress_bar;        /* IDC_PROGRESS */
 	GtkWidget *status_label;        /* IDC_STATUS */
 	GtkWidget *elapsed_label;       /* elapsed time display (right of status) */
+	GtkWidget *speed_label;         /* write speed / ETA display */
 
 	/* Main action buttons */
 	GtkWidget *start_btn;           /* IDC_START */

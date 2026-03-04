@@ -728,3 +728,47 @@ Linux implementation:
 
 * ~~209~~: **RESOLVED** — BlockingProcessList populated on Linux; warning shown before format.
   4 new tests pass (25 total in test_process_linux). Full test suite: all tests pass.
+
+
+---
+
+## Session 2026-03-08 — Write speed / ETA tracking
+
+### Feature 210: Write speed display during format/write operations
+
+On Windows, `_UpdateProgressWithInfo` uses a GNU wget-derived ring-buffer algorithm
+(`bar_update` / `bar_progress`) to track the rolling transfer speed and estimated time
+remaining (ETA).  The Linux implementation previously just updated the progress bar %
+with no speed or ETA information.
+
+Linux implementation:
+- Added `src/linux/progress.h` — declares `struct bar_progress`, `struct bar_progress_hist`,
+  and the public API: `bar_reset()`, `bar_update()`, `bar_get_speed()`, `bar_get_eta()`.
+  Constants match Windows `ui.h` (`SPEED_HISTORY_SIZE=20`, `SPEED_SAMPLE_MIN=150ms`, etc.)
+- Added `src/linux/progress.c` — implements the ring-buffer speed tracking and ETA
+  calculation.  Ported from the GNU wget algorithm in `src/windows/ui.c`.
+- Added `GtkWidget *speed_label` to `RufusWidgets` in `ui_gtk.h` — a new label widget
+  shown between the status text and the elapsed timer in the status row.
+- Updated `build_status_section()` in `ui_gtk.c` to create and pack `rw.speed_label`.
+- Added `SpeedData` idle-callback infrastructure in `ui_gtk.c` to marshal speed text
+  updates from the format thread to the GTK main thread safely.
+- Updated `_UpdateProgressWithInfo()` in `ui_gtk.c`:
+  - Tracks monotonic time via `clock_gettime(CLOCK_MONOTONIC)`.
+  - Calls `bar_update()` with bytes delta and elapsed ms.
+  - Calls `bar_get_speed()` and displays "X.X MB/s" / "X.X KB/s" / "N B/s" in the speed label.
+- Updated `start_clock_timer()` to capture `g_format_start_ms` and call `bar_reset()`.
+- Updated `stop_clock_timer()` to clear the speed label.
+- Added `linux/progress.c` to `OS_SOURCES` in `src/Makefile.am` (and regenerated).
+- 16 TDD tests in `tests/test_progress_linux.c` covering:
+  - `bar_reset` initialises state correctly
+  - Sub-SPEED_SAMPLE_MIN samples accumulate in `recent_bytes` but don't enter ring
+  - Exact and over SPEED_SAMPLE_MIN samples enter the ring
+  - Multiple samples accumulate; ring wraps after SPEED_HISTORY_SIZE entries
+  - `bar_get_speed` returns 0 with no history, positive with history
+  - Speed approximation within 20% tolerance
+  - `bar_get_eta` returns UINT32_MAX when not enough data
+  - ETA is reasonable when half-done
+  - Stall detection clears the ring; recovery from stall resets flag
+
+* ~~210~~: **RESOLVED** — Write speed (MB/s / KB/s) shown in status bar during format.
+  16 new tests pass. Full test suite: all tests pass.

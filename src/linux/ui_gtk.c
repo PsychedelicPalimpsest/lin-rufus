@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <time.h>
 
 /* Pull in shared Rufus headers through the compat layer */
 #include "rufus.h"
@@ -40,6 +41,7 @@
 #include "combo_bridge.h"
 #include "settings.h"
 #include "version.h"
+#include "progress.h"
 #include "window_text_bridge.h"
 #include "crash_handler.h"
 #include "device_combo.h"
@@ -115,6 +117,17 @@ static combo_state_t *cs_imgopt   = NULL;
 
 /* Struct used to pass progress data to the GTK main thread via g_idle_add. */
 typedef struct { int op; float pct; } ProgressData;
+typedef struct { char text[64]; } SpeedData;
+
+/* Idle callback: update speed label from main thread. */
+static gboolean idle_update_speed(gpointer data)
+{
+	SpeedData *s = (SpeedData *)data;
+	if (rw.speed_label)
+		gtk_label_set_text(GTK_LABEL(rw.speed_label), s->text);
+	free(s);
+	return G_SOURCE_REMOVE;
+}
 
 /* FileSystemLabel[] is defined in linux/format.c */
 extern const char* FileSystemLabel[FS_MAX];
@@ -146,6 +159,11 @@ static void on_nb_passes_changed(GtkComboBox *combo, gpointer data);
 /* Elapsed time counter and GLib timer source ID (mirrors Windows ClockTimer). */
 static unsigned int elapsed_timer_count = 0;
 static guint elapsed_timer_source = 0;
+
+/* Speed/ETA ring-buffer state — mirrors bar_progress in src/windows/ui.c. */
+static struct bar_progress g_bp;
+/* Timestamp (ms) when the current format operation started, for elapsed calc. */
+static uint64_t g_format_start_ms = 0;
 
 /* Forward declaration for combo registration helper */
 static void combo_register_all(void);
@@ -186,9 +204,15 @@ static gboolean clock_timer_cb(gpointer data)
 
 static void start_clock_timer(void)
 {
+	struct timespec ts;
 	elapsed_timer_count = 0;
 	if (rw.elapsed_label)
 		gtk_label_set_text(GTK_LABEL(rw.elapsed_label), "00:00:00");
+	if (rw.speed_label)
+		gtk_label_set_text(GTK_LABEL(rw.speed_label), "");
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	g_format_start_ms = (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+	bar_reset(&g_bp, 0);   /* total_length updated by first _UpdateProgressWithInfo */
 	if (elapsed_timer_source == 0)
 		elapsed_timer_source = g_timeout_add(1000, clock_timer_cb, NULL);
 }
@@ -201,6 +225,8 @@ static void stop_clock_timer(void)
 	}
 	if (rw.elapsed_label)
 		gtk_label_set_text(GTK_LABEL(rw.elapsed_label), "");
+	if (rw.speed_label)
+		gtk_label_set_text(GTK_LABEL(rw.speed_label), "");
 }
 
 /* Blocking I/O timer — mirrors Windows BlockingTimer (3 s interval).
@@ -740,7 +766,11 @@ static GtkWidget *build_status_section(void)
 	rw.elapsed_label = gtk_label_new("");
 	gtk_widget_set_halign(rw.elapsed_label, GTK_ALIGN_END);
 
+	rw.speed_label = gtk_label_new("");
+	gtk_widget_set_halign(rw.speed_label, GTK_ALIGN_END);
+
 	gtk_box_pack_start(GTK_BOX(status_row), rw.status_label,  TRUE,  TRUE,  0);
+	gtk_box_pack_start(GTK_BOX(status_row), rw.speed_label,   FALSE, FALSE, 4);
 	gtk_box_pack_start(GTK_BOX(status_row), rw.elapsed_label, FALSE, FALSE, 4);
 
 	gtk_box_pack_start(GTK_BOX(vbox), rw.progress_bar,  FALSE, FALSE, 0);
@@ -3055,10 +3085,47 @@ void UpdateProgress(int op, float percent)
 
 void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f)
 {
-	(void)op; (void)msg; (void)f;
+	(void)msg; (void)f;
 	if (tot == 0) return;
+
 	float pct = (float)((double)cur / (double)tot * 100.0);
 	UpdateProgress(op, pct);
+
+	/* ---- speed / ETA tracking ---------------------------------------- */
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	uint64_t now_ms = (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+
+	if (g_format_start_ms == 0)
+		g_format_start_ms = now_ms;
+
+	uint64_t dl_total_ms = now_ms - g_format_start_ms;
+
+	/* Keep total_length in sync (first call may not know it yet) */
+	if (g_bp.total_length != tot) {
+		g_bp.total_length = tot;
+	}
+	uint64_t prev = g_bp.count;
+	g_bp.count    = cur;
+	bar_update(&g_bp, cur - prev, dl_total_ms);
+
+	/* Build the speed/ETA string to show beside the elapsed timer. */
+	uint64_t speed = bar_get_speed(&g_bp, dl_total_ms);
+	if (speed > 0 && rw.speed_label) {
+		SpeedData *sd = malloc(sizeof(*sd));
+		if (sd) {
+			/* Format speed as "X.X MB/s" or "X.X KB/s" */
+			if (speed >= 1024 * 1024)
+				snprintf(sd->text, sizeof(sd->text), "%.1f MB/s",
+				         (double)speed / (1024.0 * 1024.0));
+			else if (speed >= 1024)
+				snprintf(sd->text, sizeof(sd->text), "%.1f KB/s",
+				         (double)speed / 1024.0);
+			else
+				snprintf(sd->text, sizeof(sd->text), "%" PRIu64 " B/s", speed);
+			g_idle_add(idle_update_speed, sd);
+		}
+	}
 }
 
 /* ======================================================================

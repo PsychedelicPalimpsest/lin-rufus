@@ -674,6 +674,13 @@ EXTRA_SRC_LINUX_test_update_check_linux := $(SETTINGS_LINUX_SRC)
 
 # badblocks_linux tests: bad block detection via pread/pwrite on temp files
 BADBLOCKS_LINUX_SRC := $(SRC_DIR)/linux/badblocks.c
+
+# progress_linux tests: speed/ETA ring-buffer tracking (src/linux/progress.c)
+CFLAGS_LINUX_test_progress_linux := \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-Wno-unused-parameter
+EXTRA_SRC_LINUX_test_progress_linux := $(SRC_DIR)/linux/progress.c
+
 CFLAGS_LINUX_test_badblocks_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(SRC_DIR)/ext2fs \
