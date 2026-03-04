@@ -949,7 +949,13 @@ thumbprint_list_t* GetThumbprintEntries(char* thumbprints_txt)
  * These functions are pure buffer operations (no file I/O) and are
  * identical on all platforms.  The PE structure definitions live in
  * src/linux/compat/winnt.h (Linux) / the Windows SDK (Windows).
+ *
+ * Define RUFUS_EXCLUDE_PE_PARSER to omit these functions (e.g. when
+ * cross-compiling for MinGW/Wine where some PE types conflict with
+ * system headers but the PE-parsing functionality is not needed).
  * ======================================================================= */
+
+#ifndef RUFUS_EXCLUDE_PE_PARSER
 
 /* Return the machine architecture of a PE image buffer, or
  * IMAGE_FILE_MACHINE_UNKNOWN on error. */
@@ -1156,3 +1162,5 @@ uint8_t* GetPeSignatureData(uint8_t* buf)
 
 	return (uint8_t*)cert;
 }
+
+#endif /* !RUFUS_EXCLUDE_PE_PARSER */

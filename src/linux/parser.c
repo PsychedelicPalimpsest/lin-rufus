@@ -257,7 +257,12 @@ out:
 	return ret;
 }
 
-static __inline char* get_sanitized_token_data_buffer(const char* token, unsigned int n, const char* buffer, size_t buffer_size)
+/*
+ * Helper: get a token value and convert literal '\n' sequences to CRLF.
+ * Returned string is heap-allocated; caller must free it.
+ */
+static __inline char* get_sanitized_token_data_buffer(const char* token, unsigned int n,
+                                                       const char* buffer, size_t buffer_size)
 {
 	size_t i;
 	char* data = get_token_data_buffer(token, n, buffer, buffer_size);
@@ -276,7 +281,7 @@ static __inline char* get_sanitized_token_data_buffer(const char* token, unsigne
  * Parse an update data buffer into a caller-provided RUFUS_UPDATE struct.
  * Returns TRUE if a version was successfully parsed.
  */
-BOOL parse_update_into(char* buf, size_t len, RUFUS_UPDATE *out)
+BOOL parse_update_into(char* buf, size_t len, RUFUS_UPDATE* out)
 {
 	size_t i;
 	char *data = NULL, *token;

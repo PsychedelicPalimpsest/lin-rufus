@@ -372,7 +372,12 @@ out:
 	return ret;
 }
 
-static __inline char* get_sanitized_token_data_buffer(const char* token, unsigned int n, const char* buffer, size_t buffer_size)
+/*
+ * Helper: get a token value and convert literal '\n' sequences to CRLF.
+ * Returned string is heap-allocated; caller must free it.
+ */
+static __inline char* get_sanitized_token_data_buffer(const char* token, unsigned int n,
+                                                       const char* buffer, size_t buffer_size)
 {
 	size_t i;
 	char* data = get_token_data_buffer(token, n, buffer, buffer_size);
@@ -388,12 +393,13 @@ static __inline char* get_sanitized_token_data_buffer(const char* token, unsigne
 }
 
 /*
- * Parse an update data file and populates a rufus_update structure.
+ * Parse an update data buffer into a caller-provided RUFUS_UPDATE struct.
  * NB: since this is remote data, and we're running elevated, it *IS* considered
  * potentially malicious, even if it comes from a supposedly trusted server.
- * len should be the size of the buffer, including the zero terminator
+ * len should be the size of the buffer, including the zero terminator.
+ * Returns TRUE if a version was successfully parsed.
  */
-void parse_update(char* buf, size_t len)
+BOOL parse_update_into(char* buf, size_t len, RUFUS_UPDATE* out)
 {
 	size_t i;
 	char *data = NULL, *token;
@@ -403,7 +409,7 @@ void parse_update(char* buf, size_t len)
 
 	// strchr includes the NUL terminator in the search, so take care of backslash before NUL
 	if ((buf == NULL) || (len < 2) || (len > 64 * KB) || (buf[len-1] != 0) || (buf[len-2] == '\\'))
-		return;
+		return FALSE;
 	// Sanitize the data - Not a silver bullet, but it helps
 	len = safe_strlen(buf)+1;	// Someone may be inserting NULs
 	for (i = 0; i < len - 1; i++) {
@@ -419,29 +425,45 @@ void parse_update(char* buf, size_t len)
 	}
 
 	for (i = 0; i < 3; i++)
-		update.version[i] = 0;
-	update.platform_min[0] = 5;
-	update.platform_min[1] = 2;	// XP or later
-	safe_free(update.download_url);
-	safe_free(update.release_notes);
+		out->version[i] = 0;
+	out->platform_min[0] = 5;
+	out->platform_min[1] = 2;	// XP or later
+	safe_free(out->download_url);
+	safe_free(out->release_notes);
+	safe_free(out->loc_url);
+	out->loc_version = 0;
 	if ((data = get_sanitized_token_data_buffer("version", 1, buf, len)) != NULL) {
 		for (i = 0; (i < 3) && ((token = strtok((i == 0) ? data : NULL, ".")) != NULL); i++) {
-			update.version[i] = (uint16_t)atoi(token);
+			out->version[i] = (uint16_t)atoi(token);
 		}
 		safe_free(data);
 	}
 	if ((data = get_sanitized_token_data_buffer("platform_min", 1, buf, len)) != NULL) {
 		for (i = 0; (i < 2) && ((token = strtok((i == 0) ? data : NULL, ".")) != NULL); i++) {
-			update.platform_min[i] = (uint32_t)atoi(token);
+			out->platform_min[i] = (uint32_t)atoi(token);
 		}
 		safe_free(data);
 	}
 	static_sprintf(download_url_name, "download_url_%s", GetArchName(WindowsVersion.Arch));
 	safe_strtolower(download_url_name);
-	update.download_url = get_sanitized_token_data_buffer(download_url_name, 1, buf, len);
-	if (update.download_url == NULL)
-		update.download_url = get_sanitized_token_data_buffer("download_url", 1, buf, len);
-	update.release_notes = get_sanitized_token_data_buffer("release_notes", 1, buf, len);
+	out->download_url = get_sanitized_token_data_buffer(download_url_name, 1, buf, len);
+	if (out->download_url == NULL)
+		out->download_url = get_sanitized_token_data_buffer("download_url", 1, buf, len);
+	out->release_notes = get_sanitized_token_data_buffer("release_notes", 1, buf, len);
+	out->loc_url = get_sanitized_token_data_buffer("loc_url", 1, buf, len);
+	if ((data = get_sanitized_token_data_buffer("loc_version", 1, buf, len)) != NULL) {
+		out->loc_version = (uint32_t)atoi(data);
+		safe_free(data);
+	}
+	return (out->version[0] || out->version[1] || out->version[2]);
+}
+
+/*
+ * Parse an update data buffer and populate the global 'update' structure.
+ */
+void parse_update(char* buf, size_t len)
+{
+	parse_update_into(buf, len, &update);
 }
 
 /*

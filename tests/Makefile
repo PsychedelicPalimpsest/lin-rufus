@@ -120,6 +120,31 @@ CFLAGS_LINUX_test_parser  := -I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux
 LDFLAGS_LINUX_test_parser := $(shell pkg-config --libs fontconfig 2>/dev/null)
 EXTRA_SRC_LINUX_test_parser := $(PARSER_SRC)
 
+# parser_common tests: cross-platform parser string/buffer/token operations
+# Linux: link common/parser.c + linux/parser.c + common/localization.c + linux/stdfn.c
+# Wine:  link common/parser.c (RUFUS_EXCLUDE_PE_PARSER) + windows/parser.c + common/localization.c + common/stdfn.c
+PARSER_COMMON_SRC_LINUX := $(COMMON)/parser.c $(SRC_DIR)/linux/parser.c \
+                            $(COMMON)/localization.c $(SRC_DIR)/linux/stdfn.c
+PARSER_COMMON_SRC_WIN   := $(COMMON)/parser.c $(SRC_DIR)/windows/parser.c \
+                            $(COMMON)/localization.c $(COMMON)/stdfn.c
+
+CFLAGS_LINUX_test_parser_common := \
+	-D_GNU_SOURCE -DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	$(shell pkg-config --cflags fontconfig 2>/dev/null)
+LDFLAGS_LINUX_test_parser_common := $(shell pkg-config --libs fontconfig 2>/dev/null)
+EXTRA_SRC_LINUX_test_parser_common := $(PARSER_COMMON_SRC_LINUX)
+
+CFLAGS_WIN_test_parser_common := \
+	-DRUFUS_EXCLUDE_PE_PARSER \
+	-I$(SRC_DIR)/common -I$(SRC_DIR)/windows \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter
+EXTRA_SRC_WIN_test_parser_common := $(PARSER_COMMON_SRC_WIN)
+
 # drive_linux tests: Linux drive access (GetPhysicalName, partition parsing, etc.)
 # (full entry below overrides this — kept here for clarity on variable names)
 
