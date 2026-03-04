@@ -1,7 +1,9 @@
 /* test_compat_linux.c — tests for compat layer headers:
  *   shlwapi.h: PathFileExistsA, PathFileExistsW, PathCombineA, StrStrIA, StrCmpIA
  *   shellapi.h: ShellExecuteA
- *   windows.h: GetTickCount64
+ *   windows.h: GetTickCount64, CharLowerA/CharUpperA, GetEnvironmentVariableA,
+ *              SetEnvironmentVariableA, GetTempPathA, GetTempFileNameA,
+ *              GetModuleFileNameA
  */
 #ifdef _WIN32
 #include "framework.h"
@@ -398,6 +400,42 @@ TEST(get_module_filename_a_null_terminated)
 }
 
 /* =========================================================================
+ * GetTempFileNameA
+ * =========================================================================*/
+TEST(get_temp_filename_a_success_returns_nonzero)
+{
+	char tmpfile[MAX_PATH] = {0};
+	UINT r = GetTempFileNameA("/tmp", "ruf", 0, tmpfile);
+	CHECK_MSG(r != 0, "GetTempFileNameA must return non-zero on success");
+	CHECK_MSG(tmpfile[0] == '/', "GetTempFileNameA must produce an absolute path");
+	/* Clean up the created temp file */
+	if (tmpfile[0]) unlink(tmpfile);
+}
+
+TEST(get_temp_filename_a_file_exists_after_call)
+{
+	char tmpfile[MAX_PATH] = {0};
+	UINT r = GetTempFileNameA("/tmp", "ruf", 0, tmpfile);
+	if (r == 0) { CHECK_MSG(FALSE, "GetTempFileNameA failed unexpectedly"); return; }
+	/* The file must exist on disk */
+	CHECK_MSG(PathFileExistsA(tmpfile), "temp file must exist after GetTempFileNameA");
+	unlink(tmpfile);
+}
+
+TEST(get_temp_filename_a_null_buf_returns_zero)
+{
+	UINT r = GetTempFileNameA("/tmp", "ruf", 0, NULL);
+	CHECK_MSG(r == 0, "GetTempFileNameA(NULL buf) must return 0");
+}
+
+TEST(get_temp_filename_a_bad_dir_returns_zero)
+{
+	char tmpfile[MAX_PATH] = {0};
+	UINT r = GetTempFileNameA("/nonexistent_dir_xyzzy_rufus", "ruf", 0, tmpfile);
+	CHECK_MSG(r == 0, "GetTempFileNameA with non-existent dir must return 0");
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -463,6 +501,12 @@ int main(void)
 	printf("\n  GetModuleFileNameA\n");
 	RUN(get_module_filename_a_returns_nonzero);
 	RUN(get_module_filename_a_null_terminated);
+
+	printf("\n  GetTempFileNameA\n");
+	RUN(get_temp_filename_a_success_returns_nonzero);
+	RUN(get_temp_filename_a_file_exists_after_call);
+	RUN(get_temp_filename_a_null_buf_returns_zero);
+	RUN(get_temp_filename_a_bad_dir_returns_zero);
 
 	TEST_RESULTS();
 	return (_fail > 0) ? 1 : 0;

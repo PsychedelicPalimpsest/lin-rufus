@@ -1536,10 +1536,12 @@ static inline DWORD GetTempPathA(DWORD sz, LPSTR buf) {
 #define GetTempPath GetTempPathA
 static inline UINT GetTempFileNameA(LPCSTR path, LPCSTR prefix, UINT unum, LPSTR tmpfile) {
     (void)unum;
+    if (!tmpfile) return 0;
     snprintf(tmpfile, MAX_PATH, "%s/%sXXXXXX", path ? path : "/tmp", prefix ? prefix : "tmp");
     int fd = mkstemp(tmpfile);
-    if (fd >= 0) close(fd);
-    return (UINT)fd;
+    if (fd < 0) { tmpfile[0] = '\0'; return 0; }
+    close(fd);
+    return 1;  /* non-zero indicates success (Windows returns a unique number; 1 is valid) */
 }
 #define GetTempFileName GetTempFileNameA
 static inline DWORD GetModuleFileNameA(HMODULE h, LPSTR buf, DWORD sz) {
