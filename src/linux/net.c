@@ -1279,6 +1279,7 @@ static DWORD WINAPI DownloadISOThread(LPVOID param)
 
 	/* Download the ISO */
 	PostMessage(hMainDialog, UM_PROGRESS_INIT, 0, 0);
+	PostMessage(hMainDialog, UM_TIMER_START, 0, 0);
 	ErrorStatus = 0;
 	if (DownloadToFileOrBuffer(url_buf, save_path, NULL, hMainDialog, TRUE) == 0) {
 		PostMessage(hMainDialog, UM_PROGRESS_EXIT, 0, 0);

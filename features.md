@@ -880,3 +880,29 @@ On Windows, `UpdateProgressWithInfo` drives speed tracking during file reads. On
 
 * ~~213~~: **RESOLVED** — Download speed displayed in status bar during downloads.
   5 new tests added to test_net_linux, all pass. Full test suite: all tests pass.
+
+## Feature 214: UASP Device Detection and Display
+
+**Goal**: When a USB device uses the UAS (USB Attached SCSI) protocol, show "(UAS)" in its
+display name in the device combo box — matching Windows behavior where such devices show
+"UAS Device" in their name.
+
+**Status**: RESOLVED
+
+**Implementation**:
+- Modified `GetDevicesWithRoot()` in `src/linux/dev.c`: after building the initial
+  `display_name`, read `<sysfs>/block/<dev>/device/uevent` and scan for `DRIVER=uas`.
+  If found, the display name is rebuilt as `"USB_SPEED (UAS) SIZE NAME"` instead of
+  the plain `"USB_SPEED SIZE NAME"` format.
+- 3 TDD tests added to `tests/test_dev_linux.c` (Feature 214 group, "UASP detection"):
+  - `test_uasp_device_shows_uas_in_display_name` — device with `DRIVER=uas` in uevent
+    gets "(UAS)" in display_name
+  - `test_non_uasp_device_no_uas_label` — device with `DRIVER=usb-storage` does NOT get "(UAS)"
+  - `test_no_uevent_no_uas_label` — device with no uevent file does NOT get "(UAS)"
+- New helper `fake_set_device_uevent()` added to `test_dev_linux.c` for writing the
+  uevent file in the mock sysfs tree.
+- UM_TIMER_START also added to `DownloadISO` thread before the file download so the
+  elapsed timer label ticks correctly during Fido ISO downloads.
+
+* ~~214~~: **RESOLVED** — UAS devices show "(UAS)" in device display name.
+  3 new tests in test_dev_linux (173 total). Full test suite: all tests pass.

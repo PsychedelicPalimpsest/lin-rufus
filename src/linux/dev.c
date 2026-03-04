@@ -236,6 +236,31 @@ BOOL GetDevicesWithRoot(DWORD devnum, const char* sysfs_root, const char* dev_ro
 		         usb_speed_str,
 		         SizeToHumanReadable(size, FALSE, use_fake_units), dev_name);
 
+		/* Check for UAS (USB Attached SCSI) driver; if detected, annotate
+		 * the display name to mirror the Windows "UAS Device" label. */
+		{
+			char uevent_path[PATH_MAX];
+			snprintf(uevent_path, sizeof(uevent_path),
+			         "%s/block/%s/device/uevent", sysfs_root, name);
+			FILE *ef = fopen(uevent_path, "r");
+			if (ef) {
+				char line[256];
+				while (fgets(line, sizeof(line), ef)) {
+					if (strncmp(line, "DRIVER=uas", 10) == 0) {
+						/* Insert "(UAS)" after the speed prefix */
+						char tmp[512];
+						snprintf(tmp, sizeof(tmp), "%s (UAS) %s %s",
+						         usb_speed_str,
+						         SizeToHumanReadable(size, FALSE, use_fake_units),
+						         dev_name);
+						snprintf(display_name, sizeof(display_name), "%s", tmp);
+						break;
+					}
+				}
+				fclose(ef);
+			}
+		}
+
 		/* Drive index will be assigned after sorting */
 		rufus_drive[num_drives].id           = safe_strdup(dev_node);
 		rufus_drive[num_drives].name         = safe_strdup(dev_name);

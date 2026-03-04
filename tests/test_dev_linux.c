@@ -1325,6 +1325,101 @@ static void test_optical_non_sr_ignored(void)
 	rmdir(dev);
 }
 
+/* ===== UAS (USB Attached SCSI) display label tests (Feature 214) ===== */
+
+/* Helper: write the uevent file for a block device's device/ directory */
+static void fake_set_device_uevent(const char *sysfs, const char *devname,
+                                   const char *content)
+{
+	char path[1024];
+	snprintf(path, sizeof(path), "%s/block/%s/device", sysfs, devname);
+	mkdirs(path);
+	snprintf(path, sizeof(path), "%s/block/%s/device/uevent", sysfs, devname);
+	fake_write_file(path, content);
+}
+
+/* 38a. UASP device: display_name includes "(UAS)" */
+static void test_uasp_device_shows_uas_in_display_name(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_16g = (uint64_t)16 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_16g, "SanDisk", "Ultra\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+	fake_set_device_uevent(sysfs, "sda",
+	                       "DRIVER=uas\n"
+	                       "DEVTYPE=scsi_device\n");
+
+	ClearDrives();
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(rufus_drive[0].display_name != NULL);
+	if (rufus_drive[0].display_name) {
+		CHECK_MSG(strstr(rufus_drive[0].display_name, "(UAS)") != NULL,
+		          "UAS device display_name must contain '(UAS)'");
+	}
+
+	ClearDrives();
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 38b. usb-storage device: display_name does NOT include "(UAS)" */
+static void test_non_uasp_device_no_uas_label(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_8g = (uint64_t)8 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_8g, "Kingston", "DT 100G3\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+	fake_set_device_uevent(sysfs, "sda",
+	                       "DRIVER=usb-storage\n"
+	                       "DEVTYPE=scsi_device\n");
+
+	ClearDrives();
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(rufus_drive[0].display_name != NULL);
+	if (rufus_drive[0].display_name) {
+		CHECK_MSG(strstr(rufus_drive[0].display_name, "(UAS)") == NULL,
+		          "usb-storage device display_name must NOT contain '(UAS)'");
+	}
+
+	ClearDrives();
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
+/* 38c. Device without uevent: display_name does NOT include "(UAS)" */
+static void test_no_uevent_no_uas_label(void)
+{
+	char sysfs[64], dev[64];
+	make_tmpdirs(sysfs, dev);
+
+	uint64_t s_4g = (uint64_t)4 * 1024 * 1024 * 1024 / 512;
+	FakeDev devs[] = {
+		{ "sda", 1, s_4g, "Generic", "Flash\n", 1, 1, NULL, NULL },
+	};
+	fake_sysfs_create(sysfs, dev, devs, 1);
+	/* No uevent file created */
+
+	ClearDrives();
+	GetDevicesWithRoot(0, sysfs, dev);
+	CHECK(count_drives() == 1);
+	CHECK(rufus_drive[0].display_name != NULL);
+	if (rufus_drive[0].display_name) {
+		CHECK_MSG(strstr(rufus_drive[0].display_name, "(UAS)") == NULL,
+		          "device without uevent must NOT contain '(UAS)'");
+	}
+
+	ClearDrives();
+	rmdir_recursive(sysfs); rmdir_recursive(dev);
+}
+
 /* ===== find_usb_sysfs_device / CyclePort / CycleDevice tests ===== */
 
 extern BOOL find_usb_sysfs_device(const char* sysfs_root, const char* blk_name,
@@ -1523,6 +1618,11 @@ int main(void)
 	test_drive_indices_are_contiguous();
 	test_enable_hdds_includes_both_types();
 	test_clear_drives_idempotent();
+
+	printf("\n  UASP (UAS) device detection\n");
+	test_uasp_device_shows_uas_in_display_name();
+	test_non_uasp_device_no_uas_label();
+	test_no_uevent_no_uas_label();
 
 	printf("\n  GetOpticalMedia\n");
 	test_optical_no_sr_devices();
