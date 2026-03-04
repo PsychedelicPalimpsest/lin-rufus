@@ -178,8 +178,28 @@ static float _progress_last_pct = -1.0f;
 static int   _progress_op = -99;
 static void _reset_progress(void) { _progress_calls = 0; _progress_last_pct = -1.0f; _progress_op = -99; }
 void UpdateProgress(int op, float p)  { _progress_calls++; _progress_last_pct = p; _progress_op = op; }
+
+/* _UpdateProgressWithInfo tracking — tests for Feature 213 (download speed) use these */
+static int      _upwi_calls      = 0;
+static uint64_t _upwi_last_cur   = 0;
+static uint64_t _upwi_last_tot   = 0;
+static int      _upwi_last_msg   = 0;
+static void _reset_upwi(void)
+{
+	_upwi_calls = 0; _upwi_last_cur = 0;
+	_upwi_last_tot = 0; _upwi_last_msg = 0;
+}
 void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL f)
-                                       { (void)op;(void)msg;(void)cur;(void)tot;(void)f; }
+{
+	(void)op; (void)f;
+	_upwi_calls++;
+	_upwi_last_cur = cur;
+	_upwi_last_tot = tot;
+	_upwi_last_msg = msg;
+	/* Mirror the progress bar update so _progress_calls reflects reality */
+	if (tot > 0)
+		UpdateProgress(op, (float)((double)cur / (double)tot * 100.0));
+}
 void InitProgress(BOOL b)             { (void)b; }
 void PrintStatusInfo(BOOL info, BOOL dbg, unsigned dur, int msg_id, ...) { (void)info;(void)dbg;(void)dur;(void)msg_id; }
 
@@ -418,6 +438,11 @@ static const char* srv_url(const char *path)
 	snprintf(url_buf, sizeof(url_buf), "http://127.0.0.1:%d/%s", HTTP_PORT, path);
 	return url_buf;
 }
+
+/* Fake HWND sentinel used by multiple test groups */
+#ifndef FAKE_HDLG
+#define FAKE_HDLG ((HWND)(void*)0xDEADBEEF)
+#endif
 
 /* ================================================================
  * Tests
@@ -740,6 +765,104 @@ TEST(download_progress_file_also_reports_progress)
 }
 
 /* ================================================================
+ * Feature 213: Download speed tracking via _UpdateProgressWithInfo
+ *
+ * When hDlg != NULL, download_xferinfo_cb must call
+ * _UpdateProgressWithInfo(OP_NOOP, MSG_241, dlnow, dltotal, FALSE)
+ * so that the progress module's ring-buffer can compute download speed.
+ *
+ * When hDlg == NULL (background downloads) only UpdateProgress is called.
+ * ================================================================ */
+
+TEST(download_speed_upwi_called_with_hdlg)
+{
+	/* _UpdateProgressWithInfo must be called when hDlg is non-NULL */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	_reset_progress();
+	_reset_upwi();
+	uint8_t *buf = NULL;
+	uint64_t n = DownloadToFileOrBufferEx(srv_url("hello.txt"), NULL, NULL, &buf,
+	                                       FAKE_HDLG, TRUE);
+	CHECK(n > 0);
+	CHECK_MSG(_upwi_calls > 0,
+	          "_UpdateProgressWithInfo not called during download with hDlg");
+	if (buf) free(buf);
+}
+
+TEST(download_speed_upwi_receives_byte_counts)
+{
+	/* _UpdateProgressWithInfo must be called with the actual byte totals */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	_reset_progress();
+	_reset_upwi();
+	uint8_t *buf = NULL;
+	uint64_t n = DownloadToFileOrBufferEx(srv_url("hello.txt"), NULL, NULL, &buf,
+	                                       FAKE_HDLG, TRUE);
+	CHECK(n > 0);
+	/* The last call should reflect the full size */
+	CHECK_MSG(_upwi_last_tot == n,
+	          "last _UpdateProgressWithInfo total does not match download size");
+	CHECK_MSG(_upwi_last_cur == n,
+	          "last _UpdateProgressWithInfo current does not match download size");
+	if (buf) free(buf);
+}
+
+TEST(download_speed_upwi_msg_is_241)
+{
+	/* _UpdateProgressWithInfo must be invoked with MSG_241 (speed context) */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	_reset_progress();
+	_reset_upwi();
+	uint8_t *buf = NULL;
+	uint64_t n = DownloadToFileOrBufferEx(srv_url("hello.txt"), NULL, NULL, &buf,
+	                                       FAKE_HDLG, TRUE);
+	CHECK(n > 0);
+	CHECK_MSG(_upwi_last_msg == MSG_241,
+	          "_UpdateProgressWithInfo not called with MSG_241");
+	if (buf) free(buf);
+}
+
+TEST(download_speed_upwi_not_called_without_hdlg)
+{
+	/* When hDlg == NULL, _UpdateProgressWithInfo must NOT be called —
+	 * only the legacy UpdateProgress path should fire. */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	_reset_progress();
+	_reset_upwi();
+	uint8_t *buf = NULL;
+	uint64_t n = DownloadToFileOrBufferEx(srv_url("hello.txt"), NULL, NULL, &buf,
+	                                       NULL, TRUE);
+	CHECK(n > 0);
+	CHECK_MSG(_upwi_calls == 0,
+	          "_UpdateProgressWithInfo called when hDlg is NULL");
+	/* But legacy UpdateProgress still fires */
+	CHECK(_progress_calls > 0);
+	if (buf) free(buf);
+}
+
+TEST(download_speed_progress_still_updates_bar)
+{
+	/* Even with hDlg set, the progress bar must still advance.
+	 * Our stub mirrors progress via _UpdateProgressWithInfo, so
+	 * _progress_calls should be > 0. */
+	if (!srv_available) { printf("  [SKIP: no HTTP server]\n"); return; }
+
+	_reset_progress();
+	_reset_upwi();
+	uint8_t *buf = NULL;
+	uint64_t n = DownloadToFileOrBufferEx(srv_url("hello.txt"), NULL, NULL, &buf,
+	                                       FAKE_HDLG, TRUE);
+	CHECK(n > 0);
+	CHECK_MSG(_progress_calls > 0,
+	          "UpdateProgress not called when hDlg set (bar not advancing)");
+	if (buf) free(buf);
+}
+
+/* ================================================================
  * CheckForUpdates — tests
  * ================================================================ */
 
@@ -916,9 +1039,6 @@ extern LPARAM _captured_post_lparam;
 
 /* Internal access to the xferinfo callback for direct testing */
 typedef struct { void *hDlg; int last_pct; } xferinfo_ud_t_test;
-
-/* Fake HWND sentinel for testing */
-#define FAKE_HDLG ((HWND)(void*)0xDEADBEEF)
 
 TEST(um_download_progress_constant_in_wm_app_range)
 {
@@ -1295,6 +1415,11 @@ int main(void)
 		RUN(download_progress_called_during_download);
 		RUN(download_progress_completes_at_100);
 		RUN(download_progress_file_also_reports_progress);
+		RUN(download_speed_upwi_called_with_hdlg);
+		RUN(download_speed_upwi_receives_byte_counts);
+		RUN(download_speed_upwi_msg_is_241);
+		RUN(download_speed_upwi_not_called_without_hdlg);
+		RUN(download_speed_progress_still_updates_bar);
 	} else {
 		printf("  [SKIP: no HTTP server]\n");
 	}

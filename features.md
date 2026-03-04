@@ -853,3 +853,30 @@ Linux implementation:
 * ~~212~~: **RESOLVED** — Alt key cycles speed/ETA/percent mode; elapsed timer and
   speed ring-buffer now start correctly.  15 new tests, 18 assertions, all pass.
   Full test suite: all tests pass.
+
+## Feature 213: Download Speed Tracking in Status Bar
+
+**Goal**: Show download speed in the status bar while downloading ISOs, signatures, and updates.
+On Windows, `UpdateProgressWithInfo` drives speed tracking during file reads. On Linux, only
+`UpdateProgress` was called (percent only), so the speed label never updated during downloads.
+
+**Status**: RESOLVED
+
+**Implementation**:
+- Modified `download_xferinfo_cb()` in `src/linux/net.c`:
+  - When `hDlg != NULL` and `dltotal > 0`: calls `_UpdateProgressWithInfo(OP_NOOP, MSG_241,
+    dlnow, dltotal, FALSE)` — this drives the ring-buffer speed/ETA tracking in `progress.c`
+    and posts `UM_DOWNLOAD_PROGRESS` for the dialog.
+  - When `hDlg == NULL`: uses legacy `UpdateProgress(OP_NOOP, pct)` path unchanged (no speed
+    tracking needed for silent/background downloads).
+- Added `extern void _UpdateProgressWithInfo(...)` declaration to `net.c` (picks up weak
+  symbol from `ui.c` in the real build, or test stub in the test build).
+- 5 TDD tests added to `tests/test_net_linux.c` (Feature 213 group):
+  - `download_speed_upwi_called_with_hdlg` — `_UpdateProgressWithInfo` called when hDlg set
+  - `download_speed_upwi_receives_byte_counts` — last `cur`/`tot` match download size
+  - `download_speed_upwi_msg_is_241` — MSG_241 is passed (speed context)
+  - `download_speed_upwi_not_called_without_hdlg` — no call when hDlg is NULL
+  - `download_speed_progress_still_updates_bar` — progress bar still advances
+
+* ~~213~~: **RESOLVED** — Download speed displayed in status bar during downloads.
+  5 new tests added to test_net_linux, all pass. Full test suite: all tests pass.

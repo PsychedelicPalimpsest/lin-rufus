@@ -48,6 +48,9 @@
 extern loc_cmd *selected_locale;
 extern char   *fido_url;
 extern char   *image_path;
+
+/* Progress helpers from ui_gtk.c / ui.c */
+extern void _UpdateProgressWithInfo(int op, int msg, uint64_t cur, uint64_t tot, BOOL force);
 extern HWND    hMainDialog;
 extern DWORD   ErrorStatus;
 extern char    temp_dir[];
@@ -144,17 +147,21 @@ static int download_xferinfo_cb(void *ud, curl_off_t dltotal, curl_off_t dlnow,
 	xferinfo_ud_t *ctx = (xferinfo_ud_t *)ud;
 	(void)ultotal; (void)ulnow;
 	if (dltotal > 0) {
-		float pct = (float)((double)dlnow / (double)dltotal * 100.0);
-		UpdateProgress(OP_NOOP, pct);
-		/* When a progress dialog was provided, post UM_DOWNLOAD_PROGRESS
-		 * with the integer percent as WPARAM.  Suppress duplicate messages
-		 * for the same integer value to avoid flooding the message queue. */
 		if (ctx && ctx->hDlg != NULL) {
-			int ipct = (int)pct;
+			/* Drive speed tracking via _UpdateProgressWithInfo so the
+			 * ring-buffer in progress.c can compute download speed. */
+			_UpdateProgressWithInfo(OP_NOOP, MSG_241,
+			                        (uint64_t)dlnow, (uint64_t)dltotal, FALSE);
+			/* Post UM_DOWNLOAD_PROGRESS for dialogs that listen for it.
+			 * Suppress duplicate messages for the same integer percent. */
+			int ipct = (int)((double)dlnow / (double)dltotal * 100.0);
 			if (ipct != ctx->last_pct) {
 				ctx->last_pct = ipct;
 				PostMessage(ctx->hDlg, UM_DOWNLOAD_PROGRESS, (WPARAM)ipct, 0);
 			}
+		} else {
+			float pct = (float)((double)dlnow / (double)dltotal * 100.0);
+			UpdateProgress(OP_NOOP, pct);
 		}
 	}
 	return 0; /* returning non-zero aborts the transfer */
