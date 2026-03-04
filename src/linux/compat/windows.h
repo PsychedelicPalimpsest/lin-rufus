@@ -1525,7 +1525,11 @@ static inline DWORD GetEnvironmentVariableA(LPCSTR n, LPSTR buf, DWORD sz) {
     return need - 1;  /* Windows returns length not including null on success */
 }
 #define GetEnvironmentVariable GetEnvironmentVariableA
-static inline BOOL SetEnvironmentVariableA(LPCSTR n, LPCSTR v) { return setenv(n, v ? v : "", 1) == 0; }
+static inline BOOL SetEnvironmentVariableA(LPCSTR n, LPCSTR v) {
+    if (!n) return FALSE;
+    if (!v) return unsetenv(n) == 0;
+    return setenv(n, v, 1) == 0;
+}
 #define SetEnvironmentVariable SetEnvironmentVariableA
 static inline DWORD GetTempPathA(DWORD sz, LPSTR buf) {
     const char* t = getenv("TMPDIR"); if (!t) t = "/tmp";

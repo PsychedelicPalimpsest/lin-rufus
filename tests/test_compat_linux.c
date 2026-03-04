@@ -377,13 +377,12 @@ TEST(getenv_null_buf_returns_needed_size)
 TEST(setenv_can_unset_with_null_value)
 {
 	/* Windows: SetEnvironmentVariableA with NULL value removes the variable.
-	 * Our stub sets it to empty string (POSIX unsetenv not directly supported
-	 * via the Windows API on Linux) — just verify it doesn't crash. */
-	SetEnvironmentVariableA("RUFUS_TEST_ENV_DEL", "value");
-	/* Our impl maps NULL -> setenv(n, "", 1) which won't crash */
+	 * Our impl calls unsetenv() when v == NULL. */
+	SetEnvironmentVariableA("RUFUS_TEST_ENV_DEL", "should_disappear");
 	BOOL r = SetEnvironmentVariableA("RUFUS_TEST_ENV_DEL", NULL);
-	(void)r;  /* just check no crash */
-	CHECK_MSG(TRUE, "SetEnvironmentVariableA with NULL value should not crash");
+	CHECK_MSG(r == TRUE, "SetEnvironmentVariableA(NULL) must return TRUE");
+	CHECK_MSG(getenv("RUFUS_TEST_ENV_DEL") == NULL,
+	          "SetEnvironmentVariableA(NULL) must remove the variable");
 }
 
 /* =========================================================================
