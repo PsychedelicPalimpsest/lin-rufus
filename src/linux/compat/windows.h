@@ -648,7 +648,11 @@ static __inline int strncat_s(char* dest, size_t destsz, const char* src, size_t
 extern DWORD _win_last_error;
 static inline DWORD GetLastError(void)    { return _win_last_error; }
 static inline void  SetLastError(DWORD e) { _win_last_error = e; }
-static inline ULONGLONG GetTickCount64(void) { return 0; }
+static inline ULONGLONG GetTickCount64(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (ULONGLONG)ts.tv_sec * 1000ULL + (ULONGLONG)(ts.tv_nsec / 1000000);
+}
 
 static inline HANDLE GetCurrentProcess(void) { return (HANDLE)(intptr_t)getpid(); }
 static inline DWORD  GetCurrentProcessId(void) { return (DWORD)getpid(); }

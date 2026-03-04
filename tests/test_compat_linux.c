@@ -1,6 +1,7 @@
 /* test_compat_linux.c — tests for compat layer headers:
  *   shlwapi.h: PathFileExistsA, PathFileExistsW, PathCombineA, StrStrIA, StrCmpIA
  *   shellapi.h: ShellExecuteA
+ *   windows.h: GetTickCount64
  */
 #ifdef _WIN32
 #include "framework.h"
@@ -14,11 +15,75 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <time.h>
 
 /* Pull in the compat headers under test */
 #include "../src/linux/compat/windows.h"
 #include "../src/linux/compat/shlwapi.h"
 #include "../src/linux/compat/shellapi.h"
+
+/* Minimal stub so windows.h links */
+DWORD _win_last_error = 0;
+
+/* =========================================================================
+ * GetTickCount64 (Feature 219)
+ * =========================================================================*/
+
+TEST(get_tick_count64_nonzero)
+{
+    ULONGLONG t = GetTickCount64();
+    CHECK_MSG(t > 0, "GetTickCount64 must return a non-zero value on Linux");
+}
+
+TEST(get_tick_count64_advances)
+{
+    ULONGLONG t0 = GetTickCount64();
+    struct timespec ts = { 0, 10000000 };  /* 10 ms */
+    nanosleep(&ts, NULL);
+    ULONGLONG t1 = GetTickCount64();
+    CHECK_MSG(t1 > t0, "GetTickCount64 must increase after 10 ms sleep");
+}
+
+TEST(get_tick_count64_delta_reasonable)
+{
+    /* A 10 ms sleep should produce a delta in [5, 500] ms */
+    ULONGLONG t0 = GetTickCount64();
+    struct timespec ts = { 0, 10000000 };  /* 10 ms */
+    nanosleep(&ts, NULL);
+    ULONGLONG t1 = GetTickCount64();
+    ULONGLONG delta = t1 - t0;
+    CHECK_MSG(delta >= 5 && delta <= 500,
+              "GetTickCount64 delta after 10ms must be in [5,500] ms");
+}
+
+TEST(get_tick_count64_millisecond_resolution)
+{
+    /* Two calls in tight succession must differ by < 100 ms (they're fast) */
+    ULONGLONG t0 = GetTickCount64();
+    ULONGLONG t1 = GetTickCount64();
+    ULONGLONG delta = t1 - t0;
+    CHECK_MSG(delta < 100,
+              "Two back-to-back GetTickCount64 calls must differ by < 100 ms");
+}
+
+TEST(get_tick_count64_cycle_port_rate_limit_works)
+{
+    /* The CyclePort guard is: GetTickCount64() < last_reset + 10000ULL
+     * With a real timer, a freshly recorded last_reset should NOT fire
+     * if queried within ~0ms (simulating just-reset). */
+    ULONGLONG last_reset = GetTickCount64();
+    /* Immediately after recording, we're well within the 10s window */
+    CHECK_MSG(GetTickCount64() < last_reset + 10000ULL,
+              "GetTickCount64 must support CyclePort rate-limit guard");
+    /* After 10+ seconds last_reset would expire — just verify the arithmetic */
+    last_reset = 0;  /* simulate a very old reset (boot) */
+    ULONGLONG now = GetTickCount64();
+    /* now must be >= 10000 if system has been running > 10s (almost always true) */
+    if (now >= 10000ULL) {
+        CHECK_MSG(now >= last_reset + 10000ULL,
+                  "Old last_reset must not block CyclePort when 10s has passed");
+    }
+}
 
 /* =========================================================================
  * PathFileExistsA
@@ -179,6 +244,13 @@ TEST(shell_execute_a_sw_show_constant_defined)
 int main(void)
 {
 	printf("=== compat shlwapi / shellapi tests ===\n");
+
+    printf("\n  GetTickCount64 (Feature 219)\n");
+    RUN(get_tick_count64_nonzero);
+    RUN(get_tick_count64_advances);
+    RUN(get_tick_count64_delta_reasonable);
+    RUN(get_tick_count64_millisecond_resolution);
+    RUN(get_tick_count64_cycle_port_rate_limit_works);
 
 	printf("\n  PathFileExistsA\n");
 	RUN(path_file_exists_a_real_file);

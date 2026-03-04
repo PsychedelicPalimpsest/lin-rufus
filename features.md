@@ -1029,3 +1029,34 @@ window flashes in GNOME Shell, KDE Plasma, XFCE, i3, etc.
 
 * ~~218~~: **RESOLVED** — FlashTaskbar calls gtk_window_set_urgency_hint on Linux.
   6 new tests (62 total in test_stdlg_linux). Full test suite: all tests pass.
+
+## Feature 219: GetTickCount64 real implementation
+
+**Goal**: `GetTickCount64()` was a stub that always returned 0 on Linux. This caused
+a real bug in `CyclePort()` in `dev.c`: the rate-limit guard `GetTickCount64() < last_reset + 10000` 
+always evaluated to `0 < 0 + 10000 = TRUE`, so `CyclePort` would always print
+"You must wait at least 10 seconds before trying to reset a device" and return FALSE,
+making USB port cycling completely broken on Linux.
+
+**Status**: RESOLVED
+
+**Implementation**:
+- Replaced the stub `static inline ULONGLONG GetTickCount64(void) { return 0; }` in
+  `src/linux/compat/windows.h` with a real implementation using `clock_gettime(CLOCK_MONOTONIC)`:
+  ```c
+  static inline ULONGLONG GetTickCount64(void) {
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC, &ts);
+      return (ULONGLONG)ts.tv_sec * 1000ULL + (ULONGLONG)(ts.tv_nsec / 1000000);
+  }
+  ```
+- `<time.h>` was already included in `windows.h` so no extra include needed
+- 5 TDD tests added to `tests/test_compat_linux.c`:
+  - `get_tick_count64_nonzero` — must return > 0 after system has started
+  - `get_tick_count64_advances` — value increases after a 10ms sleep
+  - `get_tick_count64_delta_reasonable` — delta after 10ms sleep is in [5,500] ms
+  - `get_tick_count64_millisecond_resolution` — two back-to-back calls differ < 100ms
+  - `get_tick_count64_cycle_port_rate_limit_works` — CyclePort guard arithmetic works
+
+* ~~219~~: **RESOLVED** — GetTickCount64 uses clock_gettime(CLOCK_MONOTONIC); CyclePort works.
+  5 new tests (29 total in test_compat_linux). Full test suite: all tests pass.
