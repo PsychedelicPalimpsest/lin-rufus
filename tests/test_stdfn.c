@@ -500,6 +500,14 @@ TEST(to_locale_name_strips_modifier)
     CHECK(strcmp(r, "de-DE") == 0);
 }
 
+/* LANG=C.UTF-8 falls back to en-US */
+TEST(to_locale_name_c_utf8_locale)
+{
+    setenv("LANG", "C.UTF-8", 1);
+    char* r = ToLocaleName(0);
+    CHECK(strcmp(r, "en-US") == 0);
+}
+
 /* ===========================================================================
  * IsFontAvailable tests (Linux only)
  * ========================================================================= */
@@ -856,6 +864,7 @@ int main(void)
     RUN(to_locale_name_underscore_to_hyphen);
     RUN(to_locale_name_c_locale);
     RUN(to_locale_name_strips_modifier);
+    RUN(to_locale_name_c_utf8_locale);
 
     printf("\n=== IsFontAvailable ===\n");
     RUN(is_font_available_null);

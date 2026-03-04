@@ -361,6 +361,11 @@ char* ToLocaleName(DWORD lang_id)
         i++;
     }
     locale_name[i] = '\0';
+
+    /* After stripping the encoding/modifier suffix, re-check for C/POSIX */
+    if (strcmp(locale_name, "C") == 0 || strcmp(locale_name, "POSIX") == 0)
+        return "en-US";
+
     return (i > 0) ? locale_name : "en-US";
 }
 BOOL    SetPrivilege(HANDLE hToken, LPCWSTR priv, BOOL enable)   { (void)hToken;(void)priv;(void)enable; return FALSE; }
