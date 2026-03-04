@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>  /* mount(), umount2(), MS_MGC_VAL */
+#include <sys/sysmacros.h> /* makedev() */
 #include <linux/fs.h>   /* BLKGETSIZE64, BLKRRPART, BLKSSZGET, BLKFLSBUF */
 #include <linux/blkpg.h> /* BLKPG, BLKPG_DEL_PARTITION, blkpg_partition */
 #include <time.h>
@@ -448,6 +449,40 @@ BOOL RefreshDriveLayout(HANDLE hDrive)
                 char cmd[320];
                 snprintf(cmd, sizeof(cmd), "partx -u %s 2>/dev/null", dev_path);
                 system(cmd);
+                /* For loop devices, enumerate sysfs to find partition entries
+                 * and create device nodes directly via mknod().  This makes
+                 * partition devices (e.g. /dev/loop8p1) visible even in
+                 * container environments where udev is not running. */
+                if (strstr(dev_path, "/dev/loop") != NULL) {
+                    const char *base = strrchr(dev_path, '/') + 1;
+                    char sysfs_dir[256];
+                    snprintf(sysfs_dir, sizeof(sysfs_dir), "/sys/block/%s", base);
+                    DIR *dh = opendir(sysfs_dir);
+                    if (dh) {
+                        struct dirent *de;
+                        size_t blen = strlen(base);
+                        while ((de = readdir(dh)) != NULL) {
+                            if (strncmp(de->d_name, base, blen) != 0 ||
+                                de->d_name[blen] != 'p') continue;
+                            char dev_file[320];
+                            snprintf(dev_file, sizeof(dev_file), "%s/%s/dev",
+                                     sysfs_dir, de->d_name);
+                            FILE *f = fopen(dev_file, "r");
+                            if (!f) continue;
+                            unsigned maj = 0, min_val = 0;
+                            if (fscanf(f, "%u:%u", &maj, &min_val) == 2) {
+                                char node[256];
+                                snprintf(node, sizeof(node), "/dev/%s", de->d_name);
+                                struct stat nst;
+                                if (stat(node, &nst) != 0)
+                                    mknod(node, S_IFBLK | 0660,
+                                          makedev(maj, min_val));
+                            }
+                            fclose(f);
+                        }
+                        closedir(dh);
+                    }
+                }
             }
         }
     }

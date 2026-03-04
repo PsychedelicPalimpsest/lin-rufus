@@ -32,6 +32,8 @@ apt-get install -y --no-install-recommends \
   util-linux \
   `# TEST: QEMU x86 emulation for boot-verification tests` \
   qemu-system-x86 \
+  `# TEST: qemu-nbd (NBD server) for VHD mount/format tests` \
+  qemu-utils \
   `# TEST: UI automation — AT-SPI2 accessibility, virtual framebuffer, X11 input` \
   xvfb dbus-x11 at-spi2-core python3-pyatspi xdotool \
   `# ASAN: AddressSanitizer + Undefined Behaviour Sanitizer runtime` \

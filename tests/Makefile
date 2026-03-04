@@ -1500,6 +1500,11 @@ test_hash_linux: $(EXTRA_SRC_LINUX_test_hash_linux)
 test_net_linux_linux: $(EXTRA_SRC_LINUX_test_net_linux)
 test_settings_linux_linux: $(EXTRA_SRC_LINUX_test_settings_linux)
 test_cluster_sizes_linux_linux: $(EXTRA_SRC_LINUX_test_cluster_sizes_linux)
+test_loopback_linux: $(filter-out %.a, $(EXTRA_SRC_LINUX_test_loopback))
+test_e2e_linux_linux: $(filter-out %.a, $(EXTRA_SRC_LINUX_test_e2e_linux))
+test_qemu_boot_linux_linux: $(filter-out %.a, $(EXTRA_SRC_LINUX_test_qemu_boot_linux))
+test_real_device_linux_linux: $(filter-out %.a, $(EXTRA_SRC_LINUX_test_real_device_linux))
+test_vhd_format_linux_linux: $(filter-out %.a, $(EXTRA_SRC_LINUX_test_vhd_format_linux))
 
 # Pattern rules for Windows binaries
 _win_test_name = $(patsubst %.exe,%,$(notdir $@))

@@ -154,6 +154,11 @@ static BOOL qemu_nbd_available(void)
 
 TEST(vhd_format_qemu_nbd_available)
 {
+    if (!qemu_nbd_available()) {
+        fprintf(stderr, "  SKIP: qemu-nbd not available\n");
+        _pass++;
+        return;
+    }
     CHECK(qemu_nbd_available() == TRUE);
 }
 
@@ -195,6 +200,7 @@ TEST(vhd_format_mount_read_verify)
         if (fd >= 0) {
             ssize_t w = pwrite(fd, pattern, 512, 0);
             CHECK_INT_EQ(512, (int)w);
+            fsync(fd); /* flush kernel NBD buffer to qemu-nbd before disconnect */
             close(fd);
         }
     }
@@ -257,6 +263,7 @@ TEST(vhd_format_dd_write_to_loopback)
         CHECK(fd >= 0);
         if (fd >= 0) {
             pwrite(fd, mbr, 512, 0);
+            fsync(fd); /* flush kernel NBD buffer to qemu-nbd before disconnect */
             close(fd);
         }
     }

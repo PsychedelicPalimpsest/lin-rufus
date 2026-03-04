@@ -131,17 +131,24 @@ if [ "${RUN_CONTAINER}" -eq 1 ]; then
       set -euo pipefail
       ./configure --with-os=linux
       find . -name 'Makefile.in' -o -name 'aclocal.m4' -o -name 'configure' | xargs touch
+      # Force rebuild of all sub-libraries and root test binaries from source
+      # inside the container.  Host-compiled objects/binaries may reference
+      # glibc 2.38+ symbols (e.g. __isoc23_strtol) that are absent on Ubuntu
+      # 22.04 (glibc 2.35).  Delete .o files to prevent make from re-archiving
+      # them; delete root test binaries so make -C tests run-root rebuilds all.
+      find src/bled src/ext2fs src/wimlib src/libcdio -name '*.o' -delete
       rm -f src/bled/libbled.a src/ext2fs/libext2fs.a \
             src/wimlib/libwim.a \
             src/libcdio/iso9660/libiso9660.a src/libcdio/driver/libdriver.a src/libcdio/udf/libudf.a \
-            tests/test_loopback_linux
+            tests/test_loopback_linux tests/test_e2e_linux_linux \
+            tests/test_qemu_boot_linux_linux tests/test_real_device_linux_linux \
+            tests/test_vhd_format_linux_linux
       make -j\$(nproc) -C src/bled
       make -j\$(nproc) -C src/ext2fs
       make -j\$(nproc) -C src/wimlib
       make -j\$(nproc) -C src/libcdio/iso9660
       make -j\$(nproc) -C src/libcdio/driver
       make -j\$(nproc) -C src/libcdio/udf
-      make -C tests test_loopback_linux
       make -C tests run-root
     "
 fi

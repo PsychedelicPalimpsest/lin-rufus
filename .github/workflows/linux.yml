@@ -31,6 +31,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+
+    - name: Install dependencies
       # install-deps.sh is the single source of truth for all dependencies.
       # It installs: build tools, libs, filesystem tools, ASAN runtime, cppcheck,
       # and MinGW.  See DEPENDENCIES.md for the full annotated list.
@@ -38,8 +40,6 @@ jobs:
 
     - name: Regen configure and make files
       run: aclocal && automake
-
-
 
     - name: Configure (Linux target)
       run: ./configure --with-os=linux
