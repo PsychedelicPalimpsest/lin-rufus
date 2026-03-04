@@ -71,10 +71,12 @@ on Linux.
   is not implemented (rarely needed in practice)
 
 ### Process-Holds-Drive Check (`GetProcessSearch`)
-- **Windows**: enumerates open file handles to warn if another process has the
-  target drive open
-- **Linux**: not implemented — the format thread handles unmounting via
-  `umount`/`fuser`, which is equivalent in practice
+- **Windows**: enumerates open file handles via `NtQuerySystemInformation` to
+  warn if another process has the target drive open
+- **Linux**: implemented in `process.c` via a synchronous `/proc` scan —
+  iterates `readdir("/proc")`, follows `/proc/<pid>/fd/` symlinks, and compares
+  `st_rdev` against the target block device; matching process names are reported
+  in `BlockingProcessList` just as on Windows
 
 ### Extended Label (`IDC_EXTENDED_LABEL`)
 - **Windows**: checkbox to toggle `autorun.inf` creation
@@ -101,7 +103,6 @@ on Linux.
 |---------|--------|
 | `WM_DEVICECHANGE` integration | Win32-only; replaced by libudev |
 | `SetAlertPromptHook` / format-disk system dialog | Win32 hook API |
-| `GetProcessSearch` (open handle scan) | Win32 `NtQuerySystemInformation` |
 | `CopySKUSiPolicy` (WDAC) | Windows Defender feature |
 | `SetAutorun` / autorun.inf | Not applicable on Linux |
 | `IDD_FORMAT` / `IDD_LOG` dialog resources | Win32 DIALOG resources |

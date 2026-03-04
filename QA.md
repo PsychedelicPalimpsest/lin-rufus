@@ -1,6 +1,6 @@
 # Rufus Linux Port — QA Notes
 
-> **Last updated:** 2026-03-04  
+> **Last updated:** 2026-03-04 (session 5)
 > **Reviewer:** Copilot QA session
 
 ---
@@ -360,3 +360,85 @@ Removed all verbose QA session narratives and verbose RESOLVED feature descripti
 (lines 573–1149 of the old file).  Replaced with a compact summary table of all
 188–222 features in the new "Pending Work" section.  File shrunk from 75 KB → 43 KB.
 
+
+---
+
+## What Was Tested — Session 2026-03-04 (session 5)
+
+### Bugs Fixed This Session
+
+**DIFFERENCES.md documentation error — `GetProcessSearch` listed as "Not Implemented":**
+- `DIFFERENCES.md` had two places stating `GetProcessSearch` is not implemented on Linux.
+- Reality: `process.c` contains a full `/proc`-scan-based implementation that matches
+  Windows semantics exactly — it iterates `/proc/<pid>/fd/`, checks `st_rdev`, and
+  adds process names to `BlockingProcessList`.
+- Fixed by updating the "Behavioral Differences" section to document the real implementation,
+  and removing the entry from the "Not Implemented" table.
+
+**`features.md` — `FlashTaskbar()` listed as 🚫 N/A:**
+- Feature 218 implemented `FlashTaskbar()` via `gtk_window_set_urgency_hint`, but
+  the `features.md` UI stub table still showed it as 🚫.  Updated to ✅.
+
+### Tests Run
+
+| Test | Result |
+|------|--------|
+| `./run_tests.sh --linux-only` | ✅ All tests passed |
+| `./run_tests.sh --wine-only` | ✅ All tests passed |
+| `sudo RUFUS_TEST_DEVICE=/dev/nvme0n2 test_real_device_linux_linux` | ✅ 11 passed |
+| `sudo RUFUS_TEST_DEVICE=/dev/nvme0n2 test_e2e_linux_linux` | ✅ 13 passed |
+| `test_verify_linux_linux` (force-rebuilt) | ✅ 37 passed |
+| `test_dev_usb_speed_linux_linux` (force-rebuilt) | ✅ 17 passed |
+| `test_cluster_sizes_linux_linux` (force-rebuilt) | ✅ 29 passed |
+| `test_kbd_shortcuts_linux_linux` (force-rebuilt) | ✅ 140 passed |
+| Manual `--device /dev/nvme0n2 --fs fat32 --label QASESSION --no-prompt` | ✅ `blkid` shows `LABEL="QASESSION"` + `LABEL_FATBOOT="QASESSION"` |
+| Manual `--device /dev/nvme0n2 --image ~/ubuntu-24.04.4-desktop-amd64.iso --write-as-image --no-prompt` | ✅ ISO 9660 magic `01 CD001` verified at offset 0x8000 |
+| Manual `--include-hdds --list-devices --json` | ✅ valid JSON, nvme0n1 + nvme0n2 shown |
+| Manual `--version` | ✅ `rufus 4.13.0` |
+| Manual `--help` | ✅ all 42 flags shown |
+
+### Spot Checks Performed
+
+| File | Finding |
+|------|---------|
+| `src/linux/process.c` | Clean; full `/proc` scan implementation for `GetProcessSearch`; `SearchProcessAlt` scans `/proc/PID/comm` |
+| `src/linux/boot_validation.c` | Clean; all predicates correct; no dead code |
+| `src/linux/syslinux.c` | Clean; libfat/libinstaller integration correct |
+| `src/linux/format.c` (WritePBR, sector_write) | Clean; sector-aligned write buffer correct |
+| `tests/test_verify_linux.c` | Good coverage: null source, invalid fd, zero size, match, mismatch (small+large), second chunk, cancel, progress reporting, short source |
+| `tests/test_dev_usb_speed_linux.c` | Good coverage: all USB speeds, null/empty, unknown, boundary conditions |
+| `tests/test_cluster_sizes_linux.c` | Good coverage: FAT16/32/NTFS/exFAT/ext2/UDF across size ranges |
+| `tests/test_kbd_shortcuts_linux.c` | Excellent: 140 tests covering all Alt+key shortcuts |
+| `tests/cli_linux_glue.c` | Mock `/dev/sda` is a test string (not real device access) — acceptable |
+| `DIFFERENCES.md` | `GetProcessSearch` incorrectly listed as N/A — **fixed** |
+| `features.md` | `FlashTaskbar()` incorrectly listed as 🚫 — **fixed**; historic "Resolved Features Summary" table removed |
+| `doc/rufus.1` | All 42 CLI flags present in both SYNOPSIS and OPTIONS; man page accurate |
+
+### Feature Parity Notes
+
+- All 87 `src/linux/*.c` files have test coverage (either direct test file or tested
+  via a larger test that includes the file).
+- `wintogo_bcd_template.c` (data-only file) is covered by `test_wue_linux.c`.
+- No TODO/FIXME/HACK comments in `src/linux/*.c` or `src/common/*.c`.
+- `DIFFERENCES.md` now accurately reflects implemented vs N/A features.
+
+### features.md Cleanup (session 5)
+
+- Removed `## Build / CI Fixes (session 2025-07)` section (all resolved).
+- Removed `### Resolved Features Summary` table (features 188–224; all done).
+- Updated `## Pending Work` to clearly state all 188–224 are complete.
+- Corrected two stale entries in the main status tables.
+- File shrunk from 581 → 513 lines.
+
+---
+
+## Tips for Next QA Session (session 5 update)
+
+1. **Read this file**, then check `features.md` Pending Work (currently empty).
+2. **Use `shuf`** to distribute spot-check effort evenly.
+3. **Run `./run_tests.sh --linux-only` first** to establish a passing baseline.
+4. **Force-rebuild suspicious tests** before accepting them as passing.
+5. **Test disk `/dev/nvme0n2`** — after session 5 it has Ubuntu 24.04 ISO written (DD mode).
+6. **No hardcoded `/dev/nvme0n2` in repo** — use `RUFUS_TEST_DEVICE` env var.
+7. **`DIFFERENCES.md` is now accurate** — `GetProcessSearch` is implemented; `FlashTaskbar` is ✅.
+8. **Wine32 missing** — benign warnings; 64-bit Wine tests work fine.

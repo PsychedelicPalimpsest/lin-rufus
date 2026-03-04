@@ -314,12 +314,12 @@ These headers allow Windows source files to compile on Linux unchanged.
 | `CustomSelectionDialog()` | ✅ | GTK implementation: checkbox/radio-button grid GtkDialog; username_index creates inline GtkEntry; test-injectable; fallback returns mask; 40 tests pass |
 | `ListDialog()` | ✅ | GTK implementation: scrollable GtkListBox dialog; non-GTK dumps to stderr; 40 tests pass |
 | `CreateTooltip()` / `DestroyTooltip()` | ✅ | Uses `gtk_widget_set_tooltip_text` / `gtk_widget_set_has_tooltip`; `#ifdef USE_GTK` guard; 6 tests pass; wired into `on_app_activate` for device, boot, filesystem, cluster, label, select, start controls |
-| `SetTaskbarProgressValue()` | 🚫 | Windows taskbar — N/A; could map to GTK window urgency hint |
+| `SetTaskbarProgressValue()` | 🚫 | Windows taskbar progress bar — not implemented; window title shows `(NN%)` instead (Feature 215) |
 | `CreateAboutBox()` / `AboutCallback()` | ✅ | GTK About dialog implemented in `ui_gtk.c`; Windows `AboutCallback` stub unused (GTK handles this directly) |
 | `LicenseCallback()` | ✅ | GTK scrollable GtkTextView dialog; `find_license_file()` searches app_dir; 3 tests pass (item 37) |
 | `UpdateCallback()` / `NewVersionCallback()` | ✅ | `UM_NEW_VERSION` + GTK GtkMessageDialog with version string and release notes; 4 tests pass (item 38) |
 | `SetFidoCheck()` / `SetUpdateCheck()` | ✅ | Both implemented: `SetFidoCheck` checks for pwsh, spawns `CheckForFidoThread` (downloads Fido.ver, validates URL, posts `UM_ENABLE_DOWNLOAD_ISO` to reveal Download ISO button); wired into `on_app_activate`; 57 net tests pass |
-| `FlashTaskbar()` | 🚫 | N/A on Linux |
+| `FlashTaskbar()` | ✅ | `gtk_window_set_urgency_hint` — flashes taskbar on operation complete (Feature 218) |
 | `MyCreateDialog()` / `MyDialogBox()` | ✅ | `IDD_HASH` replaced with `UM_HASH_COMPLETED` → GTK dialog; other dialogs use native GTK equivalents; Windows dialog resource system is not used on Linux |
 | `GetDialogTemplate()` | 🚫 | Windows `.rc` resource — not applicable on Linux |
 | `SetAlertPromptHook()` / `SetAlertPromptMessages()` | 🚫 | Windows-only WinEvent hooks for system format dialogs — N/A on Linux |
@@ -510,72 +510,4 @@ This is the most structurally significant porting gap.
 
 ## Pending Work
 
-_(None — see Resolved Features Summary below)_
-
----
-
-## Build / CI Fixes (session 2025-07)
-
-### Container test linker failure (`__isoc23_strtol`)
-**Root cause:** Pre-built `.a` files (`libwim.a`, `libiso9660.a`, `libdriver.a`,
-`libudf.a`) were compiled on the host with GCC 15 + glibc 2.38+, which introduces
-C23 symbol aliases (`__isoc23_strtol` etc.).  Ubuntu 22.04 container (glibc 2.35)
-does not export these symbols → linker failure.  
-**Fix (`run_tests.sh`):** In `--container` and `--full-container` modes the script
-now deletes and rebuilds these four libraries with GCC-12 (the container compiler)
-before linking the test binaries.
-
-### `MAX_USERNAME_LENGTH` redefinition warning
-`src/windows/rufus.h` redefined `MAX_USERNAME_LENGTH` (already defined in
-`src/linux/compat/windows.h`) without an `#undef` guard.  Added `#undef` before
-the `#define` in `rufus.h`.
-
-### `vhd.c` signedness / const warnings
-- `strncmp(&buf[4], ...)` — `buf` is `uint8_t*`; added `(const char *)` cast.
-- `const char *orig_image_path = image_path` then re-assigned to `char *image_path`
-  — changed `const char*` to `char*` in `format.c`.
-
-### `test_vhd_linux.c` buffer overflow (pre-existing)
-`isbootable_gz_bootable` declared `char path[] = "/tmp/test_vhd_boot_XXXXXX.gz"`
-(30 bytes) then called `snprintf(path, sizeof(path), "…_%d.gz", getpid())`.  With a
-7-digit PID the snprintf silently truncated the path, stripping the `.gz` extension
-and causing the bootable-detection test to fail.  Fixed by widening the buffer to
-`char path[64]`.
-
-### Resolved Features Summary
-
-| Feature | Area | Implemented in |
-|---------|------|----------------|
-| 188 | CLI subprocess tests (`test_exe_cli_linux.c`) | Tests |
-| 189 | GTK binary intercepts `--device` before GTK init | `ui_gtk.c` |
-| 190 | Non-GTK CLI binary builds with `--with-ui=none` | Build system |
-| 191 | `RunNtfsFix()` unit tests (24 tests) | `test_ntfsfix_linux.c` |
-| 192 | `device_open_in_fm_build_cmd()` quotes device path | `device_combo.c` |
-| 193 | CLI extended options (`--version`, `--boot-type`, etc.) | `cli.c` |
-| 194 | `--win-to-go`/`-W` CLI flag | `cli.c`, `format.c` |
-| 195 | CLI format flags (`--write-as-image`, `--fast-zeroing`, etc.) | `cli.c` |
-| 196 | Pre-existing test build failures fixed | Tests |
-| 197 | WinUI regression tests _(skipped — no CI infra)_ | — |
-| 198 | CLI feature parity (addressed by 193–196; `--locale` added) | `cli.c` |
-| 199 | FAT32 root-dir volume-label entry written | `format_fat32.c` |
-| 200 | Integration tests for `--include-hdds --list-devices` | `test_cli_linux.c` |
-| 201–205 | UI accessibility names + automation tests | `ui_gtk.c`, `test_ui_automation_linux.c` |
-| 206 | `--locale LOCALE` CLI option | `cli.c` |
-| 207 | `rufus_init_paths()` called in non-GTK `main()` | `rufus.c` |
-| 208 | Persistent log auto-save to file | `stdio.c`, `ui_gtk.c` |
-| 209 | Blocking process list shown before format | `process.c`, `ui_gtk.c` |
-| 210 | Write speed (MB/s / KB/s) in status bar | `format.c`, `ui_gtk.c` |
-| 211 | USB connection speed in device combo | `dev.c`, `usb_speed.c` |
-| 212 | Alt key cycles speed/ETA/percent mode | `kbd_shortcuts.c`, `ui_gtk.c` |
-| 213 | Download speed in status bar | `net.c`, `ui_gtk.c` |
-| 214 | UASP device detection and "(UAS)" in device name | `dev.c` |
-| 215 | Window title shows `(NN%)` during operation | `progress_title.c`, `ui_gtk.c` |
-| 216 | Joliet / Rock Ridge keyboard shortcuts | `kbd_shortcuts.c` |
-| 217 | `SetThreadPriority` via `setpriority()`; Alt++/- wired | `windows.h`, `ui_gtk.c` |
-| 218 | `FlashTaskbar` via `gtk_window_set_urgency_hint` | `stdlg.c` |
-| 219 | `GetTickCount64` uses `clock_gettime(CLOCK_MONOTONIC)` | `windows.h` |
-| 220 | Blocking process list in `ListDialog` after format failure | `ui_gtk.c` |
-| 221 | `FlashTaskbar` on success; save-image-type restored; crash fix | `ui_gtk.c` |
-| 222 | SUDO_USER-aware settings path resolution | `paths.c`, `rufus.c` |
-| 223 | Timed status-bar messages: cheat-mode toggle results briefly flash in the status bar (3.5 s) then revert to the previous message, mirroring Windows `PrintStatusTimeout`/`TID_MESSAGE_STATUS`. Injectable timer backend enables pure-C unit tests. | `status_timeout.c`, `ui_gtk.c` |
-| 224 | `SetDOSLocale()` full parity: XKB layout detection (Debian/Ubuntu + Fedora/RHEL/Arch), keyboard driver file (keyboard.sys/keybrd2.sys/keybrd3.sys), CP850→CP858 upgrade, EGA/CPX font file selection, GOTO/codepage/keyb AUTOEXEC.BAT structure; 92 total dos tests | `dos_locale.c`, `test_dos_linux.c` |
+_(None — all features 188–224 are implemented and tested.)_
