@@ -889,6 +889,89 @@ TEST(keyboard_sys_used_for_us)
 #endif
 }
 
+/* ================================================================
+ * FreeDOS codepage upgrade tests (CP850 -> CP858 parity)
+ * Windows fd_upgrade_cp() upgrades CP850 to CP858 (adds Euro symbol).
+ * The Linux port must do the same for FreeDOS targets.
+ * ================================================================ */
+#ifdef RUFUS_TEST
+/* Helper: return the first codepage number found in FDCONFIG.SYS for XKB layout. */
+static int get_fdconfig_cp(const char* xkb)
+{
+    dos_locale_set_xkb_layout(xkb);
+    char *target = make_tmpdir();
+    if (!target) { dos_locale_set_xkb_layout(NULL); return -1; }
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg, "r");
+    int cp = -1;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            /* Lines like: "1 !DEVICE=\LOCALE\KEYB.EXE GR,858,\LOCALE\KEYBOARD.SYS" */
+            char *keyb = strstr(line, "KEYB.EXE");
+            if (!keyb) continue;
+            /* Skip to the comma after the keyboard code */
+            char *comma = strchr(keyb, ',');
+            if (!comma) continue;
+            int parsed = atoi(comma + 1);
+            if (parsed > 0) { cp = parsed; break; }
+        }
+        fclose(f);
+    }
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    return cp;
+}
+#endif /* RUFUS_TEST */
+
+TEST(freedos_upgrades_cp850_to_cp858_for_german)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* de -> GR, CP850 -> should be upgraded to CP858 for FreeDOS */
+    int cp = get_fdconfig_cp("de");
+    CHECK_MSG(cp == 858, "German FreeDOS should use CP858 (upgraded from CP850)");
+#endif
+}
+
+TEST(freedos_upgrades_cp850_to_cp858_for_french)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* fr -> FR, CP850 -> should be upgraded to CP858 for FreeDOS */
+    int cp = get_fdconfig_cp("fr");
+    CHECK_MSG(cp == 858, "French FreeDOS should use CP858 (upgraded from CP850)");
+#endif
+}
+
+TEST(freedos_keeps_cp866_for_russian)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* ru -> RU, CP866 -> should NOT be upgraded (only CP850 is upgraded) */
+    int cp = get_fdconfig_cp("ru");
+    CHECK_MSG(cp == 866, "Russian FreeDOS should keep CP866");
+#endif
+}
+
+TEST(freedos_keeps_cp737_for_greek)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* gr -> GK, CP737 -> should NOT be upgraded */
+    int cp = get_fdconfig_cp("gr");
+    CHECK_MSG(cp == 737, "Greek FreeDOS should keep CP737");
+#endif
+}
+
 /* GetResource is provided by stdfn.c */
 #include "resource.h"
 extern uint8_t* GetResource(void *m, char *n, char *t, const char *d, DWORD *l, BOOL dup);
@@ -1068,6 +1151,11 @@ int main(void)
     RUN(keybrd2_sys_used_for_greek);
     RUN(keybrd2_sys_used_for_turkish);
     RUN(keyboard_sys_used_for_us);
+
+    RUN(freedos_upgrades_cp850_to_cp858_for_german);
+    RUN(freedos_upgrades_cp850_to_cp858_for_french);
+    RUN(freedos_keeps_cp866_for_russian);
+    RUN(freedos_keeps_cp737_for_greek);
 
     RUN(getresource_command_com_not_null);
     RUN(getresource_command_com_size_correct);

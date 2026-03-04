@@ -380,7 +380,7 @@ These headers allow Windows source files to compile on Linux unchanged.
 | Function | Status | Notes |
 |----------|--------|-------|
 | `ExtractFreeDOS()` / `ExtractDOS()` | ✅ | Copies FreeDOS boot files from `res/freedos/` to target; dispatches on `boot_type`; 23 tests pass |
-| `SetDOSLocale()` | ✅ | Detects system XKB keyboard layout from /etc/default/keyboard; maps to FreeDOS 2-letter code + OEM codepage; creates FDCONFIG.SYS with language selection menu for non-US layouts; falls back to US/CP437; 7 keyboard detection tests (39 total dos tests) |
+| `SetDOSLocale()` | ✅ | Detects system XKB keyboard layout from /etc/default/keyboard (Debian/Ubuntu) and /etc/vconsole.conf XKBLAYOUT/KEYMAP (Fedora/RHEL/Arch); strips variant suffixes; maps to FreeDOS 2-letter code + OEM codepage; selects correct driver file (keyboard.sys/keybrd2.sys/keybrd3.sys) matching Windows parity; creates FDCONFIG.SYS with language selection menu for non-US layouts; falls back to US/CP437; 80 total dos tests |
 | `InstallSyslinux()` | ✅ | Uses mcopy+libfat+pwrite; requires FAT32 image with >65524 clusters (libfat FAT28 detection); 36 tests pass |
 | `GetSyslinuxVersion()` | ✅ | Verbatim port from Windows; scans buffer for SYSLINUX/ISOLINUX version string |
 | `libfat_readfile()` | ✅ | pread-based FAT sector reader; `intptr_t` fd cast |
@@ -548,4 +548,4 @@ _(None — see Resolved Features Summary below)_
 | 221 | `FlashTaskbar` on success; save-image-type restored; crash fix | `ui_gtk.c` |
 | 222 | SUDO_USER-aware settings path resolution | `paths.c`, `rufus.c` |
 | 223 | Timed status-bar messages: cheat-mode toggle results briefly flash in the status bar (3.5 s) then revert to the previous message, mirroring Windows `PrintStatusTimeout`/`TID_MESSAGE_STATUS`. Injectable timer backend enables pure-C unit tests. | `status_timeout.c`, `ui_gtk.c` |
-| 224 | `SetDOSLocale()` reads XKB layout from `/etc/default/keyboard` and maps to FreeDOS keyboard code + OEM codepage; creates FDCONFIG.SYS with language selection menu for non-US layouts; 7 new tests | `dos_locale.c`, `test_dos_linux.c` |
+| 224 | `SetDOSLocale()` reads XKB layout from `/etc/default/keyboard` (Debian/Ubuntu) and `/etc/vconsole.conf` XKBLAYOUT/KEYMAP (Fedora/RHEL/Arch); strips variant suffixes; maps to FreeDOS keyboard code + OEM codepage; selects correct driver file (keyboard.sys/keybrd2.sys/keybrd3.sys) matching Windows parity; creates FDCONFIG.SYS with language selection menu for non-US layouts; 80 total dos tests | `dos_locale.c`, `test_dos_linux.c` |

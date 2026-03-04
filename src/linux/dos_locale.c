@@ -275,6 +275,10 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     const char* kb = xkb_to_dos(xkb, &cp);
     const char* kbdrv = kb_driver_for(kb);
 
+    /* FreeDOS upgrade: CP850 (Latin-1) -> CP858 (Latin-1 with Euro symbol) */
+    if (cp == 850)
+        cp = 858;
+
     /* Upper-case DOS keyboard code for display / KEYB.EXE */
     char KB_UPPER[8];
     size_t kblen = strlen(kb);
