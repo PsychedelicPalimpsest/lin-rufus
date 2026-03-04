@@ -507,7 +507,7 @@ This is the most structurally significant porting gap.
 
 ## Pending Work
 
-223. In `/home/mitch/workflow_logs` are some logs from failed github actions, fix them
+_(None — see Resolved Features Summary below)_
 
 ### Resolved Features Summary
 

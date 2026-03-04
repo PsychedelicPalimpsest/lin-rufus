@@ -1,2 +1,5 @@
 # Wine test artifacts (Windows paths with backslashes become literal directory names on Linux)
-\tmp\
+# The find+rm cleanup in run_tests.sh cleans these after Wine runs.
+# This .gitignore is an extra safety net; git treats the initial backslash
+# as an escape prefix so we cannot match it directly — use a glob instead.
+/[\\]*

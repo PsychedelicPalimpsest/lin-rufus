@@ -462,6 +462,144 @@ TEST(hresult_failure_codes_are_negative)
 }
 
 /* ==========================================================================
+ * String case-folding: _stricmp / _strnicmp
+ * ========================================================================== */
+
+TEST(stricmp_equal_same_case)
+{
+	CHECK_MSG(_stricmp("hello", "hello") == 0, "_stricmp equal strings must return 0");
+}
+
+TEST(stricmp_equal_diff_case)
+{
+	CHECK_MSG(_stricmp("HELLO", "hello") == 0, "_stricmp case-insensitive must return 0");
+	CHECK_MSG(_stricmp("HeLLo", "hElLO") == 0, "_stricmp mixed case must return 0");
+}
+
+TEST(stricmp_less)
+{
+	CHECK_MSG(_stricmp("abc", "xyz") < 0, "_stricmp('abc','xyz') must be negative");
+}
+
+TEST(stricmp_greater)
+{
+	CHECK_MSG(_stricmp("xyz", "abc") > 0, "_stricmp('xyz','abc') must be positive");
+}
+
+TEST(strnicmp_n_chars)
+{
+	CHECK_MSG(_strnicmp("HELLO_WORLD", "hello_xyz", 5) == 0,
+	          "_strnicmp first 5 chars equal (case insensitive)");
+	CHECK_MSG(_strnicmp("HELLO_WORLD", "hello_xyz", 7) != 0,
+	          "_strnicmp first 7 chars differ (W vs x)");
+}
+
+/* ==========================================================================
+ * GetFileAttributesA
+ * ========================================================================== */
+
+TEST(get_file_attrs_real_file)
+{
+	/* /etc/passwd exists on virtually every POSIX system */
+	DWORD a = GetFileAttributesA("/etc/passwd");
+	CHECK_MSG(a != INVALID_FILE_ATTRIBUTES, "GetFileAttributesA on real file must not return INVALID");
+	CHECK_MSG(!(a & FILE_ATTRIBUTE_DIRECTORY), "regular file must not have DIRECTORY attribute");
+}
+
+TEST(get_file_attrs_directory)
+{
+	DWORD a = GetFileAttributesA("/tmp");
+	CHECK_MSG(a != INVALID_FILE_ATTRIBUTES, "GetFileAttributesA on /tmp must not return INVALID");
+	CHECK_MSG(a & FILE_ATTRIBUTE_DIRECTORY, "/tmp must have FILE_ATTRIBUTE_DIRECTORY set");
+}
+
+TEST(get_file_attrs_missing_returns_invalid)
+{
+	DWORD a = GetFileAttributesA("/nonexistent_path_xyzzy_rufus");
+	CHECK_MSG(a == INVALID_FILE_ATTRIBUTES,
+	          "GetFileAttributesA on missing path must return INVALID_FILE_ATTRIBUTES");
+}
+
+TEST(get_file_attrs_null_returns_invalid)
+{
+	DWORD a = GetFileAttributesA(NULL);
+	CHECK_MSG(a == INVALID_FILE_ATTRIBUTES,
+	          "GetFileAttributesA(NULL) must return INVALID_FILE_ATTRIBUTES");
+}
+
+/* ==========================================================================
+ * GetCurrentDirectoryA / SetCurrentDirectoryA
+ * ========================================================================== */
+
+TEST(get_current_directory_a_returns_nonzero)
+{
+	char buf[MAX_PATH] = {0};
+	DWORD r = GetCurrentDirectoryA(sizeof(buf), buf);
+	CHECK_MSG(r > 0, "GetCurrentDirectoryA must return non-zero length");
+	CHECK_MSG(buf[0] == '/', "GetCurrentDirectoryA must return an absolute path");
+}
+
+TEST(get_current_directory_a_length_matches)
+{
+	char buf[MAX_PATH] = {0};
+	DWORD r = GetCurrentDirectoryA(sizeof(buf), buf);
+	CHECK_MSG(r == (DWORD)strlen(buf),
+	          "GetCurrentDirectoryA return value must equal strlen(buf)");
+}
+
+TEST(set_current_directory_a_roundtrip)
+{
+	char orig[MAX_PATH] = {0};
+	GetCurrentDirectoryA(sizeof(orig), orig);
+
+	/* cd to /tmp and back */
+	BOOL ok = SetCurrentDirectoryA("/tmp");
+	CHECK_MSG(ok, "SetCurrentDirectoryA('/tmp') must succeed");
+
+	char cwd[MAX_PATH] = {0};
+	GetCurrentDirectoryA(sizeof(cwd), cwd);
+	/* /tmp may be a symlink; just check it is non-empty and starts with '/' */
+	CHECK_MSG(cwd[0] == '/', "After SetCurrentDirectory, cwd must be absolute path");
+
+	/* Restore original directory */
+	SetCurrentDirectoryA(orig);
+}
+
+/* ==========================================================================
+ * sprintf_s / strcpy_s / strcat_s bounds safety
+ * ========================================================================== */
+
+TEST(sprintf_s_basic)
+{
+	char buf[32] = {0};
+	int r = sprintf_s(buf, sizeof(buf), "hello %d", 42);
+	CHECK_MSG(r > 0, "sprintf_s must return positive on success");
+	CHECK_STR_EQ(buf, "hello 42");
+}
+
+TEST(strcpy_s_basic)
+{
+	char dst[16] = {0};
+	strcpy_s(dst, sizeof(dst), "hello");
+	CHECK_STR_EQ(dst, "hello");
+}
+
+TEST(strcpy_s_truncates_and_null_terminates)
+{
+	char dst[4] = {0};
+	strcpy_s(dst, sizeof(dst), "hello_world");
+	/* Must be null-terminated even if truncated */
+	CHECK_MSG(dst[3] == '\0', "strcpy_s must null-terminate even on truncation");
+}
+
+TEST(strcat_s_basic)
+{
+	char buf[32] = "hello";
+	strcat_s(buf, sizeof(buf), " world");
+	CHECK_STR_EQ(buf, "hello world");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -541,6 +679,26 @@ int main(void)
 	RUN_TEST(dword_is_unsigned);
 	RUN_TEST(long_is_signed);
 	RUN_TEST(hresult_failure_codes_are_negative);
+
+	RUN_TEST(stricmp_equal_same_case);
+	RUN_TEST(stricmp_equal_diff_case);
+	RUN_TEST(stricmp_less);
+	RUN_TEST(stricmp_greater);
+	RUN_TEST(strnicmp_n_chars);
+
+	RUN_TEST(get_file_attrs_real_file);
+	RUN_TEST(get_file_attrs_directory);
+	RUN_TEST(get_file_attrs_missing_returns_invalid);
+	RUN_TEST(get_file_attrs_null_returns_invalid);
+
+	RUN_TEST(get_current_directory_a_returns_nonzero);
+	RUN_TEST(get_current_directory_a_length_matches);
+	RUN_TEST(set_current_directory_a_roundtrip);
+
+	RUN_TEST(sprintf_s_basic);
+	RUN_TEST(strcpy_s_basic);
+	RUN_TEST(strcpy_s_truncates_and_null_terminates);
+	RUN_TEST(strcat_s_basic);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;

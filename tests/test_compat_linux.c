@@ -239,6 +239,165 @@ TEST(shell_execute_a_sw_show_constant_defined)
 }
 
 /* =========================================================================
+ * CharLowerA / CharUpperA — in-place case conversion
+ * =========================================================================*/
+
+TEST(charlowera_lowercases_string)
+{
+	char s[] = "HELLO WORLD";
+	CharLowerA(s);
+	CHECK_STR_EQ(s, "hello world");
+}
+
+TEST(charlowera_already_lowercase_unchanged)
+{
+	char s[] = "hello world";
+	CharLowerA(s);
+	CHECK_STR_EQ(s, "hello world");
+}
+
+TEST(charlowera_mixed_case)
+{
+	char s[] = "HeLLo";
+	CharLowerA(s);
+	CHECK_STR_EQ(s, "hello");
+}
+
+TEST(charlowera_empty_string)
+{
+	char s[] = "";
+	CharLowerA(s);
+	CHECK_STR_EQ(s, "");
+}
+
+TEST(charlowera_null_safe)
+{
+	/* CharLowerA(NULL) must not crash */
+	char *r = CharLowerA(NULL);
+	CHECK(r == NULL);
+}
+
+TEST(charuppera_uppercases_string)
+{
+	char s[] = "hello world";
+	CharUpperA(s);
+	CHECK_STR_EQ(s, "HELLO WORLD");
+}
+
+TEST(charuppera_null_safe)
+{
+	char *r = CharUpperA(NULL);
+	CHECK(r == NULL);
+}
+
+/* safe_strtolower (rufus.h macro) must actually lowercase on Linux */
+TEST(safe_strtolower_actually_lowercases)
+{
+	char s[] = "RUFUS-NET.EXE";
+	char *p = s;
+	/* safe_strtolower is defined in rufus.h but we can call CharLowerA
+	 * directly because that is exactly what it expands to on Linux. */
+	CharLowerA(p);
+	CHECK_STR_EQ(p, "rufus-net.exe");
+}
+
+/* =========================================================================
+ * GetEnvironmentVariableA / SetEnvironmentVariableA
+ * =========================================================================*/
+TEST(getenv_set_and_get_roundtrip)
+{
+	SetEnvironmentVariableA("RUFUS_TEST_ENV_42", "hello_world");
+	char buf[64] = {0};
+	DWORD r = GetEnvironmentVariableA("RUFUS_TEST_ENV_42", buf, sizeof(buf));
+	CHECK_MSG(r == 11, "GetEnvironmentVariableA should return 11 (length of 'hello_world')");
+	CHECK_STR_EQ(buf, "hello_world");
+}
+
+TEST(getenv_missing_returns_zero)
+{
+	DWORD r = GetEnvironmentVariableA("RUFUS_NOT_SET_XYZ_99", NULL, 0);
+	CHECK_MSG(r == 0, "GetEnvironmentVariableA of unset var should return 0");
+}
+
+TEST(getenv_buffer_too_small_returns_needed_size)
+{
+	SetEnvironmentVariableA("RUFUS_TEST_ENV_SMALL", "abcde");
+	char buf[3] = {0};
+	DWORD r = GetEnvironmentVariableA("RUFUS_TEST_ENV_SMALL", buf, sizeof(buf));
+	/* Windows returns required size (6 = strlen+1) when buffer too small */
+	CHECK_MSG(r == 6, "Should return needed size (6) when buffer too small");
+	/* buf should not have been written to (or at least not null-term violated) */
+}
+
+TEST(getenv_null_buf_returns_needed_size)
+{
+	SetEnvironmentVariableA("RUFUS_TEST_ENV_NULL", "test123");
+	DWORD r = GetEnvironmentVariableA("RUFUS_TEST_ENV_NULL", NULL, 0);
+	/* Windows returns strlen+1 when buf is NULL */
+	CHECK_MSG(r == 8, "GetEnvironmentVariableA(NULL, 0) should return 8 (strlen+1)");
+}
+
+TEST(setenv_can_unset_with_null_value)
+{
+	/* Windows: SetEnvironmentVariableA with NULL value removes the variable.
+	 * Our stub sets it to empty string (POSIX unsetenv not directly supported
+	 * via the Windows API on Linux) — just verify it doesn't crash. */
+	SetEnvironmentVariableA("RUFUS_TEST_ENV_DEL", "value");
+	/* Our impl maps NULL -> setenv(n, "", 1) which won't crash */
+	BOOL r = SetEnvironmentVariableA("RUFUS_TEST_ENV_DEL", NULL);
+	(void)r;  /* just check no crash */
+	CHECK_MSG(TRUE, "SetEnvironmentVariableA with NULL value should not crash");
+}
+
+/* =========================================================================
+ * GetTempPathA
+ * =========================================================================*/
+TEST(get_temp_path_a_returns_nonzero)
+{
+	char buf[MAX_PATH] = {0};
+	DWORD r = GetTempPathA(sizeof(buf), buf);
+	CHECK_MSG(r > 0, "GetTempPathA should return non-zero length");
+	CHECK_MSG(buf[0] != '\0', "GetTempPathA should fill buffer");
+}
+
+TEST(get_temp_path_a_returns_valid_dir)
+{
+	char buf[MAX_PATH] = {0};
+	GetTempPathA(sizeof(buf), buf);
+	/* On Linux, should be /tmp or $TMPDIR */
+	CHECK_MSG(strstr(buf, "tmp") != NULL || buf[0] == '/',
+	          "GetTempPathA should return a path containing 'tmp' or absolute path");
+}
+
+TEST(get_temp_path_a_length_matches_buf)
+{
+	char buf[MAX_PATH] = {0};
+	DWORD r = GetTempPathA(sizeof(buf), buf);
+	CHECK_MSG(r == (DWORD)strlen(buf),
+	          "GetTempPathA return value should equal strlen(buf)");
+}
+
+/* =========================================================================
+ * GetModuleFileNameA
+ * =========================================================================*/
+TEST(get_module_filename_a_returns_nonzero)
+{
+	char buf[MAX_PATH] = {0};
+	DWORD r = GetModuleFileNameA(NULL, buf, sizeof(buf));
+	CHECK_MSG(r > 0, "GetModuleFileNameA should return non-zero");
+	CHECK_MSG(buf[0] == '/', "GetModuleFileNameA should return absolute path");
+}
+
+TEST(get_module_filename_a_null_terminated)
+{
+	char buf[MAX_PATH];
+	memset(buf, 0xAB, sizeof(buf));
+	DWORD r = GetModuleFileNameA(NULL, buf, sizeof(buf));
+	CHECK_MSG(r < sizeof(buf), "GetModuleFileNameA should fit in MAX_PATH");
+	CHECK_MSG(buf[r] == '\0', "GetModuleFileNameA result should be null-terminated");
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -278,6 +437,32 @@ int main(void)
 	RUN(shell_execute_a_empty_file_returns_error);
 	RUN(shell_execute_a_valid_path_returns_gt32);
 	RUN(shell_execute_a_sw_show_constant_defined);
+
+	printf("\n  CharLowerA / CharUpperA (safe_strtolower fix)\n");
+	RUN(charlowera_lowercases_string);
+	RUN(charlowera_already_lowercase_unchanged);
+	RUN(charlowera_mixed_case);
+	RUN(charlowera_empty_string);
+	RUN(charlowera_null_safe);
+	RUN(charuppera_uppercases_string);
+	RUN(charuppera_null_safe);
+	RUN(safe_strtolower_actually_lowercases);
+
+	printf("\n  GetEnvironmentVariableA / SetEnvironmentVariableA\n");
+	RUN(getenv_set_and_get_roundtrip);
+	RUN(getenv_missing_returns_zero);
+	RUN(getenv_buffer_too_small_returns_needed_size);
+	RUN(getenv_null_buf_returns_needed_size);
+	RUN(setenv_can_unset_with_null_value);
+
+	printf("\n  GetTempPathA\n");
+	RUN(get_temp_path_a_returns_nonzero);
+	RUN(get_temp_path_a_returns_valid_dir);
+	RUN(get_temp_path_a_length_matches_buf);
+
+	printf("\n  GetModuleFileNameA\n");
+	RUN(get_module_filename_a_returns_nonzero);
+	RUN(get_module_filename_a_null_terminated);
 
 	TEST_RESULTS();
 	return (_fail > 0) ? 1 : 0;

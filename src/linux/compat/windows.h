@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <wchar.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -705,8 +706,18 @@ static inline void Sleep(DWORD ms) {
 #define lstrcatA  strcat
 #define lstrlenA  (int)strlen
 #define CompareStringA(l,f,s1,c1,s2,c2) strcasecmp(s1,s2)
-#define CharLowerA(s) (s)
-#define CharUpperA(s) (s)
+
+/* CharLowerA / CharUpperA: Windows modifies the string in-place.
+ * On Linux we need to do the same; a no-op would silently break
+ * safe_strtolower() calls in parser.c / net.c. */
+static inline char *CharLowerA(char *s) {
+    if (s) { for (char *p = s; *p; p++) *p = (char)tolower((unsigned char)*p); }
+    return s;
+}
+static inline char *CharUpperA(char *s) {
+    if (s) { for (char *p = s; *p; p++) *p = (char)toupper((unsigned char)*p); }
+    return s;
+}
 
 /* ---- Numeric conversion ---- */
 #define atoi64 atoll
@@ -1506,16 +1517,21 @@ static inline BOOL GetVersionExA(OSVERSIONINFOEXA* vi) { (void)vi; return FALSE;
 static inline DWORD GetEnvironmentVariableA(LPCSTR n, LPSTR buf, DWORD sz) {
     char* v = getenv(n);
     if (!v) return 0;
-    if (buf) strncpy(buf, v, sz);
-    return (DWORD)strlen(v);
+    DWORD need = (DWORD)strlen(v) + 1;
+    /* Windows: if buffer too small (or NULL), return required size; don't write to buf */
+    if (!buf || sz < need) return need;
+    memcpy(buf, v, need);
+    return need - 1;  /* Windows returns length not including null on success */
 }
 #define GetEnvironmentVariable GetEnvironmentVariableA
 static inline BOOL SetEnvironmentVariableA(LPCSTR n, LPCSTR v) { return setenv(n, v ? v : "", 1) == 0; }
 #define SetEnvironmentVariable SetEnvironmentVariableA
 static inline DWORD GetTempPathA(DWORD sz, LPSTR buf) {
     const char* t = getenv("TMPDIR"); if (!t) t = "/tmp";
-    if (buf) strncpy(buf, t, sz);
-    return (DWORD)strlen(t);
+    DWORD need = (DWORD)strlen(t) + 1;
+    if (buf && sz >= need) { memcpy(buf, t, need); }
+    else if (buf && sz > 0) { buf[0] = '\0'; }
+    return (DWORD)(need - 1);  /* returns length not including null */
 }
 #define GetTempPath GetTempPathA
 static inline UINT GetTempFileNameA(LPCSTR path, LPCSTR prefix, UINT unum, LPSTR tmpfile) {
@@ -1563,7 +1579,7 @@ static inline DWORD FormatMessageA(DWORD flags, LPCVOID src, DWORD msgid, DWORD 
 /* ---- GetFileAttributes stub ---- */
 static inline DWORD GetFileAttributesA(LPCSTR p) {
     struct stat st;
-    if (stat(p, &st) != 0) return 0xFFFFFFFF; /* INVALID_FILE_ATTRIBUTES */
+    if (!p || stat(p, &st) != 0) return 0xFFFFFFFF; /* INVALID_FILE_ATTRIBUTES */
     DWORD attr = 0;
     if (S_ISDIR(st.st_mode)) attr |= FILE_ATTRIBUTE_DIRECTORY;
     if (!(st.st_mode & S_IRUSR)) attr |= FILE_ATTRIBUTE_READONLY;

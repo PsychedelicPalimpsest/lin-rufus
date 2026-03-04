@@ -212,6 +212,11 @@ if [ "${RUN_WINE}" -eq 1 ]; then
 
     info "Running Windows tests via Wine ..."
     make "${MAKE_ARGS[@]}" run-wine || overall_failed=$((overall_failed + 1))
+
+    # Wine runs tests in the tests/ directory and may create Windows-style paths
+    # (e.g. \tmp\...) as literal directory names on the Linux filesystem.
+    # Clean them up so they don't get accidentally committed.
+    (cd tests && find . -maxdepth 1 -name $'\\\\*' -exec rm -rf {} + 2>/dev/null || true)
   fi
 fi
 
