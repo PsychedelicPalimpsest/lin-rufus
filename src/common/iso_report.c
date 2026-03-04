@@ -9,8 +9,6 @@
  *   const char*       old_c32_name[]     — defined in {linux,windows}/iso.c
  *   void uprintf(const char *fmt, ...)   — platform log function
  *   char* SizeToHumanReadable(uint64_t, BOOL, BOOL)
- *
- * Windows-only (guarded with #ifdef _WIN32):
  *   char* lmprintf(uint32_t msg_id, ...)
  *   void  Notification(UINT, const char*, const char*)
  *
@@ -20,10 +18,8 @@
 
 #include "rufus.h"       /* RUFUS_IMG_REPORT, HAS_* macros, WINPE_*, NB_OLD_C32 */
 #include "iso_report.h"
-#ifdef _WIN32
 #include "localization.h"  /* lmprintf() */
 #include "resource.h"      /* MSG_xxx constants */
-#endif
 
 /* Helper: log a line if condition is true */
 #define PRINT_ISO_PROP(b, ...) do { if (b) uprintf(__VA_ARGS__); } while (0)
@@ -65,11 +61,9 @@ void log_iso_report(void)
 	if (img_report.mismatch_size > 0) {
 		uprintf("  ERROR: Detected that file on disk has been truncated by %s!",
 			SizeToHumanReadable((uint64_t)img_report.mismatch_size, FALSE, FALSE));
-#ifdef _WIN32
 		Notification(MB_OK | MB_ICONWARNING, lmprintf(MSG_297),
 			lmprintf(MSG_298,
 				SizeToHumanReadable((uint64_t)img_report.mismatch_size, FALSE, FALSE)));
-#endif
 	} else if (img_report.mismatch_size < 0) {
 		uprintf("  Note: File on disk is larger than reported ISO size by %s...",
 			SizeToHumanReadable((uint64_t)(-img_report.mismatch_size), FALSE, FALSE));

@@ -63,9 +63,25 @@ char* SizeToHumanReadable(uint64_t size, BOOL copy_to_log, BOOL fake_units)
     return str;
 }
 
-/* ---- lmprintf stub (only needed for Windows Notification path) ---- */
+/* ---- lmprintf stub ---- */
 char* lmprintf(uint32_t msg_id, ...)
 {
     (void)msg_id;
     return "";
 }
+
+/* ---- NotificationEx stub (tracks calls for test assertions) ---- */
+static int g_notification_calls = 0;
+
+int NotificationEx(int type, const char* dont_display_setting,
+                   const notification_info* more_info, const char* title,
+                   const char* format, ...)
+{
+    (void)type; (void)dont_display_setting; (void)more_info;
+    (void)title; (void)format;
+    g_notification_calls++;
+    return 0;
+}
+
+int iso_report_get_notification_calls(void) { return g_notification_calls; }
+void iso_report_reset_notification_calls(void) { g_notification_calls = 0; }

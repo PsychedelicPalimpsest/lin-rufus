@@ -12,7 +12,8 @@
  *  4.  windows_version_with_minor     — "Detected: Windows 10.0 ISO (Build …)"
  *  5.  windows_version_no_minor       — "Detected: Windows 11 ISO (Build …)" (no ".0")
  *  6.  mismatch_truncated_logged      — Truncation error logged for mismatch_size > 0
- *  7.  mismatch_larger_logged         — "larger than reported" note for mismatch_size < 0
+ *  7.  mismatch_truncated_shows_notification — Notification shown for truncated ISO
+ *  8.  mismatch_larger_logged         — "larger than reported" note for mismatch_size < 0
  *  8.  has_4gb_file_logged            — ">4GB file" flag logged
  *  9.  has_long_filename_logged       — ">64 chars filename" logged
  * 10.  has_deep_directories_logged    — "Rock Ridge deep directory" logged
@@ -61,6 +62,8 @@ void log_iso_report(void);
 /* ---- Globals provided by iso_report_linux_glue.c ---- */
 extern RUFUS_IMG_REPORT img_report;
 void rufus_set_log_handler(void (*fn)(const char *msg));
+int iso_report_get_notification_calls(void);
+void iso_report_reset_notification_calls(void);
 
 /* ---- Log capture infrastructure ---- */
 #define CAP_BUF_SZ 8192
@@ -181,6 +184,16 @@ TEST(mismatch_truncated_logged)
     log_iso_report();
     stop_capture();
     CHECK_MSG(has("ERROR") || has("truncated"), "truncation error must be logged");
+}
+
+TEST(mismatch_truncated_shows_notification)
+{
+    img_report = make_empty();
+    img_report.mismatch_size = (int64_t)512 * 1024;
+    iso_report_reset_notification_calls();
+    log_iso_report();
+    CHECK_MSG(iso_report_get_notification_calls() > 0,
+              "truncated ISO must trigger a Notification dialog");
 }
 
 TEST(mismatch_larger_logged)
@@ -493,6 +506,7 @@ int main(void)
     RUN_TEST(windows_version_with_minor);
     RUN_TEST(windows_version_no_minor);
     RUN_TEST(mismatch_truncated_logged);
+    RUN_TEST(mismatch_truncated_shows_notification);
     RUN_TEST(mismatch_larger_logged);
     RUN_TEST(has_4gb_file_logged);
     RUN_TEST(has_long_filename_logged);
