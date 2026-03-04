@@ -38,6 +38,11 @@ jobs:
       # and MinGW.  See DEPENDENCIES.md for the full annotated list.
       run: sudo bash tests/install-deps.sh
 
+    - name: Regen configure and make files
+      run: aclocal && automake
+
+
+
     - name: Configure (Linux target)
       run: ./configure --with-os=linux
 
