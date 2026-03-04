@@ -347,6 +347,84 @@ TEST(free_loc_cmd_frees_without_crash)
 }
 
 /* -----------------------------------------------------------------------
+ * dispatch_loc_cmd() tests
+ * --------------------------------------------------------------------- */
+TEST(dispatch_loc_cmd_null_returns_false)
+{
+    init_localization();
+    BOOL r = dispatch_loc_cmd(NULL);
+    CHECK(r == FALSE);
+    exit_localization();
+}
+
+TEST(dispatch_loc_cmd_group_does_not_crash)
+{
+    /*
+     * A GROUP command sets the dialog index for subsequent TEXT commands.
+     * It should not crash even without GTK/UI.
+     * Note: dispatch_loc_cmd takes ownership of lcmd — don't free manually.
+     */
+    init_localization();
+    /* Need msg_table != default_msg_table or the command is silently discarded */
+    msg_table = current_msg_table;
+
+    loc_cmd *grp = calloc(1, sizeof(loc_cmd));
+    grp->command = LC_GROUP;
+    grp->ctrl_id = IDD_DIALOG;
+    grp->txt[0]  = strdup("IDD_DIALOG");
+    list_init(&grp->list);
+
+    BOOL r = dispatch_loc_cmd(grp);
+    /* ownership transferred to localization system — don't free grp */
+    CHECK(r == TRUE);
+    exit_localization();
+}
+
+TEST(dispatch_loc_cmd_text_msg_prefix_adds_message)
+{
+    /*
+     * An LC_TEXT command whose txt[0] starts with "MSG_" must be routed
+     * through add_message_command() — this is the path that populates
+     * msg_table with translated strings.
+     */
+    init_localization();
+    msg_table = current_msg_table;
+
+    loc_cmd *txt = calloc(1, sizeof(loc_cmd));
+    txt->command = LC_TEXT;
+    txt->ctrl_id = -1;
+    txt->txt[0]  = strdup("MSG_001");
+    txt->txt[1]  = strdup("Hello, world");
+    list_init(&txt->list);
+
+    BOOL r = dispatch_loc_cmd(txt);
+    /* ownership transferred */
+    CHECK(r == TRUE);
+    /* After dispatch, MSG_001 must be in msg_table */
+    CHECK(msg_table[1] != NULL);
+    CHECK(strcmp(msg_table[1], "Hello, world") == 0);
+    exit_localization();
+}
+
+TEST(dispatch_loc_cmd_text_unknown_control_returns_false)
+{
+    init_localization();
+    msg_table = current_msg_table;
+
+    loc_cmd *txt = calloc(1, sizeof(loc_cmd));
+    txt->command = LC_TEXT;
+    txt->ctrl_id = -1;
+    txt->txt[0]  = strdup("IDC_DOES_NOT_EXIST_9999");
+    txt->txt[1]  = strdup("Some text");
+    list_init(&txt->list);
+
+    BOOL r = dispatch_loc_cmd(txt);
+    /* ownership transferred (or freed on error path) */
+    CHECK(r == FALSE);
+    exit_localization();
+}
+
+/* -----------------------------------------------------------------------
  * get_loc_dlg_count() / get_loc_dlg_entry() accessors
  * --------------------------------------------------------------------- */
 TEST(get_loc_dlg_count_is_positive)
@@ -400,6 +478,12 @@ int main(void)
     /* free_loc_cmd */
     RUN(free_loc_cmd_null_safe);
     RUN(free_loc_cmd_frees_without_crash);
+
+    /* dispatch_loc_cmd */
+    RUN(dispatch_loc_cmd_null_returns_false);
+    RUN(dispatch_loc_cmd_group_does_not_crash);
+    RUN(dispatch_loc_cmd_text_msg_prefix_adds_message);
+    RUN(dispatch_loc_cmd_text_unknown_control_returns_false);
 
     /* accessors */
     RUN(get_loc_dlg_count_is_positive);
