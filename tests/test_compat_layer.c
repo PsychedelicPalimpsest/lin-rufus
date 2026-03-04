@@ -564,6 +564,36 @@ TEST(strnicmp_n_chars)
 }
 
 /* ==========================================================================
+ * lstrlenA / lstrcpyA / lstrcpynA macros
+ * ========================================================================== */
+
+TEST(lstrlena_basic)
+{
+	CHECK_MSG(lstrlenA("hello") == 5, "lstrlenA must return string length");
+}
+
+TEST(lstrlena_empty)
+{
+	CHECK_MSG(lstrlenA("") == 0, "lstrlenA must return 0 for empty string");
+}
+
+TEST(lstrcpya_basic)
+{
+	char dst[32];
+	lstrcpyA(dst, "world");
+	CHECK_MSG(strcmp(dst, "world") == 0, "lstrcpyA must copy the string");
+}
+
+TEST(lstrcpyna_truncates)
+{
+	char dst[4] = {0};
+	lstrcpynA(dst, "hello", 3);
+	/* strncpy copies up to n chars but does NOT guarantee null-termination */
+	dst[3] = '\0';
+	CHECK_MSG(strncmp(dst, "he", 2) == 0, "lstrcpynA must copy first n-1 chars");
+}
+
+/* ==========================================================================
  * GetFileAttributesA
  * ========================================================================== */
 
@@ -1413,6 +1443,11 @@ int main(void)
 	RUN_TEST(stricmp_less);
 	RUN_TEST(stricmp_greater);
 	RUN_TEST(strnicmp_n_chars);
+
+	RUN_TEST(lstrlena_basic);
+	RUN_TEST(lstrlena_empty);
+	RUN_TEST(lstrcpya_basic);
+	RUN_TEST(lstrcpyna_truncates);
 
 	RUN_TEST(get_file_attrs_real_file);
 	RUN_TEST(get_file_attrs_directory);
