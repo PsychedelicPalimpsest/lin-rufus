@@ -428,6 +428,29 @@ TEST(partition_style_raw_is_2)
 }
 
 /* ==========================================================================
+ * GUID struct layout
+ * ========================================================================== */
+
+TEST(guid_sizeof_is_16)
+{
+	CHECK_MSG(sizeof(GUID) == 16, "sizeof(GUID) must be 16 bytes");
+}
+
+TEST(guid_is_equal_guid_macro)
+{
+	GUID a = {0x12345678, 0xABCD, 0xEF01, {0,1,2,3,4,5,6,7}};
+	GUID b = {0x12345678, 0xABCD, 0xEF01, {0,1,2,3,4,5,6,7}};
+	CHECK_MSG(IsEqualGUID(&a, &b), "IsEqualGUID must return true for equal GUIDs");
+}
+
+TEST(guid_is_equal_guid_differs)
+{
+	GUID a = {0x00000001, 0, 0, {0}};
+	GUID b = {0x00000002, 0, 0, {0}};
+	CHECK_MSG(!IsEqualGUID(&a, &b), "IsEqualGUID must return false for different GUIDs");
+}
+
+/* ==========================================================================
  * HANDLE-derived pointer types (all must have pointer width)
  * ========================================================================== */
 
@@ -1307,6 +1330,10 @@ int main(void)
 	RUN_TEST(partition_style_mbr_is_0);
 	RUN_TEST(partition_style_gpt_is_1);
 	RUN_TEST(partition_style_raw_is_2);
+
+	RUN_TEST(guid_sizeof_is_16);
+	RUN_TEST(guid_is_equal_guid_macro);
+	RUN_TEST(guid_is_equal_guid_differs);
 	RUN_TEST(sizeof_hwnd_is_pointer);
 	RUN_TEST(sizeof_hmodule_is_pointer);
 	RUN_TEST(sizeof_hkey_is_pointer);
