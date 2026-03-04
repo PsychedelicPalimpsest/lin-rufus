@@ -1207,6 +1207,33 @@ TEST(flushfilebuffers_on_valid_file)
 }
 
 /* ==========================================================================
+ * FormatMessageA — formats error ID as "Error %u"
+ * ========================================================================== */
+
+TEST(formatmessage_basic_error_code)
+{
+	char buf[64] = {0};
+	DWORD r = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, 5, 0, buf, sizeof(buf), NULL);
+	CHECK_MSG(r > 0, "FormatMessageA must return > 0 on success");
+	CHECK_MSG(strstr(buf, "5") != NULL, "FormatMessageA must include error code in output");
+}
+
+TEST(formatmessage_null_buf_returns_zero_len)
+{
+	DWORD r = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, 42, 0, NULL, 0, NULL);
+	CHECK_MSG(r == 0, "FormatMessageA with NULL buf must return 0");
+}
+
+TEST(formatmessage_zero_id_formats_zero)
+{
+	char buf[64] = {0};
+	FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, 0, 0, buf, sizeof(buf), NULL);
+	CHECK_MSG(strstr(buf, "0") != NULL, "FormatMessageA with id=0 must include '0' in output");
+}
+
+
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -1376,6 +1403,10 @@ int main(void)
 	RUN_TEST(cocreateguid_two_guids_differ);
 
 	RUN_TEST(flushfilebuffers_on_valid_file);
+
+	RUN_TEST(formatmessage_basic_error_code);
+	RUN_TEST(formatmessage_null_buf_returns_zero_len);
+	RUN_TEST(formatmessage_zero_id_formats_zero);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
