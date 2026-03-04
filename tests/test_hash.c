@@ -344,29 +344,10 @@ TEST(hash_tables_populated)
 }
 
 /* ====================================================================
- * HashThread / IndividualHashThread tests (Linux only)
- *
- * HashThread reads image_path, spawns IndividualHashThread workers for
- * MD5/SHA1/SHA256 (and optionally SHA512), and populates hash_str[].
+ * Cross-platform PE / hash helper declarations and utilities
  * ==================================================================== */
-#ifdef __linux__
 
-#include <pthread.h>
-
-/*
- * Globals declared extern in rufus.h — defined in hash_linux_glue.c for
- * the test build.
- */
-extern char*  image_path;
-extern char   hash_str[HASH_MAX][150];
-extern BOOL   enable_extra_hashes;
-extern RUFUS_IMG_REPORT img_report;
-extern DWORD  ErrorStatus;
-extern BOOL   validate_md5sum;
-extern uint64_t md5sum_totalbytes;
-extern StrArray modified_files;
-
-/* Forward declarations for PE256Buffer / efi_image_parse (defined in hash.c) */
+/* Forward declarations for PE256Buffer / efi_image_parse (defined in hash glue) */
 struct image_region { const uint8_t *data; uint32_t size; };
 struct efi_image_regions { int max; int num; struct image_region reg[]; };
 extern BOOL efi_image_parse(uint8_t *efi, size_t len, struct efi_image_regions **regp);
@@ -422,16 +403,53 @@ static char ht_tmp[256];
 
 static int make_ht_file(const void* content, size_t len)
 {
+#ifdef _WIN32
+	char tmp_dir[MAX_PATH];
+	GetTempPathA(sizeof(tmp_dir), tmp_dir);
+	if (!GetTempFileNameA(tmp_dir, "ht", 0, ht_tmp)) return -1;
+	if (len > 0) {
+		int fd = _open(ht_tmp, _O_WRONLY | _O_BINARY | _O_TRUNC);
+		if (fd < 0) { _unlink(ht_tmp); return -1; }
+		int w = _write(fd, content, (unsigned)len);
+		_close(fd);
+		if (w != (int)len) { _unlink(ht_tmp); return -1; }
+	}
+	return 0;
+#else
 	snprintf(ht_tmp, sizeof(ht_tmp), "/tmp/test_ht_XXXXXX");
 	int fd = mkstemp(ht_tmp);
 	if (fd < 0) return -1;
 	if (len > 0) {
 		ssize_t w = write(fd, content, len);
-		if (w != (ssize_t)len) { close(fd); unlink(ht_tmp); return -1; }
+		if (w != (ssize_t)len) { close(fd); remove(ht_tmp); return -1; }
 	}
 	close(fd);
 	return 0;
+#endif
 }
+
+/* ====================================================================
+ * HashThread / IndividualHashThread tests (Linux only)
+ *
+ * HashThread reads image_path, spawns IndividualHashThread workers for
+ * MD5/SHA1/SHA256 (and optionally SHA512), and populates hash_str[].
+ * ==================================================================== */
+#ifdef __linux__
+
+#include <pthread.h>
+
+/*
+ * Globals declared extern in rufus.h — defined in hash_linux_glue.c for
+ * the test build.
+ */
+extern char*  image_path;
+extern char   hash_str[HASH_MAX][150];
+extern BOOL   enable_extra_hashes;
+extern RUFUS_IMG_REPORT img_report;
+extern DWORD  ErrorStatus;
+extern BOOL   validate_md5sum;
+extern uint64_t md5sum_totalbytes;
+extern StrArray modified_files;
 
 /*
  * Run HashThread synchronously: set up globals, spawn HashThread, wait
@@ -504,7 +522,7 @@ TEST(hashthread_basic_abc)
 	/* SHA512 not requested — should be empty */
 	CHECK(hash_str[HASH_SHA512][0] == '\0');
 
-	unlink(ht_tmp);
+	remove(ht_tmp);
 }
 
 /* ---- With extra hashes: also verify SHA512 ---- */
@@ -529,7 +547,7 @@ TEST(hashthread_with_sha512)
 	    "2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f");
 
 	enable_extra_hashes = FALSE;
-	unlink(ht_tmp);
+	remove(ht_tmp);
 }
 
 /* ---- Empty file ---- */
@@ -550,7 +568,7 @@ TEST(hashthread_empty_file)
 	CHECK_STR_EQ(hash_str[HASH_SHA256],
 	    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 
-	unlink(ht_tmp);
+	remove(ht_tmp);
 }
 
 /* ---- Large file (> BUFFER_SIZE = 64 KiB) ---- */
@@ -586,7 +604,7 @@ TEST(hashthread_large_file)
 	CHECK_STR_EQ(hash_str[HASH_MD5],    exp_md5_hex);
 	CHECK_STR_EQ(hash_str[HASH_SHA256], exp_sha256_hex);
 
-	unlink(ht_tmp);
+	remove(ht_tmp);
 }
 
 /* ---- "fox" message ---- */
@@ -608,7 +626,7 @@ TEST(hashthread_fox_message)
 	CHECK_STR_EQ(hash_str[HASH_SHA256],
 	    "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592");
 
-	unlink(ht_tmp);
+	remove(ht_tmp);
 }
 
 /* ---- IsBufferInDB returns FALSE for arbitrary buffers ---- */
@@ -625,111 +643,7 @@ TEST(hashthread_is_file_in_db_miss)
 	if (make_ht_file("hello world", 11) < 0) { CHECK(0); return; }
 	BOOL r = IsFileInDB(ht_tmp);
 	CHECK(r == FALSE);
-	unlink(ht_tmp);
-}
-
-/* ---- StringToHash: hex string to binary conversion ---- */
-extern uint8_t *StringToHash(const char *str);
-
-/* Known MD5 of empty string: "d41d8cd98f00b204e9800998ecf8427e" */
-#define MD5_EMPTY_HEX "d41d8cd98f00b204e9800998ecf8427e"
-static const uint8_t MD5_EMPTY_BIN[16] = {
-	0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x04,
-	0xe9, 0x80, 0x09, 0x98, 0xec, 0xf8, 0x42, 0x7e
-};
-
-TEST(string_to_hash_md5_basic)
-{
-	uint8_t *h = StringToHash(MD5_EMPTY_HEX);
-	CHECK_MSG(h != NULL, "StringToHash must return non-NULL for valid MD5 hex string");
-	CHECK_MSG(memcmp(h, MD5_EMPTY_BIN, 16) == 0,
-	          "StringToHash must produce correct binary for known MD5 hex");
-}
-
-TEST(string_to_hash_uppercase_hex)
-{
-	/* StringToHash must accept uppercase hex digits */
-	uint8_t *h = StringToHash("D41D8CD98F00B204E9800998ECF8427E");
-	CHECK_MSG(h != NULL, "StringToHash must accept uppercase hex");
-	CHECK_MSG(memcmp(h, MD5_EMPTY_BIN, 16) == 0,
-	          "StringToHash uppercase must produce same result as lowercase");
-}
-
-TEST(string_to_hash_null_returns_null)
-{
-	/* NULL and wrong-length inputs trigger assert() via if_assert_fails.
-	 * These cannot be tested safely without a subprocess wrapper. */
-	(void)0; /* documented: NULL/wrong-length/invalid-chars trigger assert() */
-}
-
-TEST(string_to_hash_wrong_length_returns_null)
-{
-	(void)0; /* see above */
-}
-
-TEST(string_to_hash_invalid_chars_returns_null)
-{
-	(void)0; /* see above — assert fires before NULL is returned */
-}
-
-TEST(string_to_hash_sha256_length)
-{
-	/* SHA-256 hex string is 64 chars */
-	/* SHA-256 of empty string */
-	const char *sha256_empty = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-	uint8_t *h = StringToHash(sha256_empty);
-	CHECK_MSG(h != NULL, "StringToHash must handle SHA-256 length (64 hex chars)");
-	CHECK_MSG(h[0] == 0xe3, "StringToHash SHA-256: first byte must be 0xe3");
-}
-
-TEST(string_to_hash_sha1_length)
-{
-	/* SHA-1 of empty string — 40 hex chars */
-	const char *sha1_empty = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
-	uint8_t *h = StringToHash(sha1_empty);
-	CHECK_MSG(h != NULL, "StringToHash must handle SHA-1 length (40 hex chars)");
-	CHECK_MSG(h[0] == 0xda, "StringToHash SHA-1: first byte must be 0xda");
-}
-
-/* ---- FileMatchesHash: file path + expected hex string ---- */
-
-/* MD5 of "abc" */
-#define MD5_ABC_HEX "900150983cd24fb0d6963f7d28e17f72"
-/* SHA-256 of "abc" */
-#define SHA256_ABC_HEX "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-/* SHA-256 of empty string */
-#define SHA256_EMPTY_HEX "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-
-TEST(file_matches_hash_correct_md5)
-{
-	/* Write "abc" and verify FileMatchesHash returns TRUE for the correct MD5 */
-	if (make_ht_file("abc", 3) < 0) { CHECK(0); return; }
-	/* FileMatchesHash always uses SHA-256 internally */
-	BOOL r = FileMatchesHash(ht_tmp, SHA256_ABC_HEX);
-	CHECK_MSG(r == TRUE, "FileMatchesHash must return TRUE for correct SHA-256");
-	unlink(ht_tmp);
-}
-
-TEST(file_matches_hash_wrong_hash)
-{
-	if (make_ht_file("abc", 3) < 0) { CHECK(0); return; }
-	/* Pass the MD5 of "abc" to a function that uses SHA-256 — must not match */
-	BOOL r = FileMatchesHash(ht_tmp, SHA256_EMPTY_HEX);
-	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE when hash does not match");
-	unlink(ht_tmp);
-}
-
-TEST(file_matches_hash_null_path)
-{
-	/* NULL path — HashFile will fail, should return FALSE */
-	BOOL r = FileMatchesHash(NULL, SHA256_ABC_HEX);
-	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE for NULL path");
-}
-
-TEST(file_matches_hash_missing_file)
-{
-	BOOL r = FileMatchesHash("/nonexistent/path/abc.bin", SHA256_ABC_HEX);
-	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE for missing file");
+	remove(ht_tmp);
 }
 
 /* ====================================================================
@@ -761,7 +675,7 @@ TEST(hash_dialog_strings_non_empty_after_run)
 	/* Without extra hashes, SHA512 must be empty */
 	CHECK_MSG(hash_str[HASH_SHA512][0] == '\0', "SHA512 must be empty without enable_extra_hashes");
 
-	unlink(ht_tmp);
+	remove(ht_tmp);
 }
 
 /* Hash dialog: SHA512 populated when enable_extra_hashes is set */
@@ -779,7 +693,7 @@ TEST(hash_dialog_sha512_populated_when_extra_enabled)
 	CHECK_MSG(hash_str[HASH_SHA512][0] != '\0', "SHA512 must be populated with enable_extra_hashes");
 
 	enable_extra_hashes = FALSE;  /* reset */
-	unlink(ht_tmp);
+	remove(ht_tmp);
 }
 
 /* Hash dialog: UM_HASH_COMPLETED constant is defined and distinct from UM_FORMAT_COMPLETED */
@@ -945,106 +859,6 @@ TEST(update_md5sum_no_crash_missing_file)
 	/* Should return silently without crashing */
 	UpdateMD5Sum("/tmp/nonexistent_rufus_dir_xyz", "md5sum.txt");
 	CHECK(1);  /* just check no crash/abort */
-}
-
-/* ====================================================================
- * PE256Buffer / efi_image_parse tests
- * ==================================================================== */
-
-TEST(pe256_null_buf)
-{
-	uint8_t hash[32] = {0};
-	BOOL r = PE256Buffer(NULL, 1024, hash);
-	CHECK(r == FALSE);
-}
-
-TEST(pe256_too_small)
-{
-	uint8_t data[128] = {0};
-	uint8_t hash[32] = {0};
-	BOOL r = PE256Buffer(data, sizeof(data), hash);
-	CHECK(r == FALSE);  /* < 1 KB */
-}
-
-TEST(pe256_invalid_pe)
-{
-	uint8_t data[1024];
-	memset(data, 0x55, sizeof(data));
-	uint8_t hash[32] = {0};
-	BOOL r = PE256Buffer(data, sizeof(data), hash);
-	CHECK(r == FALSE);  /* no MZ/PE signature */
-}
-
-TEST(pe256_valid_pe64)
-{
-	size_t len = 0;
-	uint8_t *pe = make_pe64(&len);
-	CHECK(pe != NULL);
-	uint8_t hash[32] = {0};
-	BOOL r = PE256Buffer(pe, (uint32_t)len, hash);
-	CHECK(r == TRUE);
-	/* hash must be non-zero */
-	int all_zero = 1;
-	for (int i = 0; i < 32; i++) if (hash[i]) { all_zero = 0; break; }
-	CHECK(!all_zero);
-	free(pe);
-}
-
-TEST(pe256_deterministic)
-{
-	size_t len = 0;
-	uint8_t *pe = make_pe64(&len);
-	CHECK(pe != NULL);
-	uint8_t h1[32] = {0}, h2[32] = {0};
-	BOOL r1 = PE256Buffer(pe, (uint32_t)len, h1);
-	BOOL r2 = PE256Buffer(pe, (uint32_t)len, h2);
-	CHECK(r1 == TRUE && r2 == TRUE);
-	CHECK(memcmp(h1, h2, 32) == 0);
-	free(pe);
-}
-
-TEST(efi_parse_null)
-{
-	struct efi_image_regions *regs = NULL;
-	BOOL r = efi_image_parse(NULL, 0, &regs);
-	CHECK(r == FALSE);
-}
-
-TEST(efi_parse_too_short)
-{
-	uint8_t data[64] = {0};
-	struct efi_image_regions *regs = NULL;
-	BOOL r = efi_image_parse(data, sizeof(data), &regs);
-	CHECK(r == FALSE);  /* len < 0x80 */
-}
-
-TEST(efi_parse_bad_magic)
-{
-	uint8_t data[256];
-	memset(data, 0, sizeof(data));
-	/* DOS header with valid e_lfanew but bad PE magic */
-	IMAGE_DOS_HEADER *dos = (void *)data;
-	dos->e_magic = IMAGE_DOS_SIGNATURE;
-	dos->e_lfanew = 64;
-	/* NT magic NOT set → OptionalHeader.Magic == 0 → should fail */
-	struct efi_image_regions *regs = NULL;
-	BOOL r = efi_image_parse(data, sizeof(data), &regs);
-	CHECK(r == FALSE);
-	free(regs);
-}
-
-TEST(efi_parse_valid_pe64)
-{
-	size_t len = 0;
-	uint8_t *pe = make_pe64(&len);
-	CHECK(pe != NULL);
-	struct efi_image_regions *regs = NULL;
-	BOOL r = efi_image_parse(pe, len, &regs);
-	CHECK(r == TRUE);
-	CHECK(regs != NULL);
-	CHECK(regs->num > 0);
-	free(regs);
-	free(pe);
 }
 
 /* ---- IsSignedBySecureBootAuthority / IsBootloaderRevoked (Linux only) ---- */
@@ -1403,6 +1217,215 @@ TEST(svn_check_no_rsrc_section)
 
 #endif /* __linux__ */
 
+/* ====================================================================
+ * StringToHash tests (cross-platform)
+ * ==================================================================== */
+
+extern uint8_t *StringToHash(const char *str);
+
+/* Known MD5 of empty string: "d41d8cd98f00b204e9800998ecf8427e" */
+#define MD5_EMPTY_HEX "d41d8cd98f00b204e9800998ecf8427e"
+static const uint8_t MD5_EMPTY_BIN[16] = {
+	0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x04,
+	0xe9, 0x80, 0x09, 0x98, 0xec, 0xf8, 0x42, 0x7e
+};
+
+TEST(string_to_hash_md5_basic)
+{
+	uint8_t *h = StringToHash(MD5_EMPTY_HEX);
+	CHECK_MSG(h != NULL, "StringToHash must return non-NULL for valid MD5 hex string");
+	CHECK_MSG(memcmp(h, MD5_EMPTY_BIN, 16) == 0,
+	          "StringToHash must produce correct binary for known MD5 hex");
+}
+
+TEST(string_to_hash_uppercase_hex)
+{
+	/* StringToHash must accept uppercase hex digits */
+	uint8_t *h = StringToHash("D41D8CD98F00B204E9800998ECF8427E");
+	CHECK_MSG(h != NULL, "StringToHash must accept uppercase hex");
+	CHECK_MSG(memcmp(h, MD5_EMPTY_BIN, 16) == 0,
+	          "StringToHash uppercase must produce same result as lowercase");
+}
+
+TEST(string_to_hash_null_returns_null)
+{
+	/* NULL and wrong-length inputs trigger assert() via if_assert_fails.
+	 * These cannot be tested safely without a subprocess wrapper. */
+	(void)0; /* documented: NULL/wrong-length/invalid-chars trigger assert() */
+}
+
+TEST(string_to_hash_wrong_length_returns_null)
+{
+	(void)0; /* see above */
+}
+
+TEST(string_to_hash_invalid_chars_returns_null)
+{
+	(void)0; /* see above — assert fires before NULL is returned */
+}
+
+TEST(string_to_hash_sha256_length)
+{
+	/* SHA-256 hex string is 64 chars */
+	/* SHA-256 of empty string */
+	const char *sha256_empty = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+	uint8_t *h = StringToHash(sha256_empty);
+	CHECK_MSG(h != NULL, "StringToHash must handle SHA-256 length (64 hex chars)");
+	CHECK_MSG(h[0] == 0xe3, "StringToHash SHA-256: first byte must be 0xe3");
+}
+
+TEST(string_to_hash_sha1_length)
+{
+	/* SHA-1 of empty string — 40 hex chars */
+	const char *sha1_empty = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
+	uint8_t *h = StringToHash(sha1_empty);
+	CHECK_MSG(h != NULL, "StringToHash must handle SHA-1 length (40 hex chars)");
+	CHECK_MSG(h[0] == 0xda, "StringToHash SHA-1: first byte must be 0xda");
+}
+
+/* ====================================================================
+ * FileMatchesHash tests (cross-platform)
+ * ==================================================================== */
+
+/* MD5 of "abc" */
+#define MD5_ABC_HEX "900150983cd24fb0d6963f7d28e17f72"
+/* SHA-256 of "abc" */
+#define SHA256_ABC_HEX "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+/* SHA-256 of empty string */
+#define SHA256_EMPTY_HEX "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+TEST(file_matches_hash_correct_md5)
+{
+	/* Write "abc" and verify FileMatchesHash returns TRUE for the correct SHA-256 */
+	if (make_ht_file("abc", 3) < 0) { CHECK(0); return; }
+	/* FileMatchesHash always uses SHA-256 internally */
+	BOOL r = FileMatchesHash(ht_tmp, SHA256_ABC_HEX);
+	CHECK_MSG(r == TRUE, "FileMatchesHash must return TRUE for correct SHA-256");
+	remove(ht_tmp);
+}
+
+TEST(file_matches_hash_wrong_hash)
+{
+	if (make_ht_file("abc", 3) < 0) { CHECK(0); return; }
+	/* Pass the SHA-256 of empty to content "abc" — must not match */
+	BOOL r = FileMatchesHash(ht_tmp, SHA256_EMPTY_HEX);
+	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE when hash does not match");
+	remove(ht_tmp);
+}
+
+TEST(file_matches_hash_null_path)
+{
+	/* NULL path — HashFile will fail, should return FALSE */
+	BOOL r = FileMatchesHash(NULL, SHA256_ABC_HEX);
+	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE for NULL path");
+}
+
+TEST(file_matches_hash_missing_file)
+{
+	BOOL r = FileMatchesHash("/nonexistent/path/abc.bin", SHA256_ABC_HEX);
+	CHECK_MSG(r == FALSE, "FileMatchesHash must return FALSE for missing file");
+}
+
+/* ====================================================================
+ * PE256Buffer / efi_image_parse tests (cross-platform)
+ * ==================================================================== */
+
+TEST(pe256_null_buf)
+{
+	uint8_t hash[32] = {0};
+	BOOL r = PE256Buffer(NULL, 1024, hash);
+	CHECK(r == FALSE);
+}
+
+TEST(pe256_too_small)
+{
+	uint8_t data[128] = {0};
+	uint8_t hash[32] = {0};
+	BOOL r = PE256Buffer(data, sizeof(data), hash);
+	CHECK(r == FALSE);  /* < 1 KB */
+}
+
+TEST(pe256_invalid_pe)
+{
+	uint8_t data[1024];
+	memset(data, 0x55, sizeof(data));
+	uint8_t hash[32] = {0};
+	BOOL r = PE256Buffer(data, sizeof(data), hash);
+	CHECK(r == FALSE);  /* no MZ/PE signature */
+}
+
+TEST(pe256_valid_pe64)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	uint8_t hash[32] = {0};
+	BOOL r = PE256Buffer(pe, (uint32_t)len, hash);
+	CHECK(r == TRUE);
+	/* hash must be non-zero */
+	int all_zero = 1;
+	for (int i = 0; i < 32; i++) if (hash[i]) { all_zero = 0; break; }
+	CHECK(!all_zero);
+	free(pe);
+}
+
+TEST(pe256_deterministic)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	uint8_t h1[32] = {0}, h2[32] = {0};
+	BOOL r1 = PE256Buffer(pe, (uint32_t)len, h1);
+	BOOL r2 = PE256Buffer(pe, (uint32_t)len, h2);
+	CHECK(r1 == TRUE && r2 == TRUE);
+	CHECK(memcmp(h1, h2, 32) == 0);
+	free(pe);
+}
+
+TEST(efi_parse_null)
+{
+	struct efi_image_regions *regs = NULL;
+	BOOL r = efi_image_parse(NULL, 0, &regs);
+	CHECK(r == FALSE);
+}
+
+TEST(efi_parse_too_short)
+{
+	uint8_t data[64] = {0};
+	struct efi_image_regions *regs = NULL;
+	BOOL r = efi_image_parse(data, sizeof(data), &regs);
+	CHECK(r == FALSE);  /* len < 0x80 */
+}
+
+TEST(efi_parse_bad_magic)
+{
+	uint8_t data[256];
+	memset(data, 0, sizeof(data));
+	/* DOS header with valid e_lfanew but bad PE magic */
+	IMAGE_DOS_HEADER *dos = (void *)data;
+	dos->e_magic = IMAGE_DOS_SIGNATURE;
+	dos->e_lfanew = 64;
+	/* NT magic NOT set → OptionalHeader.Magic == 0 → should fail */
+	struct efi_image_regions *regs = NULL;
+	BOOL r = efi_image_parse(data, sizeof(data), &regs);
+	CHECK(r == FALSE);
+	free(regs);
+}
+
+TEST(efi_parse_valid_pe64)
+{
+	size_t len = 0;
+	uint8_t *pe = make_pe64(&len);
+	CHECK(pe != NULL);
+	struct efi_image_regions *regs = NULL;
+	BOOL r = efi_image_parse(pe, len, &regs);
+	CHECK(r == TRUE);
+	CHECK(regs != NULL);
+	CHECK(regs->num > 0);
+	free(regs);
+	free(pe);
+}
+
 int main(void)
 {
 	printf("=== hash tests ===\n\n");
@@ -1451,18 +1474,6 @@ int main(void)
 	printf("\n  Hash function tables\n");
 	RUN(hash_tables_populated);
 
-#ifdef __linux__
-	printf("\n  HashThread / IndividualHashThread (Linux only)\n");
-	RUN(hashthread_null_path);
-	RUN(hashthread_nonexistent_file);
-	RUN(hashthread_basic_abc);
-	RUN(hashthread_with_sha512);
-	RUN(hashthread_empty_file);
-	RUN(hashthread_large_file);
-	RUN(hashthread_fox_message);
-	RUN(hashthread_is_buffer_in_db_miss);
-	RUN(hashthread_is_file_in_db_miss);
-
 	printf("\n  StringToHash\n");
 	RUN(string_to_hash_md5_basic);
 	RUN(string_to_hash_uppercase_hex);
@@ -1478,6 +1489,29 @@ int main(void)
 	RUN(file_matches_hash_null_path);
 	RUN(file_matches_hash_missing_file);
 
+	printf("\n  PE256Buffer / efi_image_parse\n");
+	RUN(pe256_null_buf);
+	RUN(pe256_too_small);
+	RUN(pe256_invalid_pe);
+	RUN(pe256_valid_pe64);
+	RUN(pe256_deterministic);
+	RUN(efi_parse_null);
+	RUN(efi_parse_too_short);
+	RUN(efi_parse_bad_magic);
+	RUN(efi_parse_valid_pe64);
+
+#ifdef __linux__
+	printf("\n  HashThread / IndividualHashThread (Linux only)\n");
+	RUN(hashthread_null_path);
+	RUN(hashthread_nonexistent_file);
+	RUN(hashthread_basic_abc);
+	RUN(hashthread_with_sha512);
+	RUN(hashthread_empty_file);
+	RUN(hashthread_large_file);
+	RUN(hashthread_fox_message);
+	RUN(hashthread_is_buffer_in_db_miss);
+	RUN(hashthread_is_file_in_db_miss);
+
 	printf("\n  Hash dialog (Linux only)\n");
 	RUN(hash_dialog_strings_non_empty_after_run);
 	RUN(hash_dialog_sha512_populated_when_extra_enabled);
@@ -1488,17 +1522,6 @@ int main(void)
 	RUN(update_md5sum_updates_hash);
 	RUN(update_md5sum_skips_unlisted_file);
 	RUN(update_md5sum_no_crash_missing_file);
-
-	printf("\n  PE256Buffer / efi_image_parse (Linux only)\n");
-	RUN(pe256_null_buf);
-	RUN(pe256_too_small);
-	RUN(pe256_invalid_pe);
-	RUN(pe256_valid_pe64);
-	RUN(pe256_deterministic);
-	RUN(efi_parse_null);
-	RUN(efi_parse_too_short);
-	RUN(efi_parse_bad_magic);
-	RUN(efi_parse_valid_pe64);
 
 	printf("\n  IsSignedBySecureBootAuthority / IsBootloaderRevoked (Linux only)\n");
 	RUN(sb_issigned_null_buf);

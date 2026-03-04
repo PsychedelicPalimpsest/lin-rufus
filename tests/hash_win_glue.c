@@ -136,7 +136,10 @@ BOOL BufferMatchesHash(const uint8_t* buf, const size_t len, const char* str)
 }
 
 /* Stubs for functions not tested but referenced via headers. */
-BOOL PE256Buffer(uint8_t* b, uint32_t l, uint8_t* h)              { (void)b; (void)l; (void)h; return FALSE; }
+#ifndef uprintf
+#define uprintf(...) ((void)0)
+#endif
+#include "../src/common/hash_pe.c"
 BOOL IsSignedBySecureBootAuthority(uint8_t* b, uint32_t l)        { (void)b; (void)l; return FALSE; }
 int  IsBootloaderRevoked(uint8_t* b, uint32_t l)                  { (void)b; (void)l; return 0; }
 void UpdateMD5Sum(const char* d, const char* m)                   { (void)d; (void)m; }
