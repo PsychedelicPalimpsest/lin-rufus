@@ -891,6 +891,39 @@ TEST(setfilepointerex_seek_set)
 }
 
 /* ==========================================================================
+ * LARGE_INTEGER / ULARGE_INTEGER struct layout
+ * ========================================================================== */
+
+TEST(large_integer_quadpart_is_8_bytes)
+{
+	CHECK_MSG(sizeof(LARGE_INTEGER) == 8, "sizeof(LARGE_INTEGER) must be 8");
+}
+
+TEST(large_integer_quadpart_set_low_high)
+{
+	LARGE_INTEGER li;
+	li.QuadPart = (LONGLONG)0x0000000100000002LL;
+	CHECK_MSG(li.LowPart  == 0x00000002U, "LARGE_INTEGER LowPart must be low 32 bits");
+	CHECK_MSG(li.HighPart == 0x00000001,  "LARGE_INTEGER HighPart must be high 32 bits");
+}
+
+TEST(ularge_integer_quadpart_set_low_high)
+{
+	ULARGE_INTEGER uli;
+	uli.QuadPart = (ULONGLONG)0xFFFFFFFF00000001ULL;
+	CHECK_MSG(uli.LowPart  == 0x00000001U, "ULARGE_INTEGER LowPart must be low 32 bits");
+	CHECK_MSG(uli.HighPart == 0xFFFFFFFFU, "ULARGE_INTEGER HighPart must be high 32 bits");
+}
+
+TEST(large_integer_u_member_aliases_direct_fields)
+{
+	LARGE_INTEGER li;
+	li.QuadPart = (LONGLONG)0x0000ABCD0000EF12LL;
+	CHECK_MSG(li.u.LowPart == li.LowPart, "LARGE_INTEGER .u.LowPart must alias .LowPart");
+	CHECK_MSG(li.u.HighPart == li.HighPart, "LARGE_INTEGER .u.HighPart must alias .HighPart");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -1017,6 +1050,11 @@ int main(void)
 	RUN_TEST(closehandle_null_returns_false);
 	RUN_TEST(getfilesizeex_after_write);
 	RUN_TEST(setfilepointerex_seek_set);
+
+	RUN_TEST(large_integer_quadpart_is_8_bytes);
+	RUN_TEST(large_integer_quadpart_set_low_high);
+	RUN_TEST(ularge_integer_quadpart_set_low_high);
+	RUN_TEST(large_integer_u_member_aliases_direct_fields);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
