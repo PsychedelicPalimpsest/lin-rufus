@@ -43,6 +43,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include "registry.h"
+#include "msapi_utf8.h"
 #else
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -64,7 +65,9 @@
 #include "wue.h"
 
 /* bypass registry key names */
-extern const char* bypass_name[];
+extern const char* bypass_name[3];
+/* WUE username set by CustomSelectionDialog */
+extern char unattend_username[];
 
 /*
  * CreateUnattendXml — generate an installation answer file containing the

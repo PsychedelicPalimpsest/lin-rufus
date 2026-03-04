@@ -1037,6 +1037,22 @@ EXTRA_SRC_LINUX_test_wue_linux := \
 	$(WIM_LIB) \
 	$(XML_SRC)
 
+# wue_common tests: wue_compute_option_flags() pure logic (Linux + Wine)
+CFLAGS_LINUX_test_wue_common := \
+	-DRUFUS_TEST \
+	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
+	-I$(SRC_DIR)/common -I$(SRC_DIR) \
+	-Wno-implicit-function-declaration -Wno-unused-function \
+	-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers
+EXTRA_SRC_LINUX_test_wue_common := $(COMMON)/wue.c
+
+CFLAGS_WIN_test_wue_common := \
+	-I$(SRC_DIR)/windows -I$(SRC_DIR)/common \
+	-Wno-unused-function -Wno-sign-compare \
+	-Wno-implicit-function-declaration -Wno-unused-parameter \
+	-Wno-missing-field-initializers
+EXTRA_SRC_WIN_test_wue_common := $(COMMON)/wue.c
+
 # timezone_linux tests: IanaToWindowsTimezone, system TZ detection
 CFLAGS_LINUX_test_timezone_linux := \
 	-DRUFUS_TEST \
