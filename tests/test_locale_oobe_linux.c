@@ -458,6 +458,102 @@ TEST(vconsole_keymap_with_variant_suffix_stripped_oobe)
 }
 
 /* ================================================================
+ * Extended kb_map coverage tests — common layouts missing from
+ * the original table (parity with xkb_dos_table in dos_locale.c)
+ * ================================================================ */
+
+/* Helper: get input_locale for a given XKB layout injection */
+static void get_input_locale_for_xkb(const char *xkb, char *out, size_t outsz)
+{
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_keyboard_injection(xkb);
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_keyboard_injection(NULL);
+	strncpy(out, loc.input_locale, outsz - 1);
+	out[outsz - 1] = '\0';
+}
+
+TEST(kb_map_estonian_ee_maps_to_0425)
+{
+	char il[64];
+	get_input_locale_for_xkb("ee", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0425") != NULL,
+	          "Estonian (ee) should map to input locale 0425");
+}
+
+TEST(kb_map_lithuanian_lt_maps_to_0427)
+{
+	char il[64];
+	get_input_locale_for_xkb("lt", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0427") != NULL,
+	          "Lithuanian (lt) should map to input locale 0427");
+}
+
+TEST(kb_map_latvian_lv_maps_to_0426)
+{
+	char il[64];
+	get_input_locale_for_xkb("lv", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0426") != NULL,
+	          "Latvian (lv) should map to input locale 0426");
+}
+
+TEST(kb_map_slovenian_si_maps_to_0424)
+{
+	char il[64];
+	get_input_locale_for_xkb("si", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0424") != NULL,
+	          "Slovenian (si) should map to input locale 0424");
+}
+
+TEST(kb_map_albanian_al_maps_to_041c)
+{
+	char il[64];
+	get_input_locale_for_xkb("al", il, sizeof(il));
+	CHECK_MSG(strstr(il, "041c") != NULL || strstr(il, "041C") != NULL,
+	          "Albanian (al) should map to input locale 041c");
+}
+
+TEST(kb_map_icelandic_is_maps_to_040f)
+{
+	char il[64];
+	get_input_locale_for_xkb("is", il, sizeof(il));
+	CHECK_MSG(strstr(il, "040f") != NULL || strstr(il, "040F") != NULL,
+	          "Icelandic (is) should map to input locale 040f");
+}
+
+TEST(kb_map_latin_american_la_maps_to_080a)
+{
+	char il[64];
+	get_input_locale_for_xkb("la", il, sizeof(il));
+	CHECK_MSG(strstr(il, "080a") != NULL,
+	          "Latin American (la) should map to input locale 080a");
+}
+
+TEST(kb_map_macedonian_mk_maps_to_042f)
+{
+	char il[64];
+	get_input_locale_for_xkb("mk", il, sizeof(il));
+	CHECK_MSG(strstr(il, "042f") != NULL || strstr(il, "042F") != NULL,
+	          "Macedonian (mk) should map to input locale 042f");
+}
+
+TEST(kb_map_serbian_cyrillic_sr_maps_to_0c1a)
+{
+	char il[64];
+	get_input_locale_for_xkb("sr", il, sizeof(il));
+	CHECK_MSG(strstr(il, "0c1a") != NULL || strstr(il, "0C1A") != NULL,
+	          "Serbian Cyrillic (sr) should map to input locale 0c1a");
+}
+
+TEST(kb_map_vietnamese_vn_maps_to_042a)
+{
+	char il[64];
+	get_input_locale_for_xkb("vn", il, sizeof(il));
+	CHECK_MSG(strstr(il, "042a") != NULL || strstr(il, "042A") != NULL,
+	          "Vietnamese (vn) should map to input locale 042a");
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 int main(void)
@@ -503,6 +599,18 @@ int main(void)
 	RUN(vconsole_xkblayout_sets_input_locale_fr);
 	RUN(etc_default_keyboard_takes_priority_over_vconsole_oobe);
 	RUN(vconsole_keymap_with_variant_suffix_stripped_oobe);
+
+	printf("\n=== Extended kb_map coverage tests ===\n");
+	RUN(kb_map_estonian_ee_maps_to_0425);
+	RUN(kb_map_lithuanian_lt_maps_to_0427);
+	RUN(kb_map_latvian_lv_maps_to_0426);
+	RUN(kb_map_slovenian_si_maps_to_0424);
+	RUN(kb_map_albanian_al_maps_to_041c);
+	RUN(kb_map_icelandic_is_maps_to_040f);
+	RUN(kb_map_latin_american_la_maps_to_080a);
+	RUN(kb_map_macedonian_mk_maps_to_042f);
+	RUN(kb_map_serbian_cyrillic_sr_maps_to_0c1a);
+	RUN(kb_map_vietnamese_vn_maps_to_042a);
 
 	TEST_RESULTS();
 }

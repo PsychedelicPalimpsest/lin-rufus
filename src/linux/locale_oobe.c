@@ -174,6 +174,36 @@ static const KbEntry kb_map[] = {
 	{ "ara",  "0401:00000401" },
 	{ "in",   "4009:00004009" },
 	{ "latam","080a:0000080a" },
+	/* Extended entries — parity with xkb_dos_table in dos_locale.c */
+	{ "al",   "041c:0000041c" },  /* Albanian */
+	{ "am",   "042b:0002042b" },  /* Armenian (Eastern) */
+	{ "az",   "042c:0000042c" },  /* Azerbaijani (Latin) */
+	{ "ba",   "141a:0000141a" },  /* Bosnian (Latin) */
+	{ "by",   "0423:00000423" },  /* Belarusian */
+	{ "ee",   "0425:00000425" },  /* Estonian */
+	{ "fo",   "0438:00000406" },  /* Faroese (uses Danish keyboard) */
+	{ "ge",   "0437:00000437" },  /* Georgian */
+	{ "ir",   "0429:00000429" },  /* Persian */
+	{ "is",   "040f:0000040f" },  /* Icelandic */
+	{ "kk",   "043f:0000043f" },  /* Kazakh */
+	{ "ko",   "0412:00000412" },  /* Korean (alternate) */
+	{ "ky",   "0440:00000440" },  /* Kyrgyz */
+	{ "la",   "080a:0000080a" },  /* Latin American Spanish */
+	{ "lt",   "0427:00000427" },  /* Lithuanian */
+	{ "lv",   "0426:00000426" },  /* Latvian */
+	{ "mk",   "042f:0000042f" },  /* Macedonian */
+	{ "mn",   "0450:00000450" },  /* Mongolian */
+	{ "mt",   "043a:0000043a" },  /* Maltese */
+	{ "ph",   "3409:00000409" },  /* Filipino (uses US keyboard) */
+	{ "si",   "0424:00000424" },  /* Slovenian */
+	{ "sq",   "041c:0000041c" },  /* Albanian (sq = sq-AL alternate code) */
+	{ "sr",   "0c1a:00000c1a" },  /* Serbian (Cyrillic) */
+	{ "th",   "041e:0000041e" },  /* Thai */
+	{ "tj",   "0428:00000428" },  /* Tajik */
+	{ "tm",   "0442:00000442" },  /* Turkmen */
+	{ "uz",   "0443:00000443" },  /* Uzbek (Latin) */
+	{ "vn",   "042a:0000042a" },  /* Vietnamese */
+	{ "yu",   "081a:0000081a" },  /* Yugoslav / Serbian Latin */
 };
 
 /* xkb layouts can be comma-separated (e.g. "us,de"); extract the first one */
