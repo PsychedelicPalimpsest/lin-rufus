@@ -338,8 +338,187 @@ TEST(set_dos_locale_null_returns_false)
 }
 
 /* ================================================================
- * Embedded resource tests (item 31)
+ * SetDOSLocale keyboard detection tests (TDD — require injection hooks)
  * ================================================================ */
+
+#ifdef RUFUS_TEST
+/* Injection hook provided by dos_locale.c when built with -DRUFUS_TEST */
+extern void dos_locale_set_xkb_layout(const char* layout);
+#endif
+
+TEST(set_dos_locale_detects_german_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+    return;
+#else
+    dos_locale_set_xkb_layout("de");
+
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+
+    BOOL ok = SetDOSLocale(sep, TRUE);
+
+    /* Read FDCONFIG.SYS and look for "GR" (German DOS keyboard code) */
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg, "r");
+    int found_gr = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            if (strstr(line, " GR") || strstr(line, " gr") || strstr(line, ",GR") || strstr(line, ",gr"))
+                found_gr = 1;
+        }
+        fclose(f);
+    }
+
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+
+    CHECK(ok);
+    CHECK_MSG(found_gr, "German XKB layout → FDCONFIG.SYS should reference 'GR' keyboard");
+#endif
+}
+
+TEST(set_dos_locale_detects_french_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+    return;
+#else
+    dos_locale_set_xkb_layout("fr");
+
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+
+    BOOL ok = SetDOSLocale(sep, TRUE);
+
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg, "r");
+    int found_fr = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            if (strstr(line, " FR") || strstr(line, " fr") || strstr(line, ",FR") || strstr(line, ",fr"))
+                found_fr = 1;
+        }
+        fclose(f);
+    }
+
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+
+    CHECK(ok);
+    CHECK_MSG(found_fr, "French XKB layout → FDCONFIG.SYS should reference 'FR' keyboard");
+#endif
+}
+
+TEST(set_dos_locale_unknown_falls_back_to_us)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+    return;
+#else
+    dos_locale_set_xkb_layout("xx");  /* unknown layout */
+
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+
+    BOOL ok = SetDOSLocale(sep, TRUE);
+
+    char bat[MAX_PATH];
+    snprintf(bat, sizeof(bat), "%s/AUTOEXEC.BAT", target);
+    FILE *f = fopen(bat, "r");
+    int found_us = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            if (strstr(line, "US") || strstr(line, "us") || strstr(line, "437"))
+                found_us = 1;
+        }
+        fclose(f);
+    }
+
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+
+    CHECK(ok);
+    CHECK_MSG(found_us, "Unknown XKB layout → AUTOEXEC.BAT should reference US/437");
+#endif
+}
+
+TEST(set_dos_locale_british_maps_to_uk)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+    return;
+#else
+    dos_locale_set_xkb_layout("gb");
+
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+
+    BOOL ok = SetDOSLocale(sep, TRUE);
+
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg, "r");
+    int found_uk = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            if (strstr(line, " UK") || strstr(line, " uk") || strstr(line, ",UK") || strstr(line, ",uk"))
+                found_uk = 1;
+        }
+        fclose(f);
+    }
+
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+
+    CHECK(ok);
+    CHECK_MSG(found_uk, "GB (British) XKB layout → FDCONFIG.SYS should reference 'UK' keyboard");
+#endif
+}
+
+TEST(set_dos_locale_us_no_fdconfig_menu)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+    return;
+#else
+    /* When US keyboard is in use, there's no need for a multi-language menu;
+     * AUTOEXEC.BAT should mention 437 and US */
+    dos_locale_set_xkb_layout("us");
+
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+
+    BOOL ok = SetDOSLocale(sep, TRUE);
+
+    char bat[MAX_PATH];
+    snprintf(bat, sizeof(bat), "%s/AUTOEXEC.BAT", target);
+    int bat_exists = (access(bat, F_OK) == 0);
+
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+
+    CHECK(ok);
+    CHECK_MSG(bat_exists, "US keyboard → AUTOEXEC.BAT should be created");
+#endif
+}
 
 #include "resource.h"
 /* GetResource is provided by stdfn.c */
@@ -498,6 +677,11 @@ int main(void)
     RUN(extract_dos_unknown_boot_type_returns_false);
     RUN(set_dos_locale_creates_autoexec);
     RUN(set_dos_locale_null_returns_false);
+    RUN(set_dos_locale_detects_german_keyboard);
+    RUN(set_dos_locale_detects_french_keyboard);
+    RUN(set_dos_locale_unknown_falls_back_to_us);
+    RUN(set_dos_locale_british_maps_to_uk);
+    RUN(set_dos_locale_us_no_fdconfig_menu);
 
     RUN(getresource_command_com_not_null);
     RUN(getresource_command_com_size_correct);

@@ -2,6 +2,7 @@
  * Rufus: The Reliable USB Formatting Utility
  * Linux implementation: dos_locale.c — DOS locale data
  * Copyright © 2011-2024 Pete Batard <pete@akeo.ie>
+ * Copyright © 2025 PsychedelicPalimpsest
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,20 +20,180 @@
 
 /*
  * Linux implementation: dos_locale.c
- * SetDOSLocale — create minimal AUTOEXEC.BAT and FDCONFIG.SYS for FreeDOS
+ * SetDOSLocale — create AUTOEXEC.BAT and FDCONFIG.SYS for FreeDOS,
+ * using the system XKB keyboard layout when available.
  *
- * On Linux we can't easily detect the system OEM codepage or keyboard
- * layout, so we default to US English / CP437.  A future enhancement
- * could parse /etc/locale.conf or $LANG to pick a better default.
+ * The XKB layout is read from /etc/default/keyboard (XKBLAYOUT= line).
+ * It is mapped to the 2-letter FreeDOS keyboard code and the corresponding
+ * OEM codepage.  When no matching layout is found, US/CP437 is used.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 
 #include "rufus.h"
 #include "dos.h"
 
+/* ----------------------------------------------------------------
+ * XKB layout -> (DOS keyboard code, OEM codepage) mapping
+ * ----------------------------------------------------------------
+ * FreeDOS keyboard codes from keyboard.sys / keybrd2.sys:
+ *   keyboard.sys  : be br cf co cz dk dv fr gr hu it jp la lh nl no
+ *                   pl po rh sf sg sk sp su sv uk us yu
+ *   keybrd2.sys   : bg ce gk is ro ru rx tr tt yc
+ * ---------------------------------------------------------------- */
+typedef struct {
+    const char* xkb;    /* XKB layout short name (lower-case) */
+    const char* dos_kb; /* FreeDOS 2-letter keyboard code     */
+    int         cp;     /* default OEM code page              */
+} xkb_to_dos_t;
+
+/* Sorted by XKB name for readability; lookup is linear (table is small). */
+static const xkb_to_dos_t xkb_dos_table[] = {
+    { "al",  "sq",  852 },  /* Albanian */
+    { "am",  "hy",  899 },  /* Armenian */
+    { "az",  "az",  850 },  /* Azerbaijani */
+    { "ba",  "yu",  852 },  /* Bosnian */
+    { "be",  "be",  850 },  /* Belgian French */
+    { "bg",  "bg",  855 },  /* Bulgarian */
+    { "br",  "br",  850 },  /* Brazilian ABNT */
+    { "by",  "bl",  855 },  /* Belarusian */
+    { "ca",  "cf",  850 },  /* Canadian French */
+    { "ch",  "sg",  850 },  /* Swiss German */
+    { "cz",  "cz",  852 },  /* Czech */
+    { "de",  "gr",  850 },  /* German */
+    { "dk",  "dk",  850 },  /* Danish */
+    { "ee",  "et",  775 },  /* Estonian */
+    { "es",  "sp",  850 },  /* Spanish */
+    { "fi",  "su",  850 },  /* Finnish */
+    { "fo",  "fo",  850 },  /* Faroese */
+    { "fr",  "fr",  850 },  /* French */
+    { "gb",  "uk",  850 },  /* British English */
+    { "ge",  "ka",  850 },  /* Georgian */
+    { "gk",  "gk",  737 },  /* Greek (alternate name) */
+    { "gr",  "gk",  737 },  /* Greek */
+    { "hr",  "yu",  852 },  /* Croatian */
+    { "hu",  "hu",  852 },  /* Hungarian */
+    { "il",  "il",  862 },  /* Hebrew */
+    { "ir",  "ar",  864 },  /* Persian/Farsi */
+    { "is",  "is",  850 },  /* Icelandic */
+    { "it",  "it",  850 },  /* Italian */
+    { "jp",  "jp",  932 },  /* Japanese */
+    { "kk",  "kk",  850 },  /* Kazakh */
+    { "ko",  "us",  949 },  /* Korean (no FreeDOS kb) */
+    { "kr",  "us",  949 },  /* Korean alternate */
+    { "ky",  "ky",  850 },  /* Kyrgyz */
+    { "la",  "la",  850 },  /* Latin American Spanish */
+    { "lt",  "lt",  775 },  /* Lithuanian */
+    { "lv",  "lv",  775 },  /* Latvian */
+    { "mk",  "mk",  855 },  /* Macedonian */
+    { "mn",  "mn",  850 },  /* Mongolian */
+    { "mt",  "mt",  850 },  /* Maltese */
+    { "nl",  "nl",  850 },  /* Dutch */
+    { "no",  "no",  850 },  /* Norwegian */
+    { "ph",  "ph",  850 },  /* Filipino */
+    { "pl",  "pl",  852 },  /* Polish */
+    { "pt",  "po",  850 },  /* Portuguese */
+    { "ro",  "ro",  852 },  /* Romanian */
+    { "rs",  "yu",  855 },  /* Serbian */
+    { "ru",  "ru",  866 },  /* Russian */
+    { "se",  "sv",  850 },  /* Swedish */
+    { "si",  "sl",  852 },  /* Slovenian */
+    { "sk",  "sk",  852 },  /* Slovak */
+    { "sq",  "sq",  852 },  /* Albanian (alternate) */
+    { "sr",  "ru",  855 },  /* Serbian Cyrillic */
+    { "sv",  "sv",  850 },  /* Swedish (alternate) */
+    { "th",  "us",  874 },  /* Thai (no FreeDOS kb) */
+    { "tj",  "tj",  850 },  /* Tajik */
+    { "tm",  "tm",  850 },  /* Turkmen */
+    { "tr",  "tr",  857 },  /* Turkish */
+    { "ua",  "ur",  866 },  /* Ukrainian */
+    { "uk",  "uk",  850 },  /* British (alternate key) */
+    { "us",  "us",  437 },  /* US English */
+    { "uz",  "uz",  850 },  /* Uzbek */
+    { "vn",  "vi",  850 },  /* Vietnamese */
+    { "yu",  "yu",  855 },  /* Yugoslav */
+    { "zh",  "us",  936 },  /* Chinese (no FreeDOS kb) */
+};
+
+/* ----------------------------------------------------------------
+ * Injection support for unit testing
+ * ---------------------------------------------------------------- */
+#ifdef RUFUS_TEST
+static const char* s_injected_xkb = NULL;
+
+void dos_locale_set_xkb_layout(const char* layout)
+{
+    s_injected_xkb = layout;
+}
+#endif /* RUFUS_TEST */
+
+/* ----------------------------------------------------------------
+ * get_xkb_layout() - returns a pointer to a static buffer holding
+ * the detected XKB layout (e.g. "de", "fr", "us").
+ * Falls back to "us" on any error.
+ * ---------------------------------------------------------------- */
+static const char* get_xkb_layout(void)
+{
+    static char buf[32];
+    strncpy(buf, "us", sizeof(buf));
+
+#ifdef RUFUS_TEST
+    if (s_injected_xkb != NULL) {
+        strncpy(buf, s_injected_xkb, sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        return buf;
+    }
+#endif
+
+    FILE* f = fopen("/etc/default/keyboard", "r");
+    if (!f)
+        return buf;
+
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (strncmp(p, "XKBLAYOUT=", 10) != 0)
+            continue;
+        p += 10;
+        if (*p == '"' || *p == '\'')
+            p++;
+        size_t i = 0;
+        while (*p && *p != ',' && *p != '"' && *p != '\'' &&
+               *p != '\n' && *p != '\r' && !isspace((unsigned char)*p) &&
+               i < sizeof(buf) - 1) {
+            buf[i++] = (char)tolower((unsigned char)*p);
+            p++;
+        }
+        buf[i] = '\0';
+        break;
+    }
+    fclose(f);
+    return buf;
+}
+
+/* ----------------------------------------------------------------
+ * xkb_to_dos() - look up a DOS keyboard code for the given XKB
+ * layout name (lower-case).  Returns "us" / CP437 if not found.
+ * ---------------------------------------------------------------- */
+static const char* xkb_to_dos(const char* xkb, int* cp)
+{
+    for (size_t i = 0; i < ARRAYSIZE(xkb_dos_table); i++) {
+        if (strcmp(xkb_dos_table[i].xkb, xkb) == 0) {
+            if (cp) *cp = xkb_dos_table[i].cp;
+            return xkb_dos_table[i].dos_kb;
+        }
+    }
+    if (cp) *cp = 437;
+    return "us";
+}
+
+/* ----------------------------------------------------------------
+ * SetDOSLocale() - public API
+ * ---------------------------------------------------------------- */
 BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
 {
     (void)bFreeDOS;  /* always treat as FreeDOS on Linux */
@@ -42,31 +203,75 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
         return FALSE;
     }
 
-    /* Create AUTOEXEC.BAT */
+    const char* xkb = get_xkb_layout();
+    int cp = 437;
+    const char* kb = xkb_to_dos(xkb, &cp);
+
+    /* Upper-case DOS keyboard code for display / KEYB.EXE */
+    char KB_UPPER[8];
+    size_t kblen = strlen(kb);
+    for (size_t i = 0; i < kblen && i < sizeof(KB_UPPER) - 1; i++)
+        KB_UPPER[i] = (char)toupper((unsigned char)kb[i]);
+    KB_UPPER[kblen < sizeof(KB_UPPER) - 1 ? kblen : sizeof(KB_UPPER) - 2] = '\0';
+
     char filename[MAX_PATH];
-    snprintf(filename, sizeof(filename), "%sAUTOEXEC.BAT", path);
+
+    /* For US keyboard with CP437: simple single-language AUTOEXEC.BAT */
+    if (strcmp(kb, "us") == 0 && cp == 437) {
+        snprintf(filename, sizeof(filename), "%sAUTOEXEC.BAT", path);
+        FILE* fd = fopen(filename, "w");
+        if (fd == NULL) {
+            uprintf_errno("SetDOSLocale: cannot create AUTOEXEC.BAT");
+            return FALSE;
+        }
+        fprintf(fd, "@echo off\r\n");
+        fprintf(fd, "set PATH=.;\\;\\LOCALE\r\n");
+        fprintf(fd, "echo Using US keyboard with CP437 codepage\r\n");
+        fclose(fd);
+
+        snprintf(filename, sizeof(filename), "%sFDCONFIG.SYS", path);
+        fd = fopen(filename, "w");
+        if (fd != NULL) {
+            fprintf(fd, "!DEVICE=\\LOCALE\\DISPLAY.EXE CON=(EGA,,1)\r\n");
+            fprintf(fd, "!DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\KEYBOARD.SYS\r\n");
+            fclose(fd);
+        }
+        uprintf("SetDOSLocale: US locale -- created AUTOEXEC.BAT and FDCONFIG.SYS");
+        return TRUE;
+    }
+
+    /* Non-US keyboard: FDCONFIG.SYS with a language selection menu
+     * (native keyboard + US English fallback), matching Windows behaviour. */
+    snprintf(filename, sizeof(filename), "%sFDCONFIG.SYS", path);
     FILE* fd = fopen(filename, "w");
     if (fd == NULL) {
-        uprintf_errno("SetDOSLocale: cannot create AUTOEXEC.BAT");
+        uprintf_errno("SetDOSLocale: cannot create FDCONFIG.SYS");
         return FALSE;
+    }
+    fprintf(fd, "!MENUCOLOR=7,0\r\nMENU\r\n");
+    fprintf(fd, "MENU   FreeDOS Language Selection Menu\r\n");
+    fprintf(fd, "MENU   ==================================\r\nMENU\r\n");
+    fprintf(fd, "MENUDEFAULT=1,5\r\n");
+    fprintf(fd, "MENU 1) Use %s keyboard with CP%d codepage\r\n", KB_UPPER, cp);
+    fprintf(fd, "MENU 2) Use US keyboard with CP437 codepage\r\n");
+    fprintf(fd, "MENU\r\n");
+    fprintf(fd, "12?\r\n");
+    fprintf(fd, "!DEVICE=\\LOCALE\\DISPLAY.EXE CON=(EGA,,1)\r\n");
+    fprintf(fd, "1 !DEVICE=\\LOCALE\\KEYB.EXE %s,%d,\\LOCALE\\KEYBOARD.SYS\r\n", KB_UPPER, cp);
+    fprintf(fd, "2 !DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\KEYBOARD.SYS\r\n");
+    fclose(fd);
+
+    snprintf(filename, sizeof(filename), "%sAUTOEXEC.BAT", path);
+    fd = fopen(filename, "w");
+    if (fd == NULL) {
+        uprintf_errno("SetDOSLocale: cannot create AUTOEXEC.BAT");
+        return TRUE;  /* FDCONFIG.SYS already written -- non-fatal */
     }
     fprintf(fd, "@echo off\r\n");
     fprintf(fd, "set PATH=.;\\;\\LOCALE\r\n");
-    fprintf(fd, "echo Using US keyboard with CP437 codepage\r\n");
+    fprintf(fd, "echo Using %s keyboard with CP%d codepage\r\n", KB_UPPER, cp);
     fclose(fd);
 
-    /* Create FDCONFIG.SYS (FreeDOS config) */
-    snprintf(filename, sizeof(filename), "%sFDCONFIG.SYS", path);
-    fd = fopen(filename, "w");
-    if (fd == NULL) {
-        /* Non-fatal — AUTOEXEC.BAT is sufficient for basic boot */
-        uprintf_errno("SetDOSLocale: cannot create FDCONFIG.SYS");
-        return TRUE;
-    }
-    fprintf(fd, "!DEVICE=\\LOCALE\\DISPLAY.EXE CON=(EGA,,1)\r\n");
-    fprintf(fd, "!DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\KEYBOARD.SYS\r\n");
-    fclose(fd);
-
-    uprintf("SetDOSLocale: created AUTOEXEC.BAT and FDCONFIG.SYS");
+    uprintf("SetDOSLocale: %s locale (CP%d) -- created AUTOEXEC.BAT and FDCONFIG.SYS", KB_UPPER, cp);
     return TRUE;
 }

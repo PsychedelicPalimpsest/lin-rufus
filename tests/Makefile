@@ -1207,6 +1207,7 @@ DOS_LINUX_SRC := $(SRC_DIR)/linux/dos.c \
                  $(SRC_DIR)/linux/stdfn.c \
                  $(SRC_DIR)/linux/globals.c
 CFLAGS_LINUX_test_dos_linux := \
+	-DRUFUS_TEST \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \
 	-I$(SRC_DIR) -I$(COMMON) \
 	-Wno-implicit-function-declaration -Wno-unused-function \
