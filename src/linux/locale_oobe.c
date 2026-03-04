@@ -20,8 +20,9 @@
 
 /* ── injection state (test-only) ─────────────────────────────────────────── */
 #ifdef RUFUS_TEST
-static const char *s_lang_injection     = NULL;
-static const char *s_keyboard_injection = NULL;
+static const char *s_lang_injection             = NULL;
+static const char *s_keyboard_injection         = NULL;
+static const char *s_etc_default_keyboard_path  = NULL;
 
 void locale_oobe_set_lang_injection(const char *lang)
 {
@@ -31,6 +32,11 @@ void locale_oobe_set_lang_injection(const char *lang)
 void locale_oobe_set_keyboard_injection(const char *xkb_layout)
 {
 	s_keyboard_injection = xkb_layout;
+}
+
+void locale_oobe_set_etc_default_keyboard_path(const char *path)
+{
+	s_etc_default_keyboard_path = path;
 }
 #endif /* RUFUS_TEST */
 
@@ -176,7 +182,12 @@ static void first_xkb_layout(const char *src, char *out, size_t outsz)
 /* Try to read the first XKBLAYOUT from /etc/default/keyboard */
 static int try_etc_default_keyboard(char *out, size_t outsz)
 {
-	FILE *f = fopen("/etc/default/keyboard", "r");
+	const char *path = "/etc/default/keyboard";
+#ifdef RUFUS_TEST
+	if (s_etc_default_keyboard_path)
+		path = s_etc_default_keyboard_path;
+#endif
+	FILE *f = fopen(path, "r");
 	if (!f) return 0;
 	char line[256];
 	while (fgets(line, sizeof(line), f)) {

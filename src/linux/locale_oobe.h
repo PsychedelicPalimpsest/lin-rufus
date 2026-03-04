@@ -54,6 +54,10 @@ void locale_oobe_set_lang_injection(const char *lang);
 /* Override the xkb layout string used for InputLocale detection.
  * Pass NULL to revert to real detection. */
 void locale_oobe_set_keyboard_injection(const char *xkb_layout);
+
+/* Override the path to /etc/default/keyboard (for testing file-based
+ * keyboard layout detection). Pass NULL to revert to default. */
+void locale_oobe_set_etc_default_keyboard_path(const char *path);
 #endif
 
 #ifdef __cplusplus
