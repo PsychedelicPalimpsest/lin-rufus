@@ -1,10 +1,11 @@
 /* test_compat_linux.c — tests for compat layer headers:
- *   shlwapi.h: PathFileExistsA, PathFileExistsW, PathCombineA, StrStrIA, StrCmpIA
+ *   shlwapi.h: PathFileExistsA, PathFileExistsW, PathCombineA, StrStrIA, StrCmpIA,
+ *              StrCmpNIA
  *   shellapi.h: ShellExecuteA
  *   windows.h: GetTickCount64, CharLowerA/CharUpperA, GetEnvironmentVariableA,
  *              SetEnvironmentVariableA, GetTempPathA, GetTempFileNameA,
  *              GetModuleFileNameA, GetCurrentProcessId, GetCurrentThreadId,
- *              GetCurrentThread
+ *              GetCurrentThread, SetThreadAffinityMask
  */
 #ifdef _WIN32
 #include "framework.h"
@@ -206,6 +207,37 @@ TEST(strcmp_ia_less)
 {
 	CHECK_MSG(StrCmpIA("abc", "xyz") < 0,
 	          "StrCmpIA: 'abc' < 'xyz' must be < 0");
+}
+
+/* =========================================================================
+ * StrCmpNIA — case-insensitive n-char comparison
+ * =========================================================================*/
+
+TEST(strcmpnia_equal_n_chars)
+{
+	/* First 5 chars are identical case-insensitively */
+	CHECK_MSG(StrCmpNIA("HELLO world", "hello world", 5) == 0,
+	          "StrCmpNIA: equal first 5 chars must return 0");
+}
+
+TEST(strcmpnia_less_in_first_n)
+{
+	CHECK_MSG(StrCmpNIA("abc", "xyz", 3) < 0,
+	          "StrCmpNIA: 'abc' < 'xyz' in 3 chars must be < 0");
+}
+
+TEST(strcmpnia_n_zero_always_equal)
+{
+	/* n=0: no characters compared, must return 0 */
+	CHECK_MSG(StrCmpNIA("abc", "xyz", 0) == 0,
+	          "StrCmpNIA(n=0): must return 0 (no chars compared)");
+}
+
+TEST(strcmpnia_differing_after_n)
+{
+	/* First 4 chars are equal, diff starts at char 5 — must be 0 */
+	CHECK_MSG(StrCmpNIA("TEST_abc", "test_xyz", 5) == 0,
+	          "StrCmpNIA must only compare first n chars");
 }
 
 /* =========================================================================
@@ -520,6 +552,12 @@ int main(void)
 	RUN(strstr_ia_no_match);
 	RUN(strcmp_ia_equal);
 	RUN(strcmp_ia_less);
+
+	printf("\n  StrCmpNIA\n");
+	RUN(strcmpnia_equal_n_chars);
+	RUN(strcmpnia_less_in_first_n);
+	RUN(strcmpnia_n_zero_always_equal);
+	RUN(strcmpnia_differing_after_n);
 
 	printf("\n  ShellExecuteA\n");
 	RUN(shell_execute_a_null_file_returns_error);

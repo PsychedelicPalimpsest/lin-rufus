@@ -7,7 +7,8 @@
  *   windows.h  — primitive types, HANDLE-family, HRESULT, string types,
  *                 bit-manipulation macros, file constants, error codes,
  *                 CreateFileA/ReadFile/WriteFile/CloseHandle,
- *                 InterlockedIncrement/Decrement/Exchange/CompareExchange
+ *                 InterlockedIncrement/Decrement/Exchange/CompareExchange,
+ *                 GetLastError/SetLastError, Sleep, FlushFileBuffers
  *   winioctl.h — PARTITION_STYLE enum
  *   winerror.h — standard HRESULT / Win32 error constants
  *   shlwapi.h  — already exercised in test_compat_linux; included here only for
@@ -26,11 +27,15 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include <stddef.h>
 #include <wchar.h>
 #include <string.h>
+#include <time.h>
 
 /* Pull in every compat header we want to verify */
 #include "../src/linux/compat/windows.h"
 #include "../src/linux/compat/winioctl.h"
 #include "../src/linux/compat/shlwapi.h"
+
+/* _win_last_error is declared extern in windows.h; we own the definition here */
+DWORD _win_last_error = 0;
 
 /* ==========================================================================
  * Primitive integer type sizes
@@ -924,8 +929,44 @@ TEST(large_integer_u_member_aliases_direct_fields)
 }
 
 /* ==========================================================================
- * Run all tests
+ * GetLastError / SetLastError roundtrip
  * ========================================================================== */
+
+TEST(setlasterror_then_getlasterror_roundtrip)
+{
+	SetLastError(ERROR_FILE_NOT_FOUND);
+	CHECK_MSG(GetLastError() == ERROR_FILE_NOT_FOUND,
+	          "GetLastError must return value set by SetLastError");
+}
+
+TEST(setlasterror_zero_clears)
+{
+	SetLastError(42);
+	SetLastError(0);
+	CHECK_MSG(GetLastError() == 0, "SetLastError(0) must clear the error");
+}
+
+/* ==========================================================================
+ * Sleep — must actually delay at least the requested number of milliseconds
+ * ========================================================================== */
+
+TEST(sleep_actually_delays)
+{
+	struct timespec before, after;
+	clock_gettime(CLOCK_MONOTONIC, &before);
+	Sleep(30);   /* ask for 30 ms */
+	clock_gettime(CLOCK_MONOTONIC, &after);
+	long long delta_ms = ((long long)(after.tv_sec  - before.tv_sec)  * 1000LL) +
+	                     ((long long)(after.tv_nsec - before.tv_nsec) / 1000000LL);
+	CHECK_MSG(delta_ms >= 25, "Sleep(30) must delay at least 25 ms");
+}
+
+TEST(sleep_zero_is_noop)
+{
+	/* Sleep(0) must not crash and must return quickly */
+	Sleep(0);
+	CHECK_MSG(1, "Sleep(0) must complete without crashing");
+}
 
 int main(void)
 {
@@ -1055,6 +1096,12 @@ int main(void)
 	RUN_TEST(large_integer_quadpart_set_low_high);
 	RUN_TEST(ularge_integer_quadpart_set_low_high);
 	RUN_TEST(large_integer_u_member_aliases_direct_fields);
+
+	RUN_TEST(setlasterror_then_getlasterror_roundtrip);
+	RUN_TEST(setlasterror_zero_clears);
+
+	RUN_TEST(sleep_actually_delays);
+	RUN_TEST(sleep_zero_is_noop);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;
