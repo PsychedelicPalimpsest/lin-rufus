@@ -304,6 +304,43 @@ TEST(error_insufficient_buffer_is_122)
 	          "ERROR_INSUFFICIENT_BUFFER must be 122");
 }
 
+TEST(error_file_not_found_is_2)
+{
+	CHECK_MSG(ERROR_FILE_NOT_FOUND == 2, "ERROR_FILE_NOT_FOUND must be 2");
+}
+
+TEST(error_path_not_found_is_3)
+{
+	CHECK_MSG(ERROR_PATH_NOT_FOUND == 3, "ERROR_PATH_NOT_FOUND must be 3");
+}
+
+TEST(error_already_exists_is_183)
+{
+	CHECK_MSG(ERROR_ALREADY_EXISTS == 183, "ERROR_ALREADY_EXISTS must be 183");
+}
+
+/* GetLastError_win: errno -> Windows error code mapping */
+TEST(getlasterror_win_enoent_maps_to_file_not_found)
+{
+	errno = ENOENT;
+	CHECK_MSG(GetLastError_win() == ERROR_FILE_NOT_FOUND,
+	          "GetLastError_win: ENOENT must map to ERROR_FILE_NOT_FOUND");
+}
+
+TEST(getlasterror_win_eacces_maps_to_access_denied)
+{
+	errno = EACCES;
+	CHECK_MSG(GetLastError_win() == ERROR_ACCESS_DENIED,
+	          "GetLastError_win: EACCES must map to ERROR_ACCESS_DENIED");
+}
+
+TEST(getlasterror_win_eexist_maps_to_already_exists)
+{
+	errno = EEXIST;
+	CHECK_MSG(GetLastError_win() == ERROR_ALREADY_EXISTS,
+	          "GetLastError_win: EEXIST must map to ERROR_ALREADY_EXISTS");
+}
+
 /* ==========================================================================
  * Bit-manipulation macros
  * ========================================================================== */
@@ -1312,6 +1349,12 @@ int main(void)
 	RUN_TEST(error_access_denied_is_5);
 	RUN_TEST(error_invalid_handle_is_6);
 	RUN_TEST(error_insufficient_buffer_is_122);
+	RUN_TEST(error_file_not_found_is_2);
+	RUN_TEST(error_path_not_found_is_3);
+	RUN_TEST(error_already_exists_is_183);
+	RUN_TEST(getlasterror_win_enoent_maps_to_file_not_found);
+	RUN_TEST(getlasterror_win_eacces_maps_to_access_denied);
+	RUN_TEST(getlasterror_win_eexist_maps_to_already_exists);
 	RUN_TEST(loword_extracts_low_16);
 	RUN_TEST(hiword_extracts_high_16);
 	RUN_TEST(lobyte_extracts_low_8);
