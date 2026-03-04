@@ -658,6 +658,7 @@ SETTINGS_LINUX_SRC := \
 	$(SRC_DIR)/linux/stdio.c \
 	$(SRC_DIR)/linux/ui.c \
 	$(SRC_DIR)/linux/stdlg.c \
+	$(SRC_DIR)/linux/paths.c \
 	settings_linux_glue.c
 CFLAGS_LINUX_test_settings_linux := \
 	-I$(COMPAT) -I$(SRC_DIR)/windows -I$(SRC_DIR)/linux \

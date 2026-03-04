@@ -364,6 +364,67 @@ TEST(image_scan_runs_as_thread)
 	image_path = saved;
 }
 
+/* After scan, label matches the vol_ident used when creating the ISO */
+TEST(image_scan_iso_label_correct)
+{
+	if (!test_iso_available) { printf("  (skipped: no test ISO)\n"); return; }
+
+	char *saved = image_path;
+	image_path = TEST_ISO_PATH;
+	memset(&img_report, 0, sizeof(img_report));
+
+	run_scan_thread();
+
+	/* The ISO was created with vol_ident='SCANTEST' */
+	CHECK_MSG(strstr(img_report.label, "SCANTEST") != NULL ||
+	          strcmp(img_report.label, "SCANTEST") == 0,
+	          "label must contain 'SCANTEST' from vol_ident");
+
+	image_path = saved;
+}
+
+/* After scan of a simple non-bootable data ISO, is_bootable_img is 0 */
+TEST(image_scan_simple_iso_not_bootable)
+{
+	if (!test_iso_available) { printf("  (skipped: no test ISO)\n"); return; }
+
+	char *saved = image_path;
+	image_path = TEST_ISO_PATH;
+	memset(&img_report, 0, sizeof(img_report));
+
+	run_scan_thread();
+
+	/* A pycdlib-generated data ISO has no boot entry */
+	CHECK_MSG(img_report.is_bootable_img == 0,
+	          "simple data ISO must not be flagged as bootable");
+
+	image_path = saved;
+}
+
+/* Scanning the same ISO twice gives the same result (idempotency) */
+TEST(image_scan_idempotent)
+{
+	if (!test_iso_available) { printf("  (skipped: no test ISO)\n"); return; }
+
+	char *saved = image_path;
+	image_path = TEST_ISO_PATH;
+
+	memset(&img_report, 0, sizeof(img_report));
+	run_scan_thread();
+	uint64_t size1 = img_report.image_size;
+	BOOLEAN  iso1  = img_report.is_iso;
+
+	memset(&img_report, 0, sizeof(img_report));
+	run_scan_thread();
+	uint64_t size2 = img_report.image_size;
+	BOOLEAN  iso2  = img_report.is_iso;
+
+	CHECK_MSG(iso1 == iso2,   "is_iso must be idempotent across two scans");
+	CHECK_MSG(size1 == size2, "image_size must be idempotent across two scans");
+
+	image_path = saved;
+}
+
 int main(void)
 {
 	setup_test_iso();
@@ -375,6 +436,9 @@ int main(void)
 	RUN(image_scan_iso_size_nonzero);
 	RUN(image_scan_posts_um_image_scanned);
 	RUN(image_scan_runs_as_thread);
+	RUN(image_scan_iso_label_correct);
+	RUN(image_scan_simple_iso_not_bootable);
+	RUN(image_scan_idempotent);
 
 	cleanup_test_iso();
 	TEST_RESULTS();

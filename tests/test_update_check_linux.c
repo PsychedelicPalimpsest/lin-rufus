@@ -198,6 +198,49 @@ TEST(large_negative_interval_returns_false)
     CHECK(r == FALSE);
 }
 
+/* 11. After YES, interval is exactly 86400 (daily) */
+TEST(yes_sets_interval_to_86400)
+{
+    setup_ini();
+    stdlg_set_test_response(IDYES, NULL);
+    SetUpdateCheck();
+    int32_t interval = ReadSetting32(SETTING_UPDATE_INTERVAL);
+    teardown_ini();
+    CHECK_INT_EQ(86400, (int)interval);
+}
+
+/* 12. After NO, interval is exactly -1 (disabled) */
+TEST(no_sets_interval_to_minus_one)
+{
+    setup_ini();
+    stdlg_set_test_response(IDNO, NULL);
+    SetUpdateCheck();
+    int32_t interval = ReadSetting32(SETTING_UPDATE_INTERVAL);
+    teardown_ini();
+    CHECK_INT_EQ(-1, (int)interval);
+}
+
+/* 13. A custom interval (e.g., weekly) above 0 returns TRUE without dialog */
+TEST(custom_positive_interval_returns_true)
+{
+    setup_ini();
+    WriteSetting32(SETTING_UPDATE_INTERVAL, 604800); /* 7 days */
+    BOOL r = SetUpdateCheck();
+    teardown_ini();
+    CHECK(r == TRUE);
+}
+
+/* 14. After YES, COMM_CHECK is not 0 (real timestamp written) */
+TEST(yes_writes_nonzero_comm_check)
+{
+    setup_ini();
+    stdlg_set_test_response(IDYES, NULL);
+    SetUpdateCheck();
+    int64_t commcheck = ReadSetting64(SETTING_COMM_CHECK);
+    teardown_ini();
+    CHECK(commcheck != 0);
+}
+
 int main(void)
 {
     printf("=== test_update_check_linux ===\n");
@@ -211,6 +254,10 @@ int main(void)
     RUN(second_call_does_not_reset_interval);
     RUN(subsequent_call_after_yes_stays_positive);
     RUN(large_negative_interval_returns_false);
+    RUN(yes_sets_interval_to_86400);
+    RUN(no_sets_interval_to_minus_one);
+    RUN(custom_positive_interval_returns_true);
+    RUN(yes_writes_nonzero_comm_check);
     TEST_RESULTS();
 }
 #endif /* __linux__ */
