@@ -363,15 +363,15 @@ TEST(set_dos_locale_detects_german_keyboard)
 
     BOOL ok = SetDOSLocale(sep, TRUE);
 
-    /* Read FDCONFIG.SYS and look for "GR" (German DOS keyboard code) */
+    /* Read AUTOEXEC.BAT and look for "GR" (German DOS keyboard code in keyb command) */
     char cfg[MAX_PATH];
-    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    snprintf(cfg, sizeof(cfg), "%s/AUTOEXEC.BAT", target);
     FILE *f = fopen(cfg, "r");
     int found_gr = 0;
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
-            if (strstr(line, " GR") || strstr(line, " gr") || strstr(line, ",GR") || strstr(line, ",gr"))
+            if (strstr(line, " GR,") || strstr(line, " gr,"))
                 found_gr = 1;
         }
         fclose(f);
@@ -381,7 +381,7 @@ TEST(set_dos_locale_detects_german_keyboard)
     rm_rf(target); free(target);
 
     CHECK(ok);
-    CHECK_MSG(found_gr, "German XKB layout → FDCONFIG.SYS should reference 'GR' keyboard");
+    CHECK_MSG(found_gr, "German XKB layout → AUTOEXEC.BAT should reference 'GR' keyboard");
 #endif
 }
 
@@ -401,13 +401,13 @@ TEST(set_dos_locale_detects_french_keyboard)
     BOOL ok = SetDOSLocale(sep, TRUE);
 
     char cfg[MAX_PATH];
-    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    snprintf(cfg, sizeof(cfg), "%s/AUTOEXEC.BAT", target);
     FILE *f = fopen(cfg, "r");
     int found_fr = 0;
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
-            if (strstr(line, " FR") || strstr(line, " fr") || strstr(line, ",FR") || strstr(line, ",fr"))
+            if (strstr(line, " FR,") || strstr(line, " fr,"))
                 found_fr = 1;
         }
         fclose(f);
@@ -417,7 +417,7 @@ TEST(set_dos_locale_detects_french_keyboard)
     rm_rf(target); free(target);
 
     CHECK(ok);
-    CHECK_MSG(found_fr, "French XKB layout → FDCONFIG.SYS should reference 'FR' keyboard");
+    CHECK_MSG(found_fr, "French XKB layout → AUTOEXEC.BAT should reference 'FR' keyboard");
 #endif
 }
 
@@ -473,13 +473,13 @@ TEST(set_dos_locale_british_maps_to_uk)
     BOOL ok = SetDOSLocale(sep, TRUE);
 
     char cfg[MAX_PATH];
-    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    snprintf(cfg, sizeof(cfg), "%s/AUTOEXEC.BAT", target);
     FILE *f = fopen(cfg, "r");
     int found_uk = 0;
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
-            if (strstr(line, " UK") || strstr(line, " uk") || strstr(line, ",UK") || strstr(line, ",uk"))
+            if (strstr(line, " UK,") || strstr(line, " uk,"))
                 found_uk = 1;
         }
         fclose(f);
@@ -489,7 +489,7 @@ TEST(set_dos_locale_british_maps_to_uk)
     rm_rf(target); free(target);
 
     CHECK(ok);
-    CHECK_MSG(found_uk, "GB (British) XKB layout → FDCONFIG.SYS should reference 'UK' keyboard");
+    CHECK_MSG(found_uk, "GB (British) XKB layout → AUTOEXEC.BAT should reference 'UK' keyboard");
 #endif
 }
 
@@ -522,9 +522,10 @@ TEST(set_dos_locale_us_no_fdconfig_menu)
 #endif
 }
 
-/* Helper: inject an XKB layout, call SetDOSLocale, scan FDCONFIG.SYS for
- * a given uppercase keyboard code string (e.g. "SP", "NL", "SV"), and
- * clean up.  Returns 1 if found, 0 if not. */
+/* Helper: inject an XKB layout, call SetDOSLocale, scan AUTOEXEC.BAT for
+ * a given uppercase keyboard code string (e.g. "SP", "NL", "SV") in the
+ * keyb command, and clean up.  Returns 1 if found, 0 if not.
+ * Windows parity: keyboard codes appear in AUTOEXEC.BAT (keyb XX,,\locale\...) */
 #ifdef RUFUS_TEST
 static int check_kb_in_fdconfig(const char* xkb, const char* expected_dos_upper)
 {
@@ -534,18 +535,23 @@ static int check_kb_in_fdconfig(const char* xkb, const char* expected_dos_upper)
     char sep[MAX_PATH];
     snprintf(sep, sizeof(sep), "%s/", target);
     SetDOSLocale(sep, TRUE);
+    /* Check AUTOEXEC.BAT for the keyb XX,, command */
     char cfg[MAX_PATH];
-    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    snprintf(cfg, sizeof(cfg), "%s/AUTOEXEC.BAT", target);
     FILE *f = fopen(cfg, "r");
     int found = 0;
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
-            /* Look for the code as a word boundary, e.g. " SP," or " SP " */
-            char needle_space[8], needle_comma[8];
-            snprintf(needle_space, sizeof(needle_space), " %s ", expected_dos_upper);
-            snprintf(needle_comma, sizeof(needle_comma), " %s,", expected_dos_upper);
-            if (strstr(line, needle_space) || strstr(line, needle_comma))
+            char upper[256];
+            size_t i;
+            for (i = 0; i < sizeof(upper)-1 && line[i]; i++)
+                upper[i] = (char)toupper((unsigned char)line[i]);
+            upper[i] = '\0';
+            /* Match "keyb XX,," or "keyb XX\r\n" */
+            char needle[32];
+            snprintf(needle, sizeof(needle), " %s,", expected_dos_upper);
+            if (strstr(upper, needle))
                 found = 1;
         }
         fclose(f);
@@ -584,15 +590,15 @@ TEST(vconsole_keymap_de_maps_to_gr)
     snprintf(sep, sizeof(sep), "%s/", target);
     BOOL ok = SetDOSLocale(sep, TRUE);
 
+    /* keyboard code appears in AUTOEXEC.BAT keyb command (Windows parity) */
     char cfg_path[MAX_PATH];
-    snprintf(cfg_path, sizeof(cfg_path), "%s/FDCONFIG.SYS", target);
+    snprintf(cfg_path, sizeof(cfg_path), "%s/AUTOEXEC.BAT", target);
     FILE *f = fopen(cfg_path, "r");
     int found_gr = 0;
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
-            if (strstr(line, " GR") || strstr(line, " gr") ||
-                strstr(line, ",GR") || strstr(line, ",gr"))
+            if (strstr(line, " GR,") || strstr(line, " gr,"))
                 found_gr = 1;
         }
         fclose(f);
@@ -604,7 +610,7 @@ TEST(vconsole_keymap_de_maps_to_gr)
     unlink(vcfg); free(vcfg);
 
     CHECK(ok);
-    CHECK_MSG(found_gr, "vconsole KEYMAP=de -> FDCONFIG.SYS should reference 'GR' keyboard");
+    CHECK_MSG(found_gr, "vconsole KEYMAP=de -> AUTOEXEC.BAT should reference 'GR' keyboard");
 #endif
 }
 
@@ -626,14 +632,13 @@ TEST(vconsole_keymap_with_variant_strips_suffix)
     BOOL ok = SetDOSLocale(sep, TRUE);
 
     char cfg_path[MAX_PATH];
-    snprintf(cfg_path, sizeof(cfg_path), "%s/FDCONFIG.SYS", target);
+    snprintf(cfg_path, sizeof(cfg_path), "%s/AUTOEXEC.BAT", target);
     FILE *f = fopen(cfg_path, "r");
     int found_gr = 0;
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
-            if (strstr(line, " GR") || strstr(line, " gr") ||
-                strstr(line, ",GR") || strstr(line, ",gr"))
+            if (strstr(line, " GR,") || strstr(line, " gr,"))
                 found_gr = 1;
         }
         fclose(f);
@@ -667,15 +672,16 @@ TEST(etc_default_keyboard_takes_priority_over_vconsole)
     snprintf(sep, sizeof(sep), "%s/", target);
     SetDOSLocale(sep, TRUE);
 
+    /* keyboard code appears in AUTOEXEC.BAT keyb command (Windows parity) */
     char cfg_path[MAX_PATH];
-    snprintf(cfg_path, sizeof(cfg_path), "%s/FDCONFIG.SYS", target);
+    snprintf(cfg_path, sizeof(cfg_path), "%s/AUTOEXEC.BAT", target);
     FILE *f = fopen(cfg_path, "r");
     int found_fr = 0, found_gr = 0;
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
-            if (strstr(line, " FR") || strstr(line, ",FR")) found_fr = 1;
-            if (strstr(line, " GR") || strstr(line, ",GR")) found_gr = 1;
+            if (strstr(line, " FR,") || strstr(line, " fr,")) found_fr = 1;
+            if (strstr(line, " GR,") || strstr(line, " gr,")) found_gr = 1;
         }
         fclose(f);
     }
@@ -771,9 +777,41 @@ TEST(set_dos_locale_polish_maps_to_pl)
  * fd_kb2 (keybrd2.sys) : bg ce gk is ro ru rx tr tt yc
  * ================================================================ */
 #ifdef RUFUS_TEST
-/* Helper: check that FDCONFIG.SYS contains the expected driver filename.
- * Returns 1 if found, 0 if not found, -1 on error. */
+/* Helper: check that AUTOEXEC.BAT references the expected keyboard driver.
+ * Returns 1 if found, 0 if not found, -1 on error.
+ * Windows parity: KEYB.EXE is loaded from AUTOEXEC.BAT, not FDCONFIG.SYS. */
 static int check_driver_in_fdconfig(const char* xkb, const char* expected_driver)
+{
+    dos_locale_set_xkb_layout(xkb);
+    char *target = make_tmpdir();
+    if (!target) { dos_locale_set_xkb_layout(NULL); return -1; }
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    /* Windows puts keyboard driver in AUTOEXEC.BAT, not CONFIG.SYS */
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/AUTOEXEC.BAT", target);
+    FILE *f = fopen(cfg, "r");
+    int found = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            /* Case-insensitive search for the driver filename */
+            char *p = line;
+            while (*p) { *p = (char)toupper((unsigned char)*p); p++; }
+            if (strstr(line, expected_driver))
+                found = 1;
+        }
+        fclose(f);
+    }
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    return found;
+}
+
+/* Helper: returns 1 if FDCONFIG.SYS contains any DEVICE= or !DEVICE= line
+ * referencing KEYB.EXE. Windows parity: KEYB.EXE should only be in AUTOEXEC.BAT. */
+static int fdconfig_has_keyb_device_line(const char* xkb)
 {
     dos_locale_set_xkb_layout(xkb);
     char *target = make_tmpdir();
@@ -788,10 +826,12 @@ static int check_driver_in_fdconfig(const char* xkb, const char* expected_driver
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
-            /* Case-insensitive search for the driver filename */
-            char *p = line;
-            while (*p) { *p = (char)toupper((unsigned char)*p); p++; }
-            if (strstr(line, expected_driver))
+            char upper[256];
+            size_t i;
+            for (i = 0; i < sizeof(upper)-1 && line[i]; i++)
+                upper[i] = (char)toupper((unsigned char)line[i]);
+            upper[i] = '\0';
+            if (strstr(upper, "KEYB.EXE"))
                 found = 1;
         }
         fclose(f);
@@ -862,30 +902,64 @@ TEST(keyboard_sys_used_for_us)
 #ifndef RUFUS_TEST
     printf("SKIP (needs RUFUS_TEST)\n");
 #else
-    /* us -> US -> fd_kb1 -> keyboard.sys (via simple AUTOEXEC path) */
+    /* Windows parity: US/437 AUTOEXEC.BAT has echo line with human-readable names,
+     * no keyb command (US English is the DOS default — no driver needed). */
     dos_locale_set_xkb_layout("us");
     char *target = make_tmpdir();
     CHECK(target != NULL);
     char sep[MAX_PATH];
     snprintf(sep, sizeof(sep), "%s/", target);
     SetDOSLocale(sep, TRUE);
-    /* For US/437, we get FDCONFIG.SYS with KEYBOARD.SYS */
-    char cfg[MAX_PATH];
-    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
-    FILE *f = fopen(cfg, "r");
-    int found = 0;
+    char bat[MAX_PATH];
+    snprintf(bat, sizeof(bat), "%s/AUTOEXEC.BAT", target);
+    FILE *f = fopen(bat, "r");
+    int found_us = 0;
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
             char *p = line;
             while (*p) { *p = (char)toupper((unsigned char)*p); p++; }
-            if (strstr(line, "KEYBOARD.SYS")) found = 1;
+            if (strstr(line, "US-ENGLISH")) found_us = 1;
         }
         fclose(f);
     }
     dos_locale_set_xkb_layout(NULL);
     rm_rf(target); free(target);
-    CHECK_MSG(found == 1, "US locale should use KEYBOARD.SYS");
+    CHECK_MSG(found_us == 1,
+              "US locale AUTOEXEC.BAT should show 'US-English' (human-readable name)");
+#endif
+}
+
+TEST(us_locale_no_fdconfig_sys)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Windows parity: US/437 creates only AUTOEXEC.BAT, no FDCONFIG.SYS */
+    dos_locale_set_xkb_layout("us");
+    char *target = make_tmpdir();
+    CHECK(target != NULL);
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    int fdconfig_exists = (access(cfg, F_OK) == 0);
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    CHECK_MSG(!fdconfig_exists,
+              "US locale should NOT create FDCONFIG.SYS (Windows parity)");
+#endif
+}
+
+TEST(fdconfig_has_no_keyb_device_line_german)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    /* Windows parity: FDCONFIG.SYS should have only menu items, no DEVICE=KEYB lines */
+    CHECK_MSG(fdconfig_has_keyb_device_line("de") == 0,
+              "FDCONFIG.SYS should NOT have DEVICE=KEYB.EXE lines (Windows parity)");
 #endif
 }
 
@@ -895,7 +969,7 @@ TEST(keyboard_sys_used_for_us)
  * The Linux port must do the same for FreeDOS targets.
  * ================================================================ */
 #ifdef RUFUS_TEST
-/* Helper: return the first codepage number found in FDCONFIG.SYS for XKB layout. */
+/* Helper: return the first codepage number found in FDCONFIG.SYS MENU line [NNN] */
 static int get_fdconfig_cp(const char* xkb)
 {
     dos_locale_set_xkb_layout(xkb);
@@ -911,13 +985,10 @@ static int get_fdconfig_cp(const char* xkb)
     if (f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
-            /* Lines like: "1 !DEVICE=\LOCALE\KEYB.EXE GR,858,\LOCALE\KEYBOARD.SYS" */
-            char *keyb = strstr(line, "KEYB.EXE");
-            if (!keyb) continue;
-            /* Skip to the comma after the keyboard code */
-            char *comma = strchr(keyb, ',');
-            if (!comma) continue;
-            int parsed = atoi(comma + 1);
+            /* Lines like: "MENU 1) Use German keyboard with ... codepage [858]" */
+            char *bracket = strrchr(line, '[');
+            if (!bracket) continue;
+            int parsed = atoi(bracket + 1);
             if (parsed > 0) { cp = parsed; break; }
         }
         fclose(f);
@@ -1367,6 +1438,8 @@ int main(void)
     RUN(keybrd2_sys_used_for_greek);
     RUN(keybrd2_sys_used_for_turkish);
     RUN(keyboard_sys_used_for_us);
+    RUN(us_locale_no_fdconfig_sys);
+    RUN(fdconfig_has_no_keyb_device_line_german);
 
     RUN(freedos_upgrades_cp850_to_cp858_for_german);
     RUN(freedos_upgrades_cp850_to_cp858_for_french);

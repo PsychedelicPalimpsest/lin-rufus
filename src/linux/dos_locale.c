@@ -398,7 +398,8 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
 
     char filename[MAX_PATH];
 
-    /* For US keyboard with CP437: simple single-language AUTOEXEC.BAT */
+    /* For US keyboard with CP437: simple single-language AUTOEXEC.BAT only.
+     * Windows parity: no CONFIG.SYS/FDCONFIG.SYS created for US locale. */
     if (strcmp(kb, "us") == 0 && cp == 437) {
         snprintf(filename, sizeof(filename), "%sAUTOEXEC.BAT", path);
         FILE* fd = fopen(filename, "w");
@@ -408,17 +409,10 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
         }
         fprintf(fd, "@echo off\r\n");
         fprintf(fd, "set PATH=.;\\;\\LOCALE\r\n");
-        fprintf(fd, "echo Using US keyboard with CP437 codepage\r\n");
+        fprintf(fd, "echo Using %s keyboard with %s codepage [437]\r\n",
+                kb_to_hr("us"), cp_to_hr(437));
         fclose(fd);
-
-        snprintf(filename, sizeof(filename), "%sFDCONFIG.SYS", path);
-        fd = fopen(filename, "w");
-        if (fd != NULL) {
-            fprintf(fd, "!DEVICE=\\LOCALE\\DISPLAY.EXE CON=(EGA,,1)\r\n");
-            fprintf(fd, "!DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\%s\r\n", kbdrv);
-            fclose(fd);
-        }
-        uprintf("SetDOSLocale: US locale -- created AUTOEXEC.BAT and FDCONFIG.SYS");
+        uprintf("SetDOSLocale: US locale -- created AUTOEXEC.BAT");
         return TRUE;
     }
 
@@ -439,9 +433,6 @@ BOOL SetDOSLocale(const char* path, BOOL bFreeDOS)
     fprintf(fd, "MENU 2) Use US-English keyboard with US-English codepage [437]\r\n");
     fprintf(fd, "MENU\r\n");
     fprintf(fd, "12?\r\n");
-    fprintf(fd, "!DEVICE=\\LOCALE\\DISPLAY.EXE CON=(EGA,,1)\r\n");
-    fprintf(fd, "1 !DEVICE=\\LOCALE\\KEYB.EXE %s,%d,\\LOCALE\\%s\r\n", KB_UPPER, cp, kbdrv);
-    fprintf(fd, "2 !DEVICE=\\LOCALE\\KEYB.EXE US,437,\\LOCALE\\%s\r\n", kbdrv);
     fclose(fd);
 
     /* AUTOEXEC.BAT: use GOTO %%CONFIG%% structure to activate codepage/keyboard
