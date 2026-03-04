@@ -713,6 +713,53 @@ TEST(move_file_ex_a_rename)
 }
 
 /* ==========================================================================
+ * InterlockedIncrement / InterlockedDecrement / InterlockedExchange /
+ * InterlockedCompareExchange
+ * ========================================================================== */
+
+TEST(interlocked_increment_returns_new_value)
+{
+	volatile LONG v = 0;
+	LONG r = InterlockedIncrement(&v);
+	CHECK_MSG(r == 1, "InterlockedIncrement must return new value (1)");
+	CHECK_MSG(v == 1, "InterlockedIncrement must update the variable");
+}
+
+TEST(interlocked_decrement_returns_new_value)
+{
+	volatile LONG v = 5;
+	LONG r = InterlockedDecrement(&v);
+	CHECK_MSG(r == 4, "InterlockedDecrement must return new value (4)");
+	CHECK_MSG(v == 4, "InterlockedDecrement must update the variable");
+}
+
+TEST(interlocked_exchange_sets_value)
+{
+	volatile LONG v = 10;
+	LONG old = InterlockedExchange(&v, 99);
+	CHECK_MSG(old == 10, "InterlockedExchange must return previous value");
+	CHECK_MSG(v == 99, "InterlockedExchange must set the new value");
+}
+
+TEST(interlocked_compare_exchange_success)
+{
+	volatile LONG v = 42;
+	/* Comparand matches — exchange should happen */
+	LONG old = InterlockedCompareExchange(&v, 100, 42);
+	CHECK_MSG(old == 42, "InterlockedCompareExchange must return old value on success");
+	CHECK_MSG(v == 100, "InterlockedCompareExchange must set new value when comparand matches");
+}
+
+TEST(interlocked_compare_exchange_failure)
+{
+	volatile LONG v = 42;
+	/* Comparand does not match — exchange must NOT happen */
+	LONG old = InterlockedCompareExchange(&v, 100, 99);
+	CHECK_MSG(old == 42, "InterlockedCompareExchange must return old value on failure");
+	CHECK_MSG(v == 42, "InterlockedCompareExchange must not change value when comparand mismatches");
+}
+
+/* ==========================================================================
  * Run all tests
  * ========================================================================== */
 
@@ -825,6 +872,12 @@ int main(void)
 	RUN_TEST(delete_file_a_success);
 	RUN_TEST(delete_file_a_missing_returns_false);
 	RUN_TEST(move_file_ex_a_rename);
+
+	RUN_TEST(interlocked_increment_returns_new_value);
+	RUN_TEST(interlocked_decrement_returns_new_value);
+	RUN_TEST(interlocked_exchange_sets_value);
+	RUN_TEST(interlocked_compare_exchange_success);
+	RUN_TEST(interlocked_compare_exchange_failure);
 
 	PRINT_RESULTS();
 	return (g_failed == 0) ? 0 : 1;

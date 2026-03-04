@@ -66,7 +66,7 @@ char *fido_url = NULL, *save_image_type = NULL;
 char *sbat_level_txt = NULL, *sb_active_txt = NULL, *sb_revoked_txt = NULL;
 sbat_entry_t* sbat_entries = NULL;
 thumbprint_list_t *sb_active_certs = NULL, *sb_revoked_certs = NULL;
-RUFUS_UPDATE update = { {0,0,0}, {0,0}, NULL, NULL };
+RUFUS_UPDATE update = { {0,0,0}, {0,0}, NULL, NULL, NULL, 0 };
 
 /* More bools from rufus.c */
 BOOL has_uefi_csm = FALSE, its_a_me_mario = FALSE;

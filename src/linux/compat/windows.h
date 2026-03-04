@@ -659,8 +659,9 @@ static inline ULONGLONG GetTickCount64(void) {
 
 static inline HANDLE GetCurrentProcess(void) { return (HANDLE)(intptr_t)getpid(); }
 static inline DWORD  GetCurrentProcessId(void) { return (DWORD)getpid(); }
-static inline HANDLE GetCurrentThread(void) { return (HANDLE)0; }
-static inline DWORD  GetCurrentThreadId(void) { return (DWORD)0; }
+/* GetCurrentThread() returns a pseudo-handle (-2) matching Windows convention. */
+static inline HANDLE GetCurrentThread(void)    { return (HANDLE)(intptr_t)-2; }
+static inline DWORD  GetCurrentThreadId(void)  { return (DWORD)syscall(SYS_gettid); }
 
 /* OutputDebugString is a no-op on Linux */
 static inline void OutputDebugStringA(LPCSTR s) { (void)s; }
@@ -1452,8 +1453,8 @@ static inline DWORD_PTR SetThreadAffinityMask(HANDLE h, DWORD_PTR mask)
             CPU_SET(i, &cs);
     }
 
-    /* Handle GetCurrentThread() pseudo-handle (returns 0 on Linux) */
-    if (h == NULL || h == (HANDLE)0) {
+    /* Handle GetCurrentThread() pseudo-handle (-2, matching Windows convention) */
+    if (h == NULL || h == (HANDLE)0 || h == (HANDLE)(intptr_t)-2) {
         pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs);
         return mask;
     }

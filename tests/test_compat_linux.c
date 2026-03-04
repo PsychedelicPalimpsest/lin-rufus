@@ -3,7 +3,8 @@
  *   shellapi.h: ShellExecuteA
  *   windows.h: GetTickCount64, CharLowerA/CharUpperA, GetEnvironmentVariableA,
  *              SetEnvironmentVariableA, GetTempPathA, GetTempFileNameA,
- *              GetModuleFileNameA
+ *              GetModuleFileNameA, GetCurrentProcessId, GetCurrentThreadId,
+ *              GetCurrentThread
  */
 #ifdef _WIN32
 #include "framework.h"
@@ -17,6 +18,8 @@ int main(void) { printf("SKIP: Linux-only test\n"); return 0; }
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 #include <time.h>
 
 /* Pull in the compat headers under test */
@@ -436,6 +439,40 @@ TEST(get_temp_filename_a_bad_dir_returns_zero)
 }
 
 /* =========================================================================
+ * GetCurrentProcessId / GetCurrentThreadId / GetCurrentThread
+ * =========================================================================*/
+TEST(get_current_process_id_matches_getpid)
+{
+	DWORD pid = GetCurrentProcessId();
+	CHECK_MSG((int)pid == getpid(), "GetCurrentProcessId must match getpid()");
+}
+
+TEST(get_current_process_id_nonzero)
+{
+	CHECK_MSG(GetCurrentProcessId() != 0, "GetCurrentProcessId must not be zero");
+}
+
+TEST(get_current_thread_id_nonzero)
+{
+	DWORD tid = GetCurrentThreadId();
+	CHECK_MSG(tid != 0, "GetCurrentThreadId must not be zero");
+}
+
+TEST(get_current_thread_id_matches_gettid)
+{
+	DWORD tid = GetCurrentThreadId();
+	pid_t ktid = (pid_t)syscall(SYS_gettid);
+	CHECK_MSG((pid_t)tid == ktid, "GetCurrentThreadId must match gettid()");
+}
+
+TEST(get_current_thread_pseudo_handle)
+{
+	/* Windows convention: GetCurrentThread() returns -2 pseudo-handle */
+	HANDLE h = GetCurrentThread();
+	CHECK_MSG(h == (HANDLE)(intptr_t)-2, "GetCurrentThread must return pseudo-handle -2");
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 int main(void)
@@ -507,6 +544,13 @@ int main(void)
 	RUN(get_temp_filename_a_file_exists_after_call);
 	RUN(get_temp_filename_a_null_buf_returns_zero);
 	RUN(get_temp_filename_a_bad_dir_returns_zero);
+
+	printf("\n  GetCurrentProcessId / GetCurrentThreadId / GetCurrentThread\n");
+	RUN(get_current_process_id_matches_getpid);
+	RUN(get_current_process_id_nonzero);
+	RUN(get_current_thread_id_nonzero);
+	RUN(get_current_thread_id_matches_gettid);
+	RUN(get_current_thread_pseudo_handle);
 
 	TEST_RESULTS();
 	return (_fail > 0) ? 1 : 0;
