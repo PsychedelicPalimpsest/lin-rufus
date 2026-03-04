@@ -554,6 +554,67 @@ TEST(kb_map_vietnamese_vn_maps_to_042a)
 }
 
 /* ================================================================
+ * XKB variant support tests — XKBVARIANT= in /etc/default/keyboard
+ * ================================================================ */
+
+TEST(swiss_french_variant_gives_fr_ch_locale)
+{
+	/* Swiss layout with French variant -> fr-CH / 100c input locale */
+	char *p = write_keyboard_file("XKBLAYOUT=\"ch\"\nXKBVARIANT=\"fr\"\n");
+	if (!p) { CHECK(0); return; }
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("fr_CH.UTF-8");
+	locale_oobe_set_keyboard_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(p);
+	locale_oobe_set_vconsole_path("/nonexistent/vconsole.conf");
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(NULL);
+	locale_oobe_set_vconsole_path(NULL);
+	unlink(p);
+	CHECK_MSG(strstr(loc.input_locale, "100c") != NULL || strstr(loc.input_locale, "100C") != NULL,
+	          "Swiss French (ch + fr variant) should give fr-CH input locale (100c)");
+}
+
+TEST(swiss_german_no_variant_gives_de_ch_locale)
+{
+	/* Swiss layout with no variant -> de-CH / 0807 input locale */
+	char *p = write_keyboard_file("XKBLAYOUT=\"ch\"\n");
+	if (!p) { CHECK(0); return; }
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("de_CH.UTF-8");
+	locale_oobe_set_keyboard_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(p);
+	locale_oobe_set_vconsole_path("/nonexistent/vconsole.conf");
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(NULL);
+	locale_oobe_set_vconsole_path(NULL);
+	unlink(p);
+	CHECK_MSG(strstr(loc.input_locale, "0807") != NULL,
+	          "Swiss German (ch, no variant) should give de-CH input locale (0807)");
+}
+
+TEST(serbian_latin_variant_gives_0x081a_locale)
+{
+	/* Serbian layout with Latin variant -> Serbian Latin / 081a input locale */
+	char *p = write_keyboard_file("XKBLAYOUT=\"rs\"\nXKBVARIANT=\"latin\"\n");
+	if (!p) { CHECK(0); return; }
+	LinuxOobeLocale loc = { 0 };
+	locale_oobe_set_lang_injection("sr_RS.UTF-8");
+	locale_oobe_set_keyboard_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(p);
+	locale_oobe_set_vconsole_path("/nonexistent/vconsole.conf");
+	GetLinuxOobeLocale(&loc);
+	locale_oobe_set_lang_injection(NULL);
+	locale_oobe_set_etc_default_keyboard_path(NULL);
+	locale_oobe_set_vconsole_path(NULL);
+	unlink(p);
+	CHECK_MSG(strstr(loc.input_locale, "081a") != NULL || strstr(loc.input_locale, "081A") != NULL,
+	          "Serbian Latin (rs + latin variant) should give Serbian Latin locale (081a)");
+}
+
+/* ================================================================
  * main
  * ================================================================ */
 int main(void)
@@ -611,6 +672,11 @@ int main(void)
 	RUN(kb_map_macedonian_mk_maps_to_042f);
 	RUN(kb_map_serbian_cyrillic_sr_maps_to_0c1a);
 	RUN(kb_map_vietnamese_vn_maps_to_042a);
+
+	printf("\n=== XKB variant support tests ===\n");
+	RUN(swiss_french_variant_gives_fr_ch_locale);
+	RUN(swiss_german_no_variant_gives_de_ch_locale);
+	RUN(serbian_latin_variant_gives_0x081a_locale);
 
 	TEST_RESULTS();
 }

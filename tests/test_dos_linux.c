@@ -697,6 +697,94 @@ TEST(etc_default_keyboard_takes_priority_over_vconsole)
 #endif
 }
 
+/* Helper: run SetDOSLocale with /etc/default/keyboard content, return keyb XX code found in AUTOEXEC.BAT */
+#ifdef RUFUS_TEST
+static int autoexec_keyb_code_from_keyboard_file(const char* keyboard_file_contents, char* code_out, size_t code_sz)
+{
+    char *kbcfg = write_kb_config_file(keyboard_file_contents);
+    if (!kbcfg) return 0;
+    dos_locale_set_etc_default_keyboard_path(kbcfg);
+    dos_locale_set_vconsole_path("/nonexistent/vconsole.conf");
+
+    char *target = make_tmpdir();
+    if (!target) { unlink(kbcfg); free(kbcfg); return 0; }
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+
+    char bat[MAX_PATH];
+    snprintf(bat, sizeof(bat), "%s/AUTOEXEC.BAT", target);
+    FILE *f = fopen(bat, "r");
+    int found = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            /* Look for "keyb XX,," pattern */
+            char *p = strstr(line, "keyb ");
+            if (!p) p = strstr(line, "KEYB ");
+            if (p) {
+                p += 5;
+                size_t i = 0;
+                while (*p && *p != ',' && !isspace((unsigned char)*p) && i < code_sz - 1)
+                    code_out[i++] = (char)toupper((unsigned char)*p++);
+                code_out[i] = '\0';
+                found = 1;
+                break;
+            }
+        }
+        fclose(f);
+    }
+
+    dos_locale_set_etc_default_keyboard_path(NULL);
+    dos_locale_set_vconsole_path(NULL);
+    rm_rf(target); free(target);
+    unlink(kbcfg); free(kbcfg);
+    return found;
+}
+#endif /* RUFUS_TEST */
+
+TEST(swiss_french_variant_uses_sf_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    char code[16] = {0};
+    int found = autoexec_keyb_code_from_keyboard_file(
+        "XKBLAYOUT=\"ch\"\nXKBVARIANT=\"fr\"\n", code, sizeof(code));
+    CHECK_MSG(found, "Should find keyb command in AUTOEXEC.BAT");
+    CHECK_MSG(strcmp(code, "SF") == 0,
+              "Swiss French (ch + fr variant) -> DOS keyboard 'SF'");
+#endif
+}
+
+TEST(swiss_german_no_variant_uses_sg_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    char code[16] = {0};
+    int found = autoexec_keyb_code_from_keyboard_file(
+        "XKBLAYOUT=\"ch\"\n", code, sizeof(code));
+    CHECK_MSG(found, "Should find keyb command in AUTOEXEC.BAT");
+    CHECK_MSG(strcmp(code, "SG") == 0,
+              "Swiss German (ch, no variant) -> DOS keyboard 'SG'");
+#endif
+}
+
+TEST(serbian_latin_variant_uses_yu_keyboard)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    char code[16] = {0};
+    int found = autoexec_keyb_code_from_keyboard_file(
+        "XKBLAYOUT=\"rs\"\nXKBVARIANT=\"latin\"\n", code, sizeof(code));
+    CHECK_MSG(found, "Should find keyb command in AUTOEXEC.BAT");
+    CHECK_MSG(strcmp(code, "YU") == 0,
+              "Serbian Latin (rs + latin variant) -> DOS keyboard 'YU'");
+#endif
+}
+
 TEST(set_dos_locale_spanish_maps_to_sp)
 {
 #ifndef RUFUS_TEST
@@ -1431,6 +1519,9 @@ int main(void)
     RUN(vconsole_keymap_de_maps_to_gr);
     RUN(vconsole_keymap_with_variant_strips_suffix);
     RUN(etc_default_keyboard_takes_priority_over_vconsole);
+    RUN(swiss_french_variant_uses_sf_keyboard);
+    RUN(swiss_german_no_variant_uses_sg_keyboard);
+    RUN(serbian_latin_variant_uses_yu_keyboard);
 
     RUN(keyboard_sys_used_for_german);
     RUN(keyboard_sys_used_for_french);

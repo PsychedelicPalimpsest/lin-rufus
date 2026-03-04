@@ -204,6 +204,11 @@ static const KbEntry kb_map[] = {
 	{ "uz",   "0443:00000443" },  /* Uzbek (Latin) */
 	{ "vn",   "042a:0000042a" },  /* Vietnamese */
 	{ "yu",   "081a:0000081a" },  /* Yugoslav / Serbian Latin */
+	/* XKB variant overrides — "layout:variant" combined keys */
+	{ "ch:fr",       "100c:0000100c" },  /* Swiss French (ch + fr variant) */
+	{ "ch:fr_mac",   "100c:0000100c" },  /* Swiss French Mac layout */
+	{ "rs:latin",    "081a:0000081a" },  /* Serbian Latin (not Cyrillic) */
+	{ "rs:latinyz",  "081a:0000081a" },  /* Serbian Latin YZ */
 };
 
 /* xkb layouts can be comma-separated (e.g. "us,de"); extract the first one */
@@ -215,7 +220,9 @@ static void first_xkb_layout(const char *src, char *out, size_t outsz)
 	out[i] = '\0';
 }
 
-/* Try to read the first XKBLAYOUT from /etc/default/keyboard */
+/* Try to read the first XKBLAYOUT from /etc/default/keyboard.
+ * Also reads XKBVARIANT= from the same file; if non-empty, the result is
+ * returned as "layout:variant" (e.g. "ch:fr" for Swiss French). */
 static int try_etc_default_keyboard(char *out, size_t outsz)
 {
 	const char *path = "/etc/default/keyboard";
@@ -225,29 +232,50 @@ static int try_etc_default_keyboard(char *out, size_t outsz)
 #endif
 	FILE *f = fopen(path, "r");
 	if (!f) return 0;
+
+	char layout[32] = {0};
+	char variant[32] = {0};
 	char line[256];
 	while (fgets(line, sizeof(line), f)) {
-		if (strncmp(line, "XKBLAYOUT=", 10) != 0)
+		if (layout[0] == '\0' && strncmp(line, "XKBLAYOUT=", 10) == 0) {
+			char *val = line + 10;
+			if (*val == '"') val++;
+			size_t n = strcspn(val, "\"\n\r");
+			if (n > 0 && n < sizeof(layout)) {
+				strncpy(layout, val, n);
+				layout[n] = '\0';
+			}
 			continue;
-		char *val = line + 10;
-		/* Strip quotes and newline */
-		if (*val == '"') val++;
-		size_t n = strcspn(val, "\"\n\r");
-		if (n > 0 && n < outsz) {
-			strncpy(out, val, n);
-			out[n] = '\0';
-			fclose(f);
-			return 1;
+		}
+		if (variant[0] == '\0' && strncmp(line, "XKBVARIANT=", 11) == 0) {
+			char *val = line + 11;
+			if (*val == '"') val++;
+			size_t n = strcspn(val, "\"\n\r");
+			if (n > 0 && n < sizeof(variant)) {
+				strncpy(variant, val, n);
+				variant[n] = '\0';
+			}
 		}
 	}
 	fclose(f);
-	return 0;
+
+	if (layout[0] == '\0')
+		return 0;
+
+	if (variant[0] != '\0')
+		snprintf(out, outsz, "%s:%s", layout, variant);
+	else {
+		strncpy(out, layout, outsz - 1);
+		out[outsz - 1] = '\0';
+	}
+	return 1;
 }
 
 /*
  * Try to read a keyboard layout from /etc/vconsole.conf.
- * Checks XKBLAYOUT= first (Arch with X11 config), then KEYMAP= (Fedora/RHEL).
- * Strips variant suffixes like "de-latin1" -> "de".
+ * Checks XKBLAYOUT= first (with XKBVARIANT= for variant), then KEYMAP=.
+ * For XKBLAYOUT=, variant is combined as "layout:variant" if present.
+ * For KEYMAP=, variant suffixes like "de-latin1" are stripped to "de".
  */
 static int try_vconsole(char *out, size_t outsz)
 {
@@ -259,35 +287,70 @@ static int try_vconsole(char *out, size_t outsz)
 	FILE *f = fopen(path, "r");
 	if (!f) return 0;
 
-	static const char* const keys[] = { "XKBLAYOUT=", "KEYMAP=", NULL };
+	char xkblayout[32] = {0};
+	char xkbvariant[32] = {0};
+	char keymap[32] = {0};
 	char line[256];
-	char found[32] = { 0 };
-	int got = 0;
 
-	while (fgets(line, sizeof(line), f) && !got) {
-		for (int k = 0; keys[k] && !got; k++) {
-			size_t klen = strlen(keys[k]);
-			char *p = line;
-			while (*p == ' ' || *p == '\t') p++;
-			if (strncmp(p, keys[k], klen) != 0) continue;
-			p += klen;
+	while (fgets(line, sizeof(line), f)) {
+		char *p = line;
+		while (*p == ' ' || *p == '\t') p++;
+
+		if (xkblayout[0] == '\0' && strncmp(p, "XKBLAYOUT=", 10) == 0) {
+			p += 10;
 			if (*p == '"' || *p == '\'') p++;
-			/* Copy base layout, stripping variant suffix ("-" or "_") */
+			size_t i = 0;
+			/* Don't strip suffix here — we read XKBVARIANT= separately */
+			while (*p && *p != '"' && *p != '\'' && *p != '\n' && *p != '\r'
+			       && *p != ',' && i < sizeof(xkblayout) - 1) {
+				xkblayout[i++] = (char)tolower((unsigned char)*p);
+				p++;
+			}
+			xkblayout[i] = '\0';
+			continue;
+		}
+
+		if (xkbvariant[0] == '\0' && strncmp(p, "XKBVARIANT=", 11) == 0) {
+			p += 11;
+			if (*p == '"' || *p == '\'') p++;
+			size_t i = 0;
+			while (*p && *p != '"' && *p != '\'' && *p != '\n' && *p != '\r'
+			       && i < sizeof(xkbvariant) - 1) {
+				xkbvariant[i++] = (char)tolower((unsigned char)*p);
+				p++;
+			}
+			xkbvariant[i] = '\0';
+			continue;
+		}
+
+		if (keymap[0] == '\0' && strncmp(p, "KEYMAP=", 7) == 0) {
+			p += 7;
+			if (*p == '"' || *p == '\'') p++;
+			/* Strip variant suffix ("-" or "_") for KEYMAP= entries */
 			size_t i = 0;
 			while (*p && *p != '"' && *p != '\'' && *p != '\n' && *p != '\r'
 			       && *p != '-' && *p != '_' && *p != ','
-			       && i < sizeof(found) - 1) {
-				found[i++] = (char)tolower((unsigned char)*p);
+			       && i < sizeof(keymap) - 1) {
+				keymap[i++] = (char)tolower((unsigned char)*p);
 				p++;
 			}
-			found[i] = '\0';
-			if (i > 0) got = 1;
+			keymap[i] = '\0';
 		}
 	}
 	fclose(f);
 
-	if (got && found[0] && outsz > 0) {
-		strncpy(out, found, outsz - 1);
+	/* Prefer XKBLAYOUT= (+ optional XKBVARIANT=) over KEYMAP= */
+	if (xkblayout[0] != '\0') {
+		if (xkbvariant[0] != '\0')
+			snprintf(out, outsz, "%s:%s", xkblayout, xkbvariant);
+		else {
+			strncpy(out, xkblayout, outsz - 1);
+			out[outsz - 1] = '\0';
+		}
+		return 1;
+	}
+	if (keymap[0] != '\0') {
+		strncpy(out, keymap, outsz - 1);
 		out[outsz - 1] = '\0';
 		return 1;
 	}
@@ -295,17 +358,33 @@ static int try_vconsole(char *out, size_t outsz)
 }
 
 /* Map an xkb layout string to a Windows input locale string.
- * Returns a pointer to a static string; never NULL. */
+ * Returns a pointer to a static string; never NULL.
+ * Accepts "layout:variant" format; first tries the combined key, then falls
+ * back to layout-only if no variant match is found. */
 static const char *xkb_to_win_input_locale(const char *xkb, const char *bcp47_fallback)
 {
 	size_t i;
-	char layout[32] = { 0 };
+	char layout[64] = { 0 };  /* may hold "layout:variant" */
 
 	if (xkb && xkb[0]) {
 		first_xkb_layout(xkb, layout, sizeof(layout));
+		/* Try exact match (handles both "xx" and "xx:variant" combined keys) */
 		for (i = 0; i < sizeof(kb_map) / sizeof(kb_map[0]); i++) {
 			if (strcmp(layout, kb_map[i].xkb) == 0)
 				return kb_map[i].win;
+		}
+		/* If combined "layout:variant" had no match, fall back to layout only */
+		if (strchr(layout, ':')) {
+			char base[32] = { 0 };
+			const char *colon = strchr(layout, ':');
+			size_t n = (size_t)(colon - layout);
+			if (n >= sizeof(base)) n = sizeof(base) - 1;
+			strncpy(base, layout, n);
+			base[n] = '\0';
+			for (i = 0; i < sizeof(kb_map) / sizeof(kb_map[0]); i++) {
+				if (strcmp(base, kb_map[i].xkb) == 0)
+					return kb_map[i].win;
+			}
 		}
 	}
 

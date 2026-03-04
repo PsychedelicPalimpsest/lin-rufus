@@ -119,7 +119,25 @@ static const xkb_to_dos_t xkb_dos_table[] = {
 };
 
 /*
- * FreeDOS keyboard driver file lists, mirroring the Windows implementation.
+ * XKB (layout, variant) -> (DOS keyboard code, OEM codepage) overrides.
+ * Used when XKBVARIANT= changes the keyboard from the layout default.
+ * The xkb field here is "layout:variant" and must match what get_xkb_layout()
+ * returns when it combines XKBLAYOUT + XKBVARIANT.
+ */
+typedef struct {
+    const char* xkb;    /* "layout:variant" lower-case */
+    const char* dos_kb;
+    int         cp;
+} xkb_variant_to_dos_t;
+
+static const xkb_variant_to_dos_t xkb_variant_dos_table[] = {
+    { "ch:fr",       "sf", 850 },  /* Swiss French */
+    { "ch:fr_mac",   "sf", 850 },  /* Swiss French (Mac layout) */
+    { "rs:latin",    "yu", 852 },  /* Serbian Latin (not Cyrillic) */
+    { "rs:latinyz",  "yu", 852 },  /* Serbian Latin YZ variant */
+};
+
+/*
  * kb_driver_for() returns the correct *.SYS filename for a given DOS code.
  *
  * fd_kb1 -> KEYBOARD.SYS (main set)
@@ -286,13 +304,17 @@ void dos_locale_set_vconsole_path(const char* p)             { s_vconsole_path  
  * Falls back to "us" on any error.
  *
  * Sources tried in order:
- *   1. /etc/default/keyboard XKBLAYOUT=  (Debian/Ubuntu)
- *   2. /etc/vconsole.conf    XKBLAYOUT=  (Arch with X11 config)
+ *   1. /etc/default/keyboard XKBLAYOUT= + XKBVARIANT=  (Debian/Ubuntu)
+ *   2. /etc/vconsole.conf    XKBLAYOUT= + XKBVARIANT=  (Arch with X11 config)
  *   3. /etc/vconsole.conf    KEYMAP=     (Fedora/RHEL/Arch console)
+ *
+ * When a variant is found alongside the layout, the result is returned as
+ * "layout:variant" (e.g. "ch:fr" for Swiss French).  xkb_to_dos() handles
+ * this combined format.
  * ---------------------------------------------------------------- */
 static const char* get_xkb_layout(void)
 {
-    static char buf[32];
+    static char buf[64];  /* may hold "layout:variant" */
     strncpy(buf, "us", sizeof(buf));
 
 #ifdef RUFUS_TEST
@@ -303,49 +325,86 @@ static const char* get_xkb_layout(void)
     }
 #endif
 
-    typedef struct { const char* file; const char* key; } kb_src_t;
 #ifdef RUFUS_TEST
-    /* When test paths are injected, use them instead of the system paths */
     const char* etc_default_kb = s_etc_default_kb_path ? s_etc_default_kb_path : "/etc/default/keyboard";
     const char* vconsole        = s_vconsole_path       ? s_vconsole_path       : "/etc/vconsole.conf";
 #else
     const char* etc_default_kb = "/etc/default/keyboard";
     const char* vconsole        = "/etc/vconsole.conf";
 #endif
+
+    /* Each source specifies a file, the layout key, and an optional variant key. */
+    typedef struct {
+        const char* file;
+        const char* layout_key;
+        const char* variant_key;  /* NULL means no variant reading */
+    } kb_src_t;
+
     const kb_src_t sources[] = {
-        { etc_default_kb, "XKBLAYOUT=" },  /* Debian / Ubuntu */
-        { vconsole,       "XKBLAYOUT=" },  /* Arch (X11 config) */
-        { vconsole,       "KEYMAP="    },  /* Fedora / RHEL / Arch */
+        { etc_default_kb, "XKBLAYOUT=", "XKBVARIANT=" },  /* Debian/Ubuntu */
+        { vconsole,       "XKBLAYOUT=", "XKBVARIANT=" },  /* Arch (X11 config) */
+        { vconsole,       "KEYMAP=",    NULL            },  /* Fedora/RHEL/Arch */
     };
 
     for (size_t src = 0; src < ARRAYSIZE(sources); src++) {
         FILE* f = fopen(sources[src].file, "r");
         if (!f) continue;
-        size_t keylen = strlen(sources[src].key);
+
+        char layout[32] = {0};
+        char variant[32] = {0};
         char line[256];
-        int found = 0;
+
         while (fgets(line, sizeof(line), f)) {
             char *p = line;
             while (*p == ' ' || *p == '\t') p++;
-            if (strncmp(p, sources[src].key, keylen) != 0) continue;
-            p += keylen;
-            if (*p == '"' || *p == '\'') p++;
-            size_t i = 0;
-            /* Strip variant suffixes (e.g. "de-latin1" -> "de") */
-            while (*p && *p != ',' && *p != '"' && *p != '\'' &&
-                   *p != '\n' && *p != '\r' && *p != '_' && *p != '-' &&
-                   !isspace((unsigned char)*p) &&
-                   i < sizeof(buf) - 1) {
-                buf[i++] = (char)tolower((unsigned char)*p);
-                p++;
+
+            /* Check layout key */
+            size_t lklen = strlen(sources[src].layout_key);
+            if (layout[0] == '\0' && strncmp(p, sources[src].layout_key, lklen) == 0) {
+                p += lklen;
+                if (*p == '"' || *p == '\'') p++;
+                size_t i = 0;
+                /* Strip variant suffixes (e.g. "de-latin1" -> "de") for KEYMAP= entries */
+                int strip = (sources[src].variant_key == NULL);
+                while (*p && *p != ',' && *p != '"' && *p != '\'' &&
+                       *p != '\n' && *p != '\r' &&
+                       !(strip && (*p == '_' || *p == '-')) &&
+                       !isspace((unsigned char)*p) &&
+                       i < sizeof(layout) - 1) {
+                    layout[i++] = (char)tolower((unsigned char)*p);
+                    p++;
+                }
+                layout[i] = '\0';
+                continue;
             }
-            buf[i] = '\0';
-            found = 1;
-            break;
+
+            /* Check variant key (if this source supports it) */
+            if (sources[src].variant_key && variant[0] == '\0') {
+                size_t vklen = strlen(sources[src].variant_key);
+                if (strncmp(p, sources[src].variant_key, vklen) == 0) {
+                    p += vklen;
+                    if (*p == '"' || *p == '\'') p++;
+                    size_t i = 0;
+                    while (*p && *p != '"' && *p != '\'' && *p != '\n' &&
+                           *p != '\r' && !isspace((unsigned char)*p) &&
+                           i < sizeof(variant) - 1) {
+                        variant[i++] = (char)tolower((unsigned char)*p);
+                        p++;
+                    }
+                    variant[i] = '\0';
+                }
+            }
         }
         fclose(f);
-        if (found && buf[0] != '\0')
+
+        if (layout[0] != '\0') {
+            if (variant[0] != '\0')
+                snprintf(buf, sizeof(buf), "%s:%s", layout, variant);
+            else
+                strncpy(buf, layout, sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
             return buf;
+        }
     }
     return buf;
 }
@@ -353,9 +412,35 @@ static const char* get_xkb_layout(void)
 /* ----------------------------------------------------------------
  * xkb_to_dos() - look up a DOS keyboard code for the given XKB
  * layout name (lower-case).  Returns "us" / CP437 if not found.
+ * Supports "layout:variant" format: variant table is checked first.
  * ---------------------------------------------------------------- */
 static const char* xkb_to_dos(const char* xkb, int* cp)
 {
+    /* Check variant table first if input has "layout:variant" format */
+    if (strchr(xkb, ':')) {
+        for (size_t i = 0; i < ARRAYSIZE(xkb_variant_dos_table); i++) {
+            if (strcmp(xkb_variant_dos_table[i].xkb, xkb) == 0) {
+                if (cp) *cp = xkb_variant_dos_table[i].cp;
+                return xkb_variant_dos_table[i].dos_kb;
+            }
+        }
+        /* Strip variant and fall through to base layout lookup */
+        char base[32];
+        const char* colon = strchr(xkb, ':');
+        size_t n = (size_t)(colon - xkb);
+        if (n >= sizeof(base)) n = sizeof(base) - 1;
+        strncpy(base, xkb, n);
+        base[n] = '\0';
+        for (size_t i = 0; i < ARRAYSIZE(xkb_dos_table); i++) {
+            if (strcmp(xkb_dos_table[i].xkb, base) == 0) {
+                if (cp) *cp = xkb_dos_table[i].cp;
+                return xkb_dos_table[i].dos_kb;
+            }
+        }
+        if (cp) *cp = 437;
+        return "us";
+    }
+
     for (size_t i = 0; i < ARRAYSIZE(xkb_dos_table); i++) {
         if (strcmp(xkb_dos_table[i].xkb, xkb) == 0) {
             if (cp) *cp = xkb_dos_table[i].cp;
