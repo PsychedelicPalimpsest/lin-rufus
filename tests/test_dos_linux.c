@@ -520,8 +520,111 @@ TEST(set_dos_locale_us_no_fdconfig_menu)
 #endif
 }
 
-#include "resource.h"
+/* Helper: inject an XKB layout, call SetDOSLocale, scan FDCONFIG.SYS for
+ * a given uppercase keyboard code string (e.g. "SP", "NL", "SV"), and
+ * clean up.  Returns 1 if found, 0 if not. */
+#ifdef RUFUS_TEST
+static int check_kb_in_fdconfig(const char* xkb, const char* expected_dos_upper)
+{
+    dos_locale_set_xkb_layout(xkb);
+    char *target = make_tmpdir();
+    if (!target) { dos_locale_set_xkb_layout(NULL); return -1; }
+    char sep[MAX_PATH];
+    snprintf(sep, sizeof(sep), "%s/", target);
+    SetDOSLocale(sep, TRUE);
+    char cfg[MAX_PATH];
+    snprintf(cfg, sizeof(cfg), "%s/FDCONFIG.SYS", target);
+    FILE *f = fopen(cfg, "r");
+    int found = 0;
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f)) {
+            /* Look for the code as a word boundary, e.g. " SP," or " SP " */
+            char needle_space[8], needle_comma[8];
+            snprintf(needle_space, sizeof(needle_space), " %s ", expected_dos_upper);
+            snprintf(needle_comma, sizeof(needle_comma), " %s,", expected_dos_upper);
+            if (strstr(line, needle_space) || strstr(line, needle_comma))
+                found = 1;
+        }
+        fclose(f);
+    }
+    dos_locale_set_xkb_layout(NULL);
+    rm_rf(target); free(target);
+    return found;
+}
+#endif /* RUFUS_TEST */
+
+TEST(set_dos_locale_spanish_maps_to_sp)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_kb_in_fdconfig("es", "SP") == 1,
+              "Spanish XKB 'es' -> DOS 'SP'");
+#endif
+}
+
+TEST(set_dos_locale_dutch_maps_to_nl)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_kb_in_fdconfig("nl", "NL") == 1,
+              "Dutch XKB 'nl' -> DOS 'NL'");
+#endif
+}
+
+TEST(set_dos_locale_italian_maps_to_it)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_kb_in_fdconfig("it", "IT") == 1,
+              "Italian XKB 'it' -> DOS 'IT'");
+#endif
+}
+
+TEST(set_dos_locale_swedish_maps_to_sv)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_kb_in_fdconfig("se", "SV") == 1,
+              "Swedish XKB 'se' -> DOS 'SV'");
+#endif
+}
+
+TEST(set_dos_locale_norwegian_maps_to_no)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_kb_in_fdconfig("no", "NO") == 1,
+              "Norwegian XKB 'no' -> DOS 'NO'");
+#endif
+}
+
+TEST(set_dos_locale_russian_maps_to_ru)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_kb_in_fdconfig("ru", "RU") == 1,
+              "Russian XKB 'ru' -> DOS 'RU'");
+#endif
+}
+
+TEST(set_dos_locale_polish_maps_to_pl)
+{
+#ifndef RUFUS_TEST
+    printf("SKIP (needs RUFUS_TEST)\n");
+#else
+    CHECK_MSG(check_kb_in_fdconfig("pl", "PL") == 1,
+              "Polish XKB 'pl' -> DOS 'PL'");
+#endif
+}
 /* GetResource is provided by stdfn.c */
+#include "resource.h"
 extern uint8_t* GetResource(void *m, char *n, char *t, const char *d, DWORD *l, BOOL dup);
 extern DWORD    GetResourceSize(void *m, char *n, char *t, const char *d);
 
@@ -682,6 +785,13 @@ int main(void)
     RUN(set_dos_locale_unknown_falls_back_to_us);
     RUN(set_dos_locale_british_maps_to_uk);
     RUN(set_dos_locale_us_no_fdconfig_menu);
+    RUN(set_dos_locale_spanish_maps_to_sp);
+    RUN(set_dos_locale_dutch_maps_to_nl);
+    RUN(set_dos_locale_italian_maps_to_it);
+    RUN(set_dos_locale_swedish_maps_to_sv);
+    RUN(set_dos_locale_norwegian_maps_to_no);
+    RUN(set_dos_locale_russian_maps_to_ru);
+    RUN(set_dos_locale_polish_maps_to_pl);
 
     RUN(getresource_command_com_not_null);
     RUN(getresource_command_com_size_correct);
